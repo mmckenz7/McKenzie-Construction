@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-brand-gray text-brand-charcoal antialiased;
+}
+
+::selection {
+  @apply bg-brand-green text-brand-charcoal;
+}
