@@ -93,9 +93,7 @@ export default function HomePage() {
             </div>
 
             <div className="leading-none">
-              <div className="text-lg font-black tracking-wide">
-                McKENZIE
-              </div>
+              <div className="text-lg font-black tracking-wide">McKENZIE</div>
               <div className="mt-1 text-[10px] font-semibold tracking-[0.24em] text-zinc-300">
                 CONSTRUCTION
               </div>
@@ -106,22 +104,29 @@ export default function HomePage() {
             <a className="transition hover:text-lime-400" href="#services">
               Services
             </a>
+
             <a className="transition hover:text-lime-400" href="#projects">
               Projects
             </a>
+
             <a className="transition hover:text-lime-400" href="#difference">
               Why McKenzie
             </a>
+
             <a className="transition hover:text-lime-400" href="/about">
               About
             </a>
-            <a className="transition hover:text-lime-400" href="/learning-center">
+
+            <a
+              className="transition hover:text-lime-400"
+              href="/learning-center"
+            >
               Learning Center
             </a>
           </nav>
 
           <a
-            href="#start-project"
+            href="/contact"
             className="hidden rounded-sm px-5 py-3 text-sm font-black text-black transition hover:brightness-110 sm:inline-flex"
             style={{ backgroundColor: brandGreen }}
           >
@@ -129,7 +134,7 @@ export default function HomePage() {
           </a>
 
           <a
-            href="#start-project"
+            href="/contact"
             aria-label="Start your project"
             className="inline-flex h-11 w-11 items-center justify-center rounded-full text-xl font-black text-black sm:hidden"
             style={{ backgroundColor: brandGreen }}
@@ -177,14 +182,13 @@ export default function HomePage() {
             </h2>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-200 sm:text-xl">
-              Custom decks, outdoor living spaces, and residential
-              construction built with craftsmanship, clear communication, and
-              lasting value.
+              Custom decks, outdoor living spaces, and residential construction
+              built with craftsmanship, clear communication, and lasting value.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <a
-                href="#start-project"
+                href="/contact"
                 className="inline-flex min-h-14 items-center justify-center px-7 text-sm font-black text-black transition hover:brightness-110"
                 style={{ backgroundColor: brandGreen }}
               >
@@ -219,10 +223,14 @@ export default function HomePage() {
               >
                 ✓
               </div>
+
               <h3 className="text-sm font-black uppercase tracking-wide">
                 {title}
               </h3>
-              <p className="mt-1 text-xs leading-5 text-zinc-500">{subtitle}</p>
+
+              <p className="mt-1 text-xs leading-5 text-zinc-500">
+                {subtitle}
+              </p>
             </div>
           ))}
         </div>
@@ -267,7 +275,10 @@ export default function HomePage() {
       </section>
 
       {/* SERVICES */}
-      <section id="services" className="scroll-mt-20 bg-zinc-100 py-20 sm:py-28">
+      <section
+        id="services"
+        className="scroll-mt-20 bg-zinc-100 py-20 sm:py-28"
+      >
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
             <div>
@@ -305,12 +316,13 @@ export default function HomePage() {
 
                 <div className="p-7">
                   <h3 className="text-2xl font-black">{service.title}</h3>
+
                   <p className="mt-3 leading-7 text-zinc-600">
                     {service.description}
                   </p>
 
                   <a
-                    href="#start-project"
+                    href="/contact"
                     className="mt-6 inline-flex items-center text-sm font-black uppercase tracking-wider"
                   >
                     Start a conversation
@@ -326,10 +338,7 @@ export default function HomePage() {
       </section>
 
       {/* FEATURED PROJECTS */}
-      <section
-        id="projects"
-        className="scroll-mt-20 bg-white py-20 sm:py-28"
-      >
+      <section id="projects" className="scroll-mt-20 bg-white py-20 sm:py-28">
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
           <div className="flex items-end justify-between gap-6">
             <div>
@@ -339,6 +348,7 @@ export default function HomePage() {
               >
                 Project Explorer
               </p>
+
               <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] sm:text-5xl">
                 Featured projects
               </h2>
@@ -365,6 +375,7 @@ export default function HomePage() {
                   className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105"
                   style={{ backgroundImage: `url('${project.image}')` }}
                 />
+
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
 
                 <div className="absolute inset-x-0 bottom-0 p-7">
@@ -452,12 +463,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* START PROJECT FORM */}
-      <section
-        id="start-project"
-        className="scroll-mt-20 bg-white py-20 sm:py-28"
-      >
-        <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-[0.8fr_1.2fr]">
+      {/* PROJECT CTA */}
+      <section className="bg-white py-20 sm:py-28">
+        <div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <p
               className="text-sm font-black uppercase tracking-[0.25em]"
@@ -466,144 +474,34 @@ export default function HomePage() {
               Start your project
             </p>
 
-            <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] sm:text-5xl">
-              Tell us what you are thinking.
+            <h2 className="mt-4 max-w-3xl text-4xl font-black tracking-[-0.03em] sm:text-5xl">
+              Tell us what you would like to build.
             </h2>
 
-            <p className="mt-5 text-lg leading-8 text-zinc-600">
-              You do not need drawings, exact dimensions, or every decision
-              made. Give us the basics and Michael will personally review your
-              request.
+            <p className="mt-5 max-w-3xl text-lg leading-8 text-zinc-600">
+              Complete one project request with your contact information,
+              project details, and preferred consultation time. Michael will
+              personally review your request before any appointment is
+              confirmed.
             </p>
 
-            <div className="mt-9 space-y-4 text-sm font-semibold">
-              <a className="block" href="tel:+18652633811">
-                Call: 865-263-3811
-              </a>
-              <a
-                className="block"
-                href="mailto:mcmllc.tn@gmail.com"
-              >
+            <div className="mt-7 flex flex-col gap-3 text-sm font-semibold sm:flex-row sm:gap-8">
+              <a href="tel:+18652633811">Call: 865-263-3811</a>
+
+              <a href="mailto:mcmllc.tn@gmail.com">
                 Email: mcmllc.tn@gmail.com
               </a>
-              <p>Serving Knoxville and East Tennessee</p>
             </div>
           </div>
 
-          <form
-            className="grid gap-5 bg-zinc-100 p-6 sm:grid-cols-2 sm:p-9"
-            action="/contact"
+          <a
+            href="/contact"
+            className="inline-flex min-h-14 items-center justify-center px-8 text-sm font-black text-black transition hover:brightness-110"
+            style={{ backgroundColor: brandGreen }}
           >
-            <label className="block">
-              <span className="mb-2 block text-xs font-black uppercase tracking-wider">
-                Name *
-              </span>
-              <input
-                required
-                name="name"
-                className="min-h-13 w-full border border-zinc-300 bg-white px-4 outline-none transition focus:border-zinc-950"
-                placeholder="Your name"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-xs font-black uppercase tracking-wider">
-                Phone *
-              </span>
-              <input
-                required
-                type="tel"
-                name="phone"
-                className="min-h-13 w-full border border-zinc-300 bg-white px-4 outline-none transition focus:border-zinc-950"
-                placeholder="Your phone number"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-xs font-black uppercase tracking-wider">
-                Email
-              </span>
-              <input
-                type="email"
-                name="email"
-                className="min-h-13 w-full border border-zinc-300 bg-white px-4 outline-none transition focus:border-zinc-950"
-                placeholder="Your email"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-xs font-black uppercase tracking-wider">
-                Project Type
-              </span>
-              <select
-                name="projectType"
-                className="min-h-13 w-full border border-zinc-300 bg-white px-4 outline-none transition focus:border-zinc-950"
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  Select one
-                </option>
-                <option>New Deck</option>
-                <option>Deck Replacement</option>
-                <option>Covered Outdoor Living</option>
-                <option>Screened Porch</option>
-                <option>Outdoor Living Project</option>
-                <option>Residential Construction</option>
-                <option>Not Sure Yet</option>
-              </select>
-            </label>
-
-            <label className="block sm:col-span-2">
-              <span className="mb-2 block text-xs font-black uppercase tracking-wider">
-                Property Address
-              </span>
-              <input
-                name="address"
-                className="min-h-13 w-full border border-zinc-300 bg-white px-4 outline-none transition focus:border-zinc-950"
-                placeholder="Project address"
-              />
-            </label>
-
-            <label className="block sm:col-span-2">
-              <span className="mb-2 block text-xs font-black uppercase tracking-wider">
-                Tell Us About the Project *
-              </span>
-              <textarea
-                required
-                name="message"
-                rows={5}
-                className="w-full border border-zinc-300 bg-white px-4 py-4 outline-none transition focus:border-zinc-950"
-                placeholder="What would you like to build or improve?"
-              />
-            </label>
-
-            <label className="block sm:col-span-2">
-              <span className="mb-2 block text-xs font-black uppercase tracking-wider">
-                Photos
-                <span className="ml-2 font-medium normal-case tracking-normal text-zinc-500">
-                  Optional
-                </span>
-              </span>
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                className="w-full border border-dashed border-zinc-400 bg-white px-4 py-5 text-sm"
-              />
-              <span className="mt-2 block text-xs leading-5 text-zinc-500">
-                Photos can help us understand the project, but they are not
-                required to submit your request.
-              </span>
-            </label>
-
-            <button
-              type="submit"
-              className="min-h-14 px-7 text-sm font-black text-black transition hover:brightness-110 sm:col-span-2"
-              style={{ backgroundColor: brandGreen }}
-            >
-              SUBMIT PROJECT REQUEST →
-            </button>
-          </form>
+            REQUEST A CONSULTATION
+            <span className="ml-3 text-lg">→</span>
+          </a>
         </div>
       </section>
 
@@ -623,6 +521,7 @@ export default function HomePage() {
                 <div className="font-black tracking-wide">
                   McKENZIE CONSTRUCTION
                 </div>
+
                 <div className="mt-1 text-xs text-zinc-400">
                   Crafted Around the Way You Live.
                 </div>
@@ -630,25 +529,32 @@ export default function HomePage() {
             </div>
 
             <p className="mt-5 max-w-md text-sm leading-6 text-zinc-400">
-              Custom decks, outdoor living spaces, and residential
-              construction serving Knoxville and East Tennessee.
+              Custom decks, outdoor living spaces, and residential construction
+              serving Knoxville and East Tennessee.
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-10 text-sm">
             <div>
               <p className="font-black uppercase tracking-wider">Explore</p>
+
               <div className="mt-4 space-y-3 text-zinc-400">
                 <a className="block hover:text-white" href="#services">
                   Services
                 </a>
+
                 <a className="block hover:text-white" href="#projects">
                   Projects
                 </a>
+
                 <a className="block hover:text-white" href="/about">
                   About
                 </a>
-                <a className="block hover:text-white" href="/learning-center">
+
+                <a
+                  className="block hover:text-white"
+                  href="/learning-center"
+                >
                   Learning Center
                 </a>
               </div>
@@ -656,17 +562,23 @@ export default function HomePage() {
 
             <div>
               <p className="font-black uppercase tracking-wider">Contact</p>
+
               <div className="mt-4 space-y-3 text-zinc-400">
-                <a className="block hover:text-white" href="tel:+18652633811">
+                <a
+                  className="block hover:text-white"
+                  href="tel:+18652633811"
+                >
                   865-263-3811
                 </a>
+
                 <a
                   className="block hover:text-white"
                   href="mailto:mcmllc.tn@gmail.com"
                 >
                   Email Michael
                 </a>
-                <a className="block hover:text-white" href="#start-project">
+
+                <a className="block hover:text-white" href="/contact">
                   Start a Project
                 </a>
               </div>
@@ -688,8 +600,9 @@ export default function HomePage() {
         >
           CALL NOW
         </a>
+
         <a
-          href="#start-project"
+          href="/contact"
           className="flex min-h-12 items-center justify-center text-sm font-black text-black"
           style={{ backgroundColor: brandGreen }}
         >
