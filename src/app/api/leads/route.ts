@@ -1,4 +1,14 @@
+import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import { createPublicServerClient } from "@/lib/supabase/public-server";
+
+const allowedLeadStatuses = [
+  "new",
+  "contacted",
+  "consultation_scheduled",
+  "proposal_sent",
+  "won",
+  "lost",
+];
 
 function optionalText(value: FormDataEntryValue | null): string | null {
   if (typeof value !== "string") {
@@ -105,5 +115,87 @@ export async function POST(request: Request) {
     console.error("Project request error:", error);
 
     return redirectTo("/contact?error=submission");
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const body = (await request.json()) as {
+      leadId?: unknown;
+      status?: unknown;
+    };
+
+    const leadId =
+      typeof body.leadId === "string" ||
+      typeof body.leadId === "number"
+        ? String(body.leadId).trim()
+        : "";
+
+    const status =
+      typeof body.status === "string"
+        ? body.status.trim()
+        : "";
+
+    if (!leadId) {
+      return Response.json(
+        {
+          error: "A valid lead ID is required.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    if (!allowedLeadStatuses.includes(status)) {
+      return Response.json(
+        {
+          error: "A valid lead status is required.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const supabase = createAdminServerClient();
+
+    const { data, error } = await supabase
+      .from("leads")
+      .update({
+        lead_status: status,
+      })
+      .eq("id", leadId)
+      .select("id, lead_status")
+      .single();
+
+    if (error) {
+      console.error("Supabase lead status update error:", error);
+
+      return Response.json(
+        {
+          error: error.message,
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
+    return Response.json({
+      success: true,
+      lead: data,
+    });
+  } catch (error) {
+    console.error("Lead status request error:", error);
+
+    return Response.json(
+      {
+        error: "Unable to update the lead status.",
+      },
+      {
+        status: 500,
+      },
+    );
   }
 }

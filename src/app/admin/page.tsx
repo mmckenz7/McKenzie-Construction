@@ -1,3 +1,4 @@
+import LeadStatusForm from "@/components/lead-status-form";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const dynamic = "force-dynamic";
@@ -102,6 +103,7 @@ export default async function AdminPage() {
           <h1 className="text-2xl font-bold text-red-700">
             Error loading leads
           </h1>
+
           <p className="mt-4 text-slate-700">{error.message}</p>
         </div>
       </main>
@@ -130,7 +132,10 @@ export default async function AdminPage() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
-              <p className="text-sm text-slate-500">Total leads</p>
+              <p className="text-sm text-slate-500">
+                Total leads
+              </p>
+
               <p className="text-2xl font-bold text-slate-950">
                 {leads.length}
               </p>
@@ -172,7 +177,8 @@ export default async function AdminPage() {
                     </span>
 
                     <span className="rounded-full bg-slate-700 px-3 py-1 text-sm">
-                      Consultation: {titleCase(lead.consultation_status)}
+                      Consultation:{" "}
+                      {titleCase(lead.consultation_status)}
                     </span>
                   </div>
                 </div>
@@ -219,7 +225,9 @@ export default async function AdminPage() {
 
                       <p>
                         <strong>Preferred contact:</strong>{" "}
-                        {titleCase(lead.preferred_contact_method)}
+                        {titleCase(
+                          lead.preferred_contact_method,
+                        )}
                       </p>
                     </div>
                   </section>
@@ -273,7 +281,8 @@ export default async function AdminPage() {
                       <p>
                         <strong>Next follow-up:</strong>{" "}
                         {displayValue(
-                          lead.next_follow_up ?? lead.follow_up_at,
+                          lead.next_follow_up ??
+                            lead.follow_up_at,
                         )}
                       </p>
                     </div>
@@ -300,6 +309,13 @@ export default async function AdminPage() {
                       {displayValue(lead.notes)}
                     </p>
                   </section>
+                </div>
+
+                <div className="border-t border-slate-200 bg-white p-6">
+                  <LeadStatusForm
+                    leadId={String(lead.id)}
+                    currentStatus={lead.lead_status}
+                  />
                 </div>
               </article>
             ))}
