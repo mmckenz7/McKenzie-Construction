@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 type LeadStatusFormProps = {
   leadId: string;
   currentStatus: string | null;
+  currentFollowUpAt: string | null;
 };
 
 const leadStatuses = [
@@ -35,9 +36,30 @@ const leadStatuses = [
   },
 ];
 
+function formatForDateTimeInput(value: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 export default function LeadStatusForm({
   leadId,
   currentStatus,
+  currentFollowUpAt,
 }: LeadStatusFormProps) {
   const router = useRouter();
 
@@ -50,62 +72,140 @@ export default function LeadStatusForm({
       : "new";
 
   const [status, setStatus] = useState(startingStatus);
-  const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [hasError, setHasError] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const [followUpAt, setFollowUpAt] = useState(
+    formatForDateTimeInput(currentFollowUpAt),
+  );
+
+  const [isSavingStatus, setIsSavingStatus] = useState(false);
+  const [isSavingFollowUp, setIsSavingFollowUp] = useState(false);
+
+  const [statusMessage, setStatusMessage] = useState("");
+  const [statusHasError, setStatusHasError] = useState(false);
+
+  const [followUpMessage, setFollowUpMessage] = useState("");
+  const [followUpHasError, setFollowUpHasError] = useState(false);
+
+  async function saveChanges(payload: {
+    status?: string;
+    followUpAt?: string | null;
+  }) {
+    const response = await fetch("/api/leads", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        leadId,
+        ...payload,
+      }),
+    });
+
+    const result = (await response.json()) as {
+      success?: boolean;
+      error?: string;
+    };
+
+    if (!response.ok || !result.success) {
+      throw new Error(
+        result.error ?? "Unable to update the lead.",
+      );
+    }
+  }
+
+  async function handleStatusSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
 
-    setIsSaving(true);
-    setMessage("");
-    setHasError(false);
+    setIsSavingStatus(true);
+    setStatusMessage("");
+    setStatusHasError(false);
 
     try {
-      const response = await fetch("/api/leads", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          leadId,
-          status,
-        }),
+      await saveChanges({
+        status,
       });
 
-      const result = (await response.json()) as {
-        success?: boolean;
-        error?: string;
-      };
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.error ?? "Unable to update the lead status.",
-        );
-      }
-
-      setMessage("Status saved.");
-
+      setStatusMessage("Status saved.");
       router.refresh();
     } catch (error) {
-      setHasError(true);
+      setStatusHasError(true);
 
-      setMessage(
+      setStatusMessage(
         error instanceof Error
           ? error.message
-          : "Unable to update the lead status.",
+          : "Unable to save the lead status.",
       );
     } finally {
-      setIsSaving(false);
+      setIsSavingStatus(false);
+    }
+  }
+
+  async function handleFollowUpSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!followUpAt) {
+      setFollowUpHasError(true);
+      setFollowUpMessage("Choose a follow-up date and time.");
+      return;
+    }
+
+    setIsSavingFollowUp(true);
+    setFollowUpMessage("");
+    setFollowUpHasError(false);
+
+    try {
+      await saveChanges({
+        followUpAt,
+      });
+
+      setFollowUpMessage("Follow-up saved.");
+      router.refresh();
+    } catch (error) {
+      setFollowUpHasError(true);
+
+      setFollowUpMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to save the follow-up.",
+      );
+    } finally {
+      setIsSavingFollowUp(false);
+    }
+  }
+
+  async function handleClearFollowUp() {
+    setIsSavingFollowUp(true);
+    setFollowUpMessage("");
+    setFollowUpHasError(false);
+
+    try {
+      await saveChanges({
+        followUpAt: null,
+      });
+
+      setFollowUpAt("");
+      setFollowUpMessage("Follow-up cleared.");
+      router.refresh();
+    } catch (error) {
+      setFollowUpHasError(true);
+
+      setFollowUpMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to clear the follow-up.",
+      );
+    } finally {
+      setIsSavingFollowUp(false);
     }
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex flex-col gap-3 sm:flex-row sm:items-end"
-    >
-      <div className="w-full sm:max-w-xs">
+    <div className="grid gap-6 lg:grid-cols-2">
+      <form onSubmit={handleStatusSubmit}>
         <label
           htmlFor={`lead-status-${leadId}`}
           className="mb-2 block text-sm font-bold text-slate-950"
@@ -118,10 +218,10 @@ export default function LeadStatusForm({
           value={status}
           onChange={(event) => {
             setStatus(event.target.value);
-            setMessage("");
-            setHasError(false);
+            setStatusMessage("");
+            setStatusHasError(false);
           }}
-          disabled={isSaving}
+          disabled={isSavingStatus}
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 disabled:cursor-not-allowed disabled:bg-slate-100"
         >
           {leadStatuses.map((statusOption) => (
@@ -133,25 +233,84 @@ export default function LeadStatusForm({
             </option>
           ))}
         </select>
-      </div>
 
-      <button
-        type="submit"
-        disabled={isSaving}
-        className="rounded-lg bg-slate-950 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-      >
-        {isSaving ? "Saving..." : "Save Status"}
-      </button>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button
+            type="submit"
+            disabled={isSavingStatus}
+            className="rounded-lg bg-slate-950 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+          >
+            {isSavingStatus ? "Saving..." : "Save Status"}
+          </button>
 
-      {message ? (
-        <p
-          className={`pb-2 text-sm font-semibold ${
-            hasError ? "text-red-700" : "text-green-700"
-          }`}
+          {statusMessage ? (
+            <p
+              className={`text-sm font-semibold ${
+                statusHasError
+                  ? "text-red-700"
+                  : "text-green-700"
+              }`}
+            >
+              {statusMessage}
+            </p>
+          ) : null}
+        </div>
+      </form>
+
+      <form onSubmit={handleFollowUpSubmit}>
+        <label
+          htmlFor={`lead-follow-up-${leadId}`}
+          className="mb-2 block text-sm font-bold text-slate-950"
         >
-          {message}
-        </p>
-      ) : null}
-    </form>
+          Follow-Up Date and Time
+        </label>
+
+        <input
+          id={`lead-follow-up-${leadId}`}
+          type="datetime-local"
+          value={followUpAt}
+          onChange={(event) => {
+            setFollowUpAt(event.target.value);
+            setFollowUpMessage("");
+            setFollowUpHasError(false);
+          }}
+          disabled={isSavingFollowUp}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-slate-950 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100"
+        />
+
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button
+            type="submit"
+            disabled={isSavingFollowUp}
+            className="rounded-lg bg-slate-950 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+          >
+            {isSavingFollowUp
+              ? "Saving..."
+              : "Save Follow-Up"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleClearFollowUp}
+            disabled={isSavingFollowUp || !followUpAt}
+            className="rounded-lg border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            Clear
+          </button>
+
+          {followUpMessage ? (
+            <p
+              className={`text-sm font-semibold ${
+                followUpHasError
+                  ? "text-red-700"
+                  : "text-green-700"
+              }`}
+            >
+              {followUpMessage}
+            </p>
+          ) : null}
+        </div>
+      </form>
+    </div>
   );
 }

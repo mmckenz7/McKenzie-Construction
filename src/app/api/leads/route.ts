@@ -123,6 +123,7 @@ export async function PATCH(request: Request) {
       leadId?: unknown;
       status?: unknown;
       notes?: unknown;
+      followUpAt?: unknown;
     };
 
     const leadId =
@@ -145,6 +146,7 @@ export async function PATCH(request: Request) {
     const updates: {
       lead_status?: string;
       notes?: string | null;
+      follow_up_at?: string | null;
     } = {};
 
     if (body.status !== undefined) {
@@ -185,6 +187,36 @@ export async function PATCH(request: Request) {
         cleanedNotes.length > 0 ? cleanedNotes : null;
     }
 
+    if (body.followUpAt !== undefined) {
+      if (body.followUpAt === null || body.followUpAt === "") {
+        updates.follow_up_at = null;
+      } else if (typeof body.followUpAt === "string") {
+        const followUpDate = new Date(body.followUpAt);
+
+        if (Number.isNaN(followUpDate.getTime())) {
+          return Response.json(
+            {
+              error: "A valid follow-up date and time is required.",
+            },
+            {
+              status: 400,
+            },
+          );
+        }
+
+        updates.follow_up_at = followUpDate.toISOString();
+      } else {
+        return Response.json(
+          {
+            error: "A valid follow-up date and time is required.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+    }
+
     if (Object.keys(updates).length === 0) {
       return Response.json(
         {
@@ -202,7 +234,7 @@ export async function PATCH(request: Request) {
       .from("leads")
       .update(updates)
       .eq("id", leadId)
-      .select("id, lead_status, notes")
+      .select("id, lead_status, notes, follow_up_at")
       .single();
 
     if (error) {

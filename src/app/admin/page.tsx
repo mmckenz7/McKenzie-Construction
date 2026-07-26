@@ -34,11 +34,15 @@ function displayValue(value: string | null | undefined) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "—";
+  if (!value) {
+    return "—";
+  }
 
   const date = new Date(`${value}T12:00:00`);
 
-  if (Number.isNaN(date.getTime())) return value;
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -48,7 +52,9 @@ function formatDate(value: string | null) {
 }
 
 function formatTime(value: string | null) {
-  if (!value) return "—";
+  if (!value) {
+    return "—";
+  }
 
   const [hours, minutes] = value.split(":").map(Number);
 
@@ -66,11 +72,35 @@ function formatTime(value: string | null) {
 }
 
 function formatCreated(value: string | null) {
-  if (!value) return "—";
+  if (!value) {
+    return "—";
+  }
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return value;
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatFollowUp(value: string | null) {
+  if (!value) {
+    return "Not scheduled";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -82,7 +112,9 @@ function formatCreated(value: string | null) {
 }
 
 function titleCase(value: string | null) {
-  if (!value) return "—";
+  if (!value) {
+    return "—";
+  }
 
   return value
     .replaceAll("_", " ")
@@ -105,7 +137,9 @@ export default async function AdminPage() {
             Error loading leads
           </h1>
 
-          <p className="mt-4 text-slate-700">{error.message}</p>
+          <p className="mt-4 text-slate-700">
+            {error.message}
+          </p>
         </div>
       </main>
     );
@@ -280,11 +314,8 @@ export default async function AdminPage() {
                       </p>
 
                       <p>
-                        <strong>Next follow-up:</strong>{" "}
-                        {displayValue(
-                          lead.next_follow_up ??
-                            lead.follow_up_at,
-                        )}
+                        <strong>Current follow-up:</strong>{" "}
+                        {formatFollowUp(lead.follow_up_at)}
                       </p>
                     </div>
                   </section>
@@ -313,6 +344,7 @@ export default async function AdminPage() {
                   <LeadStatusForm
                     leadId={String(lead.id)}
                     currentStatus={lead.lead_status}
+                    currentFollowUpAt={lead.follow_up_at}
                   />
                 </div>
               </article>
