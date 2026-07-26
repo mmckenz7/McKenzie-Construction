@@ -46,7 +46,6 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
 
-    // Honeypot spam field
     const website = optionalText(formData.get("website"));
 
     if (website) {
@@ -123,17 +122,13 @@ export async function PATCH(request: Request) {
     const body = (await request.json()) as {
       leadId?: unknown;
       status?: unknown;
+      notes?: unknown;
     };
 
     const leadId =
       typeof body.leadId === "string" ||
       typeof body.leadId === "number"
         ? String(body.leadId).trim()
-        : "";
-
-    const status =
-      typeof body.status === "string"
-        ? body.status.trim()
         : "";
 
     if (!leadId) {
@@ -147,10 +142,53 @@ export async function PATCH(request: Request) {
       );
     }
 
-    if (!allowedLeadStatuses.includes(status)) {
+    const updates: {
+      lead_status?: string;
+      notes?: string | null;
+    } = {};
+
+    if (body.status !== undefined) {
+      const status =
+        typeof body.status === "string"
+          ? body.status.trim()
+          : "";
+
+      if (!allowedLeadStatuses.includes(status)) {
+        return Response.json(
+          {
+            error: "A valid lead status is required.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      updates.lead_status = status;
+    }
+
+    if (body.notes !== undefined) {
+      if (typeof body.notes !== "string") {
+        return Response.json(
+          {
+            error: "Notes must be valid text.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      const cleanedNotes = body.notes.trim();
+
+      updates.notes =
+        cleanedNotes.length > 0 ? cleanedNotes : null;
+    }
+
+    if (Object.keys(updates).length === 0) {
       return Response.json(
         {
-          error: "A valid lead status is required.",
+          error: "No valid lead changes were provided.",
         },
         {
           status: 400,
@@ -162,15 +200,13 @@ export async function PATCH(request: Request) {
 
     const { data, error } = await supabase
       .from("leads")
-      .update({
-        lead_status: status,
-      })
+      .update(updates)
       .eq("id", leadId)
-      .select("id, lead_status")
+      .select("id, lead_status, notes")
       .single();
 
     if (error) {
-      console.error("Supabase lead status update error:", error);
+      console.error("Supabase lead update error:", error);
 
       return Response.json(
         {
@@ -187,11 +223,11 @@ export async function PATCH(request: Request) {
       lead: data,
     });
   } catch (error) {
-    console.error("Lead status request error:", error);
+    console.error("Lead update request error:", error);
 
     return Response.json(
       {
-        error: "Unable to update the lead status.",
+        error: "Unable to update the lead.",
       },
       {
         status: 500,

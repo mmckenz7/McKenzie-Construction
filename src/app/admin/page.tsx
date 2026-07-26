@@ -1,3 +1,4 @@
+import LeadNotesForm from "@/components/lead-notes-form";
 import LeadStatusForm from "@/components/lead-status-form";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
@@ -301,13 +302,10 @@ export default async function AdminPage() {
                   </section>
 
                   <section>
-                    <h3 className="mb-2 font-bold text-slate-950">
-                      Internal Notes
-                    </h3>
-
-                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                      {displayValue(lead.notes)}
-                    </p>
+                    <LeadNotesForm
+                      leadId={String(lead.id)}
+                      currentNotes={lead.notes}
+                    />
                   </section>
                 </div>
 
