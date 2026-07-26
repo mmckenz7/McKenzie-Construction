@@ -20,7 +20,8 @@ export default function ContactPage() {
 
           <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
             Requested consultation times are not confirmed until McKenzie
-            Construction reviews and approves them.
+            Construction reviews the request and confirms the appointment with
+            you.
           </p>
         </div>
       </section>
@@ -56,9 +57,9 @@ export default function ContactPage() {
             </p>
 
             <p className="mt-3 leading-7 text-zinc-600">
-              We will review your request, contact you to discuss the project,
-              and either approve your preferred consultation time or suggest a
-              different time.
+              We will review your request, contact you using your preferred
+              method, and either confirm your preferred consultation time or
+              suggest a different time.
             </p>
           </div>
         </div>

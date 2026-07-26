@@ -59,12 +59,16 @@ export function ProjectRequestForm() {
       </label>
 
       <label className="block">
-        <span className={labelClass}>Preferred Contact</span>
+        <span className={labelClass}>
+          How Would You Prefer We Contact You?
+        </span>
+
         <select
           name="preferredContactMethod"
-          defaultValue="phone"
+          defaultValue="no_preference"
           className={inputClass}
         >
+          <option value="no_preference">No preference</option>
           <option value="phone">Phone call</option>
           <option value="text">Text message</option>
           <option value="email">Email</option>
@@ -141,7 +145,7 @@ export function ProjectRequestForm() {
 
       <fieldset className="border border-zinc-300 bg-white p-5 sm:col-span-2">
         <legend className="px-2 text-xs font-black uppercase tracking-[0.14em]">
-          Request a consultation
+          Request a Consultation
         </legend>
 
         <p className="mb-5 text-sm leading-6 text-zinc-600">
@@ -209,7 +213,7 @@ export function ProjectRequestForm() {
 
       <p className="text-center text-xs leading-5 text-zinc-500 sm:col-span-2">
         Requested consultation times are not confirmed until McKenzie
-        Construction approves them.
+        Construction confirms them with you.
       </p>
     </form>
   );
