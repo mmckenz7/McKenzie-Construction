@@ -13,7 +13,7 @@ const allowedLeadStatuses = [
 const allowedConsultationStatuses = [
   "not_requested",
   "pending",
-  "approved",
+  "confirmed",
   "declined",
   "completed",
 ];

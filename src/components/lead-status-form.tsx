@@ -24,8 +24,11 @@ const leadStatuses = [
 
 const consultationStatuses = [
   { value: "not_requested", label: "Not Requested" },
-  { value: "pending", label: "Pending" },
-  { value: "approved", label: "Approved" },
+  { value: "pending", label: "Pending Confirmation" },
+  {
+    value: "confirmed",
+    label: "Consultation Confirmed",
+  },
   { value: "declined", label: "Declined" },
   { value: "completed", label: "Completed" },
 ];
