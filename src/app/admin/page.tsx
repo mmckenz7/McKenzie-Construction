@@ -344,6 +344,9 @@ export default async function AdminPage() {
                   <LeadStatusForm
                     leadId={String(lead.id)}
                     currentStatus={lead.lead_status}
+                    currentConsultationStatus={
+                      lead.consultation_status
+                    }
                     currentFollowUpAt={lead.follow_up_at}
                   />
                 </div>

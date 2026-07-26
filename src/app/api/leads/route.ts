@@ -10,6 +10,14 @@ const allowedLeadStatuses = [
   "lost",
 ];
 
+const allowedConsultationStatuses = [
+  "not_requested",
+  "pending",
+  "approved",
+  "declined",
+  "completed",
+];
+
 function optionalText(value: FormDataEntryValue | null): string | null {
   if (typeof value !== "string") {
     return null;
@@ -119,17 +127,14 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const body = (await request.json()) as {
-      leadId?: unknown;
-      status?: unknown;
-      notes?: unknown;
-      followUpAt?: unknown;
-    };
+    const body = (await request.json()) as Record<string, unknown>;
+
+    const rawLeadId = body.leadId ?? body.lead_id;
 
     const leadId =
-      typeof body.leadId === "string" ||
-      typeof body.leadId === "number"
-        ? String(body.leadId).trim()
+      typeof rawLeadId === "string" ||
+      typeof rawLeadId === "number"
+        ? String(rawLeadId).trim()
         : "";
 
     if (!leadId) {
@@ -145,17 +150,21 @@ export async function PATCH(request: Request) {
 
     const updates: {
       lead_status?: string;
+      consultation_status?: string;
       notes?: string | null;
       follow_up_at?: string | null;
     } = {};
 
-    if (body.status !== undefined) {
-      const status =
-        typeof body.status === "string"
-          ? body.status.trim()
+    const rawLeadStatus =
+      body.status ?? body.leadStatus ?? body.lead_status;
+
+    if (rawLeadStatus !== undefined) {
+      const leadStatus =
+        typeof rawLeadStatus === "string"
+          ? rawLeadStatus.trim()
           : "";
 
-      if (!allowedLeadStatuses.includes(status)) {
+      if (!allowedLeadStatuses.includes(leadStatus)) {
         return Response.json(
           {
             error: "A valid lead status is required.",
@@ -166,7 +175,34 @@ export async function PATCH(request: Request) {
         );
       }
 
-      updates.lead_status = status;
+      updates.lead_status = leadStatus;
+    }
+
+    const rawConsultationStatus =
+      body.consultationStatus ?? body.consultation_status;
+
+    if (rawConsultationStatus !== undefined) {
+      const consultationStatus =
+        typeof rawConsultationStatus === "string"
+          ? rawConsultationStatus.trim()
+          : "";
+
+      if (
+        !allowedConsultationStatuses.includes(
+          consultationStatus,
+        )
+      ) {
+        return Response.json(
+          {
+            error: "A valid consultation status is required.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      updates.consultation_status = consultationStatus;
     }
 
     if (body.notes !== undefined) {
@@ -187,11 +223,14 @@ export async function PATCH(request: Request) {
         cleanedNotes.length > 0 ? cleanedNotes : null;
     }
 
-    if (body.followUpAt !== undefined) {
-      if (body.followUpAt === null || body.followUpAt === "") {
+    const rawFollowUpAt =
+      body.followUpAt ?? body.follow_up_at;
+
+    if (rawFollowUpAt !== undefined) {
+      if (rawFollowUpAt === null || rawFollowUpAt === "") {
         updates.follow_up_at = null;
-      } else if (typeof body.followUpAt === "string") {
-        const followUpDate = new Date(body.followUpAt);
+      } else if (typeof rawFollowUpAt === "string") {
+        const followUpDate = new Date(rawFollowUpAt);
 
         if (Number.isNaN(followUpDate.getTime())) {
           return Response.json(
@@ -218,6 +257,8 @@ export async function PATCH(request: Request) {
     }
 
     if (Object.keys(updates).length === 0) {
+      console.error("No recognized lead changes:", body);
+
       return Response.json(
         {
           error: "No valid lead changes were provided.",
@@ -234,7 +275,9 @@ export async function PATCH(request: Request) {
       .from("leads")
       .update(updates)
       .eq("id", leadId)
-      .select("id, lead_status, notes, follow_up_at")
+      .select(
+        "id, lead_status, consultation_status, notes, follow_up_at",
+      )
       .single();
 
     if (error) {

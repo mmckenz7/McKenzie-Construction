@@ -6,34 +6,28 @@ import { useRouter } from "next/navigation";
 type LeadStatusFormProps = {
   leadId: string;
   currentStatus: string | null;
+  currentConsultationStatus: string | null;
   currentFollowUpAt: string | null;
 };
 
 const leadStatuses = [
-  {
-    value: "new",
-    label: "New",
-  },
-  {
-    value: "contacted",
-    label: "Contacted",
-  },
+  { value: "new", label: "New" },
+  { value: "contacted", label: "Contacted" },
   {
     value: "consultation_scheduled",
     label: "Consultation Scheduled",
   },
-  {
-    value: "proposal_sent",
-    label: "Proposal Sent",
-  },
-  {
-    value: "won",
-    label: "Won",
-  },
-  {
-    value: "lost",
-    label: "Lost",
-  },
+  { value: "proposal_sent", label: "Proposal Sent" },
+  { value: "won", label: "Won" },
+  { value: "lost", label: "Lost" },
+];
+
+const consultationStatuses = [
+  { value: "not_requested", label: "Not Requested" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "declined", label: "Declined" },
+  { value: "completed", label: "Completed" },
 ];
 
 function formatForDateTimeInput(value: string | null) {
@@ -59,37 +53,47 @@ function formatForDateTimeInput(value: string | null) {
 export default function LeadStatusForm({
   leadId,
   currentStatus,
+  currentConsultationStatus,
   currentFollowUpAt,
 }: LeadStatusFormProps) {
   const router = useRouter();
 
-  const startingStatus =
-    currentStatus &&
-    leadStatuses.some(
-      (statusOption) => statusOption.value === currentStatus,
+  const startingStatus = leadStatuses.some(
+    (option) => option.value === currentStatus,
+  )
+    ? currentStatus!
+    : "new";
+
+  const startingConsultationStatus =
+    consultationStatuses.some(
+      (option) =>
+        option.value === currentConsultationStatus,
     )
-      ? currentStatus
-      : "new";
+      ? currentConsultationStatus!
+      : "not_requested";
 
   const [status, setStatus] = useState(startingStatus);
+
+  const [consultationStatus, setConsultationStatus] = useState(
+    startingConsultationStatus,
+  );
 
   const [followUpAt, setFollowUpAt] = useState(
     formatForDateTimeInput(currentFollowUpAt),
   );
 
-  const [isSavingStatus, setIsSavingStatus] = useState(false);
-  const [isSavingFollowUp, setIsSavingFollowUp] = useState(false);
-
   const [statusMessage, setStatusMessage] = useState("");
-  const [statusHasError, setStatusHasError] = useState(false);
-
+  const [consultationMessage, setConsultationMessage] =
+    useState("");
   const [followUpMessage, setFollowUpMessage] = useState("");
-  const [followUpHasError, setFollowUpHasError] = useState(false);
 
-  async function saveChanges(payload: {
-    status?: string;
-    followUpAt?: string | null;
-  }) {
+  const [isSavingStatus, setIsSavingStatus] = useState(false);
+  const [isSavingConsultation, setIsSavingConsultation] =
+    useState(false);
+  const [isSavingFollowUp, setIsSavingFollowUp] =
+    useState(false);
+
+  async function patchLead(payload: Record<string, unknown>) {
     const response = await fetch("/api/leads", {
       method: "PATCH",
       headers: {
@@ -120,25 +124,51 @@ export default function LeadStatusForm({
 
     setIsSavingStatus(true);
     setStatusMessage("");
-    setStatusHasError(false);
 
     try {
-      await saveChanges({
-        status,
+      await patchLead({
+        lead_status: status,
       });
 
       setStatusMessage("Status saved.");
       router.refresh();
     } catch (error) {
-      setStatusHasError(true);
-
       setStatusMessage(
         error instanceof Error
           ? error.message
-          : "Unable to save the lead status.",
+          : "Unable to save status.",
       );
     } finally {
       setIsSavingStatus(false);
+    }
+  }
+
+  async function handleConsultationSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    setIsSavingConsultation(true);
+    setConsultationMessage("");
+
+    try {
+      await patchLead({
+        consultation_status: consultationStatus,
+      });
+
+      setConsultationMessage(
+        "Consultation status saved.",
+      );
+
+      router.refresh();
+    } catch (error) {
+      setConsultationMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to save consultation status.",
+      );
+    } finally {
+      setIsSavingConsultation(false);
     }
   }
 
@@ -148,29 +178,27 @@ export default function LeadStatusForm({
     event.preventDefault();
 
     if (!followUpAt) {
-      setFollowUpHasError(true);
-      setFollowUpMessage("Choose a follow-up date and time.");
+      setFollowUpMessage(
+        "Choose a follow-up date and time.",
+      );
       return;
     }
 
     setIsSavingFollowUp(true);
     setFollowUpMessage("");
-    setFollowUpHasError(false);
 
     try {
-      await saveChanges({
-        followUpAt,
+      await patchLead({
+        follow_up_at: followUpAt,
       });
 
       setFollowUpMessage("Follow-up saved.");
       router.refresh();
     } catch (error) {
-      setFollowUpHasError(true);
-
       setFollowUpMessage(
         error instanceof Error
           ? error.message
-          : "Unable to save the follow-up.",
+          : "Unable to save follow-up.",
       );
     } finally {
       setIsSavingFollowUp(false);
@@ -180,23 +208,20 @@ export default function LeadStatusForm({
   async function handleClearFollowUp() {
     setIsSavingFollowUp(true);
     setFollowUpMessage("");
-    setFollowUpHasError(false);
 
     try {
-      await saveChanges({
-        followUpAt: null,
+      await patchLead({
+        follow_up_at: null,
       });
 
       setFollowUpAt("");
       setFollowUpMessage("Follow-up cleared.");
       router.refresh();
     } catch (error) {
-      setFollowUpHasError(true);
-
       setFollowUpMessage(
         error instanceof Error
           ? error.message
-          : "Unable to clear the follow-up.",
+          : "Unable to clear follow-up.",
       );
     } finally {
       setIsSavingFollowUp(false);
@@ -204,13 +229,13 @@ export default function LeadStatusForm({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-6 lg:grid-cols-3">
       <form onSubmit={handleStatusSubmit}>
         <label
           htmlFor={`lead-status-${leadId}`}
           className="mb-2 block text-sm font-bold text-slate-950"
         >
-          Update lead status
+          Lead Status
         </label>
 
         <select
@@ -219,42 +244,72 @@ export default function LeadStatusForm({
           onChange={(event) => {
             setStatus(event.target.value);
             setStatusMessage("");
-            setStatusHasError(false);
           }}
           disabled={isSavingStatus}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 disabled:cursor-not-allowed disabled:bg-slate-100"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950"
         >
-          {leadStatuses.map((statusOption) => (
-            <option
-              key={statusOption.value}
-              value={statusOption.value}
-            >
-              {statusOption.label}
+          {leadStatuses.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
 
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <button
-            type="submit"
-            disabled={isSavingStatus}
-            className="rounded-lg bg-slate-950 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-          >
-            {isSavingStatus ? "Saving..." : "Save Status"}
-          </button>
+        <button
+          type="submit"
+          disabled={isSavingStatus}
+          className="mt-3 rounded-lg bg-slate-950 px-5 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+        >
+          {isSavingStatus ? "Saving..." : "Save Status"}
+        </button>
 
-          {statusMessage ? (
-            <p
-              className={`text-sm font-semibold ${
-                statusHasError
-                  ? "text-red-700"
-                  : "text-green-700"
-              }`}
-            >
-              {statusMessage}
-            </p>
-          ) : null}
-        </div>
+        {statusMessage ? (
+          <p className="mt-2 text-sm font-semibold text-slate-700">
+            {statusMessage}
+          </p>
+        ) : null}
+      </form>
+
+      <form onSubmit={handleConsultationSubmit}>
+        <label
+          htmlFor={`consultation-status-${leadId}`}
+          className="mb-2 block text-sm font-bold text-slate-950"
+        >
+          Consultation Status
+        </label>
+
+        <select
+          id={`consultation-status-${leadId}`}
+          value={consultationStatus}
+          onChange={(event) => {
+            setConsultationStatus(event.target.value);
+            setConsultationMessage("");
+          }}
+          disabled={isSavingConsultation}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950"
+        >
+          {consultationStatuses.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        <button
+          type="submit"
+          disabled={isSavingConsultation}
+          className="mt-3 rounded-lg bg-slate-950 px-5 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+        >
+          {isSavingConsultation
+            ? "Saving..."
+            : "Save Consultation"}
+        </button>
+
+        {consultationMessage ? (
+          <p className="mt-2 text-sm font-semibold text-slate-700">
+            {consultationMessage}
+          </p>
+        ) : null}
       </form>
 
       <form onSubmit={handleFollowUpSubmit}>
@@ -272,17 +327,16 @@ export default function LeadStatusForm({
           onChange={(event) => {
             setFollowUpAt(event.target.value);
             setFollowUpMessage("");
-            setFollowUpHasError(false);
           }}
           disabled={isSavingFollowUp}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-slate-950 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950"
         />
 
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="mt-3 flex flex-wrap gap-3">
           <button
             type="submit"
             disabled={isSavingFollowUp}
-            className="rounded-lg bg-slate-950 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+            className="rounded-lg bg-slate-950 px-5 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
           >
             {isSavingFollowUp
               ? "Saving..."
@@ -293,23 +347,17 @@ export default function LeadStatusForm({
             type="button"
             onClick={handleClearFollowUp}
             disabled={isSavingFollowUp || !followUpAt}
-            className="rounded-lg border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+            className="rounded-lg border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 disabled:text-slate-400"
           >
             Clear
           </button>
-
-          {followUpMessage ? (
-            <p
-              className={`text-sm font-semibold ${
-                followUpHasError
-                  ? "text-red-700"
-                  : "text-green-700"
-              }`}
-            >
-              {followUpMessage}
-            </p>
-          ) : null}
         </div>
+
+        {followUpMessage ? (
+          <p className="mt-2 text-sm font-semibold text-slate-700">
+            {followUpMessage}
+          </p>
+        ) : null}
       </form>
     </div>
   );
