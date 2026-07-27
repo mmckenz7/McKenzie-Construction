@@ -228,9 +228,12 @@ export default async function CustomersPage() {
                           Customer
                         </p>
 
-                        <h2 className="mt-2 text-xl font-bold text-slate-950">
+                        <Link
+                          href={`/admin/customers/${customer.id}`}
+                          className="mt-2 block text-xl font-bold text-slate-950 transition hover:text-amber-700"
+                        >
                           {customer.customer_name}
-                        </h2>
+                        </Link>
                       </div>
 
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
@@ -324,17 +327,29 @@ export default async function CustomersPage() {
                       </div>
                     ) : null}
 
-                    {customer.source_lead_id ? (
+                    <div className="mt-6 flex flex-wrap gap-4">
                       <Link
-                        href={`/admin/leads/${customer.source_lead_id}`}
-                        className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-slate-700 transition hover:text-slate-950"
+                        href={`/admin/customers/${customer.id}`}
+                        className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
                       >
-                        View Original Lead
+                        Open Customer
                         <span aria-hidden="true">
                           →
                         </span>
                       </Link>
-                    ) : null}
+
+                      {customer.source_lead_id ? (
+                        <Link
+                          href={`/admin/leads/${customer.source_lead_id}`}
+                          className="inline-flex items-center gap-2 px-1 py-2 text-sm font-bold text-slate-700 transition hover:text-slate-950"
+                        >
+                          Original Lead
+                          <span aria-hidden="true">
+                            →
+                          </span>
+                        </Link>
+                      ) : null}
+                    </div>
                   </article>
                 );
               })}
