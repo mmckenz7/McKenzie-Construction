@@ -14,6 +14,10 @@ const navigationItems = [
     href: "/admin/tasks",
   },
   {
+    label: "Customers",
+    href: "/admin/customers",
+  },
+  {
     label: "Team",
     href: "/admin/team",
   },
@@ -24,7 +28,6 @@ const navigationItems = [
 ];
 
 const futureNavigationItems = [
-  "Customers",
   "Projects",
   "Estimates",
 ];
@@ -63,20 +66,19 @@ export default function AdminLayout({
               </Link>
             ))}
 
-            {futureNavigationItems.map(
-              (label) => (
-                <span
-                  key={label}
-                  title="Coming soon"
-                  className="cursor-not-allowed rounded-lg px-3 py-2 text-sm font-bold text-slate-500"
-                >
-                  {label}
-                  <span className="ml-1 text-[9px] uppercase tracking-wide text-slate-600">
-                    Soon
-                  </span>
+            {futureNavigationItems.map((label) => (
+              <span
+                key={label}
+                title="Coming soon"
+                className="cursor-not-allowed rounded-lg px-3 py-2 text-sm font-bold text-slate-500"
+              >
+                {label}
+
+                <span className="ml-1 text-[9px] uppercase tracking-wide text-slate-600">
+                  Soon
                 </span>
-              ),
-            )}
+              </span>
+            ))}
           </nav>
         </div>
       </header>

@@ -230,6 +230,9 @@ export default function LeadStageWorkflow({
       nextFollowUpAt?: string | null;
       canConvertToProject?: boolean;
       phone?: string | null;
+      customerId?: string;
+      customerName?: string;
+      alreadyConverted?: boolean;
     };
 
     if (!response.ok || !result.success) {
@@ -547,6 +550,49 @@ export default function LeadStageWorkflow({
         error instanceof Error
           ? error.message
           : "Unable to mark the estimate sent.",
+      );
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function handleConvertToCustomer() {
+    setActiveAction(
+      "convert_to_customer",
+    );
+    clearMessages();
+
+    try {
+      const response = await fetch(
+        `/api/leads/${encodeURIComponent(
+          leadId,
+        )}/convert-to-customer`,
+        {
+          method: "POST",
+        },
+      );
+
+      const result =
+        await readResponse(response);
+
+      setStatus("won");
+
+      setMessage(
+        result.alreadyConverted
+          ? "This lead was already converted to a customer."
+          : `${
+              result.customerName ??
+              "Customer"
+            } was added to the customer list.`,
+      );
+
+      router.push("/admin/customers");
+      router.refresh();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to create the customer record.",
       );
     } finally {
       setActiveAction(null);
@@ -1220,7 +1266,7 @@ export default function LeadStageWorkflow({
               <button
                 type="button"
                 onClick={() =>
-                  void runWorkflowAction("won")
+                  void handleConvertToCustomer()
                 }
                 disabled={isBusy}
                 className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:bg-emerald-300"
@@ -1374,14 +1420,15 @@ export default function LeadStageWorkflow({
             <button
               type="button"
               onClick={() =>
-                void runWorkflowAction("won")
+                void handleConvertToCustomer()
               }
               disabled={isBusy}
               className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:bg-emerald-300"
             >
-              {activeAction === "won"
-                ? "Closing..."
-                : "Mark Won"}
+              {activeAction ===
+                "convert_to_customer"
+                  ? "Creating Customer..."
+                  : "Mark Won"}
             </button>
 
             <button
@@ -1409,16 +1456,8 @@ export default function LeadStageWorkflow({
           </h3>
 
           <p className="mt-2 text-sm text-slate-700">
-            This lead is ready for the future Convert to Project workflow.
+            This lead has been marked won and converted into a customer.
           </p>
-
-          <button
-            type="button"
-            disabled
-            className="mt-4 rounded-lg bg-emerald-300 px-4 py-2 text-sm font-bold text-emerald-800"
-          >
-            Convert to Project — Coming Next
-          </button>
         </section>
       ) : null}
 
