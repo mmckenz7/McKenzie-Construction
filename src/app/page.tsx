@@ -1,3 +1,6 @@
+import Image from "next/image";
+import Link from "next/link";
+
 const brandGreen = "#8CC63F";
 
 const services = [
@@ -24,57 +27,49 @@ const services = [
   },
 ];
 
-const projects = [
+const processSteps = [
   {
-    title: "Island Ford Outdoor Retreat",
-    location: "Rocky Top, Tennessee",
+    number: "01",
+    title: "Tell Us About the Project",
     description:
-      "A large entertaining deck and fire-pit setting designed to take advantage of a private wooded property.",
-    image:
-      "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1400&q=85",
+      "Submit your project details, property information, goals, and preferred consultation times.",
   },
   {
-    title: "Covered Backyard Living",
-    location: "East Tennessee",
+    number: "02",
+    title: "Site Visit and Planning",
     description:
-      "A comfortable outdoor room combining shade, gathering space, and a seamless connection to the home.",
-    image:
-      "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=85",
+      "We meet at the property, evaluate the existing conditions, discuss options, and confirm the intended scope.",
   },
   {
-    title: "Modern Entertaining Deck",
-    location: "Knoxville, Tennessee",
+    number: "03",
+    title: "Detailed Proposal",
     description:
-      "A clean, modern outdoor space built for dinners, football Saturdays, and time with family.",
-    image:
-      "https://images.unsplash.com/photo-1600607688969-a5bfcd646154?auto=format&fit=crop&w=1400&q=85",
+      "You receive a clear proposal outlining the work, pricing, selections, and expected next steps.",
+  },
+  {
+    number: "04",
+    title: "Construction and Closeout",
+    description:
+      "We coordinate the work, communicate throughout construction, and complete a final walkthrough before closeout.",
   },
 ];
 
-const differences = [
+const trustItems = [
   {
-    title: "We Answer the Phone",
-    description:
-      "You should not have to chase your contractor just to understand what happens next.",
-    icon: "01",
+    title: "Client First",
+    subtitle: "Built around your goals",
   },
   {
-    title: "We Communicate",
-    description:
-      "Clear expectations, honest updates, and straightforward answers throughout your project.",
-    icon: "02",
+    title: "Built Right",
+    subtitle: "Craftsmanship without shortcuts",
   },
   {
-    title: "We Build It Right",
-    description:
-      "Thoughtful planning and dependable craftsmanship matter long after the final walkthrough.",
-    icon: "03",
+    title: "Clear Communication",
+    subtitle: "Know where your project stands",
   },
   {
-    title: "We Stand Behind Our Work",
-    description:
-      "Our relationship does not disappear when construction is complete.",
-    icon: "04",
+    title: "Local Experience",
+    subtitle: "Serving Knoxville and East Tennessee",
   },
 ];
 
@@ -84,63 +79,81 @@ export default function HomePage() {
       {/* HEADER */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-black/85 text-white backdrop-blur-xl">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
-          <a href="/" className="flex items-center gap-3">
-            <div
-              className="flex h-11 w-11 items-center justify-center text-sm font-black text-black"
-              style={{ backgroundColor: brandGreen }}
+          <Link
+            href="/"
+            aria-label="McKenzie Construction home"
+            className="block"
+          >
+            <Image
+              src="/branding/MCM_rev_black_horiz.jpg"
+              alt="McKenzie Construction and Management"
+              width={500}
+              height={188}
+              priority
+              className="h-auto w-[210px] sm:w-[245px]"
+            />
+          </Link>
+
+          <nav
+            aria-label="Homepage navigation"
+            className="hidden items-center gap-7 text-sm font-semibold lg:flex"
+          >
+            <a
+              className="transition hover:text-lime-400"
+              href="#services"
             >
-              MCM
-            </div>
-
-            <div className="leading-none">
-              <div className="text-lg font-black tracking-wide">McKENZIE</div>
-              <div className="mt-1 text-[10px] font-semibold tracking-[0.24em] text-zinc-300">
-                CONSTRUCTION
-              </div>
-            </div>
-          </a>
-
-          <nav className="hidden items-center gap-7 text-sm font-semibold lg:flex">
-            <a className="transition hover:text-lime-400" href="#services">
               Services
-            </a>
-
-            <a className="transition hover:text-lime-400" href="#projects">
-              Projects
-            </a>
-
-            <a className="transition hover:text-lime-400" href="#difference">
-              Why McKenzie
-            </a>
-
-            <a className="transition hover:text-lime-400" href="/about">
-              About
             </a>
 
             <a
               className="transition hover:text-lime-400"
+              href="#projects"
+            >
+              Projects
+            </a>
+
+            <a
+              className="transition hover:text-lime-400"
+              href="#our-process"
+            >
+              Our Process
+            </a>
+
+            <Link
+              className="transition hover:text-lime-400"
+              href="/about"
+            >
+              About
+            </Link>
+
+            <Link
+              className="transition hover:text-lime-400"
               href="/learning-center"
             >
               Learning Center
-            </a>
+            </Link>
           </nav>
 
-          <a
+          <Link
             href="/contact"
             className="hidden rounded-sm px-5 py-3 text-sm font-black text-black transition hover:brightness-110 sm:inline-flex"
-            style={{ backgroundColor: brandGreen }}
+            style={{
+              backgroundColor: brandGreen,
+            }}
           >
             START YOUR PROJECT
-          </a>
+          </Link>
 
-          <a
+          <Link
             href="/contact"
             aria-label="Start your project"
             className="inline-flex h-11 w-11 items-center justify-center rounded-full text-xl font-black text-black sm:hidden"
-            style={{ backgroundColor: brandGreen }}
+            style={{
+              backgroundColor: brandGreen,
+            }}
           >
             +
-          </a>
+          </Link>
         </div>
       </header>
 
@@ -161,7 +174,9 @@ export default function HomePage() {
           <div className="max-w-3xl">
             <div
               className="mb-7 h-1 w-16"
-              style={{ backgroundColor: brandGreen }}
+              style={{
+                backgroundColor: brandGreen,
+              }}
             />
 
             <p className="mb-5 text-sm font-bold uppercase tracking-[0.25em] text-zinc-300">
@@ -176,31 +191,45 @@ export default function HomePage() {
 
             <h2
               className="mt-7 max-w-2xl text-3xl font-black leading-tight sm:text-4xl lg:text-5xl"
-              style={{ color: brandGreen }}
+              style={{
+                color: brandGreen,
+              }}
             >
               Crafted Around the Way You Live.
             </h2>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-200 sm:text-xl">
-              Custom decks, outdoor living spaces, and residential construction
-              built with craftsmanship, clear communication, and lasting value.
+              Custom decks, covered outdoor living spaces, renovations, and
+              residential construction built with craftsmanship, clear
+              communication, and lasting value.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <a
+              <Link
                 href="/contact"
                 className="inline-flex min-h-14 items-center justify-center px-7 text-sm font-black text-black transition hover:brightness-110"
-                style={{ backgroundColor: brandGreen }}
+                style={{
+                  backgroundColor: brandGreen,
+                }}
               >
                 START YOUR PROJECT
                 <span className="ml-3 text-lg">→</span>
-              </a>
+              </Link>
 
               <a
                 href="#projects"
                 className="inline-flex min-h-14 items-center justify-center border border-white/55 bg-black/20 px-7 text-sm font-black text-white backdrop-blur-sm transition hover:border-white hover:bg-white hover:text-black"
               >
                 VIEW PROJECTS
+              </a>
+            </div>
+
+            <div className="mt-6">
+              <a
+                href="tel:+18652633811"
+                className="text-sm font-bold text-zinc-200 transition hover:text-white"
+              >
+                Call 865-263-3811
               </a>
             </div>
           </div>
@@ -210,26 +239,26 @@ export default function HomePage() {
       {/* TRUST BAR */}
       <section className="border-b border-zinc-200 bg-white">
         <div className="mx-auto grid max-w-7xl grid-cols-2 divide-x divide-y divide-zinc-200 px-5 sm:px-8 lg:grid-cols-4 lg:divide-y-0">
-          {[
-            ["Client First", "Built around your goals"],
-            ["Built Right", "Craftsmanship without shortcuts"],
-            ["Clear Communication", "Know where your project stands"],
-            ["Backed by Experience", "Residential construction expertise"],
-          ].map(([title, subtitle]) => (
-            <div key={title} className="px-5 py-7 text-center">
+          {trustItems.map((item) => (
+            <div
+              key={item.title}
+              className="px-5 py-7 text-center"
+            >
               <div
                 className="mx-auto mb-3 flex h-9 w-9 items-center justify-center rounded-full text-sm font-black text-black"
-                style={{ backgroundColor: `${brandGreen}33` }}
+                style={{
+                  backgroundColor: `${brandGreen}33`,
+                }}
               >
                 ✓
               </div>
 
               <h3 className="text-sm font-black uppercase tracking-wide">
-                {title}
+                {item.title}
               </h3>
 
               <p className="mt-1 text-xs leading-5 text-zinc-500">
-                {subtitle}
+                {item.subtitle}
               </p>
             </div>
           ))}
@@ -242,30 +271,34 @@ export default function HomePage() {
           <div>
             <p
               className="text-sm font-black uppercase tracking-[0.25em]"
-              style={{ color: brandGreen }}
+              style={{
+                color: brandGreen,
+              }}
             >
-              Built for the way you live outside
+              Built for the way you live
             </p>
 
             <h2 className="mt-5 text-4xl font-black leading-tight tracking-[-0.03em] sm:text-5xl">
-              More than a deck.
+              Thoughtful construction.
               <br />
-              A better place to live.
+              Practical results.
             </h2>
           </div>
 
           <div>
             <p className="text-lg leading-8 text-zinc-300 sm:text-xl">
-              Your outdoor space should feel intentional—not like an
-              afterthought attached to the back of the house. We design around
-              how you entertain, relax, move through the property, and plan to
-              use the space for years to come.
+              Your home and outdoor spaces should feel intentional—not like a
+              collection of disconnected improvements. We plan around how you
+              entertain, relax, move through the property, and expect to use the
+              space for years to come.
             </p>
 
             <a
               href="#services"
               className="mt-8 inline-flex items-center border-b-2 pb-2 text-sm font-black uppercase tracking-wider"
-              style={{ borderColor: brandGreen }}
+              style={{
+                borderColor: brandGreen,
+              }}
             >
               Explore our services
               <span className="ml-3">→</span>
@@ -284,22 +317,24 @@ export default function HomePage() {
             <div>
               <p
                 className="text-sm font-black uppercase tracking-[0.25em]"
-                style={{ color: brandGreen }}
+                style={{
+                  color: brandGreen,
+                }}
               >
                 What we build
               </p>
 
               <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] sm:text-5xl">
-                Outdoor living,
+                Spaces designed
                 <br />
-                designed as a whole.
+                as a complete whole.
               </h2>
             </div>
 
             <p className="max-w-xl text-base leading-7 text-zinc-600">
-              From a focused deck replacement to a complete outdoor
-              transformation, every project begins with how you want the space
-              to function.
+              From a focused deck replacement to a complete residential or
+              outdoor transformation, every project begins with how you want
+              the finished space to function.
             </p>
           </div>
 
@@ -309,27 +344,39 @@ export default function HomePage() {
                 key={service.title}
                 className="group overflow-hidden bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl"
               >
-                <div
-                  className="h-64 bg-cover bg-center transition duration-500 group-hover:scale-[1.03]"
-                  style={{ backgroundImage: `url('${service.image}')` }}
-                />
+                <div className="overflow-hidden">
+                  <div
+                    className="h-64 bg-cover bg-center transition duration-500 group-hover:scale-[1.03]"
+                    style={{
+                      backgroundImage: `url('${service.image}')`,
+                    }}
+                  />
+                </div>
 
                 <div className="p-7">
-                  <h3 className="text-2xl font-black">{service.title}</h3>
+                  <h3 className="text-2xl font-black">
+                    {service.title}
+                  </h3>
 
                   <p className="mt-3 leading-7 text-zinc-600">
                     {service.description}
                   </p>
 
-                  <a
+                  <Link
                     href="/contact"
                     className="mt-6 inline-flex items-center text-sm font-black uppercase tracking-wider"
                   >
                     Start a conversation
-                    <span className="ml-3" style={{ color: brandGreen }}>
+
+                    <span
+                      className="ml-3"
+                      style={{
+                        color: brandGreen,
+                      }}
+                    >
                       →
                     </span>
-                  </a>
+                  </Link>
                 </div>
               </article>
             ))}
@@ -337,129 +384,191 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* FEATURED PROJECTS */}
-      <section id="projects" className="scroll-mt-20 bg-white py-20 sm:py-28">
+      {/* FEATURED PROJECT */}
+      <section
+        id="projects"
+        className="scroll-mt-20 bg-white py-20 sm:py-28"
+      >
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
-          <div className="flex items-end justify-between gap-6">
+          <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
             <div>
               <p
                 className="text-sm font-black uppercase tracking-[0.25em]"
-                style={{ color: brandGreen }}
+                style={{
+                  color: brandGreen,
+                }}
               >
-                Project Explorer
+                Featured Project
               </p>
 
               <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] sm:text-5xl">
-                Featured projects
+                Real work in East Tennessee.
               </h2>
             </div>
 
-            <a
+            <Link
               href="/projects"
-              className="hidden text-sm font-black uppercase tracking-wider sm:inline-flex"
+              className="text-sm font-black uppercase tracking-wider"
             >
               View all projects
-              <span className="ml-3" style={{ color: brandGreen }}>
+
+              <span
+                className="ml-3"
+                style={{
+                  color: brandGreen,
+                }}
+              >
                 →
               </span>
-            </a>
+            </Link>
           </div>
 
-          <div className="mt-12 grid gap-6 lg:grid-cols-3">
-            {projects.map((project) => (
-              <article
-                key={project.title}
-                className="group relative min-h-[470px] overflow-hidden bg-zinc-950 text-white"
-              >
-                <div
-                  className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105"
-                  style={{ backgroundImage: `url('${project.image}')` }}
-                />
-
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
-
-                <div className="absolute inset-x-0 bottom-0 p-7">
-                  <p
-                    className="text-xs font-black uppercase tracking-[0.2em]"
-                    style={{ color: brandGreen }}
-                  >
-                    {project.location}
-                  </p>
-
-                  <h3 className="mt-3 text-2xl font-black">{project.title}</h3>
-
-                  <p className="mt-3 max-w-md text-sm leading-6 text-zinc-200">
-                    {project.description}
-                  </p>
-
-                  <a
-                    href="/projects"
-                    className="mt-5 inline-flex items-center text-sm font-black uppercase tracking-wider"
-                  >
-                    Explore project
-                    <span className="ml-3" style={{ color: brandGreen }}>
-                      →
-                    </span>
-                  </a>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          <a
-            href="/projects"
-            className="mt-8 inline-flex text-sm font-black uppercase tracking-wider sm:hidden"
+          <Link
+            href="/projects/island-ford"
+            className="group relative mt-12 block min-h-[520px] overflow-hidden bg-zinc-950 text-white"
           >
-            View all projects
-            <span className="ml-3" style={{ color: brandGreen }}>
-              →
-            </span>
-          </a>
+            <div
+              className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105"
+              style={{
+                backgroundImage:
+                  "url('/projects/island-ford/08F626F4-F8F9-4B55-B3E5-723253E28102_1_105_c.jpeg')",
+              }}
+            />
+
+            <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/45 to-black/10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
+
+            <div className="relative flex min-h-[520px] items-end p-7 sm:p-10">
+              <div className="max-w-2xl">
+                <p
+                  className="text-xs font-black uppercase tracking-[0.2em]"
+                  style={{
+                    color: brandGreen,
+                  }}
+                >
+                  Lake City, Tennessee
+                </p>
+
+                <h3 className="mt-3 text-3xl font-black sm:text-4xl">
+                  Island Ford Modular Home &amp; Outdoor Living
+                </h3>
+
+                <p className="mt-4 max-w-xl text-base leading-7 text-zinc-200">
+                  Complete modular-home installation with exterior finish work,
+                  custom entry decks, a large rear wood deck, stairs,
+                  landscaping, gravel access, and site improvements.
+                </p>
+
+                <p className="mt-6 inline-flex items-center text-sm font-black uppercase tracking-wider">
+                  Explore project
+
+                  <span
+                    className="ml-3"
+                    style={{
+                      color: brandGreen,
+                    }}
+                  >
+                    →
+                  </span>
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-xl font-black">
+                More completed work
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-zinc-600">
+                Browse individual photos from decks, exterior improvements,
+                residential construction, and smaller projects.
+              </p>
+            </div>
+
+            <Link
+              href="/projects/gallery"
+              className="inline-flex w-fit items-center text-sm font-black uppercase tracking-wider"
+            >
+              Project gallery
+
+              <span
+                className="ml-3"
+                style={{
+                  color: brandGreen,
+                }}
+              >
+                →
+              </span>
+            </Link>
+          </div>
         </div>
       </section>
 
-      {/* MCKENZIE DIFFERENCE */}
+      {/* OUR PROCESS */}
       <section
-        id="difference"
+        id="our-process"
         className="scroll-mt-20 bg-zinc-950 py-20 text-white sm:py-28"
       >
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
           <div className="max-w-3xl">
             <p
               className="text-sm font-black uppercase tracking-[0.25em]"
-              style={{ color: brandGreen }}
+              style={{
+                color: brandGreen,
+              }}
             >
-              The McKenzie Difference
+              Our Process
             </p>
 
             <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] sm:text-5xl">
-              The things homeowners should be able to expect.
+              A clear path from the first conversation to the final walkthrough.
             </h2>
 
             <p className="mt-5 text-lg leading-8 text-zinc-300">
-              Quality construction matters. So does everything that happens
-              before, during, and after the build.
+              You should understand what happens next, who is responsible, and
+              where your project stands throughout the process.
             </p>
           </div>
 
           <div className="mt-12 grid gap-px overflow-hidden border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
-            {differences.map((item) => (
-              <article key={item.title} className="bg-zinc-950 p-7">
+            {processSteps.map((step) => (
+              <article
+                key={step.number}
+                className="bg-zinc-950 p-7"
+              >
                 <div
                   className="text-sm font-black"
-                  style={{ color: brandGreen }}
+                  style={{
+                    color: brandGreen,
+                  }}
                 >
-                  {item.icon}
+                  {step.number}
                 </div>
 
-                <h3 className="mt-8 text-xl font-black">{item.title}</h3>
+                <h3 className="mt-8 text-xl font-black">
+                  {step.title}
+                </h3>
 
                 <p className="mt-3 text-sm leading-6 text-zinc-400">
-                  {item.description}
+                  {step.description}
                 </p>
               </article>
             ))}
           </div>
+
+          <Link
+            href="/contact"
+            className="mt-10 inline-flex min-h-14 items-center justify-center px-7 text-sm font-black text-black transition hover:brightness-110"
+            style={{
+              backgroundColor: brandGreen,
+            }}
+          >
+            START THE PROCESS
+
+            <span className="ml-3 text-lg">→</span>
+          </Link>
         </div>
       </section>
 
@@ -469,7 +578,9 @@ export default function HomePage() {
           <div>
             <p
               className="text-sm font-black uppercase tracking-[0.25em]"
-              style={{ color: brandGreen }}
+              style={{
+                color: brandGreen,
+              }}
             >
               Start your project
             </p>
@@ -486,7 +597,9 @@ export default function HomePage() {
             </p>
 
             <div className="mt-7 flex flex-col gap-3 text-sm font-semibold sm:flex-row sm:gap-8">
-              <a href="tel:+18652633811">Call: 865-263-3811</a>
+              <a href="tel:+18652633811">
+                Call: 865-263-3811
+              </a>
 
               <a href="mailto:mcmllc.tn@gmail.com">
                 Email: mcmllc.tn@gmail.com
@@ -494,14 +607,17 @@ export default function HomePage() {
             </div>
           </div>
 
-          <a
+          <Link
             href="/contact"
             className="inline-flex min-h-14 items-center justify-center px-8 text-sm font-black text-black transition hover:brightness-110"
-            style={{ backgroundColor: brandGreen }}
+            style={{
+              backgroundColor: brandGreen,
+            }}
           >
             REQUEST A CONSULTATION
+
             <span className="ml-3 text-lg">→</span>
-          </a>
+          </Link>
         </div>
       </section>
 
@@ -509,59 +625,72 @@ export default function HomePage() {
       <footer className="bg-black py-12 text-white">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-10 px-5 sm:px-8 lg:flex-row">
           <div>
-            <div className="flex items-center gap-3">
-              <div
-                className="flex h-11 w-11 items-center justify-center text-sm font-black text-black"
-                style={{ backgroundColor: brandGreen }}
-              >
-                MCM
-              </div>
+            <Image
+              src="/branding/MCM_rev_black_horiz.jpg"
+              alt="McKenzie Construction and Management"
+              width={500}
+              height={188}
+              className="h-auto w-[250px]"
+            />
 
-              <div>
-                <div className="font-black tracking-wide">
-                  McKENZIE CONSTRUCTION
-                </div>
-
-                <div className="mt-1 text-xs text-zinc-400">
-                  Crafted Around the Way You Live.
-                </div>
-              </div>
-            </div>
+            <p className="mt-3 text-xs text-zinc-400">
+              Crafted Around the Way You Live.
+            </p>
 
             <p className="mt-5 max-w-md text-sm leading-6 text-zinc-400">
-              Custom decks, outdoor living spaces, and residential construction
-              serving Knoxville and East Tennessee.
+              Custom decks, outdoor living spaces, renovations, and residential
+              construction serving Knoxville and East Tennessee.
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-10 text-sm">
             <div>
-              <p className="font-black uppercase tracking-wider">Explore</p>
+              <p className="font-black uppercase tracking-wider">
+                Explore
+              </p>
 
               <div className="mt-4 space-y-3 text-zinc-400">
-                <a className="block hover:text-white" href="#services">
+                <a
+                  className="block hover:text-white"
+                  href="#services"
+                >
                   Services
-                </a>
-
-                <a className="block hover:text-white" href="#projects">
-                  Projects
-                </a>
-
-                <a className="block hover:text-white" href="/about">
-                  About
                 </a>
 
                 <a
                   className="block hover:text-white"
+                  href="#projects"
+                >
+                  Projects
+                </a>
+
+                <a
+                  className="block hover:text-white"
+                  href="#our-process"
+                >
+                  Our Process
+                </a>
+
+                <Link
+                  className="block hover:text-white"
+                  href="/about"
+                >
+                  About
+                </Link>
+
+                <Link
+                  className="block hover:text-white"
                   href="/learning-center"
                 >
                   Learning Center
-                </a>
+                </Link>
               </div>
             </div>
 
             <div>
-              <p className="font-black uppercase tracking-wider">Contact</p>
+              <p className="font-black uppercase tracking-wider">
+                Contact
+              </p>
 
               <div className="mt-4 space-y-3 text-zinc-400">
                 <a
@@ -578,9 +707,12 @@ export default function HomePage() {
                   Email Michael
                 </a>
 
-                <a className="block hover:text-white" href="/contact">
+                <Link
+                  className="block hover:text-white"
+                  href="/contact"
+                >
                   Start a Project
-                </a>
+                </Link>
               </div>
             </div>
           </div>
@@ -601,13 +733,15 @@ export default function HomePage() {
           CALL NOW
         </a>
 
-        <a
+        <Link
           href="/contact"
           className="flex min-h-12 items-center justify-center text-sm font-black text-black"
-          style={{ backgroundColor: brandGreen }}
+          style={{
+            backgroundColor: brandGreen,
+          }}
         >
           START PROJECT
-        </a>
+        </Link>
       </div>
     </main>
   );
