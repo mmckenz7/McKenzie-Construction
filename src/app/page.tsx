@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { HomeNavigation } from "@/components/home-navigation";
+
 const brandGreen = "#8CC63F";
 
 const services = [
@@ -76,94 +78,14 @@ const trustItems = [
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-white text-zinc-950">
-      {/* HEADER */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-black/85 text-white backdrop-blur-xl">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
-          <Link
-            href="/"
-            aria-label="McKenzie Construction home"
-            className="block"
-          >
-            <Image
-              src="/branding/MCM_rev_black_horiz.jpg"
-              alt="McKenzie Construction and Management"
-              width={500}
-              height={188}
-              priority
-              className="h-auto w-[210px] sm:w-[245px]"
-            />
-          </Link>
-
-          <nav
-            aria-label="Homepage navigation"
-            className="hidden items-center gap-7 text-sm font-semibold lg:flex"
-          >
-            <a
-              className="transition hover:text-lime-400"
-              href="#services"
-            >
-              Services
-            </a>
-
-            <a
-              className="transition hover:text-lime-400"
-              href="#projects"
-            >
-              Projects
-            </a>
-
-            <a
-              className="transition hover:text-lime-400"
-              href="#our-process"
-            >
-              Our Process
-            </a>
-
-            <Link
-              className="transition hover:text-lime-400"
-              href="/about"
-            >
-              About
-            </Link>
-
-            <Link
-              className="transition hover:text-lime-400"
-              href="/learning-center"
-            >
-              Learning Center
-            </Link>
-          </nav>
-
-          <Link
-            href="/contact"
-            className="hidden rounded-sm px-5 py-3 text-sm font-black text-black transition hover:brightness-110 sm:inline-flex"
-            style={{
-              backgroundColor: brandGreen,
-            }}
-          >
-            START YOUR PROJECT
-          </Link>
-
-          <Link
-            href="/contact"
-            aria-label="Start your project"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-xl font-black text-black sm:hidden"
-            style={{
-              backgroundColor: brandGreen,
-            }}
-          >
-            +
-          </Link>
-        </div>
-      </header>
+      <HomeNavigation />
 
       {/* HERO */}
       <section className="relative flex min-h-[760px] items-end overflow-hidden bg-black pt-20 text-white lg:min-h-screen lg:items-center">
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
-            backgroundImage:
-              "url('/hero/uncovered-deck-hero.jpg')",
+            backgroundImage: "url('/hero/uncovered-deck-hero.jpg')",
           }}
         />
 
@@ -411,7 +333,6 @@ export default function HomePage() {
               className="text-sm font-black uppercase tracking-wider"
             >
               View all projects
-
               <span
                 className="ml-3"
                 style={{
@@ -461,7 +382,6 @@ export default function HomePage() {
 
                 <p className="mt-6 inline-flex items-center text-sm font-black uppercase tracking-wider">
                   Explore project
-
                   <span
                     className="ml-3"
                     style={{
@@ -492,7 +412,6 @@ export default function HomePage() {
               className="inline-flex w-fit items-center text-sm font-black uppercase tracking-wider"
             >
               Project gallery
-
               <span
                 className="ml-3"
                 style={{
