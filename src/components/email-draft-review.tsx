@@ -1,6 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 
 type EmailDraftReviewProps = {
@@ -39,6 +43,7 @@ type DraftUpdateResponse = {
   draft?: EmailDraft;
   nextFollowUpAt?: string | null;
   followUpTaskCreated?: boolean;
+  companyTaskCreated?: boolean;
   error?: string;
 };
 
@@ -47,76 +52,186 @@ export default function EmailDraftReview({
 }: EmailDraftReviewProps) {
   const router = useRouter();
 
-  const [draft, setDraft] = useState<EmailDraft | null>(
-    null,
-  );
+  const [draft, setDraft] =
+    useState<EmailDraft | null>(null);
 
-  const [toEmail, setToEmail] = useState("");
-  const [ccEmail, setCcEmail] = useState("");
-  const [subject, setSubject] = useState("");
-  const [emailBody, setEmailBody] = useState("");
+  const [toEmail, setToEmail] =
+    useState("");
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeAction, setActiveAction] = useState<
-    "save" | "approve" | "cancel" | "mark_sent" | null
+  const [ccEmail, setCcEmail] =
+    useState("");
+
+  const [subject, setSubject] =
+    useState("");
+
+  const [emailBody, setEmailBody] =
+    useState("");
+
+  const [isLoading, setIsLoading] =
+    useState(true);
+
+  const [
+    activeAction,
+    setActiveAction,
+  ] = useState<
+    | "save"
+    | "approve"
+    | "cancel"
+    | "mark_sent"
+    | null
   >(null);
 
-  const [message, setMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [message, setMessage] =
+    useState("");
 
-  const loadDraft = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMessage("");
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
-    try {
-      const response = await fetch(
-        `/api/leads/${encodeURIComponent(
-          leadId,
-        )}/email-draft`,
-        {
-          method: "GET",
-          cache: "no-store",
-        },
-      );
+  const loadDraft = useCallback(
+    async (
+      options?: {
+        showLoading?: boolean;
+        showErrors?: boolean;
+      },
+    ) => {
+      const showLoading =
+        options?.showLoading ?? true;
 
-      const result =
-        (await response.json()) as DraftLookupResponse;
+      const showErrors =
+        options?.showErrors ?? true;
 
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.error ??
-            "Unable to load the email draft.",
+      if (showLoading) {
+        setIsLoading(true);
+      }
+
+      if (showErrors) {
+        setErrorMessage("");
+      }
+
+      try {
+        const response = await fetch(
+          `/api/leads/${encodeURIComponent(
+            leadId,
+          )}/email-draft`,
+          {
+            method: "GET",
+            cache: "no-store",
+          },
         );
-      }
 
-      if (!result.hasDraft || !result.draft) {
-        setDraft(null);
-        setToEmail("");
-        setCcEmail("");
-        setSubject("");
-        setEmailBody("");
-        return;
-      }
+        const result =
+          (await response.json()) as DraftLookupResponse;
 
-      setDraft(result.draft);
-      setToEmail(result.draft.to_email ?? "");
-      setCcEmail(result.draft.cc_email ?? "");
-      setSubject(result.draft.subject ?? "");
-      setEmailBody(result.draft.body ?? "");
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to load the email draft.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [leadId]);
+        if (
+          !response.ok ||
+          !result.success
+        ) {
+          throw new Error(
+            result.error ??
+              "Unable to load the email draft.",
+          );
+        }
+
+        if (
+          !result.hasDraft ||
+          !result.draft
+        ) {
+          setDraft(null);
+          setToEmail("");
+          setCcEmail("");
+          setSubject("");
+          setEmailBody("");
+
+          return false;
+        }
+
+        setDraft(result.draft);
+        setToEmail(
+          result.draft.to_email ?? "",
+        );
+        setCcEmail(
+          result.draft.cc_email ?? "",
+        );
+        setSubject(
+          result.draft.subject ?? "",
+        );
+        setEmailBody(
+          result.draft.body ?? "",
+        );
+
+        return true;
+      } catch (error) {
+        if (showErrors) {
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to load the email draft.",
+          );
+        }
+
+        return false;
+      } finally {
+        if (showLoading) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [leadId],
+  );
 
   useEffect(() => {
     void loadDraft();
   }, [loadDraft]);
+
+  useEffect(() => {
+    if (
+      isLoading ||
+      draft ||
+      activeAction
+    ) {
+      return;
+    }
+
+    const intervalId =
+      window.setInterval(() => {
+        void loadDraft({
+          showLoading: false,
+          showErrors: false,
+        });
+      }, 2000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [
+    activeAction,
+    draft,
+    isLoading,
+    loadDraft,
+  ]);
+
+  useEffect(() => {
+    if (
+      draft &&
+      window.location.hash ===
+        "#email-draft-review"
+    ) {
+      window.requestAnimationFrame(
+        () => {
+          document
+            .getElementById(
+              "email-draft-review",
+            )
+            ?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+        },
+      );
+    }
+  }, [draft]);
 
   async function updateDraft(
     action:
@@ -129,6 +244,7 @@ export default function EmailDraftReview({
       setErrorMessage(
         "There is no email draft available.",
       );
+
       return;
     }
 
@@ -140,16 +256,23 @@ export default function EmailDraftReview({
         setErrorMessage(
           "Enter the recipient email address.",
         );
+
         return;
       }
 
       if (!subject.trim()) {
-        setErrorMessage("Enter an email subject.");
+        setErrorMessage(
+          "Enter an email subject.",
+        );
+
         return;
       }
 
       if (!emailBody.trim()) {
-        setErrorMessage("Enter the email message.");
+        setErrorMessage(
+          "Enter the email message.",
+        );
+
         return;
       }
     }
@@ -166,7 +289,8 @@ export default function EmailDraftReview({
         {
           method: "PATCH",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
           body: JSON.stringify({
             action,
@@ -181,7 +305,10 @@ export default function EmailDraftReview({
       const result =
         (await response.json()) as DraftUpdateResponse;
 
-      if (!response.ok || !result.success) {
+      if (
+        !response.ok ||
+        !result.success
+      ) {
         throw new Error(
           result.error ??
             "Unable to update the email draft.",
@@ -194,8 +321,13 @@ export default function EmailDraftReview({
         setCcEmail("");
         setSubject("");
         setEmailBody("");
-        setMessage("Email draft canceled.");
-      } else if (action === "mark_sent") {
+
+        setMessage(
+          "Email draft canceled.",
+        );
+      } else if (
+        action === "mark_sent"
+      ) {
         setDraft(null);
         setToEmail("");
         setCcEmail("");
@@ -203,16 +335,25 @@ export default function EmailDraftReview({
         setEmailBody("");
 
         setMessage(
-          result.followUpTaskCreated
+          result.followUpTaskCreated ||
+            result.companyTaskCreated
             ? "Email marked sent. The next phone follow-up was scheduled."
             : "Email marked sent.",
         );
       } else if (result.draft) {
         setDraft(result.draft);
-        setToEmail(result.draft.to_email ?? "");
-        setCcEmail(result.draft.cc_email ?? "");
-        setSubject(result.draft.subject ?? "");
-        setEmailBody(result.draft.body ?? "");
+        setToEmail(
+          result.draft.to_email ?? "",
+        );
+        setCcEmail(
+          result.draft.cc_email ?? "",
+        );
+        setSubject(
+          result.draft.subject ?? "",
+        );
+        setEmailBody(
+          result.draft.body ?? "",
+        );
 
         setMessage(
           action === "approve"
@@ -235,7 +376,10 @@ export default function EmailDraftReview({
 
   if (isLoading) {
     return (
-      <section className="rounded-xl border border-orange-300 bg-orange-50 p-5">
+      <section
+        id="email-draft-review"
+        className="scroll-mt-6 rounded-xl border border-orange-300 bg-orange-50 p-5"
+      >
         <p className="text-sm font-semibold text-orange-900">
           Loading email draft...
         </p>
@@ -245,7 +389,10 @@ export default function EmailDraftReview({
 
   if (!draft) {
     return (
-      <section className="rounded-xl border border-slate-300 bg-slate-50 p-5">
+      <section
+        id="email-draft-review"
+        className="scroll-mt-6 rounded-xl border border-slate-300 bg-slate-50 p-5"
+      >
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-slate-600">
@@ -257,14 +404,17 @@ export default function EmailDraftReview({
             </h3>
 
             <p className="mt-1 text-sm leading-6 text-slate-700">
-              A draft will appear here after a workflow action
-              creates one.
+              This section automatically
+              checks for newly generated
+              drafts.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={() => void loadDraft()}
+            onClick={() =>
+              void loadDraft()
+            }
             className="shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 transition hover:bg-slate-100"
           >
             Check for Draft
@@ -293,7 +443,10 @@ export default function EmailDraftReview({
     activeAction !== null;
 
   return (
-    <section className="rounded-xl border border-orange-300 bg-orange-50 p-5">
+    <section
+      id="email-draft-review"
+      className="scroll-mt-6 rounded-xl border border-orange-300 bg-orange-50 p-5"
+    >
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-orange-800">
@@ -305,9 +458,11 @@ export default function EmailDraftReview({
           </h3>
 
           <p className="mt-1 text-sm leading-6 text-slate-700">
-            Review and edit this message before approving it.
-            Until an email provider is connected, send it
-            manually and then click Mark Sent.
+            Review and edit this message
+            before approving it. Until an
+            email provider is connected,
+            send it manually and then click
+            Mark Sent.
           </p>
         </div>
 
@@ -334,11 +489,15 @@ export default function EmailDraftReview({
             type="email"
             value={toEmail}
             onChange={(event) => {
-              setToEmail(event.target.value);
+              setToEmail(
+                event.target.value,
+              );
               setMessage("");
               setErrorMessage("");
             }}
-            disabled={controlsAreDisabled}
+            disabled={
+              controlsAreDisabled
+            }
             className="w-full rounded-lg border border-orange-300 bg-white px-3 py-2 text-sm text-slate-950"
           />
         </label>
@@ -352,11 +511,15 @@ export default function EmailDraftReview({
             type="email"
             value={ccEmail}
             onChange={(event) => {
-              setCcEmail(event.target.value);
+              setCcEmail(
+                event.target.value,
+              );
               setMessage("");
               setErrorMessage("");
             }}
-            disabled={controlsAreDisabled}
+            disabled={
+              controlsAreDisabled
+            }
             placeholder="Optional"
             className="w-full rounded-lg border border-orange-300 bg-white px-3 py-2 text-sm text-slate-950"
           />
@@ -372,11 +535,15 @@ export default function EmailDraftReview({
           type="text"
           value={subject}
           onChange={(event) => {
-            setSubject(event.target.value);
+            setSubject(
+              event.target.value,
+            );
             setMessage("");
             setErrorMessage("");
           }}
-          disabled={controlsAreDisabled}
+          disabled={
+            controlsAreDisabled
+          }
           className="w-full rounded-lg border border-orange-300 bg-white px-3 py-2 text-sm text-slate-950"
         />
       </label>
@@ -389,11 +556,15 @@ export default function EmailDraftReview({
         <textarea
           value={emailBody}
           onChange={(event) => {
-            setEmailBody(event.target.value);
+            setEmailBody(
+              event.target.value,
+            );
             setMessage("");
             setErrorMessage("");
           }}
-          disabled={controlsAreDisabled}
+          disabled={
+            controlsAreDisabled
+          }
           rows={14}
           className="w-full rounded-lg border border-orange-300 bg-white px-3 py-2 text-sm leading-6 text-slate-950"
         />
@@ -402,8 +573,12 @@ export default function EmailDraftReview({
       <div className="mt-5 flex flex-wrap gap-3">
         <button
           type="button"
-          onClick={() => void updateDraft("save")}
-          disabled={controlsAreDisabled}
+          onClick={() =>
+            void updateDraft("save")
+          }
+          disabled={
+            controlsAreDisabled
+          }
           className="rounded-lg border border-orange-400 bg-white px-4 py-2 text-sm font-bold text-orange-900 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:text-orange-300"
         >
           {activeAction === "save"
@@ -417,7 +592,9 @@ export default function EmailDraftReview({
             onClick={() =>
               void updateDraft("approve")
             }
-            disabled={controlsAreDisabled}
+            disabled={
+              controlsAreDisabled
+            }
             className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:bg-orange-300"
           >
             {activeAction === "approve"
@@ -428,12 +605,17 @@ export default function EmailDraftReview({
           <button
             type="button"
             onClick={() =>
-              void updateDraft("mark_sent")
+              void updateDraft(
+                "mark_sent",
+              )
             }
-            disabled={controlsAreDisabled}
+            disabled={
+              controlsAreDisabled
+            }
             className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-emerald-300"
           >
-            {activeAction === "mark_sent"
+            {activeAction ===
+            "mark_sent"
               ? "Updating..."
               : "Mark Sent"}
           </button>
@@ -441,8 +623,12 @@ export default function EmailDraftReview({
 
         <button
           type="button"
-          onClick={() => void updateDraft("cancel")}
-          disabled={controlsAreDisabled}
+          onClick={() =>
+            void updateDraft("cancel")
+          }
+          disabled={
+            controlsAreDisabled
+          }
           className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
         >
           {activeAction === "cancel"
@@ -452,8 +638,12 @@ export default function EmailDraftReview({
 
         <button
           type="button"
-          onClick={() => void loadDraft()}
-          disabled={controlsAreDisabled}
+          onClick={() =>
+            void loadDraft()
+          }
+          disabled={
+            controlsAreDisabled
+          }
           className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
         >
           Reload

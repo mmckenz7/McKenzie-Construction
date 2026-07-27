@@ -460,7 +460,10 @@ export default async function LeadDetailPage({
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section
+              id="lead-workflow"
+              className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+            >
               <div className="mb-6">
                 <p className="text-xs font-bold uppercase tracking-widest text-amber-700">
                   Current Stage
@@ -485,6 +488,18 @@ export default async function LeadDetailPage({
                 }
                 currentFollowUpAt={
                   lead.follow_up_at
+                }
+                requestedDate={
+                  lead.requested_date
+                }
+                requestedTime={
+                  lead.requested_time
+                }
+                alternateDate={
+                  lead.alternate_date
+                }
+                alternateTime={
+                  lead.alternate_time
                 }
               />
             </section>

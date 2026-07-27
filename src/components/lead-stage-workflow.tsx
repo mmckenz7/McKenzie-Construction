@@ -10,6 +10,10 @@ type LeadStageWorkflowProps = {
   currentStatus: string | null;
   currentConsultationStatus: string | null;
   currentFollowUpAt: string | null;
+  requestedDate: string | null;
+  requestedTime: string | null;
+  alternateDate: string | null;
+  alternateTime: string | null;
 };
 
 type CallOutcome =
@@ -72,13 +76,84 @@ function formatForDateTimeInput(
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
+function combineDateAndTime(
+  date: string | null,
+  time: string | null,
+) {
+  if (!date || !time) {
+    return "";
+  }
+
+  return `${date}T${time.slice(0, 5)}`;
+}
+
+function formatRequestedOption(
+  date: string | null,
+  time: string | null,
+) {
+  const combined = combineDateAndTime(
+    date,
+    time,
+  );
+
+  if (!combined) {
+    return "Not provided";
+  }
+
+  const parsedDate = new Date(combined);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return `${date ?? ""} ${
+      time ?? ""
+    }`.trim();
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(parsedDate);
+}
+
 export default function LeadStageWorkflow({
   leadId,
   currentStatus,
   currentConsultationStatus,
   currentFollowUpAt,
+  requestedDate,
+  requestedTime,
+  alternateDate,
+  alternateTime,
 }: LeadStageWorkflowProps) {
   const router = useRouter();
+
+  const preferredAppointmentAt =
+    combineDateAndTime(
+      requestedDate,
+      requestedTime,
+    );
+
+  const alternateAppointmentAt =
+    combineDateAndTime(
+      alternateDate,
+      alternateTime,
+    );
+
+  const [
+    consultationChoice,
+    setConsultationChoice,
+  ] = useState<
+    "preferred" | "alternate" | "custom"
+  >(
+    preferredAppointmentAt
+      ? "preferred"
+      : alternateAppointmentAt
+        ? "alternate"
+        : "custom",
+  );
 
   const [status, setStatus] = useState(
     currentStatus ?? "new",
@@ -99,7 +174,9 @@ export default function LeadStageWorkflow({
         ? formatForDateTimeInput(
             currentFollowUpAt,
           )
-        : "",
+        : preferredAppointmentAt ||
+            alternateAppointmentAt ||
+            "",
     );
 
   const [followUpAt, setFollowUpAt] =
@@ -643,26 +720,166 @@ export default function LeadStageWorkflow({
 
           <form
             onSubmit={handleConfirmConsultation}
-            className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end"
+            className="mt-5 space-y-4"
           >
-            <label className="block flex-1">
-              <span className="mb-2 block text-sm font-bold text-slate-950">
-                Consultation Date and Time
-              </span>
+            <fieldset
+              disabled={isBusy}
+              className="grid gap-3 lg:grid-cols-3"
+            >
+              <legend className="sr-only">
+                Choose a consultation time
+              </legend>
 
-              <input
-                type="datetime-local"
-                value={appointmentAt}
-                onChange={(event) => {
-                  setAppointmentAt(
-                    event.target.value,
-                  );
-                  clearMessages();
-                }}
-                disabled={isBusy}
-                className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-950"
-              />
-            </label>
+              <label className="flex cursor-pointer gap-3 rounded-xl border border-amber-300 bg-white p-4">
+                <input
+                  type="radio"
+                  name="consultationChoice"
+                  value="preferred"
+                  checked={
+                    consultationChoice ===
+                    "preferred"
+                  }
+                  disabled={
+                    !preferredAppointmentAt ||
+                    isBusy
+                  }
+                  onChange={() => {
+                    setConsultationChoice(
+                      "preferred",
+                    );
+                    setAppointmentAt(
+                      preferredAppointmentAt,
+                    );
+                    clearMessages();
+                  }}
+                  className="mt-1"
+                />
+
+                <span>
+                  <span className="block text-sm font-bold text-slate-950">
+                    Preferred
+                  </span>
+
+                  <span className="mt-1 block text-sm text-slate-700">
+                    {formatRequestedOption(
+                      requestedDate,
+                      requestedTime,
+                    )}
+                  </span>
+                </span>
+              </label>
+
+              <label className="flex cursor-pointer gap-3 rounded-xl border border-amber-300 bg-white p-4">
+                <input
+                  type="radio"
+                  name="consultationChoice"
+                  value="alternate"
+                  checked={
+                    consultationChoice ===
+                    "alternate"
+                  }
+                  disabled={
+                    !alternateAppointmentAt ||
+                    isBusy
+                  }
+                  onChange={() => {
+                    setConsultationChoice(
+                      "alternate",
+                    );
+                    setAppointmentAt(
+                      alternateAppointmentAt,
+                    );
+                    clearMessages();
+                  }}
+                  className="mt-1"
+                />
+
+                <span>
+                  <span className="block text-sm font-bold text-slate-950">
+                    Alternate
+                  </span>
+
+                  <span className="mt-1 block text-sm text-slate-700">
+                    {formatRequestedOption(
+                      alternateDate,
+                      alternateTime,
+                    )}
+                  </span>
+                </span>
+              </label>
+
+              <label className="flex cursor-pointer gap-3 rounded-xl border border-amber-300 bg-white p-4">
+                <input
+                  type="radio"
+                  name="consultationChoice"
+                  value="custom"
+                  checked={
+                    consultationChoice ===
+                    "custom"
+                  }
+                  disabled={isBusy}
+                  onChange={() => {
+                    setConsultationChoice(
+                      "custom",
+                    );
+                    setAppointmentAt("");
+                    clearMessages();
+                  }}
+                  className="mt-1"
+                />
+
+                <span>
+                  <span className="block text-sm font-bold text-slate-950">
+                    Custom
+                  </span>
+
+                  <span className="mt-1 block text-sm text-slate-700">
+                    Select another date and time.
+                  </span>
+                </span>
+              </label>
+            </fieldset>
+
+            {consultationChoice ===
+            "custom" ? (
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-950">
+                  Custom Consultation Date and Time
+                </span>
+
+                <input
+                  type="datetime-local"
+                  value={appointmentAt}
+                  onChange={(event) => {
+                    setAppointmentAt(
+                      event.target.value,
+                    );
+                    clearMessages();
+                  }}
+                  disabled={isBusy}
+                  className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-950"
+                />
+              </label>
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-white px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-amber-800">
+                  Selected Appointment
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-slate-950">
+                  {consultationChoice ===
+                  "preferred"
+                    ? formatRequestedOption(
+                        requestedDate,
+                        requestedTime,
+                      )
+                    : formatRequestedOption(
+                        alternateDate,
+                        alternateTime,
+                      )}
+                </p>
+              </div>
+            )}
 
             <button
               type="submit"

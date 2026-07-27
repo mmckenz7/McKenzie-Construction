@@ -716,6 +716,31 @@ export default function TaskDashboard({
     }
   }
 
+  function getTaskDestination(task: Task) {
+    if (!task.lead_id) {
+      return null;
+    }
+
+    const anchor =
+      task.task_type ===
+      "review_follow_up_email"
+        ? "#email-draft-review"
+        : "#lead-workflow";
+
+    return `/admin/leads/${encodeURIComponent(
+      task.lead_id,
+    )}${anchor}`;
+  }
+
+  function openTask(task: Task) {
+    const destination =
+      getTaskDestination(task);
+
+    if (destination) {
+      router.push(destination);
+    }
+  }
+
   function renderTaskCard(
     task: Task,
     context:
@@ -776,9 +801,19 @@ export default function TaskDashboard({
               ) : null}
             </div>
 
-            <h3 className="mt-3 text-base font-bold text-slate-950">
-              {task.title}
-            </h3>
+            {getTaskDestination(task) ? (
+              <button
+                type="button"
+                onClick={() => openTask(task)}
+                className="mt-3 block text-left text-base font-bold text-slate-950 underline decoration-slate-300 underline-offset-4 transition hover:text-slate-600"
+              >
+                {task.title}
+              </button>
+            ) : (
+              <h3 className="mt-3 text-base font-bold text-slate-950">
+                {task.title}
+              </h3>
+            )}
 
             {task.description ? (
               <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
@@ -806,11 +841,7 @@ export default function TaskDashboard({
               <button
                 type="button"
                 onClick={() =>
-                  router.push(
-                    `/admin/leads/${encodeURIComponent(
-                      String(relatedLead.id),
-                    )}`,
-                  )
+                  openTask(task)
                 }
                 className="mt-3 block w-full cursor-pointer rounded-lg border border-slate-200 bg-white/80 px-3 py-3 text-left text-xs text-slate-700 transition hover:border-slate-400 hover:bg-white"
               >
@@ -827,7 +858,7 @@ export default function TaskDashboard({
                   : ""}
 
                 <span className="ml-2 font-bold text-slate-500">
-                  Open Lead →
+                  Open Task →
                 </span>
               </button>
             ) : null}
