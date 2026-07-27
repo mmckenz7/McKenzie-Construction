@@ -482,7 +482,12 @@ export default async function LeadDetailPage({
 
               <LeadStageWorkflow
                 leadId={String(lead.id)}
-                currentStatus={
+                
+        requestedDate={lead.requested_date}
+        requestedTime={lead.requested_time}
+        alternateDate={lead.alternate_date}
+        alternateTime={lead.alternate_time}
+currentStatus={
                   lead.lead_status
                 }
                 currentConsultationStatus={
