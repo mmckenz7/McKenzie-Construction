@@ -163,7 +163,7 @@ export default function HomePage() {
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage:
-              "url('https://images.unsplash.com/photo-1600585152915-d208bec867a1?auto=format&fit=crop&w=2200&q=90')",
+              "url('/hero/uncovered-deck-hero.jpg')",
           }}
         />
 
@@ -566,7 +566,6 @@ export default function HomePage() {
             }}
           >
             START THE PROCESS
-
             <span className="ml-3 text-lg">→</span>
           </Link>
         </div>
@@ -615,7 +614,6 @@ export default function HomePage() {
             }}
           >
             REQUEST A CONSULTATION
-
             <span className="ml-3 text-lg">→</span>
           </Link>
         </div>
