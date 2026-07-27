@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import LeadAssignmentControl from "@/components/lead-assignment-control";
 import LeadNotesForm from "@/components/lead-notes-form";
 import LeadStageWorkflow from "@/components/lead-stage-workflow";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -651,6 +652,10 @@ export default async function LeadDetailPage({
           </div>
 
           <aside className="space-y-6">
+            <LeadAssignmentControl
+              leadId={String(lead.id)}
+            />
+
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
