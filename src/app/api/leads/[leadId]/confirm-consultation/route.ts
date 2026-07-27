@@ -10,7 +10,21 @@ type RequestBody = {
   appointmentAt?: unknown;
 };
 
-function formatAppointmentForEmail(value: string) {
+type LeadRecord = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  property_address: string | null;
+  project_type: string | null;
+  lead_status: string | null;
+  consultation_status: string | null;
+  responsible_person_id: string | null;
+};
+
+function formatAppointmentForEmail(
+  value: string,
+) {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
@@ -34,13 +48,16 @@ export async function POST(
   context: RouteContext,
 ) {
   try {
-    const { leadId: rawLeadId } = await context.params;
+    const { leadId: rawLeadId } =
+      await context.params;
+
     const leadId = rawLeadId.trim();
 
     if (!leadId) {
       return Response.json(
         {
-          error: "A valid lead ID is required.",
+          error:
+            "A valid lead ID is required.",
         },
         {
           status: 400,
@@ -48,18 +65,23 @@ export async function POST(
       );
     }
 
-    const body = (await request.json()) as RequestBody;
+    const body =
+      (await request.json()) as RequestBody;
 
     const appointmentAt =
       typeof body.appointmentAt === "string"
         ? body.appointmentAt.trim()
         : "";
 
-    const appointmentDate = new Date(appointmentAt);
+    const appointmentDate = new Date(
+      appointmentAt,
+    );
 
     if (
       !appointmentAt ||
-      Number.isNaN(appointmentDate.getTime())
+      Number.isNaN(
+        appointmentDate.getTime(),
+      )
     ) {
       return Response.json(
         {
@@ -72,27 +94,31 @@ export async function POST(
       );
     }
 
-    const supabase = createAdminServerClient();
+    const supabase =
+      createAdminServerClient();
 
-    const { data: lead, error: leadReadError } =
-      await supabase
-        .from("leads")
-        .select(
-          `
-            id,
-            name,
-            email,
-            phone,
-            property_address,
-            project_type,
-            lead_status,
-            consultation_status
-          `,
-        )
-        .eq("id", leadId)
-        .single();
+    const {
+      data: leadData,
+      error: leadReadError,
+    } = await supabase
+      .from("leads")
+      .select(
+        `
+          id,
+          name,
+          email,
+          phone,
+          property_address,
+          project_type,
+          lead_status,
+          consultation_status,
+          responsible_person_id
+        `,
+      )
+      .eq("id", leadId)
+      .single();
 
-    if (leadReadError || !lead) {
+    if (leadReadError || !leadData) {
       return Response.json(
         {
           error:
@@ -104,6 +130,9 @@ export async function POST(
         },
       );
     }
+
+    const lead =
+      leadData as LeadRecord;
 
     if (!lead.email) {
       return Response.json(
@@ -118,7 +147,9 @@ export async function POST(
     }
 
     const formattedAppointment =
-      formatAppointmentForEmail(appointmentAt);
+      formatAppointmentForEmail(
+        appointmentAt,
+      );
 
     if (!formattedAppointment) {
       return Response.json(
@@ -132,15 +163,21 @@ export async function POST(
       );
     }
 
-    const now = new Date().toISOString();
+    const now =
+      new Date().toISOString();
+
     const appointmentIso =
       appointmentDate.toISOString();
 
-    const { error: leadUpdateError } = await supabase
+    const {
+      error: leadUpdateError,
+    } = await supabase
       .from("leads")
       .update({
-        lead_status: "consultation_scheduled",
-        consultation_status: "confirmed",
+        lead_status:
+          "consultation_scheduled",
+        consultation_status:
+          "confirmed",
         follow_up_at: appointmentIso,
       })
       .eq("id", leadId);
@@ -148,7 +185,8 @@ export async function POST(
     if (leadUpdateError) {
       return Response.json(
         {
-          error: leadUpdateError.message,
+          error:
+            leadUpdateError.message,
         },
         {
           status: 500,
@@ -156,72 +194,205 @@ export async function POST(
       );
     }
 
-    const { error: completeTaskError } = await supabase
-      .from("lead_tasks")
-      .update({
-        status: "completed",
-        completed_at: now,
-        completion_note:
-          "Consultation confirmed with the customer.",
-      })
-      .eq("lead_id", leadId)
-      .eq("task_type", "review_new_lead")
-      .in("status", ["open", "in_progress"]);
+    const reviewCompletion = {
+      status: "completed",
+      completed_at: now,
+      completion_note:
+        "Consultation confirmed with the customer.",
+    };
 
-    if (completeTaskError) {
-      console.error(
-        "Unable to complete review task:",
-        completeTaskError,
-      );
-    }
-
-    const { error: cancelExistingTaskError } =
-      await supabase
+    const [
+      legacyReviewResult,
+      companyReviewResult,
+    ] = await Promise.all([
+      supabase
         .from("lead_tasks")
-        .update({
-          status: "canceled",
-          canceled_at: now,
-          completion_note:
-            "Replaced by a newly confirmed consultation.",
-        })
+        .update(reviewCompletion)
         .eq("lead_id", leadId)
-        .eq("task_type", "complete_consultation")
-        .in("status", ["open", "in_progress"]);
+        .eq(
+          "task_type",
+          "review_new_lead",
+        )
+        .in("status", [
+          "open",
+          "in_progress",
+        ]),
 
-    if (cancelExistingTaskError) {
+      supabase
+        .from("tasks")
+        .update(reviewCompletion)
+        .eq("lead_id", leadId)
+        .eq(
+          "task_type",
+          "review_new_lead",
+        )
+        .in("status", [
+          "open",
+          "in_progress",
+        ]),
+    ]);
+
+    if (legacyReviewResult.error) {
       console.error(
-        "Unable to cancel older consultation task:",
-        cancelExistingTaskError,
+        "Unable to complete lead review task:",
+        legacyReviewResult.error,
       );
     }
 
-    const { error: taskCreateError } = await supabase
+    if (companyReviewResult.error) {
+      console.error(
+        "Unable to complete company review task:",
+        companyReviewResult.error,
+      );
+    }
+
+    const consultationCancellation = {
+      status: "canceled",
+      canceled_at: now,
+      completion_note:
+        "Replaced by a newly confirmed consultation.",
+    };
+
+    const [
+      legacyCancelResult,
+      companyCancelResult,
+    ] = await Promise.all([
+      supabase
+        .from("lead_tasks")
+        .update(
+          consultationCancellation,
+        )
+        .eq("lead_id", leadId)
+        .eq(
+          "task_type",
+          "complete_consultation",
+        )
+        .in("status", [
+          "open",
+          "in_progress",
+        ]),
+
+      supabase
+        .from("tasks")
+        .update(
+          consultationCancellation,
+        )
+        .eq("lead_id", leadId)
+        .eq(
+          "task_type",
+          "complete_consultation",
+        )
+        .in("status", [
+          "open",
+          "in_progress",
+        ]),
+    ]);
+
+    if (legacyCancelResult.error) {
+      console.error(
+        "Unable to cancel older lead consultation task:",
+        legacyCancelResult.error,
+      );
+    }
+
+    if (companyCancelResult.error) {
+      console.error(
+        "Unable to cancel older company consultation task:",
+        companyCancelResult.error,
+      );
+    }
+
+    const taskTitle =
+      `Complete consultation: ${
+        lead.name ?? "Customer"
+      }`;
+
+    const taskDescription =
+      "Complete the site consultation, record notes, and mark the visit complete.";
+
+    const taskMetadata = {
+      created_by:
+        "confirm_consultation_workflow",
+      appointment_at:
+        appointmentIso,
+      customer_name: lead.name,
+      project_type:
+        lead.project_type,
+      property_address:
+        lead.property_address,
+      phone: lead.phone,
+    };
+
+    const {
+      data: legacyTask,
+      error: legacyTaskCreateError,
+    } = await supabase
       .from("lead_tasks")
       .insert({
         lead_id: leadId,
-        task_type: "complete_consultation",
-        title: `Complete consultation: ${
-          lead.name ?? "Customer"
-        }`,
+        task_type:
+          "complete_consultation",
+        title: taskTitle,
         description:
-          "Complete the site consultation, record notes, and mark the visit complete.",
+          taskDescription,
         status: "open",
         priority: "high",
         due_at: appointmentIso,
-        metadata: {
-          created_by:
-            "confirm_consultation_workflow",
-          appointment_at: appointmentIso,
-          customer_name: lead.name,
-          project_type: lead.project_type,
-          property_address: lead.property_address,
-        },
-      });
+        assigned_to_id:
+          lead.responsible_person_id,
+        assigned_at:
+          lead.responsible_person_id
+            ? now
+            : null,
+        metadata: taskMetadata,
+      })
+      .select("id")
+      .single();
 
-    if (taskCreateError) {
+    if (legacyTaskCreateError) {
       console.error(
-        "Unable to create consultation task:",
-        taskCreateError,
+        "Unable to create lead consultation task:",
+        legacyTaskCreateError,
+      );
+    }
+
+    const {
+      data: companyTask,
+      error: companyTaskCreateError,
+    } = await supabase
+      .from("tasks")
+      .insert({
+        lead_id: leadId,
+        task_type:
+          "complete_consultation",
+        title: taskTitle,
+        description:
+          taskDescription,
+        category: "sales",
+        status: "open",
+        priority: "high",
+        due_at: appointmentIso,
+        assigned_to_id:
+          lead.responsible_person_id,
+        assigned_at:
+          lead.responsible_person_id
+            ? now
+            : null,
+        source_type:
+          "confirm_consultation_workflow",
+        metadata: {
+          ...taskMetadata,
+          legacy_lead_task_id:
+            legacyTask?.id ?? null,
+        },
+      })
+      .select("id")
+      .single();
+
+    if (companyTaskCreateError) {
+      console.error(
+        "Unable to create company consultation task:",
+        companyTaskCreateError,
       );
     }
 
@@ -233,10 +404,12 @@ export async function POST(
 Your consultation with McKenzie Construction is confirmed for ${formattedAppointment}.
 
 Project: ${
-      lead.project_type ?? "Construction consultation"
+      lead.project_type ??
+      "Construction consultation"
     }
 Property: ${
-      lead.property_address ?? "Address to be confirmed"
+      lead.property_address ??
+      "Address to be confirmed"
     }
 
 We will review the project with you, discuss the scope of work, and gather the information needed to prepare your estimate.
@@ -249,25 +422,28 @@ Michael McKenzie
 McKenzie Construction
 865-263-3811`;
 
-    const { data: emailDraft, error: draftCreateError } =
-      await supabase
-        .from("email_drafts")
-        .insert({
-          lead_id: leadId,
-          template_key:
-            "consultation_confirmation",
-          to_email: lead.email,
-          subject: emailSubject,
-          body: emailBody,
-          status: "draft",
-          metadata: {
-            created_by:
-              "confirm_consultation_workflow",
-            appointment_at: appointmentIso,
-          },
-        })
-        .select("id")
-        .single();
+    const {
+      data: emailDraft,
+      error: draftCreateError,
+    } = await supabase
+      .from("email_drafts")
+      .insert({
+        lead_id: leadId,
+        template_key:
+          "consultation_confirmation",
+        to_email: lead.email,
+        subject: emailSubject,
+        body: emailBody,
+        status: "draft",
+        metadata: {
+          created_by:
+            "confirm_consultation_workflow",
+          appointment_at:
+            appointmentIso,
+        },
+      })
+      .select("id")
+      .single();
 
     if (draftCreateError) {
       console.error(
@@ -283,34 +459,50 @@ McKenzie Construction
       direction: string;
       summary: string;
       details: string | null;
-      metadata: Record<string, unknown>;
+      metadata: Record<
+        string,
+        unknown
+      >;
     }> = [
       {
         lead_id: leadId,
-        activity_type: "consultation_confirmed",
+        activity_type:
+          "consultation_confirmed",
         channel: "consultation",
         direction: "internal",
-        summary: "Consultation confirmed",
-        details: formattedAppointment,
+        summary:
+          "Consultation confirmed",
+        details:
+          formattedAppointment,
         metadata: {
           previous_lead_status:
             lead.lead_status,
           previous_consultation_status:
             lead.consultation_status,
-          appointment_at: appointmentIso,
+          appointment_at:
+            appointmentIso,
         },
       },
       {
         lead_id: leadId,
-        activity_type: "task_created",
+        activity_type:
+          "task_created",
         channel: "task",
         direction: "internal",
         summary:
           "Complete consultation task created",
-        details: formattedAppointment,
+        details:
+          formattedAppointment,
         metadata: {
-          task_type: "complete_consultation",
+          task_type:
+            "complete_consultation",
           due_at: appointmentIso,
+          assigned_to_id:
+            lead.responsible_person_id,
+          legacy_task_id:
+            legacyTask?.id ?? null,
+          company_task_id:
+            companyTask?.id ?? null,
         },
       },
     ];
@@ -318,23 +510,26 @@ McKenzie Construction
     if (emailDraft) {
       activityRecords.push({
         lead_id: leadId,
-        activity_type: "email_draft_created",
+        activity_type:
+          "email_draft_created",
         channel: "email",
         direction: "outbound",
         summary:
           "Consultation confirmation email draft created",
         details: emailSubject,
         metadata: {
-          email_draft_id: emailDraft.id,
+          email_draft_id:
+            emailDraft.id,
           template_key:
             "consultation_confirmation",
         },
       });
     }
 
-    const { error: activityError } = await supabase
-      .from("lead_activities")
-      .insert(activityRecords);
+    const { error: activityError } =
+      await supabase
+        .from("lead_activities")
+        .insert(activityRecords);
 
     if (activityError) {
       console.error(
@@ -345,8 +540,14 @@ McKenzie Construction
 
     return Response.json({
       success: true,
-      appointmentAt: appointmentIso,
-      emailDraftCreated: Boolean(emailDraft),
+      appointmentAt:
+        appointmentIso,
+      emailDraftCreated:
+        Boolean(emailDraft),
+      legacyTaskCreated:
+        Boolean(legacyTask),
+      companyTaskCreated:
+        Boolean(companyTask),
     });
   } catch (error) {
     console.error(
@@ -357,7 +558,9 @@ McKenzie Construction
     return Response.json(
       {
         error:
-          "Unable to confirm the consultation.",
+          error instanceof Error
+            ? error.message
+            : "Unable to confirm the consultation.",
       },
       {
         status: 500,
