@@ -519,8 +519,8 @@ export default function HomePage() {
                 Call: 865-263-3811
               </a>
 
-              <a href="mailto:mcmllc.tn@gmail.com">
-                Email: mcmllc.tn@gmail.com
+              <a href="mailto:info@mckenzie-builds.com">
+                Email: info@mckenzie-builds.com
               </a>
             </div>
           </div>
@@ -619,7 +619,7 @@ export default function HomePage() {
 
                 <a
                   className="block hover:text-white"
-                  href="mailto:mcmllc.tn@gmail.com"
+                  href="mailto:info@mckenzie-builds.com"
                 >
                   Email Michael
                 </a>
