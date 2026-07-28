@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { logout } from "@/app/login/actions";
@@ -33,6 +34,17 @@ const navigationItems = [
 
 const futureNavigationItems = ["Projects", "Estimates"];
 
+function getRequestedPath(
+  pathname: string | null,
+  search: string | null,
+) {
+  if (!pathname || !pathname.startsWith("/")) {
+    return "/admin";
+  }
+
+  return search ? `${pathname}?${search}` : pathname;
+}
+
 export default async function AdminLayout({
   children,
 }: AdminLayoutProps) {
@@ -43,7 +55,16 @@ export default async function AdminLayout({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login");
+    const requestHeaders = await headers();
+
+    const requestedPath = getRequestedPath(
+      requestHeaders.get("x-pathname"),
+      requestHeaders.get("x-search-params"),
+    );
+
+    redirect(
+      `/login?next=${encodeURIComponent(requestedPath)}`,
+    );
   }
 
   return (
@@ -99,7 +120,9 @@ export default async function AdminLayout({
               </form>
             </nav>
 
-            <p className="text-xs text-slate-400">{user.email}</p>
+            <p className="text-xs text-slate-400">
+              {user.email}
+            </p>
           </div>
         </div>
       </header>

@@ -6,12 +6,14 @@ import { login } from "./actions";
 
 type LoginFormProps = {
   errorMessage: string | null;
+  nextPath: string;
 };
 
 const rememberedEmailKey = "mckenzie-crm-remembered-email";
 
 export function LoginForm({
   errorMessage,
+  nextPath,
 }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [rememberEmail, setRememberEmail] = useState(true);
@@ -55,6 +57,12 @@ export function LoginForm({
         onSubmit={handleSubmit}
         className="mt-7 space-y-5"
       >
+        <input
+          type="hidden"
+          name="next"
+          value={nextPath}
+        />
+
         <div>
           <label
             htmlFor="email"

@@ -2,8 +2,22 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+
+  requestHeaders.set(
+    "x-pathname",
+    request.nextUrl.pathname,
+  );
+
+  requestHeaders.set(
+    "x-search-params",
+    request.nextUrl.searchParams.toString(),
+  );
+
   let response = NextResponse.next({
-    request,
+    request: {
+      headers: requestHeaders,
+    },
   });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -34,7 +48,9 @@ export async function updateSession(request: NextRequest) {
           });
 
           response = NextResponse.next({
-            request,
+            request: {
+              headers: requestHeaders,
+            },
           });
 
           cookiesToSet.forEach(
@@ -47,7 +63,11 @@ export async function updateSession(request: NextRequest) {
                     maxAge: undefined,
                   };
 
-              response.cookies.set(name, value, finalOptions);
+              response.cookies.set(
+                name,
+                value,
+                finalOptions,
+              );
             },
           );
         },

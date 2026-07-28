@@ -15,12 +15,34 @@ export const metadata: Metadata = {
 type LoginPageProps = {
   searchParams: Promise<{
     error?: string;
+    next?: string;
   }>;
 };
+
+function getSafeRedirectPath(value: string | undefined) {
+  if (!value) {
+    return "/admin";
+  }
+
+  const path = value.trim();
+
+  if (
+    !path.startsWith("/") ||
+    path.startsWith("//") ||
+    path.includes("://")
+  ) {
+    return "/admin";
+  }
+
+  return path;
+}
 
 export default async function LoginPage({
   searchParams,
 }: LoginPageProps) {
+  const params = await searchParams;
+  const nextPath = getSafeRedirectPath(params.next);
+
   const supabase = await createAuthenticatedServerClient();
 
   const {
@@ -28,10 +50,8 @@ export default async function LoginPage({
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect("/admin");
+    redirect(nextPath);
   }
-
-  const params = await searchParams;
 
   const errorMessage =
     params.error === "missing-fields"
@@ -58,7 +78,10 @@ export default async function LoginPage({
           </p>
         </div>
 
-        <LoginForm errorMessage={errorMessage} />
+        <LoginForm
+          errorMessage={errorMessage}
+          nextPath={nextPath}
+        />
 
         <p className="mt-6 text-center text-xs leading-5 text-slate-500">
           Authorized company users only.
