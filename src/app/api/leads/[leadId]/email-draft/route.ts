@@ -1,3 +1,7 @@
+import {
+  createUnauthorizedApiResponse,
+  getAuthenticatedApiUser,
+} from "@/lib/api-auth";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -7,9 +11,18 @@ type RouteContext = {
 };
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: RouteContext,
 ) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
   try {
     const { leadId: rawLeadId } = await context.params;
     const leadId = rawLeadId.trim();
