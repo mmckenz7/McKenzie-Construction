@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 
 import "./globals.css";
 
@@ -8,6 +9,7 @@ const inter = Inter({
 });
 
 const siteUrl = "https://www.mckenzie-builds.com";
+const googleAnalyticsId = "G-Q0TTHS0QCH";
 
 const localBusinessSchema = {
   "@context": "https://schema.org",
@@ -138,6 +140,24 @@ export default function RootLayout({
             __html: JSON.stringify(localBusinessSchema),
           }}
         />
+
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`}
+          strategy="afterInteractive"
+        />
+
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+
+            function gtag() {
+              dataLayer.push(arguments);
+            }
+
+            gtag('js', new Date());
+            gtag('config', '${googleAnalyticsId}');
+          `}
+        </Script>
       </body>
     </html>
   );
