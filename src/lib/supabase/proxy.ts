@@ -16,6 +16,9 @@ export async function updateSession(request: NextRequest) {
     );
   }
 
+  const trustDevice =
+    request.cookies.get("mckenzie-trust-device")?.value !== "false";
+
   const supabase = createServerClient(
     supabaseUrl,
     supabasePublishableKey,
@@ -35,8 +38,16 @@ export async function updateSession(request: NextRequest) {
           });
 
           cookiesToSet.forEach(
-            ({ name, value, options }) => {
-              response.cookies.set(name, value, options);
+            ({ name, value, options: cookieOptions }) => {
+              const finalOptions = trustDevice
+                ? cookieOptions
+                : {
+                    ...cookieOptions,
+                    expires: undefined,
+                    maxAge: undefined,
+                  };
+
+              response.cookies.set(name, value, finalOptions);
             },
           );
         },
