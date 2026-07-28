@@ -12,6 +12,8 @@ const services = [
       "Purpose-built wood and composite decks designed around your home, property, and the way you want to use the space.",
     image:
       "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1200&q=85",
+    href: "/knoxville-deck-builder",
+    linkLabel: "Explore deck services",
   },
   {
     title: "Covered Outdoor Living",
@@ -19,6 +21,8 @@ const services = [
       "Comfortable, protected spaces for entertaining, relaxing, and enjoying East Tennessee throughout more of the year.",
     image:
       "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=85",
+    href: "/services",
+    linkLabel: "Explore our services",
   },
   {
     title: "Screened Porches",
@@ -26,6 +30,8 @@ const services = [
       "Open-air living without the insects, built to feel like a natural extension of your home.",
     image:
       "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=1200&q=85",
+    href: "/services",
+    linkLabel: "Explore our services",
   },
 ];
 
@@ -85,7 +91,8 @@ export default function HomePage() {
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
-            backgroundImage: "url('/hero/uncovered-deck-hero.jpg')",
+            backgroundImage:
+              "url('/hero/uncovered-deck-hero.jpg')",
           }}
         />
 
@@ -121,9 +128,9 @@ export default function HomePage() {
             </h2>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-200 sm:text-xl">
-              Custom decks, covered outdoor living spaces, renovations, and
-              residential construction built with craftsmanship, clear
-              communication, and lasting value.
+              Custom decks, covered outdoor living spaces,
+              renovations, and residential construction built with
+              craftsmanship, clear communication, and lasting value.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -209,22 +216,40 @@ export default function HomePage() {
 
           <div>
             <p className="text-lg leading-8 text-zinc-300 sm:text-xl">
-              Your home and outdoor spaces should feel intentional—not like a
-              collection of disconnected improvements. We plan around how you
-              entertain, relax, move through the property, and expect to use the
-              space for years to come.
+              Your home and outdoor spaces should feel
+              intentional—not like a collection of disconnected
+              improvements. We plan around how you entertain, relax,
+              move through the property, and expect to use the space
+              for years to come.
             </p>
 
-            <a
-              href="#services"
-              className="mt-8 inline-flex items-center border-b-2 pb-2 text-sm font-black uppercase tracking-wider"
-              style={{
-                borderColor: brandGreen,
-              }}
-            >
-              Explore our services
-              <span className="ml-3">→</span>
-            </a>
+            <div className="mt-8 flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:gap-8">
+              <a
+                href="#services"
+                className="inline-flex items-center border-b-2 pb-2 text-sm font-black uppercase tracking-wider"
+                style={{
+                  borderColor: brandGreen,
+                }}
+              >
+                Explore our services
+                <span className="ml-3">→</span>
+              </a>
+
+              <Link
+                href="/knoxville-deck-builder"
+                className="inline-flex items-center text-sm font-black uppercase tracking-wider text-zinc-200 transition hover:text-white"
+              >
+                Knoxville deck builder
+                <span
+                  className="ml-3"
+                  style={{
+                    color: brandGreen,
+                  }}
+                >
+                  →
+                </span>
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -254,9 +279,9 @@ export default function HomePage() {
             </div>
 
             <p className="max-w-xl text-base leading-7 text-zinc-600">
-              From a focused deck replacement to a complete residential or
-              outdoor transformation, every project begins with how you want
-              the finished space to function.
+              From a focused deck replacement to a complete
+              residential or outdoor transformation, every project
+              begins with how you want the finished space to function.
             </p>
           </div>
 
@@ -285,10 +310,10 @@ export default function HomePage() {
                   </p>
 
                   <Link
-                    href="/contact"
+                    href={service.href}
                     className="mt-6 inline-flex items-center text-sm font-black uppercase tracking-wider"
                   >
-                    Start a conversation
+                    {service.linkLabel}
 
                     <span
                       className="ml-3"
@@ -375,9 +400,10 @@ export default function HomePage() {
                 </h3>
 
                 <p className="mt-4 max-w-xl text-base leading-7 text-zinc-200">
-                  Complete modular-home installation with exterior finish work,
-                  custom entry decks, a large rear wood deck, stairs,
-                  landscaping, gravel access, and site improvements.
+                  Complete modular-home installation with exterior
+                  finish work, custom entry decks, a large rear wood
+                  deck, stairs, landscaping, gravel access, and site
+                  improvements.
                 </p>
 
                 <p className="mt-6 inline-flex items-center text-sm font-black uppercase tracking-wider">
@@ -402,8 +428,9 @@ export default function HomePage() {
               </h3>
 
               <p className="mt-2 text-sm leading-6 text-zinc-600">
-                Browse individual photos from decks, exterior improvements,
-                residential construction, and smaller projects.
+                Browse individual photos from decks, exterior
+                improvements, residential construction, and smaller
+                projects.
               </p>
             </div>
 
@@ -442,12 +469,14 @@ export default function HomePage() {
             </p>
 
             <h2 className="mt-4 text-4xl font-black tracking-[-0.03em] sm:text-5xl">
-              A clear path from the first conversation to the final walkthrough.
+              A clear path from the first conversation to the final
+              walkthrough.
             </h2>
 
             <p className="mt-5 text-lg leading-8 text-zinc-300">
-              You should understand what happens next, who is responsible, and
-              where your project stands throughout the process.
+              You should understand what happens next, who is
+              responsible, and where your project stands throughout
+              the process.
             </p>
           </div>
 
@@ -508,10 +537,10 @@ export default function HomePage() {
             </h2>
 
             <p className="mt-5 max-w-3xl text-lg leading-8 text-zinc-600">
-              Complete one project request with your contact information,
-              project details, and preferred consultation time. Michael will
-              personally review your request before any appointment is
-              confirmed.
+              Complete one project request with your contact
+              information, project details, and preferred consultation
+              time. Michael will personally review your request before
+              any appointment is confirmed.
             </p>
 
             <div className="mt-7 flex flex-col gap-3 text-sm font-semibold sm:flex-row sm:gap-8">
@@ -555,8 +584,9 @@ export default function HomePage() {
             </p>
 
             <p className="mt-5 max-w-md text-sm leading-6 text-zinc-400">
-              Custom decks, outdoor living spaces, renovations, and residential
-              construction serving Knoxville and East Tennessee.
+              Custom decks, outdoor living spaces, renovations, and
+              residential construction serving Knoxville and East
+              Tennessee.
             </p>
           </div>
 
@@ -567,19 +597,26 @@ export default function HomePage() {
               </p>
 
               <div className="mt-4 space-y-3 text-zinc-400">
-                <a
+                <Link
                   className="block hover:text-white"
-                  href="#services"
+                  href="/services"
                 >
                   Services
-                </a>
+                </Link>
 
-                <a
+                <Link
                   className="block hover:text-white"
-                  href="#projects"
+                  href="/knoxville-deck-builder"
+                >
+                  Knoxville Deck Builder
+                </Link>
+
+                <Link
+                  className="block hover:text-white"
+                  href="/projects"
                 >
                   Projects
-                </a>
+                </Link>
 
                 <a
                   className="block hover:text-white"
@@ -636,8 +673,8 @@ export default function HomePage() {
         </div>
 
         <div className="mx-auto mt-10 max-w-7xl border-t border-white/10 px-5 pt-6 text-xs text-zinc-500 sm:px-8">
-          © {new Date().getFullYear()} McKenzie Construction. All rights
-          reserved.
+          © {new Date().getFullYear()} McKenzie Construction. All
+          rights reserved.
         </div>
       </footer>
 
