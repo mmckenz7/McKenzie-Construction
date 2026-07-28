@@ -9,7 +9,7 @@ type Task = {
   description: string | null;
   category: string;
   task_type: string | null;
-  task_type_id: string | null;
+  task_type_id?: string | null;
   status: string;
   priority: string;
   due_at: string | null;

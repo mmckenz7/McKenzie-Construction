@@ -1,3 +1,12 @@
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
+import {
+  createUnauthorizedApiResponse,
+  getAuthenticatedApiUser,
+} from "@/lib/api-auth";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 const allowedLeadStatuses = [
@@ -26,23 +35,30 @@ function optionalText(
 
   const cleanedValue = value.trim();
 
-  return cleanedValue.length > 0 ? cleanedValue : null;
+  return cleanedValue.length > 0
+    ? cleanedValue
+    : null;
 }
 
 function requiredText(
   value: FormDataEntryValue | null,
   fieldName: string,
 ): string {
-  const cleanedValue = optionalText(value);
+  const cleanedValue =
+    optionalText(value);
 
   if (!cleanedValue) {
-    throw new Error(`${fieldName} is required.`);
+    throw new Error(
+      `${fieldName} is required.`,
+    );
   }
 
   return cleanedValue;
 }
 
-function redirectTo(path: string): Response {
+function redirectTo(
+  path: string,
+): Response {
   return new Response(null, {
     status: 303,
     headers: {
@@ -54,150 +70,238 @@ function redirectTo(path: string): Response {
 function getInitialReviewDueAt(): string {
   const dueDate = new Date();
 
-  dueDate.setHours(dueDate.getHours() + 24);
+  dueDate.setHours(
+    dueDate.getHours() + 24,
+  );
 
   return dueDate.toISOString();
 }
 
-export async function POST(request: Request) {
+export async function POST(
+  request: NextRequest,
+) {
   try {
-    const formData = await request.formData();
+    const formData =
+      await request.formData();
 
-    const website = optionalText(formData.get("website"));
+    const website = optionalText(
+      formData.get("website"),
+    );
 
     if (website) {
-      return redirectTo("/thank-you");
+      return redirectTo(
+        "/thank-you",
+      );
     }
 
-    const name = requiredText(formData.get("name"), "Name");
-    const phone = requiredText(formData.get("phone"), "Phone");
-
-    const email = optionalText(formData.get("email"));
-
-    const propertyAddress = optionalText(
-      formData.get("propertyAddress"),
+    const name = requiredText(
+      formData.get("name"),
+      "Name",
     );
 
-    const projectType = requiredText(
-      formData.get("projectType"),
-      "Project type",
+    const phone = requiredText(
+      formData.get("phone"),
+      "Phone",
     );
 
-    const description = requiredText(
-      formData.get("description"),
-      "Project description",
+    const email = optionalText(
+      formData.get("email"),
     );
 
-    const estimatedBudget = optionalText(
-      formData.get("estimatedBudget"),
-    );
+    const propertyAddress =
+      optionalText(
+        formData.get(
+          "propertyAddress",
+        ),
+      );
 
-    const desiredTimeline = optionalText(
-      formData.get("desiredTimeline"),
-    );
+    const projectType =
+      requiredText(
+        formData.get(
+          "projectType",
+        ),
+        "Project type",
+      );
+
+    const description =
+      requiredText(
+        formData.get(
+          "description",
+        ),
+        "Project description",
+      );
+
+    const estimatedBudget =
+      optionalText(
+        formData.get(
+          "estimatedBudget",
+        ),
+      );
+
+    const desiredTimeline =
+      optionalText(
+        formData.get(
+          "desiredTimeline",
+        ),
+      );
 
     const preferredContactMethod =
-      optionalText(formData.get("preferredContactMethod")) ??
-      "phone";
+      optionalText(
+        formData.get(
+          "preferredContactMethod",
+        ),
+      ) ?? "phone";
 
-    const requestedDate = optionalText(
-      formData.get("requestedDate"),
-    );
+    const requestedDate =
+      optionalText(
+        formData.get(
+          "requestedDate",
+        ),
+      );
 
-    const requestedTime = optionalText(
-      formData.get("requestedTime"),
-    );
+    const requestedTime =
+      optionalText(
+        formData.get(
+          "requestedTime",
+        ),
+      );
 
-    const alternateDate = optionalText(
-      formData.get("alternateDate"),
-    );
+    const alternateDate =
+      optionalText(
+        formData.get(
+          "alternateDate",
+        ),
+      );
 
-    const alternateTime = optionalText(
-      formData.get("alternateTime"),
-    );
+    const alternateTime =
+      optionalText(
+        formData.get(
+          "alternateTime",
+        ),
+      );
 
-    const consultationWasRequested = Boolean(
-      requestedDate || requestedTime,
-    );
+    const consultationWasRequested =
+      Boolean(
+        requestedDate ||
+          requestedTime,
+      );
 
-    const consultationStatus = consultationWasRequested
-      ? "pending"
-      : "not_requested";
+    const consultationStatus =
+      consultationWasRequested
+        ? "pending"
+        : "not_requested";
 
-    const supabase = createAdminServerClient();
+    const supabase =
+      createAdminServerClient();
 
-    const { data: newLead, error: leadError } = await supabase
+    const {
+      data: newLead,
+      error: leadError,
+    } = await supabase
       .from("leads")
       .insert({
         name,
         phone,
         email,
-        property_address: propertyAddress,
-        project_type: projectType,
+        property_address:
+          propertyAddress,
+        project_type:
+          projectType,
         description,
-        estimated_budget: estimatedBudget,
-        desired_timeline: desiredTimeline,
-        preferred_contact_method: preferredContactMethod,
-        requested_date: requestedDate,
-        requested_time: requestedTime,
-        alternate_date: alternateDate,
-        alternate_time: alternateTime,
-        consultation_status: consultationStatus,
+        estimated_budget:
+          estimatedBudget,
+        desired_timeline:
+          desiredTimeline,
+        preferred_contact_method:
+          preferredContactMethod,
+        requested_date:
+          requestedDate,
+        requested_time:
+          requestedTime,
+        alternate_date:
+          alternateDate,
+        alternate_time:
+          alternateTime,
+        consultation_status:
+          consultationStatus,
         lead_status: "new",
         lead_source: "website",
       })
       .select("id")
       .single();
 
-    if (leadError || !newLead) {
+    if (
+      leadError ||
+      !newLead
+    ) {
       console.error(
         "Supabase lead submission error:",
         leadError,
       );
 
-      return redirectTo("/contact?error=submission");
+      return redirectTo(
+        "/contact?error=submission",
+      );
     }
 
-    const leadId = String(newLead.id);
-    const initialReviewDueAt = getInitialReviewDueAt();
+    const leadId = String(
+      newLead.id,
+    );
 
-    const activityPromise = supabase
-      .from("lead_activities")
-      .insert({
-        lead_id: leadId,
-        activity_type: "lead_submitted",
-        channel: "system",
-        direction: "inbound",
-        summary: "Website lead submitted",
-        details: `${name} submitted a request for ${projectType}.`,
-        metadata: {
-          source: "website",
-          phone,
-          email,
-          property_address: propertyAddress,
-          consultation_requested:
-            consultationWasRequested,
-          requested_date: requestedDate,
-          requested_time: requestedTime,
-        },
-      });
+    const initialReviewDueAt =
+      getInitialReviewDueAt();
 
-    const taskPromise = supabase.from("lead_tasks").insert({
-      lead_id: leadId,
-      task_type: "review_new_lead",
-      title: `Review new lead: ${name}`,
-      description:
-        "Review the customer request, contact the lead, and confirm the next step.",
-      status: "open",
-      priority: "high",
-      due_at: initialReviewDueAt,
-      metadata: {
-        created_by: "website_lead_workflow",
-        customer_name: name,
-        project_type: projectType,
-        preferred_contact_method: preferredContactMethod,
-      },
-    });
+    const activityPromise =
+      supabase
+        .from("lead_activities")
+        .insert({
+          lead_id: leadId,
+          activity_type:
+            "lead_submitted",
+          channel: "system",
+          direction: "inbound",
+          summary:
+            "Website lead submitted",
+          details: `${name} submitted a request for ${projectType}.`,
+          metadata: {
+            source: "website",
+            phone,
+            email,
+            property_address:
+              propertyAddress,
+            consultation_requested:
+              consultationWasRequested,
+            requested_date:
+              requestedDate,
+            requested_time:
+              requestedTime,
+          },
+        });
+
+    const taskPromise =
+      supabase
+        .from("lead_tasks")
+        .insert({
+          lead_id: leadId,
+          task_type:
+            "review_new_lead",
+          title: `Review new lead: ${name}`,
+          description:
+            "Review the customer request, contact the lead, and confirm the next step.",
+          status: "open",
+          priority: "high",
+          due_at:
+            initialReviewDueAt,
+          metadata: {
+            created_by:
+              "website_lead_workflow",
+            customer_name: name,
+            project_type:
+              projectType,
+            preferred_contact_method:
+              preferredContactMethod,
+          },
+        });
 
     const [
       { error: activityError },
@@ -207,7 +311,10 @@ export async function POST(request: Request) {
       taskPromise,
     ]);
 
-    if (activityError || taskError) {
+    if (
+      activityError ||
+      taskError
+    ) {
       console.error(
         "Lead workflow creation error:",
         {
@@ -221,12 +328,18 @@ export async function POST(request: Request) {
         supabase
           .from("lead_activities")
           .delete()
-          .eq("lead_id", leadId),
+          .eq(
+            "lead_id",
+            leadId,
+          ),
 
         supabase
           .from("lead_tasks")
           .delete()
-          .eq("lead_id", leadId),
+          .eq(
+            "lead_id",
+            leadId,
+          ),
       ]);
 
       await supabase
@@ -234,36 +347,65 @@ export async function POST(request: Request) {
         .delete()
         .eq("id", leadId);
 
-      return redirectTo("/contact?error=submission");
+      return redirectTo(
+        "/contact?error=submission",
+      );
     }
 
-    return redirectTo("/thank-you");
+    return redirectTo(
+      "/thank-you",
+    );
   } catch (error) {
-    console.error("Project request error:", error);
+    console.error(
+      "Project request error:",
+      error,
+    );
 
-    return redirectTo("/contact?error=submission");
+    return redirectTo(
+      "/contact?error=submission",
+    );
   }
 }
 
-export async function PATCH(request: Request) {
-  try {
-    const body = (await request.json()) as Record<
-      string,
-      unknown
-    >;
+export async function PATCH(
+  request: NextRequest,
+) {
+  const user =
+    await getAuthenticatedApiUser();
 
-    const rawLeadId = body.leadId ?? body.lead_id;
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
+  try {
+    const body =
+      (await request.json()) as Record<
+        string,
+        unknown
+      >;
+
+    const rawLeadId =
+      body.leadId ??
+      body.lead_id;
 
     const leadId =
-      typeof rawLeadId === "string" ||
-      typeof rawLeadId === "number"
-        ? String(rawLeadId).trim()
+      typeof rawLeadId ===
+        "string" ||
+      typeof rawLeadId ===
+        "number"
+        ? String(
+            rawLeadId,
+          ).trim()
         : "";
 
     if (!leadId) {
-      return Response.json(
+      return NextResponse.json(
         {
-          error: "A valid lead ID is required.",
+          success: false,
+          error:
+            "A valid lead ID is required.",
         },
         {
           status: 400,
@@ -275,7 +417,9 @@ export async function PATCH(request: Request) {
       lead_status?: string;
       consultation_status?: string;
       notes?: string | null;
-      follow_up_at?: string | null;
+      follow_up_at?:
+        | string
+        | null;
     } = {};
 
     const rawLeadStatus =
@@ -283,16 +427,26 @@ export async function PATCH(request: Request) {
       body.leadStatus ??
       body.lead_status;
 
-    if (rawLeadStatus !== undefined) {
+    if (
+      rawLeadStatus !==
+      undefined
+    ) {
       const leadStatus =
-        typeof rawLeadStatus === "string"
+        typeof rawLeadStatus ===
+        "string"
           ? rawLeadStatus.trim()
           : "";
 
-      if (!allowedLeadStatuses.includes(leadStatus)) {
-        return Response.json(
+      if (
+        !allowedLeadStatuses.includes(
+          leadStatus,
+        )
+      ) {
+        return NextResponse.json(
           {
-            error: "A valid lead status is required.",
+            success: false,
+            error:
+              "A valid lead status is required.",
           },
           {
             status: 400,
@@ -300,16 +454,21 @@ export async function PATCH(request: Request) {
         );
       }
 
-      updates.lead_status = leadStatus;
+      updates.lead_status =
+        leadStatus;
     }
 
     const rawConsultationStatus =
       body.consultationStatus ??
       body.consultation_status;
 
-    if (rawConsultationStatus !== undefined) {
+    if (
+      rawConsultationStatus !==
+      undefined
+    ) {
       const consultationStatus =
-        typeof rawConsultationStatus === "string"
+        typeof rawConsultationStatus ===
+        "string"
           ? rawConsultationStatus.trim()
           : "";
 
@@ -318,8 +477,9 @@ export async function PATCH(request: Request) {
           consultationStatus,
         )
       ) {
-        return Response.json(
+        return NextResponse.json(
           {
+            success: false,
             error:
               "A valid consultation status is required.",
           },
@@ -333,11 +493,19 @@ export async function PATCH(request: Request) {
         consultationStatus;
     }
 
-    if (body.notes !== undefined) {
-      if (typeof body.notes !== "string") {
-        return Response.json(
+    if (
+      body.notes !==
+      undefined
+    ) {
+      if (
+        typeof body.notes !==
+        "string"
+      ) {
+        return NextResponse.json(
           {
-            error: "Notes must be valid text.",
+            success: false,
+            error:
+              "Notes must be valid text.",
           },
           {
             status: 400,
@@ -345,7 +513,8 @@ export async function PATCH(request: Request) {
         );
       }
 
-      const cleanedNotes = body.notes.trim();
+      const cleanedNotes =
+        body.notes.trim();
 
       updates.notes =
         cleanedNotes.length > 0
@@ -354,24 +523,37 @@ export async function PATCH(request: Request) {
     }
 
     const rawFollowUpAt =
-      body.followUpAt ?? body.follow_up_at;
+      body.followUpAt ??
+      body.follow_up_at;
 
-    if (rawFollowUpAt !== undefined) {
+    if (
+      rawFollowUpAt !==
+      undefined
+    ) {
       if (
-        rawFollowUpAt === null ||
+        rawFollowUpAt ===
+          null ||
         rawFollowUpAt === ""
       ) {
-        updates.follow_up_at = null;
+        updates.follow_up_at =
+          null;
       } else if (
-        typeof rawFollowUpAt === "string"
+        typeof rawFollowUpAt ===
+        "string"
       ) {
-        const followUpDate = new Date(rawFollowUpAt);
+        const followUpDate =
+          new Date(
+            rawFollowUpAt,
+          );
 
         if (
-          Number.isNaN(followUpDate.getTime())
+          Number.isNaN(
+            followUpDate.getTime(),
+          )
         ) {
-          return Response.json(
+          return NextResponse.json(
             {
+              success: false,
               error:
                 "A valid follow-up date and time is required.",
             },
@@ -384,8 +566,9 @@ export async function PATCH(request: Request) {
         updates.follow_up_at =
           followUpDate.toISOString();
       } else {
-        return Response.json(
+        return NextResponse.json(
           {
+            success: false,
             error:
               "A valid follow-up date and time is required.",
           },
@@ -396,14 +579,19 @@ export async function PATCH(request: Request) {
       }
     }
 
-    if (Object.keys(updates).length === 0) {
+    if (
+      Object.keys(
+        updates,
+      ).length === 0
+    ) {
       console.error(
         "No recognized lead changes:",
         body,
       );
 
-      return Response.json(
+      return NextResponse.json(
         {
+          success: false,
           error:
             "No valid lead changes were provided.",
         },
@@ -413,25 +601,32 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const supabase = createAdminServerClient();
+    const supabase =
+      createAdminServerClient();
 
-    const { data: existingLead, error: readError } =
-      await supabase
-        .from("leads")
-        .select(
-          "id, lead_status, consultation_status, notes, follow_up_at",
-        )
-        .eq("id", leadId)
-        .single();
+    const {
+      data: existingLead,
+      error: readError,
+    } = await supabase
+      .from("leads")
+      .select(
+        "id, lead_status, consultation_status, notes, follow_up_at",
+      )
+      .eq("id", leadId)
+      .single();
 
-    if (readError || !existingLead) {
+    if (
+      readError ||
+      !existingLead
+    ) {
       console.error(
         "Supabase lead read error:",
         readError,
       );
 
-      return Response.json(
+      return NextResponse.json(
         {
+          success: false,
           error:
             readError?.message ??
             "Lead could not be found.",
@@ -442,7 +637,10 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const { data, error } = await supabase
+    const {
+      data,
+      error,
+    } = await supabase
       .from("leads")
       .update(updates)
       .eq("id", leadId)
@@ -457,8 +655,9 @@ export async function PATCH(request: Request) {
         error,
       );
 
-      return Response.json(
+      return NextResponse.json(
         {
+          success: false,
           error: error.message,
         },
         {
@@ -474,17 +673,22 @@ export async function PATCH(request: Request) {
       direction: string;
       summary: string;
       details: string | null;
-      metadata: Record<string, unknown>;
+      metadata: Record<
+        string,
+        unknown
+      >;
     }> = [];
 
     if (
-      updates.lead_status !== undefined &&
+      updates.lead_status !==
+        undefined &&
       updates.lead_status !==
         existingLead.lead_status
     ) {
       activityRecords.push({
         lead_id: leadId,
-        activity_type: "lead_status_changed",
+        activity_type:
+          "lead_status_changed",
         channel: "status",
         direction: "internal",
         summary: `Lead status changed to ${updates.lead_status.replaceAll(
@@ -495,7 +699,8 @@ export async function PATCH(request: Request) {
         metadata: {
           previous_status:
             existingLead.lead_status,
-          new_status: updates.lead_status,
+          new_status:
+            updates.lead_status,
         },
       });
     }
@@ -510,7 +715,8 @@ export async function PATCH(request: Request) {
         lead_id: leadId,
         activity_type:
           "consultation_status_changed",
-        channel: "consultation",
+        channel:
+          "consultation",
         direction: "internal",
         summary: `Consultation status changed to ${updates.consultation_status.replaceAll(
           "_",
@@ -527,21 +733,25 @@ export async function PATCH(request: Request) {
     }
 
     if (
-      updates.follow_up_at !== undefined &&
+      updates.follow_up_at !==
+        undefined &&
       updates.follow_up_at !==
         existingLead.follow_up_at
     ) {
       activityRecords.push({
         lead_id: leadId,
-        activity_type: updates.follow_up_at
-          ? "follow_up_scheduled"
-          : "follow_up_removed",
+        activity_type:
+          updates.follow_up_at
+            ? "follow_up_scheduled"
+            : "follow_up_removed",
         channel: "task",
         direction: "internal",
-        summary: updates.follow_up_at
-          ? "Follow-up scheduled"
-          : "Follow-up removed",
-        details: updates.follow_up_at,
+        summary:
+          updates.follow_up_at
+            ? "Follow-up scheduled"
+            : "Follow-up removed",
+        details:
+          updates.follow_up_at,
         metadata: {
           previous_follow_up_at:
             existingLead.follow_up_at,
@@ -552,25 +762,38 @@ export async function PATCH(request: Request) {
     }
 
     if (
-      updates.notes !== undefined &&
-      updates.notes !== existingLead.notes
+      updates.notes !==
+        undefined &&
+      updates.notes !==
+        existingLead.notes
     ) {
       activityRecords.push({
         lead_id: leadId,
-        activity_type: "notes_updated",
+        activity_type:
+          "notes_updated",
         channel: "note",
         direction: "internal",
-        summary: "Lead notes updated",
-        details: updates.notes,
+        summary:
+          "Lead notes updated",
+        details:
+          updates.notes,
         metadata: {},
       });
     }
 
-    if (activityRecords.length > 0) {
-      const { error: activityError } =
-        await supabase
-          .from("lead_activities")
-          .insert(activityRecords);
+    if (
+      activityRecords.length >
+      0
+    ) {
+      const {
+        error: activityError,
+      } = await supabase
+        .from(
+          "lead_activities",
+        )
+        .insert(
+          activityRecords,
+        );
 
       if (activityError) {
         console.error(
@@ -580,7 +803,7 @@ export async function PATCH(request: Request) {
       }
     }
 
-    return Response.json({
+    return NextResponse.json({
       success: true,
       lead: data,
     });
@@ -590,9 +813,11 @@ export async function PATCH(request: Request) {
       error,
     );
 
-    return Response.json(
+    return NextResponse.json(
       {
-        error: "Unable to update the lead.",
+        success: false,
+        error:
+          "Unable to update the lead.",
       },
       {
         status: 500,
