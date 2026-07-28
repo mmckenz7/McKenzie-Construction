@@ -1,5 +1,12 @@
-import { NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
+import {
+  createUnauthorizedApiResponse,
+  getAuthenticatedApiUser,
+} from "@/lib/api-auth";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 const allowedStatuses = new Set([
@@ -215,9 +222,18 @@ function normalizeMetadata(
 }
 
 export async function GET(
-  _request: Request,
+  request: NextRequest,
   context: RouteContext,
 ) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
   const { taskId } =
     await context.params;
 
@@ -262,9 +278,18 @@ export async function GET(
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   context: RouteContext,
 ) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
   const { taskId } =
     await context.params;
 
