@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useMemo,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 
 type Task = {
@@ -62,14 +66,42 @@ type TaskFormState = {
   customDueDate: string;
   assignedToId: string;
   leadId: string;
+  recurrenceRule: string;
+};
+
+type GoogleTaskTemplate = {
+  automationKey: string;
+  title: string;
+  description: string;
+  recurrenceRule:
+    | "daily"
+    | "weekly"
+    | "monthly";
+  priority: string;
+  dueAt: string;
 };
 
 const categoryOptions = [
-  { value: "sales", label: "Sales" },
-  { value: "project", label: "Project" },
-  { value: "marketing", label: "Marketing" },
-  { value: "accounting", label: "Accounting" },
-  { value: "operations", label: "Operations" },
+  {
+    value: "sales",
+    label: "Sales",
+  },
+  {
+    value: "project",
+    label: "Project",
+  },
+  {
+    value: "marketing",
+    label: "Marketing",
+  },
+  {
+    value: "accounting",
+    label: "Accounting",
+  },
+  {
+    value: "operations",
+    label: "Operations",
+  },
   {
     value: "customer_service",
     label: "Customer Service",
@@ -78,14 +110,48 @@ const categoryOptions = [
     value: "administrative",
     label: "Administrative",
   },
-  { value: "owner", label: "Owner" },
+  {
+    value: "owner",
+    label: "Owner",
+  },
 ];
 
 const priorityOptions = [
-  { value: "low", label: "Low" },
-  { value: "normal", label: "Normal" },
-  { value: "high", label: "High" },
-  { value: "urgent", label: "Urgent" },
+  {
+    value: "low",
+    label: "Low",
+  },
+  {
+    value: "normal",
+    label: "Normal",
+  },
+  {
+    value: "high",
+    label: "High",
+  },
+  {
+    value: "urgent",
+    label: "Urgent",
+  },
+];
+
+const recurrenceOptions = [
+  {
+    value: "none",
+    label: "Does not repeat",
+  },
+  {
+    value: "daily",
+    label: "Daily",
+  },
+  {
+    value: "weekly",
+    label: "Weekly",
+  },
+  {
+    value: "monthly",
+    label: "Monthly",
+  },
 ];
 
 const dueOptions = [
@@ -93,7 +159,10 @@ const dueOptions = [
     value: "next_business_day",
     label: "Next business day",
   },
-  { value: "same_day", label: "Same day" },
+  {
+    value: "same_day",
+    label: "Same day",
+  },
   {
     value: "2_business_days",
     label: "2 business days",
@@ -141,6 +210,7 @@ const emptyTaskForm: TaskFormState = {
   customDueDate: "",
   assignedToId: "",
   leadId: "",
+  recurrenceRule: "none",
 };
 
 function titleCase(value: string) {
@@ -151,7 +221,9 @@ function titleCase(value: string) {
     );
 }
 
-function getLocalDateKey(value: string | Date) {
+function getLocalDateKey(
+  value: string | Date,
+) {
   const date =
     typeof value === "string"
       ? new Date(value)
@@ -161,24 +233,28 @@ function getLocalDateKey(value: string | Date) {
     return "";
   }
 
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
+  const parts =
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
 
   const year =
-    parts.find((part) => part.type === "year")
-      ?.value ?? "";
+    parts.find(
+      (part) => part.type === "year",
+    )?.value ?? "";
 
   const month =
-    parts.find((part) => part.type === "month")
-      ?.value ?? "";
+    parts.find(
+      (part) => part.type === "month",
+    )?.value ?? "";
 
   const day =
-    parts.find((part) => part.type === "day")
-      ?.value ?? "";
+    parts.find(
+      (part) => part.type === "day",
+    )?.value ?? "";
 
   return `${year}-${month}-${day}`;
 }
@@ -198,15 +274,20 @@ function formatDate(value: string | null) {
     return value;
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone: "America/New_York",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    },
+  ).format(date);
 }
 
-function getPriorityClasses(priority: string) {
+function getPriorityClasses(
+  priority: string,
+) {
   if (priority === "urgent") {
     return "bg-red-100 text-red-800";
   }
@@ -222,7 +303,9 @@ function getPriorityClasses(priority: string) {
   return "bg-sky-100 text-sky-800";
 }
 
-function getCategoryClasses(category: string) {
+function getCategoryClasses(
+  category: string,
+) {
   if (category === "sales") {
     return "bg-emerald-100 text-emerald-800";
   }
@@ -266,7 +349,10 @@ function addBusinessDays(
 
     const dayOfWeek = date.getDay();
 
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+    if (
+      dayOfWeek !== 0 &&
+      dayOfWeek !== 6
+    ) {
       daysAdded += 1;
     }
   }
@@ -282,6 +368,17 @@ function setEndOfBusiness(date: Date) {
   return endOfBusiness;
 }
 
+function setTaskTime(
+  date: Date,
+  hour: number,
+) {
+  const taskDate = new Date(date);
+
+  taskDate.setHours(hour, 0, 0, 0);
+
+  return taskDate;
+}
+
 function createDueAt(
   dueOption: string,
   customDueDate: string,
@@ -293,10 +390,14 @@ function createDueAt(
   }
 
   if (dueOption === "same_day") {
-    return setEndOfBusiness(today).toISOString();
+    return setEndOfBusiness(
+      today,
+    ).toISOString();
   }
 
-  if (dueOption === "next_business_day") {
+  if (
+    dueOption === "next_business_day"
+  ) {
     return setEndOfBusiness(
       addBusinessDays(today, 1),
     ).toISOString();
@@ -320,36 +421,52 @@ function createDueAt(
     ).toISOString();
   }
 
-  if (dueOption === "7_calendar_days") {
+  if (
+    dueOption === "7_calendar_days"
+  ) {
     const date = new Date(today);
 
     date.setDate(date.getDate() + 7);
 
-    return setEndOfBusiness(date).toISOString();
+    return setEndOfBusiness(
+      date,
+    ).toISOString();
   }
 
-  if (dueOption === "14_calendar_days") {
+  if (
+    dueOption === "14_calendar_days"
+  ) {
     const date = new Date(today);
 
     date.setDate(date.getDate() + 14);
 
-    return setEndOfBusiness(date).toISOString();
+    return setEndOfBusiness(
+      date,
+    ).toISOString();
   }
 
-  if (dueOption === "30_calendar_days") {
+  if (
+    dueOption === "30_calendar_days"
+  ) {
     const date = new Date(today);
 
     date.setDate(date.getDate() + 30);
 
-    return setEndOfBusiness(date).toISOString();
+    return setEndOfBusiness(
+      date,
+    ).toISOString();
   }
 
-  if (dueOption === "60_calendar_days") {
+  if (
+    dueOption === "60_calendar_days"
+  ) {
     const date = new Date(today);
 
     date.setDate(date.getDate() + 60);
 
-    return setEndOfBusiness(date).toISOString();
+    return setEndOfBusiness(
+      date,
+    ).toISOString();
   }
 
   if (
@@ -360,14 +477,151 @@ function createDueAt(
       `${customDueDate}T12:00:00`,
     );
 
-    if (Number.isNaN(date.getTime())) {
+    if (
+      Number.isNaN(date.getTime())
+    ) {
       return undefined;
     }
 
-    return setEndOfBusiness(date).toISOString();
+    return setEndOfBusiness(
+      date,
+    ).toISOString();
   }
 
   return undefined;
+}
+
+function getNextWeekday(
+  weekday: number,
+) {
+  const date = new Date();
+  const currentWeekday = date.getDay();
+
+  let daysUntil =
+    (weekday - currentWeekday + 7) % 7;
+
+  if (daysUntil === 0) {
+    daysUntil = 7;
+  }
+
+  date.setDate(
+    date.getDate() + daysUntil,
+  );
+
+  return setTaskTime(date, 16);
+}
+
+function getNextMonthDate(
+  dayOfMonth: number,
+) {
+  const date = new Date();
+
+  date.setDate(1);
+  date.setMonth(date.getMonth() + 1);
+
+  const finalDayOfMonth = new Date(
+    date.getFullYear(),
+    date.getMonth() + 1,
+    0,
+  ).getDate();
+
+  date.setDate(
+    Math.min(
+      dayOfMonth,
+      finalDayOfMonth,
+    ),
+  );
+
+  return setTaskTime(date, 16);
+}
+
+function getGoogleTaskTemplates():
+  GoogleTaskTemplate[] {
+  return [
+    {
+      automationKey:
+        "google_profile_daily_check",
+      title:
+        "Check Google Business Profile",
+      description:
+        "Check for new reviews, customer questions, messages, photo issues, rejected edits, verification notices, or profile changes. Respond to anything that needs attention.",
+      recurrenceRule: "daily",
+      priority: "normal",
+      dueAt: setTaskTime(
+        new Date(),
+        16,
+      ).toISOString(),
+    },
+    {
+      automationKey:
+        "google_profile_weekly_post",
+      title:
+        "Publish Google Business Profile post",
+      description:
+        "Publish one useful Google Business Profile update featuring a project, construction tip, availability update, before-and-after result, or link to a relevant website page.",
+      recurrenceRule: "weekly",
+      priority: "normal",
+      dueAt:
+        getNextWeekday(1).toISOString(),
+    },
+    {
+      automationKey:
+        "google_profile_weekly_photos",
+      title:
+        "Upload new project photos to Google",
+      description:
+        "Upload 2–5 strong real project photos. Prioritize finished work, wide project views, before-and-after comparisons, construction details, and clean progress photos.",
+      recurrenceRule: "weekly",
+      priority: "normal",
+      dueAt:
+        getNextWeekday(3).toISOString(),
+    },
+    {
+      automationKey:
+        "google_profile_weekly_reviews",
+      title:
+        "Request customer reviews",
+      description:
+        "Ask eligible past or recently completed customers for an honest Google review. Do not offer discounts, gifts, or other incentives.",
+      recurrenceRule: "weekly",
+      priority: "high",
+      dueAt:
+        getNextWeekday(5).toISOString(),
+    },
+    {
+      automationKey:
+        "google_profile_monthly_audit",
+      title:
+        "Audit Google Business Profile",
+      description:
+        "Review business category, services, service areas, hours, phone number, website, description, photos, profile completeness, and any Google-suggested edits.",
+      recurrenceRule: "monthly",
+      priority: "normal",
+      dueAt:
+        getNextMonthDate(1).toISOString(),
+    },
+    {
+      automationKey:
+        "search_console_monthly_review",
+      title:
+        "Review Google Search Console",
+      description:
+        "Review search impressions, clicks, ranking queries, indexed pages, sitemap status, page indexing issues, mobile usability, and any search enhancements or warnings.",
+      recurrenceRule: "monthly",
+      priority: "normal",
+      dueAt:
+        getNextMonthDate(15).toISOString(),
+    },
+  ];
+}
+
+function getAutomationKey(task: Task) {
+  const value =
+    task.metadata?.automation_key;
+
+  return typeof value === "string"
+    ? value
+    : null;
 }
 
 export default function TaskDashboard({
@@ -381,30 +635,49 @@ export default function TaskDashboard({
     useState(initialTasks);
 
   const [taskForm, setTaskForm] =
-    useState<TaskFormState>(emptyTaskForm);
+    useState<TaskFormState>(
+      emptyTaskForm,
+    );
 
-  const [categoryFilter, setCategoryFilter] =
-    useState("all");
+  const [
+    categoryFilter,
+    setCategoryFilter,
+  ] = useState("all");
 
-  const [assigneeFilter, setAssigneeFilter] =
-    useState("all");
+  const [
+    assigneeFilter,
+    setAssigneeFilter,
+  ] = useState("all");
 
-  const [showAddTask, setShowAddTask] =
-    useState(false);
+  const [
+    showAddTask,
+    setShowAddTask,
+  ] = useState(false);
 
   const [isSaving, setIsSaving] =
     useState(false);
 
-  const [updatingTaskId, setUpdatingTaskId] =
-    useState<string | null>(null);
+  const [
+    isAddingGoogleTasks,
+    setIsAddingGoogleTasks,
+  ] = useState(false);
 
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [
+    updatingTaskId,
+    setUpdatingTaskId,
+  ] = useState<string | null>(null);
+
+  const [message, setMessage] =
+    useState("");
+
+  const [error, setError] =
+    useState("");
 
   const activeTeamMembers = useMemo(
     () =>
       teamMembers.filter(
-        (member) => member.status === "active",
+        (member) =>
+          member.status === "active",
       ),
     [teamMembers],
   );
@@ -431,18 +704,61 @@ export default function TaskDashboard({
     [leads],
   );
 
+  const existingAutomationKeys =
+    useMemo(
+      () =>
+        new Set(
+          tasks
+            .map(getAutomationKey)
+            .filter(
+              (
+                value,
+              ): value is string =>
+                Boolean(value),
+            ),
+        ),
+      [tasks],
+    );
+
+  const googleTaskTemplates =
+    useMemo(
+      () => getGoogleTaskTemplates(),
+      [],
+    );
+
+  const missingGoogleTaskTemplates =
+    useMemo(
+      () =>
+        googleTaskTemplates.filter(
+          (template) =>
+            !existingAutomationKeys.has(
+              template.automationKey,
+            ),
+        ),
+      [
+        googleTaskTemplates,
+        existingAutomationKeys,
+      ],
+    );
+
+  const googleTasksConfigured =
+    missingGoogleTaskTemplates.length ===
+    0;
+
   const filteredTasks = useMemo(
     () =>
       tasks.filter((task) => {
         if (
           categoryFilter !== "all" &&
-          task.category !== categoryFilter
+          task.category !==
+            categoryFilter
         ) {
           return false;
         }
 
         if (
-          assigneeFilter === "unassigned" &&
+          assigneeFilter ===
+            "unassigned" &&
           task.assigned_to_id
         ) {
           return false;
@@ -450,8 +766,10 @@ export default function TaskDashboard({
 
         if (
           assigneeFilter !== "all" &&
-          assigneeFilter !== "unassigned" &&
-          task.assigned_to_id !== assigneeFilter
+          assigneeFilter !==
+            "unassigned" &&
+          task.assigned_to_id !==
+            assigneeFilter
         ) {
           return false;
         }
@@ -472,16 +790,18 @@ export default function TaskDashboard({
       filteredTasks.filter((task) => {
         if (
           !task.due_at ||
-          !["open", "in_progress"].includes(
-            task.status,
-          )
+          ![
+            "open",
+            "in_progress",
+          ].includes(task.status)
         ) {
           return false;
         }
 
         return (
-          getLocalDateKey(task.due_at) <
-          todayKey
+          getLocalDateKey(
+            task.due_at,
+          ) < todayKey
         );
       }),
     [filteredTasks, todayKey],
@@ -492,16 +812,18 @@ export default function TaskDashboard({
       filteredTasks.filter((task) => {
         if (
           !task.due_at ||
-          !["open", "in_progress"].includes(
-            task.status,
-          )
+          ![
+            "open",
+            "in_progress",
+          ].includes(task.status)
         ) {
           return false;
         }
 
         return (
-          getLocalDateKey(task.due_at) ===
-          todayKey
+          getLocalDateKey(
+            task.due_at,
+          ) === todayKey
         );
       }),
     [filteredTasks, todayKey],
@@ -512,16 +834,18 @@ export default function TaskDashboard({
       filteredTasks.filter((task) => {
         if (
           !task.due_at ||
-          !["open", "in_progress"].includes(
-            task.status,
-          )
+          ![
+            "open",
+            "in_progress",
+          ].includes(task.status)
         ) {
           return false;
         }
 
         return (
-          getLocalDateKey(task.due_at) >
-          todayKey
+          getLocalDateKey(
+            task.due_at,
+          ) > todayKey
         );
       }),
     [filteredTasks, todayKey],
@@ -532,24 +856,28 @@ export default function TaskDashboard({
       filteredTasks.filter(
         (task) =>
           !task.due_at &&
-          ["open", "in_progress"].includes(
-            task.status,
-          ),
+          [
+            "open",
+            "in_progress",
+          ].includes(task.status),
       ),
     [filteredTasks],
   );
 
-  const completedTodayTasks = useMemo(
-    () =>
-      filteredTasks.filter(
-        (task) =>
-          task.status === "completed" &&
-          task.completed_at &&
-          getLocalDateKey(task.completed_at) ===
-            todayKey,
-      ),
-    [filteredTasks, todayKey],
-  );
+  const completedTodayTasks =
+    useMemo(
+      () =>
+        filteredTasks.filter(
+          (task) =>
+            task.status ===
+              "completed" &&
+            task.completed_at &&
+            getLocalDateKey(
+              task.completed_at,
+            ) === todayKey,
+        ),
+      [filteredTasks, todayKey],
+    );
 
   function clearMessages() {
     setMessage("");
@@ -557,14 +885,17 @@ export default function TaskDashboard({
   }
 
   async function createTask(
-    event: FormEvent<HTMLFormElement>,
+    event:
+      FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
 
     clearMessages();
 
     if (!taskForm.title.trim()) {
-      setError("Task title is required.");
+      setError(
+        "Task title is required.",
+      );
       return;
     }
 
@@ -576,6 +907,17 @@ export default function TaskDashboard({
     if (dueAt === undefined) {
       setError(
         "Choose a valid custom due date.",
+      );
+      return;
+    }
+
+    if (
+      taskForm.recurrenceRule !==
+        "none" &&
+      !dueAt
+    ) {
+      setError(
+        "Recurring tasks require a due date.",
       );
       return;
     }
@@ -601,18 +943,22 @@ export default function TaskDashboard({
               taskForm.priority,
             dueAt,
             assignedToId:
-              taskForm.assignedToId || null,
+              taskForm.assignedToId ||
+              null,
             leadId:
               taskForm.leadId || null,
+            recurrenceRule:
+              taskForm.recurrenceRule,
           }),
         },
       );
 
-      const result = (await response.json()) as {
-        success?: boolean;
-        task?: Task;
-        error?: string;
-      };
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          task?: Task;
+          error?: string;
+        };
 
       if (
         !response.ok ||
@@ -645,6 +991,112 @@ export default function TaskDashboard({
     }
   }
 
+  async function addGoogleTasks() {
+    clearMessages();
+
+    if (googleTasksConfigured) {
+      setMessage(
+        "Google marketing tasks are already configured.",
+      );
+      return;
+    }
+
+    setIsAddingGoogleTasks(true);
+
+    const createdTasks: Task[] = [];
+
+    try {
+      for (
+        const template of
+        missingGoogleTaskTemplates
+      ) {
+        const response = await fetch(
+          "/api/tasks",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              title: template.title,
+              description:
+                template.description,
+              category: "marketing",
+              priority:
+                template.priority,
+              dueAt: template.dueAt,
+              assignedToId: null,
+              leadId: null,
+              recurrenceRule:
+                template.recurrenceRule,
+              sourceType:
+                "google_marketing",
+              metadata: {
+                automation_key:
+                  template.automationKey,
+                platform:
+                  template.automationKey.startsWith(
+                    "search_console",
+                  )
+                    ? "google_search_console"
+                    : "google_business_profile",
+              },
+            }),
+          },
+        );
+
+        const result =
+          (await response.json()) as {
+            success?: boolean;
+            task?: Task;
+            error?: string;
+          };
+
+        if (
+          !response.ok ||
+          !result.success ||
+          !result.task
+        ) {
+          throw new Error(
+            result.error ??
+              `Unable to create "${template.title}".`,
+          );
+        }
+
+        createdTasks.push(result.task);
+      }
+
+      setTasks((current) => [
+        ...current,
+        ...createdTasks,
+      ]);
+
+      setMessage(
+        `${createdTasks.length} Google marketing tasks added.`,
+      );
+
+      router.refresh();
+    } catch (creationError) {
+      if (createdTasks.length > 0) {
+        setTasks((current) => [
+          ...current,
+          ...createdTasks,
+        ]);
+      }
+
+      setError(
+        creationError instanceof Error
+          ? creationError.message
+          : "Unable to add Google marketing tasks.",
+      );
+
+      router.refresh();
+    } finally {
+      setIsAddingGoogleTasks(false);
+    }
+  }
+
   async function updateTaskStatus(
     taskId: string,
     status: string,
@@ -669,11 +1121,16 @@ export default function TaskDashboard({
         },
       );
 
-      const result = (await response.json()) as {
-        success?: boolean;
-        task?: Task;
-        error?: string;
-      };
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          task?: Task;
+          nextTask?: Task | null;
+          recurrenceWarning?:
+            | string
+            | null;
+          error?: string;
+        };
 
       if (
         !response.ok ||
@@ -686,23 +1143,59 @@ export default function TaskDashboard({
         );
       }
 
-      setTasks((current) =>
-        current.map((task) =>
-          task.id === taskId
-            ? result.task!
-            : task,
-        ),
-      );
+      setTasks((current) => {
+        const updatedTasks =
+          current.map((task) =>
+            task.id === taskId
+              ? result.task!
+              : task,
+          );
 
-      setMessage(
-        status === "completed"
-          ? "Task completed."
-          : status === "in_progress"
-            ? "Task started."
-            : status === "canceled"
-              ? "Task canceled."
-              : "Task reopened.",
-      );
+        if (
+          result.nextTask &&
+          !updatedTasks.some(
+            (task) =>
+              task.id ===
+              result.nextTask!.id,
+          )
+        ) {
+          return [
+            ...updatedTasks,
+            result.nextTask,
+          ];
+        }
+
+        return updatedTasks;
+      });
+
+      if (
+        status === "completed" &&
+        result.nextTask
+      ) {
+        setMessage(
+          `Task completed. Next occurrence scheduled for ${formatDate(
+            result.nextTask.due_at,
+          )}.`,
+        );
+      } else if (
+        result.recurrenceWarning
+      ) {
+        setMessage(
+          `Task completed, but the next occurrence could not be created: ${result.recurrenceWarning}`,
+        );
+      } else {
+        setMessage(
+          status === "completed"
+            ? "Task completed."
+            : status ===
+                "in_progress"
+              ? "Task started."
+              : status ===
+                  "canceled"
+                ? "Task canceled."
+                : "Task reopened.",
+        );
+      }
 
       router.refresh();
     } catch (updateError) {
@@ -716,7 +1209,9 @@ export default function TaskDashboard({
     }
   }
 
-  function getTaskDestination(task: Task) {
+  function getTaskDestination(
+    task: Task,
+  ) {
     if (!task.lead_id) {
       return null;
     }
@@ -750,9 +1245,12 @@ export default function TaskDashboard({
       | "unscheduled"
       | "completed",
   ) {
-    const assignee = task.assigned_to_id
-      ? teamMemberMap.get(task.assigned_to_id)
-      : null;
+    const assignee =
+      task.assigned_to_id
+        ? teamMemberMap.get(
+            task.assigned_to_id,
+          )
+        : null;
 
     const relatedLead = task.lead_id
       ? leadMap.get(task.lead_id)
@@ -769,7 +1267,8 @@ export default function TaskDashboard({
             ? "border-red-300 bg-red-50"
             : context === "today"
               ? "border-amber-300 bg-amber-50"
-              : context === "completed"
+              : context ===
+                  "completed"
                 ? "border-emerald-200 bg-emerald-50"
                 : "border-slate-200 bg-white"
         }`}
@@ -782,7 +1281,9 @@ export default function TaskDashboard({
                   task.category,
                 )}`}
               >
-                {titleCase(task.category)}
+                {titleCase(
+                  task.category,
+                )}
               </span>
 
               <span
@@ -790,7 +1291,9 @@ export default function TaskDashboard({
                   task.priority,
                 )}`}
               >
-                {titleCase(task.priority)}
+                {titleCase(
+                  task.priority,
+                )}
               </span>
 
               {task.status ===
@@ -799,12 +1302,30 @@ export default function TaskDashboard({
                   In Progress
                 </span>
               ) : null}
+
+              {task.recurrence_rule ? (
+                <span className="rounded-full bg-fuchsia-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-fuchsia-800">
+                  Repeats{" "}
+                  {titleCase(
+                    task.recurrence_rule,
+                  )}
+                </span>
+              ) : null}
+
+              {task.source_type ===
+              "google_marketing" ? (
+                <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-800">
+                  Google
+                </span>
+              ) : null}
             </div>
 
             {getTaskDestination(task) ? (
               <button
                 type="button"
-                onClick={() => openTask(task)}
+                onClick={() =>
+                  openTask(task)
+                }
                 className="mt-3 block text-left text-base font-bold text-slate-950 underline decoration-slate-300 underline-offset-4 transition hover:text-slate-600"
               >
                 {task.title}
@@ -826,14 +1347,17 @@ export default function TaskDashboard({
                 <span className="font-bold text-slate-800">
                   Due:
                 </span>{" "}
-                {formatDate(task.due_at)}
+                {formatDate(
+                  task.due_at,
+                )}
               </p>
 
               <p>
                 <span className="font-bold text-slate-800">
                   Assigned:
                 </span>{" "}
-                {assignee?.name ?? "Unassigned"}
+                {assignee?.name ??
+                  "Unassigned"}
               </p>
             </div>
 
@@ -863,7 +1387,8 @@ export default function TaskDashboard({
               </button>
             ) : null}
 
-            {context === "completed" ? (
+            {context ===
+            "completed" ? (
               <p className="mt-3 text-xs font-semibold text-emerald-800">
                 Completed today
               </p>
@@ -871,9 +1396,11 @@ export default function TaskDashboard({
           </div>
 
           <div className="flex shrink-0 flex-wrap gap-2">
-            {context !== "completed" ? (
+            {context !==
+            "completed" ? (
               <>
-                {task.status === "open" ? (
+                {task.status ===
+                "open" ? (
                   <button
                     type="button"
                     onClick={() =>
@@ -882,7 +1409,9 @@ export default function TaskDashboard({
                         "in_progress",
                       )
                     }
-                    disabled={isUpdating}
+                    disabled={
+                      isUpdating
+                    }
                     className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:text-slate-300"
                   >
                     Start
@@ -973,8 +1502,12 @@ export default function TaskDashboard({
           </p>
         ) : (
           <div className="mt-5 space-y-3">
-            {sectionTasks.map((task) =>
-              renderTaskCard(task, context),
+            {sectionTasks.map(
+              (task) =>
+                renderTaskCard(
+                  task,
+                  context,
+                ),
             )}
           </div>
         )}
@@ -1031,9 +1564,52 @@ export default function TaskDashboard({
           </p>
 
           <p className="mt-2 text-3xl font-bold text-emerald-900">
-            {completedTodayTasks.length}
+            {
+              completedTodayTasks.length
+            }
           </p>
         </article>
+      </section>
+
+      <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-blue-700">
+              Google Marketing
+            </p>
+
+            <h2 className="mt-1 text-xl font-bold text-slate-950">
+              Recurring Google profile and
+              SEO tasks
+            </h2>
+
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
+              Adds daily, weekly, and monthly
+              tasks for profile monitoring,
+              posts, photos, reviews, profile
+              audits, and Search Console
+              reporting.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              void addGoogleTasks()
+            }
+            disabled={
+              isAddingGoogleTasks ||
+              googleTasksConfigured
+            }
+            className="rounded-lg bg-blue-700 px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-blue-300"
+          >
+            {isAddingGoogleTasks
+              ? "Adding Google Tasks..."
+              : googleTasksConfigured
+                ? "Google Tasks Added"
+                : `Add ${missingGoogleTaskTemplates.length} Google Tasks`}
+          </button>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -1052,7 +1628,8 @@ export default function TaskDashboard({
             type="button"
             onClick={() => {
               setShowAddTask(
-                (current) => !current,
+                (current) =>
+                  !current,
               );
               clearMessages();
             }}
@@ -1086,8 +1663,12 @@ export default function TaskDashboard({
               {categoryOptions.map(
                 (category) => (
                   <option
-                    key={category.value}
-                    value={category.value}
+                    key={
+                      category.value
+                    }
+                    value={
+                      category.value
+                    }
                   >
                     {category.label}
                   </option>
@@ -1147,10 +1728,14 @@ export default function TaskDashboard({
                   type="text"
                   value={taskForm.title}
                   onChange={(event) => {
-                    setTaskForm((current) => ({
-                      ...current,
-                      title: event.target.value,
-                    }));
+                    setTaskForm(
+                      (current) => ({
+                        ...current,
+                        title:
+                          event.target
+                            .value,
+                      }),
+                    );
                     clearMessages();
                   }}
                   disabled={isSaving}
@@ -1165,13 +1750,18 @@ export default function TaskDashboard({
                 </span>
 
                 <select
-                  value={taskForm.category}
+                  value={
+                    taskForm.category
+                  }
                   onChange={(event) => {
-                    setTaskForm((current) => ({
-                      ...current,
-                      category:
-                        event.target.value,
-                    }));
+                    setTaskForm(
+                      (current) => ({
+                        ...current,
+                        category:
+                          event.target
+                            .value,
+                      }),
+                    );
                     clearMessages();
                   }}
                   disabled={isSaving}
@@ -1180,10 +1770,16 @@ export default function TaskDashboard({
                   {categoryOptions.map(
                     (category) => (
                       <option
-                        key={category.value}
-                        value={category.value}
+                        key={
+                          category.value
+                        }
+                        value={
+                          category.value
+                        }
                       >
-                        {category.label}
+                        {
+                          category.label
+                        }
                       </option>
                     ),
                   )}
@@ -1197,13 +1793,18 @@ export default function TaskDashboard({
               </span>
 
               <textarea
-                value={taskForm.description}
+                value={
+                  taskForm.description
+                }
                 onChange={(event) => {
-                  setTaskForm((current) => ({
-                    ...current,
-                    description:
-                      event.target.value,
-                  }));
+                  setTaskForm(
+                    (current) => ({
+                      ...current,
+                      description:
+                        event.target
+                          .value,
+                    }),
+                  );
                   clearMessages();
                 }}
                 disabled={isSaving}
@@ -1213,38 +1814,100 @@ export default function TaskDashboard({
               />
             </label>
 
-            <div className="grid gap-5 md:grid-cols-3">
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-950">
                   Due
                 </span>
 
                 <select
-                  value={taskForm.dueOption}
+                  value={
+                    taskForm.dueOption
+                  }
                   onChange={(event) => {
-                    setTaskForm((current) => ({
-                      ...current,
-                      dueOption:
-                        event.target.value,
-                      customDueDate:
-                        event.target.value ===
-                        "custom_date"
-                          ? current.customDueDate
-                          : "",
-                    }));
+                    const dueOption =
+                      event.target.value;
+
+                    setTaskForm(
+                      (current) => ({
+                        ...current,
+                        dueOption,
+                        customDueDate:
+                          dueOption ===
+                          "custom_date"
+                            ? current.customDueDate
+                            : "",
+                        recurrenceRule:
+                          dueOption ===
+                          "no_due_date"
+                            ? "none"
+                            : current.recurrenceRule,
+                      }),
+                    );
+
                     clearMessages();
                   }}
                   disabled={isSaving}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950"
                 >
-                  {dueOptions.map((option) => (
-                    <option
-                      key={option.value}
-                      value={option.value}
-                    >
-                      {option.label}
-                    </option>
-                  ))}
+                  {dueOptions.map(
+                    (option) => (
+                      <option
+                        key={
+                          option.value
+                        }
+                        value={
+                          option.value
+                        }
+                      >
+                        {option.label}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-950">
+                  Repeat
+                </span>
+
+                <select
+                  value={
+                    taskForm.recurrenceRule
+                  }
+                  onChange={(event) => {
+                    setTaskForm(
+                      (current) => ({
+                        ...current,
+                        recurrenceRule:
+                          event.target
+                            .value,
+                      }),
+                    );
+                    clearMessages();
+                  }}
+                  disabled={
+                    isSaving ||
+                    taskForm.dueOption ===
+                      "no_due_date"
+                  }
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 disabled:bg-slate-100"
+                >
+                  {recurrenceOptions.map(
+                    (option) => (
+                      <option
+                        key={
+                          option.value
+                        }
+                        value={
+                          option.value
+                        }
+                      >
+                        {option.label}
+                      </option>
+                    ),
+                  )}
                 </select>
               </label>
 
@@ -1254,13 +1917,18 @@ export default function TaskDashboard({
                 </span>
 
                 <select
-                  value={taskForm.priority}
+                  value={
+                    taskForm.priority
+                  }
                   onChange={(event) => {
-                    setTaskForm((current) => ({
-                      ...current,
-                      priority:
-                        event.target.value,
-                    }));
+                    setTaskForm(
+                      (current) => ({
+                        ...current,
+                        priority:
+                          event.target
+                            .value,
+                      }),
+                    );
                     clearMessages();
                   }}
                   disabled={isSaving}
@@ -1269,10 +1937,16 @@ export default function TaskDashboard({
                   {priorityOptions.map(
                     (priority) => (
                       <option
-                        key={priority.value}
-                        value={priority.value}
+                        key={
+                          priority.value
+                        }
+                        value={
+                          priority.value
+                        }
                       >
-                        {priority.label}
+                        {
+                          priority.label
+                        }
                       </option>
                     ),
                   )}
@@ -1289,11 +1963,14 @@ export default function TaskDashboard({
                     taskForm.assignedToId
                   }
                   onChange={(event) => {
-                    setTaskForm((current) => ({
-                      ...current,
-                      assignedToId:
-                        event.target.value,
-                    }));
+                    setTaskForm(
+                      (current) => ({
+                        ...current,
+                        assignedToId:
+                          event.target
+                            .value,
+                      }),
+                    );
                     clearMessages();
                   }}
                   disabled={isSaving}
@@ -1307,7 +1984,9 @@ export default function TaskDashboard({
                     (member) => (
                       <option
                         key={member.id}
-                        value={member.id}
+                        value={
+                          member.id
+                        }
                       >
                         {member.name}
                       </option>
@@ -1330,11 +2009,14 @@ export default function TaskDashboard({
                     taskForm.customDueDate
                   }
                   onChange={(event) => {
-                    setTaskForm((current) => ({
-                      ...current,
-                      customDueDate:
-                        event.target.value,
-                    }));
+                    setTaskForm(
+                      (current) => ({
+                        ...current,
+                        customDueDate:
+                          event.target
+                            .value,
+                      }),
+                    );
                     clearMessages();
                   }}
                   disabled={isSaving}
@@ -1351,11 +2033,14 @@ export default function TaskDashboard({
               <select
                 value={taskForm.leadId}
                 onChange={(event) => {
-                  setTaskForm((current) => ({
-                    ...current,
-                    leadId:
-                      event.target.value,
-                  }));
+                  setTaskForm(
+                    (current) => ({
+                      ...current,
+                      leadId:
+                        event.target
+                          .value,
+                    }),
+                  );
                   clearMessages();
                 }}
                 disabled={isSaving}
@@ -1367,8 +2052,12 @@ export default function TaskDashboard({
 
                 {leads.map((lead) => (
                   <option
-                    key={String(lead.id)}
-                    value={String(lead.id)}
+                    key={String(
+                      lead.id,
+                    )}
+                    value={String(
+                      lead.id,
+                    )}
                   >
                     {lead.name ??
                       "Unnamed lead"}

@@ -123,6 +123,7 @@ function formatDateAndTime(
   }
 
   return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
     month: "short",
     day: "numeric",
     hour: "numeric",

@@ -27,6 +27,12 @@ const allowedPriorities = new Set([
   "urgent",
 ]);
 
+const allowedRecurrenceRules = new Set([
+  "daily",
+  "weekly",
+  "monthly",
+]);
+
 type RouteContext = {
   params: Promise<{
     taskId: string;
@@ -45,6 +51,7 @@ type UpdateTaskBody = {
   projectId?: unknown;
   customerId?: unknown;
   completionNote?: unknown;
+  recurrenceRule?: unknown;
 };
 
 const taskSelect = `
@@ -53,6 +60,7 @@ const taskSelect = `
   description,
   category,
   task_type,
+  task_type_id,
   status,
   priority,
   due_at,
@@ -73,7 +81,10 @@ const taskSelect = `
 `;
 
 function optionalText(value: unknown) {
-  if (value === null || value === "") {
+  if (
+    value === null ||
+    value === ""
+  ) {
     return null;
   }
 
@@ -87,7 +98,10 @@ function optionalText(value: unknown) {
 }
 
 function optionalDate(value: unknown) {
-  if (value === null || value === "") {
+  if (
+    value === null ||
+    value === ""
+  ) {
     return null;
   }
 
@@ -104,19 +118,118 @@ function optionalDate(value: unknown) {
   return date.toISOString();
 }
 
+function optionalRecurrenceRule(
+  value: unknown,
+) {
+  if (
+    value === null ||
+    value === "" ||
+    value === "none"
+  ) {
+    return null;
+  }
+
+  if (
+    typeof value !== "string" ||
+    !allowedRecurrenceRules.has(value)
+  ) {
+    return undefined;
+  }
+
+  return value;
+}
+
+function calculateNextDueAt(
+  currentDueAt: string,
+  recurrenceRule: string,
+) {
+  const currentDueDate = new Date(
+    currentDueAt,
+  );
+
+  if (
+    Number.isNaN(
+      currentDueDate.getTime(),
+    )
+  ) {
+    return null;
+  }
+
+  const nextDueDate = new Date(
+    currentDueDate,
+  );
+
+  if (recurrenceRule === "daily") {
+    nextDueDate.setDate(
+      nextDueDate.getDate() + 1,
+    );
+  }
+
+  if (recurrenceRule === "weekly") {
+    nextDueDate.setDate(
+      nextDueDate.getDate() + 7,
+    );
+  }
+
+  if (recurrenceRule === "monthly") {
+    const originalDay =
+      nextDueDate.getDate();
+
+    nextDueDate.setDate(1);
+    nextDueDate.setMonth(
+      nextDueDate.getMonth() + 1,
+    );
+
+    const finalDayOfMonth = new Date(
+      nextDueDate.getFullYear(),
+      nextDueDate.getMonth() + 1,
+      0,
+    ).getDate();
+
+    nextDueDate.setDate(
+      Math.min(
+        originalDay,
+        finalDayOfMonth,
+      ),
+    );
+  }
+
+  return nextDueDate.toISOString();
+}
+
+function normalizeMetadata(
+  value: unknown,
+): Record<string, unknown> {
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  ) {
+    return value as Record<
+      string,
+      unknown
+    >;
+  }
+
+  return {};
+}
+
 export async function GET(
   _request: Request,
   context: RouteContext,
 ) {
-  const { taskId } = await context.params;
+  const { taskId } =
+    await context.params;
 
-  const supabase = createAdminServerClient();
+  const supabase =
+    createAdminServerClient();
 
-  const { data, error } = await supabase
-    .from("tasks")
-    .select(taskSelect)
-    .eq("id", taskId)
-    .maybeSingle();
+  const { data, error } =
+    await supabase
+      .from("tasks")
+      .select(taskSelect)
+      .eq("id", taskId)
+      .maybeSingle();
 
   if (error) {
     return NextResponse.json(
@@ -152,7 +265,8 @@ export async function PATCH(
   request: Request,
   context: RouteContext,
 ) {
-  const { taskId } = await context.params;
+  const { taskId } =
+    await context.params;
 
   let body: UpdateTaskBody;
 
@@ -163,7 +277,8 @@ export async function PATCH(
     return NextResponse.json(
       {
         success: false,
-        error: "Invalid request body.",
+        error:
+          "Invalid request body.",
       },
       {
         status: 400,
@@ -171,14 +286,17 @@ export async function PATCH(
     );
   }
 
-  const supabase = createAdminServerClient();
+  const supabase =
+    createAdminServerClient();
 
-  const { data: existingTask, error: readError } =
-    await supabase
-      .from("tasks")
-      .select(taskSelect)
-      .eq("id", taskId)
-      .maybeSingle();
+  const {
+    data: existingTask,
+    error: readError,
+  } = await supabase
+    .from("tasks")
+    .select(taskSelect)
+    .eq("id", taskId)
+    .maybeSingle();
 
   if (readError) {
     return NextResponse.json(
@@ -204,8 +322,12 @@ export async function PATCH(
     );
   }
 
-  const updates: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
+  const updates: Record<
+    string,
+    unknown
+  > = {
+    updated_at:
+      new Date().toISOString(),
   };
 
   if (body.title !== undefined) {
@@ -218,7 +340,8 @@ export async function PATCH(
       return NextResponse.json(
         {
           success: false,
-          error: "Task title is required.",
+          error:
+            "Task title is required.",
         },
         {
           status: 400,
@@ -229,16 +352,20 @@ export async function PATCH(
     updates.title = title;
   }
 
-  if (body.description !== undefined) {
-    const description = optionalText(
-      body.description,
-    );
+  if (
+    body.description !== undefined
+  ) {
+    const description =
+      optionalText(body.description);
 
-    if (description === undefined) {
+    if (
+      description === undefined
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid task description.",
+          error:
+            "Invalid task description.",
         },
         {
           status: 400,
@@ -246,20 +373,27 @@ export async function PATCH(
       );
     }
 
-    updates.description = description;
+    updates.description =
+      description;
   }
 
   if (body.category !== undefined) {
     const category =
-      typeof body.category === "string"
+      typeof body.category ===
+      "string"
         ? body.category.trim()
         : "";
 
-    if (!allowedCategories.has(category)) {
+    if (
+      !allowedCategories.has(
+        category,
+      )
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid task category.",
+          error:
+            "Invalid task category.",
         },
         {
           status: 400,
@@ -272,15 +406,21 @@ export async function PATCH(
 
   if (body.priority !== undefined) {
     const priority =
-      typeof body.priority === "string"
+      typeof body.priority ===
+      "string"
         ? body.priority.trim()
         : "";
 
-    if (!allowedPriorities.has(priority)) {
+    if (
+      !allowedPriorities.has(
+        priority,
+      )
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid task priority.",
+          error:
+            "Invalid task priority.",
         },
         {
           status: 400,
@@ -292,13 +432,16 @@ export async function PATCH(
   }
 
   if (body.dueAt !== undefined) {
-    const dueAt = optionalDate(body.dueAt);
+    const dueAt = optionalDate(
+      body.dueAt,
+    );
 
     if (dueAt === undefined) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid task due date.",
+          error:
+            "Invalid task due date.",
         },
         {
           status: 400,
@@ -309,12 +452,71 @@ export async function PATCH(
     updates.due_at = dueAt;
   }
 
-  if (body.assignedToId !== undefined) {
-    const assignedToId = optionalText(
-      body.assignedToId,
-    );
+  if (
+    body.recurrenceRule !==
+    undefined
+  ) {
+    const recurrenceRule =
+      optionalRecurrenceRule(
+        body.recurrenceRule,
+      );
 
-    if (assignedToId === undefined) {
+    if (
+      recurrenceRule === undefined
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Invalid recurrence schedule.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const effectiveDueAt =
+      updates.due_at !== undefined
+        ? updates.due_at
+        : existingTask.due_at;
+
+    if (
+      recurrenceRule &&
+      !effectiveDueAt
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Recurring tasks require a due date.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    updates.recurrence_rule =
+      recurrenceRule;
+
+    updates.task_type =
+      recurrenceRule
+        ? "recurring"
+        : "manual";
+  }
+
+  if (
+    body.assignedToId !== undefined
+  ) {
+    const assignedToId =
+      optionalText(
+        body.assignedToId,
+      );
+
+    if (
+      assignedToId === undefined
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -328,12 +530,14 @@ export async function PATCH(
     }
 
     if (assignedToId) {
-      const { data: employee, error } =
-        await supabase
-          .from("team_members")
-          .select("id, status")
-          .eq("id", assignedToId)
-          .maybeSingle();
+      const {
+        data: employee,
+        error,
+      } = await supabase
+        .from("team_members")
+        .select("id, status")
+        .eq("id", assignedToId)
+        .maybeSingle();
 
       if (error) {
         return NextResponse.json(
@@ -360,7 +564,10 @@ export async function PATCH(
         );
       }
 
-      if (employee.status !== "active") {
+      if (
+        employee.status !==
+        "active"
+      ) {
         return NextResponse.json(
           {
             success: false,
@@ -374,20 +581,26 @@ export async function PATCH(
       }
     }
 
-    updates.assigned_to_id = assignedToId;
-    updates.assigned_at = assignedToId
-      ? new Date().toISOString()
-      : null;
+    updates.assigned_to_id =
+      assignedToId;
+
+    updates.assigned_at =
+      assignedToId
+        ? new Date().toISOString()
+        : null;
   }
 
   if (body.leadId !== undefined) {
-    const leadId = optionalText(body.leadId);
+    const leadId = optionalText(
+      body.leadId,
+    );
 
     if (leadId === undefined) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid related lead.",
+          error:
+            "Invalid related lead.",
         },
         {
           status: 400,
@@ -398,16 +611,20 @@ export async function PATCH(
     updates.lead_id = leadId;
   }
 
-  if (body.projectId !== undefined) {
-    const projectId = optionalText(
-      body.projectId,
-    );
+  if (
+    body.projectId !== undefined
+  ) {
+    const projectId =
+      optionalText(body.projectId);
 
-    if (projectId === undefined) {
+    if (
+      projectId === undefined
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid related project.",
+          error:
+            "Invalid related project.",
         },
         {
           status: 400,
@@ -415,19 +632,26 @@ export async function PATCH(
       );
     }
 
-    updates.project_id = projectId;
+    updates.project_id =
+      projectId;
   }
 
-  if (body.customerId !== undefined) {
-    const customerId = optionalText(
-      body.customerId,
-    );
+  if (
+    body.customerId !== undefined
+  ) {
+    const customerId =
+      optionalText(
+        body.customerId,
+      );
 
-    if (customerId === undefined) {
+    if (
+      customerId === undefined
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid related customer.",
+          error:
+            "Invalid related customer.",
         },
         {
           status: 400,
@@ -435,19 +659,28 @@ export async function PATCH(
       );
     }
 
-    updates.customer_id = customerId;
+    updates.customer_id =
+      customerId;
   }
 
-  if (body.completionNote !== undefined) {
-    const completionNote = optionalText(
-      body.completionNote,
-    );
+  if (
+    body.completionNote !==
+    undefined
+  ) {
+    const completionNote =
+      optionalText(
+        body.completionNote,
+      );
 
-    if (completionNote === undefined) {
+    if (
+      completionNote ===
+      undefined
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid completion note.",
+          error:
+            "Invalid completion note.",
         },
         {
           status: 400,
@@ -455,20 +688,29 @@ export async function PATCH(
       );
     }
 
-    updates.completion_note = completionNote;
+    updates.completion_note =
+      completionNote;
   }
+
+  let requestedStatus:
+    | string
+    | null = null;
 
   if (body.status !== undefined) {
     const status =
-      typeof body.status === "string"
+      typeof body.status ===
+      "string"
         ? body.status.trim()
         : "";
 
-    if (!allowedStatuses.has(status)) {
+    if (
+      !allowedStatuses.has(status)
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid task status.",
+          error:
+            "Invalid task status.",
         },
         {
           status: 400,
@@ -476,7 +718,10 @@ export async function PATCH(
       );
     }
 
-    const now = new Date().toISOString();
+    requestedStatus = status;
+
+    const now =
+      new Date().toISOString();
 
     updates.status = status;
 
@@ -488,7 +733,9 @@ export async function PATCH(
 
     if (status === "in_progress") {
       updates.started_at =
-        existingTask.started_at ?? now;
+        existingTask.started_at ??
+        now;
+
       updates.completed_at = null;
       updates.canceled_at = null;
     }
@@ -504,12 +751,13 @@ export async function PATCH(
     }
   }
 
-  const { data, error } = await supabase
-    .from("tasks")
-    .update(updates)
-    .eq("id", taskId)
-    .select(taskSelect)
-    .single();
+  const { data, error } =
+    await supabase
+      .from("tasks")
+      .update(updates)
+      .eq("id", taskId)
+      .select(taskSelect)
+      .single();
 
   if (error) {
     return NextResponse.json(
@@ -523,8 +771,129 @@ export async function PATCH(
     );
   }
 
+  let nextTask = null;
+  let recurrenceWarning:
+    | string
+    | null = null;
+
+  const shouldCreateNextTask =
+    requestedStatus ===
+      "completed" &&
+    existingTask.status !==
+      "completed" &&
+    Boolean(
+      data.recurrence_rule,
+    ) &&
+    Boolean(data.due_at);
+
+  if (
+    shouldCreateNextTask &&
+    data.recurrence_rule &&
+    data.due_at
+  ) {
+    const nextDueAt =
+      calculateNextDueAt(
+        data.due_at,
+        data.recurrence_rule,
+      );
+
+    if (nextDueAt) {
+      const recurrenceMetadata = {
+        ...normalizeMetadata(
+          data.metadata,
+        ),
+        recurrence_parent_task_id:
+          data.id,
+        recurrence_due_at:
+          nextDueAt,
+      };
+
+      const {
+        data: existingNextTask,
+        error: duplicateCheckError,
+      } = await supabase
+        .from("tasks")
+        .select(taskSelect)
+        .contains("metadata", {
+          recurrence_parent_task_id:
+            data.id,
+          recurrence_due_at:
+            nextDueAt,
+        })
+        .maybeSingle();
+
+      if (duplicateCheckError) {
+        recurrenceWarning =
+          duplicateCheckError.message;
+      } else if (
+        existingNextTask
+      ) {
+        nextTask =
+          existingNextTask;
+      } else {
+        const {
+          data: createdNextTask,
+          error:
+            createNextTaskError,
+        } = await supabase
+          .from("tasks")
+          .insert({
+            title: data.title,
+            description:
+              data.description,
+            category: data.category,
+            task_type:
+              "recurring",
+            task_type_id:
+              data.task_type_id,
+            status: "open",
+            priority:
+              data.priority,
+            due_at: nextDueAt,
+            started_at: null,
+            completed_at: null,
+            canceled_at: null,
+            completion_note: null,
+            assigned_to_id:
+              data.assigned_to_id,
+            assigned_at:
+              data.assigned_to_id
+                ? new Date().toISOString()
+                : null,
+            lead_id: data.lead_id,
+            project_id:
+              data.project_id,
+            customer_id:
+              data.customer_id,
+            recurrence_rule:
+              data.recurrence_rule,
+            source_type:
+              data.source_type ??
+              "recurring",
+            metadata:
+              recurrenceMetadata,
+          })
+          .select(taskSelect)
+          .single();
+
+        if (createNextTaskError) {
+          recurrenceWarning =
+            createNextTaskError.message;
+        } else {
+          nextTask =
+            createdNextTask;
+        }
+      }
+    } else {
+      recurrenceWarning =
+        "The task was completed, but the next due date could not be calculated.";
+    }
+  }
+
   return NextResponse.json({
     success: true,
     task: data,
+    nextTask,
+    recurrenceWarning,
   });
 }

@@ -1,4 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const allowedCategories = new Set([
@@ -19,12 +22,20 @@ const allowedPriorities = new Set([
   "urgent",
 ]);
 
+const allowedRecurrenceRules = new Set([
+  "daily",
+  "weekly",
+  "monthly",
+]);
+
 function getSupabaseClient() {
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL;
 
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env
+      .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
@@ -85,6 +96,28 @@ function normalizeOptionalText(
   return trimmedValue || null;
 }
 
+function normalizeRecurrenceRule(
+  value: unknown,
+): string | null {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    value === "none"
+  ) {
+    return null;
+  }
+
+  if (
+    typeof value !== "string" ||
+    !allowedRecurrenceRules.has(value)
+  ) {
+    return null;
+  }
+
+  return value;
+}
+
 export async function GET() {
   try {
     const supabase = getSupabaseClient();
@@ -109,7 +142,10 @@ export async function GET() {
       tasks: data ?? [],
     });
   } catch (error) {
-    console.error("Unable to load tasks:", error);
+    console.error(
+      "Unable to load tasks:",
+      error,
+    );
 
     return NextResponse.json(
       {
@@ -141,6 +177,9 @@ export async function POST(
       projectId?: unknown;
       customerId?: unknown;
       taskTypeId?: unknown;
+      recurrenceRule?: unknown;
+      sourceType?: unknown;
+      metadata?: unknown;
     };
 
     const title =
@@ -152,7 +191,8 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error: "Task title is required.",
+          error:
+            "Task title is required.",
         },
         {
           status: 400,
@@ -169,7 +209,8 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error: "Choose a valid task category.",
+          error:
+            "Choose a valid task category.",
         },
         {
           status: 400,
@@ -186,7 +227,8 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error: "Choose a valid task priority.",
+          error:
+            "Choose a valid task priority.",
         },
         {
           status: 400,
@@ -205,7 +247,8 @@ export async function POST(
         return NextResponse.json(
           {
             success: false,
-            error: "Choose a valid due date.",
+            error:
+              "Choose a valid due date.",
           },
           {
             status: 400,
@@ -218,12 +261,15 @@ export async function POST(
       );
 
       if (
-        Number.isNaN(parsedDueDate.getTime())
+        Number.isNaN(
+          parsedDueDate.getTime(),
+        )
       ) {
         return NextResponse.json(
           {
             success: false,
-            error: "Choose a valid due date.",
+            error:
+              "Choose a valid due date.",
           },
           {
             status: 400,
@@ -231,7 +277,43 @@ export async function POST(
         );
       }
 
-      dueAt = parsedDueDate.toISOString();
+      dueAt =
+        parsedDueDate.toISOString();
+    }
+
+    const recurrenceRule =
+      normalizeRecurrenceRule(
+        body.recurrenceRule,
+      );
+
+    if (
+      body.recurrenceRule &&
+      body.recurrenceRule !== "none" &&
+      !recurrenceRule
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Choose a valid recurrence schedule.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    if (recurrenceRule && !dueAt) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Recurring tasks require a due date.",
+        },
+        {
+          status: 400,
+        },
+      );
     }
 
     const assignedToId =
@@ -239,13 +321,13 @@ export async function POST(
         body.assignedToId,
       );
 
-    const leadId = normalizeOptionalId(
-      body.leadId,
-    );
+    const leadId =
+      normalizeOptionalId(body.leadId);
 
-    const projectId = normalizeOptionalId(
-      body.projectId,
-    );
+    const projectId =
+      normalizeOptionalId(
+        body.projectId,
+      );
 
     const customerId =
       normalizeOptionalId(
@@ -257,36 +339,55 @@ export async function POST(
         body.taskTypeId,
       );
 
+    const sourceType =
+      normalizeOptionalText(
+        body.sourceType,
+      ) ?? "manual";
+
+    const metadata =
+      body.metadata &&
+      typeof body.metadata === "object" &&
+      !Array.isArray(body.metadata)
+        ? body.metadata
+        : {};
+
     const now = new Date().toISOString();
 
-    const supabase = getSupabaseClient();
+    const supabase =
+      getSupabaseClient();
 
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert({
-        title,
-        description:
-          normalizeOptionalText(
-            body.description,
-          ),
-        category,
-        task_type: "manual",
-        task_type_id: taskTypeId,
-        status: "open",
-        priority,
-        due_at: dueAt,
-        assigned_to_id: assignedToId,
-        assigned_at: assignedToId
-          ? now
-          : null,
-        lead_id: leadId,
-        project_id: projectId,
-        customer_id: customerId,
-        source_type: "manual",
-        metadata: {},
-      })
-      .select("*")
-      .single();
+    const { data, error } =
+      await supabase
+        .from("tasks")
+        .insert({
+          title,
+          description:
+            normalizeOptionalText(
+              body.description,
+            ),
+          category,
+          task_type: recurrenceRule
+            ? "recurring"
+            : "manual",
+          task_type_id: taskTypeId,
+          status: "open",
+          priority,
+          due_at: dueAt,
+          assigned_to_id:
+            assignedToId,
+          assigned_at: assignedToId
+            ? now
+            : null,
+          lead_id: leadId,
+          project_id: projectId,
+          customer_id: customerId,
+          recurrence_rule:
+            recurrenceRule,
+          source_type: sourceType,
+          metadata,
+        })
+        .select("*")
+        .single();
 
     if (error) {
       if (error.code === "23503") {
@@ -315,7 +416,10 @@ export async function POST(
       },
     );
   } catch (error) {
-    console.error("Unable to create task:", error);
+    console.error(
+      "Unable to create task:",
+      error,
+    );
 
     return NextResponse.json(
       {
