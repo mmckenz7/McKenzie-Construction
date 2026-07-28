@@ -1,57 +1,62 @@
 import type { MetadataRoute } from "next";
 
-const siteUrl = "https://www.mckenzie-builds.com";
-
 export default function sitemap(): MetadataRoute.Sitemap {
-  const lastModified = new Date();
+  const baseUrl =
+    "https://www.mckenzie-builds.com";
 
   return [
     {
-      url: siteUrl,
-      lastModified,
+      url: `${baseUrl}/`,
+      lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 1,
     },
     {
-      url: `${siteUrl}/services`,
-      lastModified,
+      url: `${baseUrl}/services`,
+      lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.9,
     },
     {
-      url: `${siteUrl}/projects`,
-      lastModified,
-      changeFrequency: "weekly",
+      url: `${baseUrl}/knoxville-deck-builder`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
       priority: 0.9,
     },
     {
-      url: `${siteUrl}/projects/island-ford`,
-      lastModified,
+      url: `${baseUrl}/projects`,
+      lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.8,
     },
     {
-      url: `${siteUrl}/projects/gallery`,
-      lastModified,
-      changeFrequency: "weekly",
+      url: `${baseUrl}/projects/island-ford`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
       priority: 0.8,
     },
     {
-      url: `${siteUrl}/about`,
-      lastModified,
+      url: `${baseUrl}/projects/gallery`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/about`,
+      lastModified: new Date(),
+      changeFrequency: "yearly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/learning-center`,
+      lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.7,
     },
     {
-      url: `${siteUrl}/learning-center`,
-      lastModified,
-      changeFrequency: "weekly",
-      priority: 0.8,
-    },
-    {
-      url: `${siteUrl}/contact`,
-      lastModified,
-      changeFrequency: "monthly",
+      url: `${baseUrl}/contact`,
+      lastModified: new Date(),
+      changeFrequency: "yearly",
       priority: 0.8,
     },
   ];
