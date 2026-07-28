@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/projects/island-ford/05062FD1-CF2E-4F0C-8422-79246C3BAAE8_1_105_c.jpeg",
+        url: "/projects/island-ford/B251B85F-BD26-4C55-B8C2-BBA4BB82973B_1_105_c.jpeg",
         width: 1200,
         height: 630,
         alt: "Custom wood deck built by McKenzie Construction near Knoxville, Tennessee",
@@ -111,7 +111,7 @@ export default function KnoxvilleDeckBuilderPage() {
         <section className="relative isolate overflow-hidden bg-slate-950">
           <div className="absolute inset-0">
             <img
-              src="/projects/island-ford/05062FD1-CF2E-4F0C-8422-79246C3BAAE8_1_105_c.jpeg"
+              src="/projects/island-ford/B251B85F-BD26-4C55-B8C2-BBA4BB82973B_1_105_c.jpeg"
               alt=""
               className="h-full w-full object-cover opacity-35"
             />
@@ -224,7 +224,7 @@ export default function KnoxvilleDeckBuilderPage() {
 
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm">
               <img
-                src="/projects/island-ford/05062FD1-CF2E-4F0C-8422-79246C3BAAE8_1_105_c.jpeg"
+                src="/projects/island-ford/B251B85F-BD26-4C55-B8C2-BBA4BB82973B_1_105_c.jpeg"
                 alt="Large pressure-treated wood deck near Knoxville"
                 className="aspect-[4/3] h-full w-full object-cover"
               />
