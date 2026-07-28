@@ -1,5 +1,12 @@
-import { NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
+import {
+  createUnauthorizedApiResponse,
+  getAuthenticatedApiUser,
+} from "@/lib/api-auth";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -40,9 +47,18 @@ function parseResponsiblePersonId(
 }
 
 export async function GET(
-  _request: Request,
+  request: NextRequest,
   context: RouteContext,
 ) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
   try {
     const { leadId: rawLeadId } =
       await context.params;
@@ -173,9 +189,18 @@ export async function GET(
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   context: RouteContext,
 ) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
   try {
     const { leadId: rawLeadId } =
       await context.params;
