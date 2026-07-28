@@ -2,7 +2,9 @@ import {
   NextRequest,
   NextResponse,
 } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+
+import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import { createAuthenticatedServerClient } from "@/lib/supabase/server";
 
 const allowedCategories = new Set([
   "sales",
@@ -28,30 +30,30 @@ const allowedRecurrenceRules = new Set([
   "monthly",
 ]);
 
-function getSupabaseClient() {
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL;
+async function requireAuthenticatedUser() {
+  const supabase =
+    await createAuthenticatedServerClient();
 
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env
-      .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error(
-      "Supabase environment variables are missing.",
-    );
+  if (error || !user) {
+    return null;
   }
 
-  return createClient(
-    supabaseUrl,
-    supabaseKey,
+  return user;
+}
+
+function unauthorizedResponse() {
+  return NextResponse.json(
     {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
+      success: false,
+      error: "You must be signed in.",
+    },
+    {
+      status: 401,
     },
   );
 }
@@ -120,7 +122,15 @@ function normalizeRecurrenceRule(
 
 export async function GET() {
   try {
-    const supabase = getSupabaseClient();
+    const user =
+      await requireAuthenticatedUser();
+
+    if (!user) {
+      return unauthorizedResponse();
+    }
+
+    const supabase =
+      createAdminServerClient();
 
     const { data, error } = await supabase
       .from("tasks")
@@ -166,6 +176,13 @@ export async function POST(
   request: NextRequest,
 ) {
   try {
+    const user =
+      await requireAuthenticatedUser();
+
+    if (!user) {
+      return unauthorizedResponse();
+    }
+
     const body = (await request.json()) as {
       title?: unknown;
       description?: unknown;
@@ -191,8 +208,7 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Task title is required.",
+          error: "Task title is required.",
         },
         {
           status: 400,
@@ -354,7 +370,7 @@ export async function POST(
     const now = new Date().toISOString();
 
     const supabase =
-      getSupabaseClient();
+      createAdminServerClient();
 
     const { data, error } =
       await supabase
