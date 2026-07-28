@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+
+import { logout } from "@/app/login/actions";
+import { createAuthenticatedServerClient } from "@/lib/supabase/server";
 
 type AdminLayoutProps = {
   children: React.ReactNode;
@@ -27,22 +31,26 @@ const navigationItems = [
   },
 ];
 
-const futureNavigationItems = [
-  "Projects",
-  "Estimates",
-];
+const futureNavigationItems = ["Projects", "Estimates"];
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: AdminLayoutProps) {
+  const supabase = await createAuthenticatedServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950 text-white shadow-sm">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-          <Link
-            href="/admin"
-            className="shrink-0"
-          >
+          <Link href="/admin" className="shrink-0">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400">
               McKenzie Construction
             </p>
@@ -52,34 +60,47 @@ export default function AdminLayout({
             </p>
           </Link>
 
-          <nav
-            aria-label="Admin navigation"
-            className="flex flex-wrap items-center gap-2"
-          >
-            {navigationItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-lg px-3 py-2 text-sm font-bold text-slate-200 transition hover:bg-slate-800 hover:text-white"
-              >
-                {item.label}
-              </Link>
-            ))}
+          <div className="flex flex-col gap-3 lg:items-end">
+            <nav
+              aria-label="Admin navigation"
+              className="flex flex-wrap items-center gap-2"
+            >
+              {navigationItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="rounded-lg px-3 py-2 text-sm font-bold text-slate-200 transition hover:bg-slate-800 hover:text-white"
+                >
+                  {item.label}
+                </Link>
+              ))}
 
-            {futureNavigationItems.map((label) => (
-              <span
-                key={label}
-                title="Coming soon"
-                className="cursor-not-allowed rounded-lg px-3 py-2 text-sm font-bold text-slate-500"
-              >
-                {label}
+              {futureNavigationItems.map((label) => (
+                <span
+                  key={label}
+                  title="Coming soon"
+                  className="cursor-not-allowed rounded-lg px-3 py-2 text-sm font-bold text-slate-500"
+                >
+                  {label}
 
-                <span className="ml-1 text-[9px] uppercase tracking-wide text-slate-600">
-                  Soon
+                  <span className="ml-1 text-[9px] uppercase tracking-wide text-slate-600">
+                    Soon
+                  </span>
                 </span>
-              </span>
-            ))}
-          </nav>
+              ))}
+
+              <form action={logout}>
+                <button
+                  type="submit"
+                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-bold text-slate-200 transition hover:border-red-400 hover:bg-red-500/10 hover:text-red-300"
+                >
+                  Sign Out
+                </button>
+              </form>
+            </nav>
+
+            <p className="text-xs text-slate-400">{user.email}</p>
+          </div>
         </div>
       </header>
 
