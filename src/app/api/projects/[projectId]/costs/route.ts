@@ -37,11 +37,14 @@ type RouteContext = {
   }>;
 };
 
-type CreateProjectCostBody = {
+type ProjectCostBody = {
+  costId?: unknown;
   costType?: unknown;
   description?: unknown;
   vendorName?: unknown;
-  amount?: unknown;
+  estimatedAmount?: unknown;
+  finalAmount?: unknown;
+  amountPaid?: unknown;
   costDate?: unknown;
   paymentStatus?: unknown;
   paymentMethod?: unknown;
@@ -55,7 +58,32 @@ type ProjectCostRecord = {
   cost_type: string;
   description: string;
   vendor_name: string | null;
+  amount: number | string;
+  estimated_amount: number | string;
+  final_amount: number | string | null;
+  amount_paid: number | string;
+  cost_date: string | null;
+  payment_status: string;
+  payment_method: string | null;
+  reference_number: string | null;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+type NormalizedProjectCost = {
+  id: string;
+  project_id: string;
+  cost_type: string;
+  description: string;
+  vendor_name: string | null;
   amount: number;
+  estimated_amount: number;
+  final_amount: number | null;
+  amount_paid: number;
+  effective_amount: number;
+  is_finalized: boolean;
   cost_date: string | null;
   payment_status: string;
   payment_method: string | null;
@@ -73,6 +101,9 @@ const projectCostSelect = `
   description,
   vendor_name,
   amount,
+  estimated_amount,
+  final_amount,
+  amount_paid,
   cost_date,
   payment_status,
   payment_method,
@@ -82,6 +113,39 @@ const projectCostSelect = `
   created_at,
   updated_at
 `;
+
+function roundMoney(
+  value: number,
+) {
+  return (
+    Math.round(value * 100) /
+    100
+  );
+}
+
+function toNumber(
+  value:
+    | number
+    | string
+    | null
+    | undefined,
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return 0;
+  }
+
+  const parsed =
+    typeof value === "number"
+      ? value
+      : Number(value);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
+}
 
 function normalizeRequiredText(
   value: unknown,
@@ -116,7 +180,7 @@ function normalizeOptionalText(
   return value.trim() || null;
 }
 
-function normalizeAmount(
+function normalizeRequiredAmount(
   value: unknown,
 ): number | undefined {
   const parsed =
@@ -139,10 +203,21 @@ function normalizeAmount(
     return undefined;
   }
 
-  return (
-    Math.round(
-      parsed * 100,
-    ) / 100
+  return roundMoney(parsed);
+}
+
+function normalizeOptionalAmount(
+  value: unknown,
+): number | null | undefined {
+  if (
+    value === null ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  return normalizeRequiredAmount(
+    value,
   );
 }
 
@@ -194,13 +269,75 @@ function normalizeDate(
   return cleanedValue;
 }
 
+function normalizeProjectCost(
+  cost: ProjectCostRecord,
+): NormalizedProjectCost {
+  const estimatedAmount =
+    roundMoney(
+      toNumber(
+        cost.estimated_amount ??
+          cost.amount,
+      ),
+    );
+
+  const finalAmount =
+    cost.final_amount === null
+      ? null
+      : roundMoney(
+          toNumber(
+            cost.final_amount,
+          ),
+        );
+
+  const effectiveAmount =
+    finalAmount !== null
+      ? finalAmount
+      : estimatedAmount;
+
+  return {
+    ...cost,
+    amount: roundMoney(
+      toNumber(cost.amount),
+    ),
+    estimated_amount:
+      estimatedAmount,
+    final_amount:
+      finalAmount,
+    amount_paid:
+      roundMoney(
+        toNumber(
+          cost.amount_paid,
+        ),
+      ),
+    effective_amount:
+      roundMoney(
+        effectiveAmount,
+      ),
+    is_finalized:
+      finalAmount !== null,
+  };
+}
+
 function calculateCostSummary(
-  costs: ProjectCostRecord[],
+  costs: NormalizedProjectCost[],
 ) {
-  let grossCosts = 0;
-  let refunds = 0;
+  let originalEstimatedGrossCosts =
+    0;
+  let originalEstimatedRefunds = 0;
+
+  let currentProjectedGrossCosts =
+    0;
+  let currentProjectedRefunds = 0;
+
+  let finalizedGrossCosts = 0;
+  let finalizedRefunds = 0;
+
+  let remainingEstimatedGrossCosts =
+    0;
+  let remainingEstimatedRefunds = 0;
+
+  let amountPaid = 0;
   let unpaidCosts = 0;
-  let paidCosts = 0;
 
   const totalsByType: Record<
     string,
@@ -215,13 +352,64 @@ function calculateCostSummary(
       continue;
     }
 
-    if (
+    const estimatedAmount =
+      cost.estimated_amount;
+
+    const effectiveAmount =
+      cost.effective_amount;
+
+    const finalizedAmount =
+      cost.final_amount;
+
+    const isRefund =
       cost.cost_type ===
-      "refund"
-    ) {
-      refunds += cost.amount;
+      "refund";
+
+    if (isRefund) {
+      originalEstimatedRefunds +=
+        estimatedAmount;
+
+      currentProjectedRefunds +=
+        effectiveAmount;
+
+      if (
+        finalizedAmount !== null
+      ) {
+        finalizedRefunds +=
+          finalizedAmount;
+      } else {
+        remainingEstimatedRefunds +=
+          estimatedAmount;
+      }
     } else {
-      grossCosts += cost.amount;
+      originalEstimatedGrossCosts +=
+        estimatedAmount;
+
+      currentProjectedGrossCosts +=
+        effectiveAmount;
+
+      if (
+        finalizedAmount !== null
+      ) {
+        finalizedGrossCosts +=
+          finalizedAmount;
+      } else {
+        remainingEstimatedGrossCosts +=
+          estimatedAmount;
+      }
+
+      amountPaid +=
+        Math.min(
+          cost.amount_paid,
+          effectiveAmount,
+        );
+
+      unpaidCosts +=
+        Math.max(
+          effectiveAmount -
+            cost.amount_paid,
+          0,
+        );
 
       totalsByType[
         cost.cost_type
@@ -229,65 +417,116 @@ function calculateCostSummary(
         (totalsByType[
           cost.cost_type
         ] ?? 0) +
-        cost.amount;
-    }
-
-    if (
-      cost.payment_status ===
-        "unpaid" ||
-      cost.payment_status ===
-        "partially_paid"
-    ) {
-      if (
-        cost.cost_type !==
-        "refund"
-      ) {
-        unpaidCosts +=
-          cost.amount;
-      }
-    }
-
-    if (
-      cost.payment_status ===
-        "paid" ||
-      cost.payment_status ===
-        "reimbursed"
-    ) {
-      if (
-        cost.cost_type !==
-        "refund"
-      ) {
-        paidCosts += cost.amount;
-      }
+        effectiveAmount;
     }
   }
 
+  const originalEstimatedNetCosts =
+    originalEstimatedGrossCosts -
+    originalEstimatedRefunds;
+
+  const currentProjectedNetCosts =
+    currentProjectedGrossCosts -
+    currentProjectedRefunds;
+
+  const finalizedNetCosts =
+    finalizedGrossCosts -
+    finalizedRefunds;
+
+  const remainingEstimatedNetCosts =
+    remainingEstimatedGrossCosts -
+    remainingEstimatedRefunds;
+
   return {
-    grossCosts:
-      Math.round(
-        grossCosts * 100,
-      ) / 100,
+    originalEstimatedGrossCosts:
+      roundMoney(
+        originalEstimatedGrossCosts,
+      ),
 
-    refunds:
-      Math.round(
-        refunds * 100,
-      ) / 100,
+    originalEstimatedRefunds:
+      roundMoney(
+        originalEstimatedRefunds,
+      ),
 
-    netCosts:
-      Math.round(
-        (grossCosts - refunds) *
-          100,
-      ) / 100,
+    originalEstimatedNetCosts:
+      roundMoney(
+        originalEstimatedNetCosts,
+      ),
+
+    currentProjectedGrossCosts:
+      roundMoney(
+        currentProjectedGrossCosts,
+      ),
+
+    currentProjectedRefunds:
+      roundMoney(
+        currentProjectedRefunds,
+      ),
+
+    currentProjectedNetCosts:
+      roundMoney(
+        currentProjectedNetCosts,
+      ),
+
+    finalizedGrossCosts:
+      roundMoney(
+        finalizedGrossCosts,
+      ),
+
+    finalizedRefunds:
+      roundMoney(
+        finalizedRefunds,
+      ),
+
+    finalizedNetCosts:
+      roundMoney(
+        finalizedNetCosts,
+      ),
+
+    remainingEstimatedGrossCosts:
+      roundMoney(
+        remainingEstimatedGrossCosts,
+      ),
+
+    remainingEstimatedRefunds:
+      roundMoney(
+        remainingEstimatedRefunds,
+      ),
+
+    remainingEstimatedNetCosts:
+      roundMoney(
+        remainingEstimatedNetCosts,
+      ),
+
+    costVariance:
+      roundMoney(
+        currentProjectedNetCosts -
+          originalEstimatedNetCosts,
+      ),
+
+    amountPaid:
+      roundMoney(amountPaid),
 
     unpaidCosts:
-      Math.round(
-        unpaidCosts * 100,
-      ) / 100,
+      roundMoney(unpaidCosts),
+
+    refunds:
+      roundMoney(
+        currentProjectedRefunds,
+      ),
+
+    grossCosts:
+      roundMoney(
+        currentProjectedGrossCosts,
+      ),
+
+    netCosts:
+      roundMoney(
+        currentProjectedNetCosts,
+      ),
 
     paidCosts:
-      Math.round(
-        paidCosts * 100,
-      ) / 100,
+      roundMoney(amountPaid),
 
     totalsByType:
       Object.fromEntries(
@@ -299,13 +538,29 @@ function calculateCostSummary(
             total,
           ]) => [
             costType,
-            Math.round(
-              total * 100,
-            ) / 100,
+            roundMoney(total),
           ],
         ),
       ),
   };
+}
+
+async function getProject(
+  projectId: string,
+) {
+  const supabase =
+    createAdminServerClient();
+
+  return supabase
+    .from("projects")
+    .select(
+      `
+        id,
+        contract_value
+      `,
+    )
+    .eq("id", projectId)
+    .maybeSingle();
 }
 
 export async function GET(
@@ -347,16 +602,9 @@ export async function GET(
   const {
     data: project,
     error: projectError,
-  } = await supabase
-    .from("projects")
-    .select(
-      `
-        id,
-        contract_value
-      `,
-    )
-    .eq("id", projectId)
-    .maybeSingle();
+  } = await getProject(
+    projectId,
+  );
 
   if (projectError) {
     return NextResponse.json(
@@ -421,8 +669,12 @@ export async function GET(
   }
 
   const costs =
-    (data ??
-      []) as ProjectCostRecord[];
+    (
+      (data ??
+        []) as ProjectCostRecord[]
+    ).map(
+      normalizeProjectCost,
+    );
 
   const summary =
     calculateCostSummary(
@@ -430,19 +682,15 @@ export async function GET(
     );
 
   const contractValue =
-    typeof project.contract_value ===
-      "number"
-      ? project.contract_value
-      : project.contract_value !==
-          null
-        ? Number(
-            project.contract_value,
-          )
-        : 0;
+    roundMoney(
+      toNumber(
+        project.contract_value,
+      ),
+    );
 
   const projectedProfit =
     contractValue -
-    summary.netCosts;
+    summary.currentProjectedNetCosts;
 
   const projectedMargin =
     contractValue > 0
@@ -451,29 +699,35 @@ export async function GET(
         100
       : null;
 
+  const originalEstimatedProfit =
+    contractValue -
+    summary.originalEstimatedNetCosts;
+
   return NextResponse.json({
     success: true,
     costs,
     summary: {
       ...summary,
-      contractValue:
-        Math.round(
-          contractValue * 100,
-        ) / 100,
+
+      contractValue,
+
+      originalEstimatedProfit:
+        roundMoney(
+          originalEstimatedProfit,
+        ),
 
       projectedProfit:
-        Math.round(
-          projectedProfit * 100,
-        ) / 100,
+        roundMoney(
+          projectedProfit,
+        ),
 
       projectedMargin:
         projectedMargin ===
         null
           ? null
-          : Math.round(
-              projectedMargin *
-                100,
-            ) / 100,
+          : roundMoney(
+              projectedMargin,
+            ),
     },
   });
 }
@@ -511,11 +765,11 @@ export async function POST(
     );
   }
 
-  let body: CreateProjectCostBody;
+  let body: ProjectCostBody;
 
   try {
     body =
-      (await request.json()) as CreateProjectCostBody;
+      (await request.json()) as ProjectCostBody;
   } catch {
     return NextResponse.json(
       {
@@ -529,203 +783,27 @@ export async function POST(
     );
   }
 
-  const costType =
-    typeof body.costType ===
-    "string"
-      ? body.costType.trim()
-      : "";
+  const validated =
+    validateCostBody(body);
 
-  if (
-    !allowedCostTypes.has(
-      costType,
-    )
-  ) {
+  if (!validated.success) {
     return NextResponse.json(
       {
         success: false,
-        error:
-          "Choose a valid cost type.",
+        error: validated.error,
       },
       {
         status: 400,
       },
     );
   }
-
-  const description =
-    normalizeRequiredText(
-      body.description,
-    );
-
-  if (!description) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "A cost description is required.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  const amount =
-    normalizeAmount(
-      body.amount,
-    );
-
-  if (
-    amount === undefined
-  ) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Amount must be a valid non-negative number.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  const costDate =
-    normalizeDate(
-      body.costDate,
-    );
-
-  if (
-    costDate === undefined
-  ) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "The cost date must use the YYYY-MM-DD format.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  const paymentStatus =
-    typeof body.paymentStatus ===
-    "string"
-      ? body.paymentStatus.trim()
-      : "unpaid";
-
-  if (
-    !allowedPaymentStatuses.has(
-      paymentStatus,
-    )
-  ) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Choose a valid payment status.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  const vendorName =
-    normalizeOptionalText(
-      body.vendorName,
-    );
-
-  if (
-    vendorName === undefined
-  ) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Invalid vendor name.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  const paymentMethod =
-    normalizeOptionalText(
-      body.paymentMethod,
-    );
-
-  if (
-    paymentMethod ===
-    undefined
-  ) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Invalid payment method.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  const referenceNumber =
-    normalizeOptionalText(
-      body.referenceNumber,
-    );
-
-  if (
-    referenceNumber ===
-    undefined
-  ) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Invalid reference number.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  const notes =
-    normalizeOptionalText(
-      body.notes,
-    );
-
-  if (
-    notes === undefined
-  ) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Invalid cost notes.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  const supabase =
-    createAdminServerClient();
 
   const {
     data: project,
     error: projectError,
-  } = await supabase
-    .from("projects")
-    .select("id")
-    .eq("id", projectId)
-    .maybeSingle();
+  } = await getProject(
+    projectId,
+  );
 
   if (projectError) {
     return NextResponse.json(
@@ -753,6 +831,9 @@ export async function POST(
     );
   }
 
+  const supabase =
+    createAdminServerClient();
+
   const {
     data,
     error,
@@ -760,19 +841,47 @@ export async function POST(
     .from("project_costs")
     .insert({
       project_id: projectId,
-      cost_type: costType,
-      description,
+      cost_type:
+        validated.value.costType,
+      description:
+        validated.value.description,
       vendor_name:
-        vendorName,
-      amount,
-      cost_date: costDate,
+        validated.value.vendorName,
+
+      amount:
+        validated.value
+          .estimatedAmount,
+
+      estimated_amount:
+        validated.value
+          .estimatedAmount,
+
+      final_amount:
+        validated.value
+          .finalAmount,
+
+      amount_paid:
+        validated.value
+          .amountPaid,
+
+      cost_date:
+        validated.value.costDate,
+
       payment_status:
-        paymentStatus,
+        validated.value
+          .paymentStatus,
+
       payment_method:
-        paymentMethod,
+        validated.value
+          .paymentMethod,
+
       reference_number:
-        referenceNumber,
-      notes,
+        validated.value
+          .referenceNumber,
+
+      notes:
+        validated.value.notes,
+
       metadata: {
         created_from:
           "project_detail_page",
@@ -815,10 +924,420 @@ export async function POST(
   return NextResponse.json(
     {
       success: true,
-      cost: data,
+      cost:
+        normalizeProjectCost(
+          data as ProjectCostRecord,
+        ),
     },
     {
       status: 201,
     },
   );
+}
+
+export async function PATCH(
+  request: NextRequest,
+  context: RouteContext,
+) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
+  const {
+    projectId: rawProjectId,
+  } = await context.params;
+
+  const projectId =
+    rawProjectId.trim();
+
+  let body: ProjectCostBody;
+
+  try {
+    body =
+      (await request.json()) as ProjectCostBody;
+  } catch {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Invalid request body.",
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
+  const costId =
+    normalizeRequiredText(
+      body.costId,
+    );
+
+  if (!costId) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "A valid project cost ID is required.",
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
+  const validated =
+    validateCostBody(body);
+
+  if (!validated.success) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: validated.error,
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
+  const supabase =
+    createAdminServerClient();
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("project_costs")
+    .update({
+      cost_type:
+        validated.value.costType,
+
+      description:
+        validated.value.description,
+
+      vendor_name:
+        validated.value.vendorName,
+
+      amount:
+        validated.value
+          .estimatedAmount,
+
+      estimated_amount:
+        validated.value
+          .estimatedAmount,
+
+      final_amount:
+        validated.value
+          .finalAmount,
+
+      amount_paid:
+        validated.value
+          .amountPaid,
+
+      cost_date:
+        validated.value.costDate,
+
+      payment_status:
+        validated.value
+          .paymentStatus,
+
+      payment_method:
+        validated.value
+          .paymentMethod,
+
+      reference_number:
+        validated.value
+          .referenceNumber,
+
+      notes:
+        validated.value.notes,
+
+      metadata: {
+        updated_from:
+          "project_detail_page",
+        updated_by_auth_user_id:
+          user.id,
+        updated_at:
+          new Date().toISOString(),
+      },
+    })
+    .eq(
+      "id",
+      costId,
+    )
+    .eq(
+      "project_id",
+      projectId,
+    )
+    .select(projectCostSelect)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: error.message,
+      },
+      {
+        status: 500,
+      },
+    );
+  }
+
+  if (!data) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Project cost not found.",
+      },
+      {
+        status: 404,
+      },
+    );
+  }
+
+  return NextResponse.json({
+    success: true,
+    cost:
+      normalizeProjectCost(
+        data as ProjectCostRecord,
+      ),
+  });
+}
+
+function validateCostBody(
+  body: ProjectCostBody,
+):
+  | {
+      success: true;
+      value: {
+        costType: string;
+        description: string;
+        vendorName: string | null;
+        estimatedAmount: number;
+        finalAmount: number | null;
+        amountPaid: number;
+        costDate: string | null;
+        paymentStatus: string;
+        paymentMethod: string | null;
+        referenceNumber: string | null;
+        notes: string | null;
+      };
+    }
+  | {
+      success: false;
+      error: string;
+    } {
+  const costType =
+    typeof body.costType ===
+    "string"
+      ? body.costType.trim()
+      : "";
+
+  if (
+    !allowedCostTypes.has(
+      costType,
+    )
+  ) {
+    return {
+      success: false,
+      error:
+        "Choose a valid cost type.",
+    };
+  }
+
+  const description =
+    normalizeRequiredText(
+      body.description,
+    );
+
+  if (!description) {
+    return {
+      success: false,
+      error:
+        "A cost description is required.",
+    };
+  }
+
+  const estimatedAmount =
+    normalizeRequiredAmount(
+      body.estimatedAmount,
+    );
+
+  if (
+    estimatedAmount ===
+    undefined
+  ) {
+    return {
+      success: false,
+      error:
+        "Estimated amount must be a valid non-negative number.",
+    };
+  }
+
+  const finalAmount =
+    normalizeOptionalAmount(
+      body.finalAmount,
+    );
+
+  if (
+    finalAmount === undefined
+  ) {
+    return {
+      success: false,
+      error:
+        "Final amount must be blank or a valid non-negative number.",
+    };
+  }
+
+  const amountPaid =
+    normalizeRequiredAmount(
+      body.amountPaid ?? 0,
+    );
+
+  if (
+    amountPaid === undefined
+  ) {
+    return {
+      success: false,
+      error:
+        "Amount paid must be a valid non-negative number.",
+    };
+  }
+
+  const effectiveAmount =
+    finalAmount !== null
+      ? finalAmount
+      : estimatedAmount;
+
+  if (
+    amountPaid >
+      effectiveAmount &&
+    costType !== "refund"
+  ) {
+    return {
+      success: false,
+      error:
+        "Amount paid cannot exceed the amount currently used for this cost.",
+    };
+  }
+
+  const costDate =
+    normalizeDate(
+      body.costDate,
+    );
+
+  if (
+    costDate === undefined
+  ) {
+    return {
+      success: false,
+      error:
+        "The cost date must use the YYYY-MM-DD format.",
+    };
+  }
+
+  const paymentStatus =
+    typeof body.paymentStatus ===
+    "string"
+      ? body.paymentStatus.trim()
+      : "unpaid";
+
+  if (
+    !allowedPaymentStatuses.has(
+      paymentStatus,
+    )
+  ) {
+    return {
+      success: false,
+      error:
+        "Choose a valid payment status.",
+    };
+  }
+
+  const vendorName =
+    normalizeOptionalText(
+      body.vendorName,
+    );
+
+  if (
+    vendorName === undefined
+  ) {
+    return {
+      success: false,
+      error:
+        "Invalid vendor name.",
+    };
+  }
+
+  const paymentMethod =
+    normalizeOptionalText(
+      body.paymentMethod,
+    );
+
+  if (
+    paymentMethod ===
+    undefined
+  ) {
+    return {
+      success: false,
+      error:
+        "Invalid payment method.",
+    };
+  }
+
+  const referenceNumber =
+    normalizeOptionalText(
+      body.referenceNumber,
+    );
+
+  if (
+    referenceNumber ===
+    undefined
+  ) {
+    return {
+      success: false,
+      error:
+        "Invalid reference number.",
+    };
+  }
+
+  const notes =
+    normalizeOptionalText(
+      body.notes,
+    );
+
+  if (
+    notes === undefined
+  ) {
+    return {
+      success: false,
+      error:
+        "Invalid cost notes.",
+    };
+  }
+
+  return {
+    success: true,
+    value: {
+      costType,
+      description,
+      vendorName,
+      estimatedAmount,
+      finalAmount,
+      amountPaid,
+      costDate,
+      paymentStatus,
+      paymentMethod,
+      referenceNumber,
+      notes,
+    },
+  };
 }

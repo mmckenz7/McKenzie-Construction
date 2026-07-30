@@ -52,10 +52,18 @@ type ProjectRecord = {
   property_address: string | null;
   status: string;
   project_manager_id: string | null;
-  estimated_value: number | string | null;
-  contract_value: number | string | null;
+  estimated_value:
+    | number
+    | string
+    | null;
+  contract_value:
+    | number
+    | string
+    | null;
   start_date: string | null;
-  target_completion_date: string | null;
+  target_completion_date:
+    | string
+    | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -65,7 +73,19 @@ type ProjectCostRecord = {
   id: string;
   project_id: string;
   cost_type: string;
-  amount: number | string;
+  amount:
+    | number
+    | string;
+  estimated_amount:
+    | number
+    | string;
+  final_amount:
+    | number
+    | string
+    | null;
+  amount_paid:
+    | number
+    | string;
   payment_status: string;
   cost_date: string | null;
 };
@@ -76,10 +96,20 @@ type LeadRecord = {
   project_type: string | null;
   property_address: string | null;
   lead_status: string | null;
-  consultation_status: string | null;
-  estimated_project_value: number | string | null;
-  expected_close_date: string | null;
-  win_probability: number | string | null;
+  consultation_status:
+    | string
+    | null;
+  estimated_project_value:
+    | number
+    | string
+    | null;
+  expected_close_date:
+    | string
+    | null;
+  win_probability:
+    | number
+    | string
+    | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -96,33 +126,68 @@ type TeamMemberRecord = {
 
 type FinancialItem = {
   id: string;
-  recordType: "project" | "lead";
+  recordType:
+    | "project"
+    | "lead";
   name: string;
-  customerName: string | null;
-  projectType: string | null;
-  propertyAddress: string | null;
+  customerName:
+    | string
+    | null;
+  projectType:
+    | string
+    | null;
+  propertyAddress:
+    | string
+    | null;
   status: string;
-  responsiblePersonName: string | null;
-  scheduledDate: string | null;
-  targetDate: string | null;
+  responsiblePersonName:
+    | string
+    | null;
+  scheduledDate:
+    | string
+    | null;
+  targetDate:
+    | string
+    | null;
   value: number;
+
   recordedCosts: number;
+  originalEstimatedCosts: number;
+  finalizedCosts: number;
+  remainingEstimatedCosts: number;
+  costVariance: number;
+
   unpaidCosts: number;
+  amountPaid: number;
   refunds: number;
   netCosts: number;
+
   projectedProfit: number;
-  projectedMargin: number | null;
-  winProbability: number | null;
+  projectedMargin:
+    | number
+    | null;
+
+  winProbability:
+    | number
+    | null;
   weightedValue: number;
 };
 
 type DateRange = {
-  startDate: string | null;
-  endDate: string | null;
+  startDate:
+    | string
+    | null;
+  endDate:
+    | string
+    | null;
 };
 
 function toNumber(
-  value: number | string | null | undefined,
+  value:
+    | number
+    | string
+    | null
+    | undefined,
 ) {
   if (
     value === null ||
@@ -221,8 +286,12 @@ function addDays(
 
 function getDateRange(
   timeframe: string,
-  requestedStartDate: string | null,
-  requestedEndDate: string | null,
+  requestedStartDate:
+    | string
+    | null,
+  requestedEndDate:
+    | string
+    | null,
 ): DateRange {
   const today =
     getTodayDate();
@@ -384,15 +453,25 @@ function getMonthLabel(
 function calculateProjectCostTotals(
   costs: ProjectCostRecord[],
 ) {
-  let grossCosts = 0;
-  let refunds = 0;
+  let originalEstimatedGrossCosts =
+    0;
+  let originalEstimatedRefunds = 0;
+
+  let currentProjectedGrossCosts =
+    0;
+  let currentProjectedRefunds = 0;
+
+  let finalizedGrossCosts = 0;
+  let finalizedRefunds = 0;
+
+  let remainingEstimatedGrossCosts =
+    0;
+  let remainingEstimatedRefunds = 0;
+
+  let amountPaid = 0;
   let unpaidCosts = 0;
-  let paidCosts = 0;
 
   for (const cost of costs) {
-    const amount =
-      toNumber(cost.amount);
-
     if (
       cost.payment_status ===
       "void"
@@ -400,55 +479,152 @@ function calculateProjectCostTotals(
       continue;
     }
 
-    if (
+    const estimatedAmount =
+      toNumber(
+        cost.estimated_amount ??
+          cost.amount,
+      );
+
+    const finalAmount =
+      cost.final_amount === null
+        ? null
+        : toNumber(
+            cost.final_amount,
+          );
+
+    const effectiveAmount =
+      finalAmount !== null
+        ? finalAmount
+        : estimatedAmount;
+
+    const paidAmount =
+      toNumber(
+        cost.amount_paid,
+      );
+
+    const isRefund =
       cost.cost_type ===
-      "refund"
-    ) {
-      refunds += amount;
+      "refund";
+
+    if (isRefund) {
+      originalEstimatedRefunds +=
+        estimatedAmount;
+
+      currentProjectedRefunds +=
+        effectiveAmount;
+
+      if (
+        finalAmount !== null
+      ) {
+        finalizedRefunds +=
+          finalAmount;
+      } else {
+        remainingEstimatedRefunds +=
+          estimatedAmount;
+      }
+
       continue;
     }
 
-    grossCosts += amount;
+    originalEstimatedGrossCosts +=
+      estimatedAmount;
+
+    currentProjectedGrossCosts +=
+      effectiveAmount;
 
     if (
-      cost.payment_status ===
-        "unpaid" ||
-      cost.payment_status ===
-        "partially_paid"
+      finalAmount !== null
     ) {
-      unpaidCosts += amount;
+      finalizedGrossCosts +=
+        finalAmount;
+    } else {
+      remainingEstimatedGrossCosts +=
+        estimatedAmount;
     }
 
-    if (
-      cost.payment_status ===
-        "paid" ||
-      cost.payment_status ===
-        "reimbursed"
-    ) {
-      paidCosts += amount;
-    }
+    amountPaid += Math.min(
+      paidAmount,
+      effectiveAmount,
+    );
+
+    unpaidCosts += Math.max(
+      effectiveAmount -
+        paidAmount,
+      0,
+    );
   }
 
+  const originalEstimatedNetCosts =
+    originalEstimatedGrossCosts -
+    originalEstimatedRefunds;
+
+  const currentProjectedNetCosts =
+    currentProjectedGrossCosts -
+    currentProjectedRefunds;
+
+  const finalizedNetCosts =
+    finalizedGrossCosts -
+    finalizedRefunds;
+
+  const remainingEstimatedNetCosts =
+    remainingEstimatedGrossCosts -
+    remainingEstimatedRefunds;
+
   return {
-    grossCosts:
-      roundMoney(grossCosts),
-
-    refunds:
-      roundMoney(refunds),
-
-    netCosts:
+    originalEstimatedGrossCosts:
       roundMoney(
-        grossCosts - refunds,
+        originalEstimatedGrossCosts,
+      ),
+
+    originalEstimatedRefunds:
+      roundMoney(
+        originalEstimatedRefunds,
+      ),
+
+    originalEstimatedNetCosts:
+      roundMoney(
+        originalEstimatedNetCosts,
+      ),
+
+    currentProjectedGrossCosts:
+      roundMoney(
+        currentProjectedGrossCosts,
+      ),
+
+    currentProjectedRefunds:
+      roundMoney(
+        currentProjectedRefunds,
+      ),
+
+    currentProjectedNetCosts:
+      roundMoney(
+        currentProjectedNetCosts,
+      ),
+
+    finalizedNetCosts:
+      roundMoney(
+        finalizedNetCosts,
+      ),
+
+    remainingEstimatedNetCosts:
+      roundMoney(
+        remainingEstimatedNetCosts,
+      ),
+
+    costVariance:
+      roundMoney(
+        currentProjectedNetCosts -
+          originalEstimatedNetCosts,
+      ),
+
+    amountPaid:
+      roundMoney(
+        amountPaid,
       ),
 
     unpaidCosts:
       roundMoney(
         unpaidCosts,
-      ),
-
-    paidCosts:
-      roundMoney(
-        paidCosts,
       ),
   };
 }
@@ -583,6 +759,9 @@ export async function GET(
           project_id,
           cost_type,
           amount,
+          estimated_amount,
+          final_amount,
+          amount_paid,
           payment_status,
           cost_date
         `,
@@ -810,7 +989,7 @@ export async function GET(
 
     const projectedProfit =
       contractValue -
-      projectCosts.netCosts;
+      projectCosts.currentProjectedNetCosts;
 
     const projectedMargin =
       contractValue > 0
@@ -857,18 +1036,39 @@ export async function GET(
         roundMoney(
           contractValue,
         ),
+
       recordedCosts:
-        projectCosts.grossCosts,
+        projectCosts.currentProjectedGrossCosts,
+
+      originalEstimatedCosts:
+        projectCosts.originalEstimatedNetCosts,
+
+      finalizedCosts:
+        projectCosts.finalizedNetCosts,
+
+      remainingEstimatedCosts:
+        projectCosts.remainingEstimatedNetCosts,
+
+      costVariance:
+        projectCosts.costVariance,
+
       unpaidCosts:
         projectCosts.unpaidCosts,
+
+      amountPaid:
+        projectCosts.amountPaid,
+
       refunds:
-        projectCosts.refunds,
+        projectCosts.currentProjectedRefunds,
+
       netCosts:
-        projectCosts.netCosts,
+        projectCosts.currentProjectedNetCosts,
+
       projectedProfit:
         roundMoney(
           projectedProfit,
         ),
+
       projectedMargin:
         projectedMargin ===
         null
@@ -876,7 +1076,9 @@ export async function GET(
           : roundMoney(
               projectedMargin,
             ),
+
       winProbability: 100,
+
       weightedValue:
         roundMoney(
           contractValue,
@@ -930,15 +1132,9 @@ export async function GET(
 
       if (
         view ===
-        "all_opportunities"
+        "all_opportunities" ||
+        view === "all"
       ) {
-        shouldIncludeLead =
-          opportunityLeadStatuses.has(
-            stage,
-          );
-      }
-
-      if (view === "all") {
         shouldIncludeLead =
           opportunityLeadStatuses.has(
             stage,
@@ -1005,22 +1201,32 @@ export async function GET(
           roundMoney(
             estimatedValue,
           ),
+
         recordedCosts: 0,
+        originalEstimatedCosts: 0,
+        finalizedCosts: 0,
+        remainingEstimatedCosts: 0,
+        costVariance: 0,
         unpaidCosts: 0,
+        amountPaid: 0,
         refunds: 0,
         netCosts: 0,
+
         projectedProfit:
           roundMoney(
             estimatedValue,
           ),
+
         projectedMargin:
           estimatedValue > 0
             ? 100
             : null,
+
         winProbability:
           roundMoney(
             normalizedProbability,
           ),
+
         weightedValue:
           roundMoney(
             estimatedValue *
@@ -1080,6 +1286,22 @@ export async function GET(
         currentTotals.recordedCosts +
         item.recordedCosts,
 
+      originalEstimatedCosts:
+        currentTotals.originalEstimatedCosts +
+        item.originalEstimatedCosts,
+
+      finalizedCosts:
+        currentTotals.finalizedCosts +
+        item.finalizedCosts,
+
+      remainingEstimatedCosts:
+        currentTotals.remainingEstimatedCosts +
+        item.remainingEstimatedCosts,
+
+      costVariance:
+        currentTotals.costVariance +
+        item.costVariance,
+
       netCosts:
         currentTotals.netCosts +
         item.netCosts,
@@ -1087,6 +1309,10 @@ export async function GET(
       unpaidCosts:
         currentTotals.unpaidCosts +
         item.unpaidCosts,
+
+      amountPaid:
+        currentTotals.amountPaid +
+        item.amountPaid,
 
       refunds:
         currentTotals.refunds +
@@ -1100,8 +1326,13 @@ export async function GET(
       totalValue: 0,
       weightedValue: 0,
       recordedCosts: 0,
+      originalEstimatedCosts: 0,
+      finalizedCosts: 0,
+      remainingEstimatedCosts: 0,
+      costVariance: 0,
       netCosts: 0,
       unpaidCosts: 0,
+      amountPaid: 0,
       refunds: 0,
       projectedProfit: 0,
     },
@@ -1134,7 +1365,8 @@ export async function GET(
       )
       .reduce(
         (total, item) =>
-          total + item.value,
+          total +
+          item.value,
         0,
       );
 
@@ -1398,6 +1630,31 @@ export async function GET(
       recordedCosts:
         roundMoney(
           totals.recordedCosts,
+        ),
+
+      originalEstimatedCosts:
+        roundMoney(
+          totals.originalEstimatedCosts,
+        ),
+
+      finalizedCosts:
+        roundMoney(
+          totals.finalizedCosts,
+        ),
+
+      remainingEstimatedCosts:
+        roundMoney(
+          totals.remainingEstimatedCosts,
+        ),
+
+      costVariance:
+        roundMoney(
+          totals.costVariance,
+        ),
+
+      amountPaid:
+        roundMoney(
+          totals.amountPaid,
         ),
 
       netCosts:

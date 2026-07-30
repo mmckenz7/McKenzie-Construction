@@ -15,6 +15,11 @@ type ProjectCost = {
   description: string;
   vendor_name: string | null;
   amount: number;
+  estimated_amount: number;
+  final_amount: number | null;
+  amount_paid: number;
+  effective_amount: number;
+  is_finalized: boolean;
   cost_date: string | null;
   payment_status: string;
   payment_method: string | null;
@@ -25,13 +30,38 @@ type ProjectCost = {
 };
 
 type CostSummary = {
-  grossCosts: number;
-  refunds: number;
-  netCosts: number;
+  originalEstimatedGrossCosts: number;
+  originalEstimatedRefunds: number;
+  originalEstimatedNetCosts: number;
+
+  currentProjectedGrossCosts: number;
+  currentProjectedRefunds: number;
+  currentProjectedNetCosts: number;
+
+  finalizedGrossCosts: number;
+  finalizedRefunds: number;
+  finalizedNetCosts: number;
+
+  remainingEstimatedGrossCosts: number;
+  remainingEstimatedRefunds: number;
+  remainingEstimatedNetCosts: number;
+
+  costVariance: number;
+  amountPaid: number;
   unpaidCosts: number;
+
+  refunds: number;
+  grossCosts: number;
+  netCosts: number;
   paidCosts: number;
-  totalsByType: Record<string, number>;
+
+  totalsByType: Record<
+    string,
+    number
+  >;
+
   contractValue: number;
+  originalEstimatedProfit: number;
   projectedProfit: number;
   projectedMargin: number | null;
 };
@@ -40,7 +70,9 @@ type CostFormState = {
   costType: string;
   description: string;
   vendorName: string;
-  amount: string;
+  estimatedAmount: string;
+  finalAmount: string;
+  amountPaid: string;
   costDate: string;
   paymentStatus: string;
   paymentMethod: string;
@@ -53,19 +85,42 @@ type ProjectCostManagerProps = {
 };
 
 const initialSummary: CostSummary = {
-  grossCosts: 0,
-  refunds: 0,
-  netCosts: 0,
+  originalEstimatedGrossCosts: 0,
+  originalEstimatedRefunds: 0,
+  originalEstimatedNetCosts: 0,
+
+  currentProjectedGrossCosts: 0,
+  currentProjectedRefunds: 0,
+  currentProjectedNetCosts: 0,
+
+  finalizedGrossCosts: 0,
+  finalizedRefunds: 0,
+  finalizedNetCosts: 0,
+
+  remainingEstimatedGrossCosts: 0,
+  remainingEstimatedRefunds: 0,
+  remainingEstimatedNetCosts: 0,
+
+  costVariance: 0,
+  amountPaid: 0,
   unpaidCosts: 0,
+
+  refunds: 0,
+  grossCosts: 0,
+  netCosts: 0,
   paidCosts: 0,
+
   totalsByType: {},
+
   contractValue: 0,
+  originalEstimatedProfit: 0,
   projectedProfit: 0,
   projectedMargin: null,
 };
 
 function getTodayDate() {
   const now = new Date();
+
   const offset =
     now.getTimezoneOffset();
 
@@ -82,7 +137,9 @@ function getInitialForm(): CostFormState {
     costType: "materials",
     description: "",
     vendorName: "",
-    amount: "",
+    estimatedAmount: "",
+    finalAmount: "",
+    amountPaid: "0",
     costDate: getTodayDate(),
     paymentStatus: "unpaid",
     paymentMethod: "",
@@ -151,10 +208,23 @@ function formatLabel(
     .split("_")
     .map(
       (word) =>
-        word.charAt(0).toUpperCase() +
+        word
+          .charAt(0)
+          .toUpperCase() +
         word.slice(1),
     )
     .join(" ");
+}
+
+function parseMoneyInput(
+  value: string,
+) {
+  return Number(
+    value.replace(
+      /[$,\s]/g,
+      "",
+    ),
+  );
 }
 
 function getPaymentStatusClasses(
@@ -224,10 +294,16 @@ export function ProjectCostManager({
   const [
     form,
     setForm,
-  ] =
-    useState<CostFormState>(
-      getInitialForm,
-    );
+  ] = useState<CostFormState>(
+    getInitialForm,
+  );
+
+  const [
+    editingCostId,
+    setEditingCostId,
+  ] = useState<string | null>(
+    null,
+  );
 
   const [
     isLoading,
@@ -338,6 +414,70 @@ export function ProjectCostManager({
     );
   }
 
+  function resetForm() {
+    setForm(
+      getInitialForm(),
+    );
+    setEditingCostId(null);
+  }
+
+  function beginEditing(
+    cost: ProjectCost,
+  ) {
+    setEditingCostId(
+      cost.id,
+    );
+
+    setForm({
+      costType:
+        cost.cost_type,
+      description:
+        cost.description,
+      vendorName:
+        cost.vendor_name ?? "",
+      estimatedAmount:
+        String(
+          cost.estimated_amount,
+        ),
+      finalAmount:
+        cost.final_amount === null
+          ? ""
+          : String(
+              cost.final_amount,
+            ),
+      amountPaid:
+        String(
+          cost.amount_paid,
+        ),
+      costDate:
+        cost.cost_date ??
+        getTodayDate(),
+      paymentStatus:
+        cost.payment_status,
+      paymentMethod:
+        cost.payment_method ?? "",
+      referenceNumber:
+        cost.reference_number ??
+        "",
+      notes:
+        cost.notes ?? "",
+    });
+
+    setError("");
+    setSuccess("");
+
+    window.setTimeout(() => {
+      document
+        .getElementById(
+          "project-cost-form",
+        )
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 0);
+  }
+
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
   ) {
@@ -356,20 +496,77 @@ export function ProjectCostManager({
       return;
     }
 
-    const amount =
-      Number(
-        form.amount.replace(
-          /[$,\s]/g,
-          "",
-        ),
+    const estimatedAmount =
+      parseMoneyInput(
+        form.estimatedAmount,
       );
 
     if (
-      !Number.isFinite(amount) ||
-      amount < 0
+      !Number.isFinite(
+        estimatedAmount,
+      ) ||
+      estimatedAmount < 0
     ) {
       setError(
-        "Enter a valid non-negative amount.",
+        "Enter a valid estimated amount.",
+      );
+
+      return;
+    }
+
+    const finalAmount =
+      form.finalAmount.trim()
+        ? parseMoneyInput(
+            form.finalAmount,
+          )
+        : null;
+
+    if (
+      finalAmount !== null &&
+      (!Number.isFinite(
+        finalAmount,
+      ) ||
+        finalAmount < 0)
+    ) {
+      setError(
+        "Final amount must be blank or a valid non-negative amount.",
+      );
+
+      return;
+    }
+
+    const amountPaid =
+      parseMoneyInput(
+        form.amountPaid ||
+          "0",
+      );
+
+    if (
+      !Number.isFinite(
+        amountPaid,
+      ) ||
+      amountPaid < 0
+    ) {
+      setError(
+        "Enter a valid amount paid.",
+      );
+
+      return;
+    }
+
+    const effectiveAmount =
+      finalAmount !== null
+        ? finalAmount
+        : estimatedAmount;
+
+    if (
+      form.costType !==
+        "refund" &&
+      amountPaid >
+        effectiveAmount
+    ) {
+      setError(
+        "Amount paid cannot exceed the amount currently used for this cost.",
       );
 
       return;
@@ -382,20 +579,31 @@ export function ProjectCostManager({
         await fetch(
           `/api/projects/${projectId}/costs`,
           {
-            method: "POST",
+            method:
+              editingCostId
+                ? "PATCH"
+                : "POST",
+
             headers: {
               "Content-Type":
                 "application/json",
             },
+
             body: JSON.stringify({
+              costId:
+                editingCostId,
               costType:
                 form.costType,
               description:
                 form.description,
               vendorName:
                 form.vendorName,
-              amount:
-                form.amount,
+              estimatedAmount:
+                form.estimatedAmount,
+              finalAmount:
+                form.finalAmount,
+              amountPaid:
+                form.amountPaid,
               costDate:
                 form.costDate,
               paymentStatus:
@@ -422,24 +630,24 @@ export function ProjectCostManager({
       ) {
         throw new Error(
           result.error ??
-            "The project cost could not be created.",
+            "The project cost could not be saved.",
         );
       }
 
       setSuccess(
-        "Project cost added successfully.",
+        editingCostId
+          ? "Project cost updated successfully."
+          : "Project cost added successfully.",
       );
 
-      setForm(
-        getInitialForm(),
-      );
+      resetForm();
 
       await loadCosts();
     } catch (submitError) {
       setError(
         submitError instanceof Error
           ? submitError.message
-          : "The project cost could not be created.",
+          : "The project cost could not be saved.",
       );
     } finally {
       setIsSubmitting(false);
@@ -459,11 +667,13 @@ export function ProjectCostManager({
           </h2>
 
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Record actual project
-            expenses, payments,
-            refunds, and credits to
-            track current project
-            profitability.
+            Each cost uses its
+            estimate until a final
+            amount is entered. Final
+            amounts automatically
+            replace estimates in the
+            running projected-profit
+            calculation.
           </p>
         </div>
 
@@ -481,7 +691,7 @@ export function ProjectCostManager({
         </button>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
             Contract Value
@@ -494,14 +704,26 @@ export function ProjectCostManager({
           </p>
         </article>
 
+        <article className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-blue-700">
+            Original Estimate
+          </p>
+
+          <p className="mt-2 text-xl font-bold text-blue-800">
+            {formatMoney(
+              summary.originalEstimatedNetCosts,
+            )}
+          </p>
+        </article>
+
         <article className="rounded-xl border border-red-200 bg-red-50 p-4">
           <p className="text-[11px] font-bold uppercase tracking-widest text-red-700">
-            Net Costs
+            Current Projected Cost
           </p>
 
           <p className="mt-2 text-xl font-bold text-red-800">
             {formatMoney(
-              summary.netCosts,
+              summary.currentProjectedNetCosts,
             )}
           </p>
         </article>
@@ -522,7 +744,7 @@ export function ProjectCostManager({
                 : "text-red-700"
             }`}
           >
-            Projected Profit
+            Running Projected Profit
           </p>
 
           <p
@@ -537,38 +759,57 @@ export function ProjectCostManager({
               summary.projectedProfit,
             )}
           </p>
-        </article>
 
-        <article className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-blue-700">
-            Profit Margin
-          </p>
-
-          <p className="mt-2 text-xl font-bold text-blue-800">
+          <p className="mt-1 text-xs font-semibold text-slate-600">
             {formatPercent(
               summary.projectedMargin,
-            )}
+            )}{" "}
+            margin
           </p>
         </article>
 
-        <article className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700">
-            Paid Costs
+        <article className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-violet-700">
+            Final Costs Entered
           </p>
 
-          <p className="mt-2 text-xl font-bold text-emerald-800">
+          <p className="mt-2 text-xl font-bold text-violet-800">
             {formatMoney(
-              summary.paidCosts,
+              summary.finalizedNetCosts,
             )}
           </p>
         </article>
 
         <article className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-[11px] font-bold uppercase tracking-widest text-amber-700">
-            Unpaid Costs
+            Estimates Remaining
           </p>
 
           <p className="mt-2 text-xl font-bold text-amber-800">
+            {formatMoney(
+              summary.remainingEstimatedNetCosts,
+            )}
+          </p>
+        </article>
+
+        <article className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700">
+            Amount Paid
+          </p>
+
+          <p className="mt-2 text-xl font-bold text-emerald-800">
+            {formatMoney(
+              summary.amountPaid,
+            )}
+          </p>
+        </article>
+
+        <article className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-orange-700">
+            Still Unpaid
+          </p>
+
+          <p className="mt-2 text-xl font-bold text-orange-800">
             {formatMoney(
               summary.unpaidCosts,
             )}
@@ -576,23 +817,50 @@ export function ProjectCostManager({
         </article>
       </div>
 
-      {summary.refunds > 0 ? (
-        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-          <p className="text-sm font-semibold text-emerald-800">
-            Refunds and credits
-            recorded:{" "}
-            {formatMoney(
-              summary.refunds,
-            )}
-          </p>
-        </div>
-      ) : null}
+      <div
+        className={`mt-4 rounded-xl border px-4 py-3 ${
+          summary.costVariance > 0
+            ? "border-red-200 bg-red-50"
+            : summary.costVariance < 0
+              ? "border-emerald-200 bg-emerald-50"
+              : "border-slate-200 bg-slate-50"
+        }`}
+      >
+        <p
+          className={`text-sm font-bold ${
+            summary.costVariance > 0
+              ? "text-red-800"
+              : summary.costVariance < 0
+                ? "text-emerald-800"
+                : "text-slate-700"
+          }`}
+        >
+          Cost variance:{" "}
+          {summary.costVariance >
+          0
+            ? "+"
+            : ""}
+          {formatMoney(
+            summary.costVariance,
+          )}
+        </p>
+
+        <p className="mt-1 text-xs text-slate-600">
+          Positive means projected
+          costs have increased above
+          the original estimate.
+          Negative means the job is
+          currently under its original
+          estimated cost.
+        </p>
+      </div>
 
       {sortedTypeTotals.length >
       0 ? (
         <div className="mt-6">
           <h3 className="text-sm font-bold text-slate-950">
-            Costs by Type
+            Current Projected Costs
+            by Type
           </h3>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -624,12 +892,35 @@ export function ProjectCostManager({
       ) : null}
 
       <form
+        id="project-cost-form"
         onSubmit={handleSubmit}
-        className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-5"
+        className="mt-8 scroll-mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5"
       >
-        <h3 className="text-lg font-bold text-slate-950">
-          Add Project Cost
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-950">
+              {editingCostId
+                ? "Update Project Cost"
+                : "Add Project Cost"}
+            </h3>
+
+            <p className="mt-1 text-sm text-slate-600">
+              Leave final amount
+              blank until the cost is
+              complete and settled.
+            </p>
+          </div>
+
+          {editingCostId ? (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700"
+            >
+              Cancel Editing
+            </button>
+          ) : null}
+        </div>
 
         <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           <label>
@@ -638,7 +929,9 @@ export function ProjectCostManager({
             </span>
 
             <select
-              value={form.costType}
+              value={
+                form.costType
+              }
               onChange={(event) =>
                 updateField(
                   "costType",
@@ -710,30 +1003,91 @@ export function ProjectCostManager({
                   event.target.value,
                 )
               }
-              placeholder="Example: Lowe's decking materials"
+              placeholder="Example: Decking materials"
               className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
             />
           </label>
 
           <label>
             <span className="text-sm font-bold text-slate-800">
-              Amount
+              Estimated amount
             </span>
 
             <input
               type="text"
               inputMode="decimal"
               required
-              value={form.amount}
+              value={
+                form.estimatedAmount
+              }
               onChange={(event) =>
                 updateField(
-                  "amount",
+                  "estimatedAmount",
                   event.target.value,
                 )
               }
               placeholder="$0.00"
               className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
             />
+
+            <span className="mt-1 block text-xs text-slate-500">
+              Used until a final
+              amount is entered.
+            </span>
+          </label>
+
+          <label>
+            <span className="text-sm font-bold text-slate-800">
+              Final amount
+            </span>
+
+            <input
+              type="text"
+              inputMode="decimal"
+              value={
+                form.finalAmount
+              }
+              onChange={(event) =>
+                updateField(
+                  "finalAmount",
+                  event.target.value,
+                )
+              }
+              placeholder="Leave blank until final"
+              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+            />
+
+            <span className="mt-1 block text-xs text-slate-500">
+              Replaces the estimate
+              in profit calculations.
+            </span>
+          </label>
+
+          <label>
+            <span className="text-sm font-bold text-slate-800">
+              Amount paid
+            </span>
+
+            <input
+              type="text"
+              inputMode="decimal"
+              value={
+                form.amountPaid
+              }
+              onChange={(event) =>
+                updateField(
+                  "amountPaid",
+                  event.target.value,
+                )
+              }
+              placeholder="$0.00"
+              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+            />
+
+            <span className="mt-1 block text-xs text-slate-500">
+              Tracks cash paid
+              separately from cost.
+            </span>
           </label>
 
           <label>
@@ -743,7 +1097,9 @@ export function ProjectCostManager({
 
             <input
               type="date"
-              value={form.costDate}
+              value={
+                form.costDate
+              }
               onChange={(event) =>
                 updateField(
                   "costDate",
@@ -889,12 +1245,16 @@ export function ProjectCostManager({
 
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={
+            isSubmitting
+          }
           className="mt-6 rounded-lg bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:opacity-60"
         >
           {isSubmitting
-            ? "Adding Cost..."
-            : "Add Cost"}
+            ? "Saving Cost..."
+            : editingCostId
+              ? "Update Cost"
+              : "Add Cost"}
         </button>
       </form>
 
@@ -911,7 +1271,8 @@ export function ProjectCostManager({
 
         {isLoading ? (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
-            Loading project costs...
+            Loading project
+            costs...
           </div>
         ) : costs.length === 0 ? (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-6">
@@ -927,27 +1288,37 @@ export function ProjectCostManager({
                 <thead className="bg-slate-50">
                   <tr className="border-b border-slate-200 text-left">
                     <th className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-500">
-                      Date
-                    </th>
-
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-500">
-                      Description
+                      Cost
                     </th>
 
                     <th className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-500">
                       Type
                     </th>
 
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-500">
-                      Vendor
-                    </th>
-
-                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-500">
-                      Payment
+                    <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-widest text-slate-500">
+                      Estimate
                     </th>
 
                     <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-widest text-slate-500">
-                      Amount
+                      Final
+                    </th>
+
+                    <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-widest text-slate-500">
+                      Amount Used
+                    </th>
+
+                    <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-widest text-slate-500">
+                      Paid
+                    </th>
+
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-500">
+                      Status
+                    </th>
+
+                    <th className="w-24 px-4 py-3">
+                      <span className="sr-only">
+                        Actions
+                      </span>
                     </th>
                   </tr>
                 </thead>
@@ -956,15 +1327,11 @@ export function ProjectCostManager({
                   {costs.map(
                     (cost) => (
                       <tr
-                        key={cost.id}
+                        key={
+                          cost.id
+                        }
                         className="border-b border-slate-100"
                       >
-                        <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-700">
-                          {formatDate(
-                            cost.cost_date,
-                          )}
-                        </td>
-
                         <td className="px-4 py-4">
                           <p className="font-bold text-slate-950">
                             {
@@ -972,18 +1339,20 @@ export function ProjectCostManager({
                             }
                           </p>
 
-                          {cost.reference_number ? (
-                            <p className="mt-1 text-xs text-slate-500">
-                              Reference:{" "}
-                              {
-                                cost.reference_number
-                              }
-                            </p>
-                          ) : null}
+                          <p className="mt-1 text-xs text-slate-500">
+                            {formatDate(
+                              cost.cost_date,
+                            )}
+                            {cost.vendor_name
+                              ? ` · ${cost.vendor_name}`
+                              : ""}
+                          </p>
 
                           {cost.notes ? (
                             <p className="mt-1 max-w-md text-xs leading-5 text-slate-500">
-                              {cost.notes}
+                              {
+                                cost.notes
+                              }
                             </p>
                           ) : null}
                         </td>
@@ -1000,29 +1369,19 @@ export function ProjectCostManager({
                           </span>
                         </td>
 
-                        <td className="px-4 py-4 text-sm font-semibold text-slate-700">
-                          {cost.vendor_name ??
-                            "—"}
+                        <td className="whitespace-nowrap px-4 py-4 text-right font-semibold text-slate-700">
+                          {formatMoney(
+                            cost.estimated_amount,
+                          )}
                         </td>
 
-                        <td className="px-4 py-4">
-                          <span
-                            className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getPaymentStatusClasses(
-                              cost.payment_status,
-                            )}`}
-                          >
-                            {formatLabel(
-                              cost.payment_status,
-                            )}
-                          </span>
-
-                          {cost.payment_method ? (
-                            <p className="mt-1 text-xs text-slate-500">
-                              {
-                                cost.payment_method
-                              }
-                            </p>
-                          ) : null}
+                        <td className="whitespace-nowrap px-4 py-4 text-right font-semibold text-slate-700">
+                          {cost.final_amount ===
+                          null
+                            ? "—"
+                            : formatMoney(
+                                cost.final_amount,
+                              )}
                         </td>
 
                         <td
@@ -1038,8 +1397,46 @@ export function ProjectCostManager({
                             ? "−"
                             : ""}
                           {formatMoney(
-                            cost.amount,
+                            cost.effective_amount,
                           )}
+
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                            {cost.is_finalized
+                              ? "Final"
+                              : "Estimate"}
+                          </p>
+                        </td>
+
+                        <td className="whitespace-nowrap px-4 py-4 text-right font-semibold text-slate-700">
+                          {formatMoney(
+                            cost.amount_paid,
+                          )}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getPaymentStatusClasses(
+                              cost.payment_status,
+                            )}`}
+                          >
+                            {formatLabel(
+                              cost.payment_status,
+                            )}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              beginEditing(
+                                cost,
+                              )
+                            }
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-slate-950 hover:text-slate-950"
+                          >
+                            Edit
+                          </button>
                         </td>
                       </tr>
                     ),
@@ -1052,7 +1449,9 @@ export function ProjectCostManager({
               {costs.map(
                 (cost) => (
                   <article
-                    key={cost.id}
+                    key={
+                      cost.id
+                    }
                     className="rounded-xl border border-slate-200 bg-white p-4"
                   >
                     <div className="flex items-start justify-between gap-4">
@@ -1083,7 +1482,7 @@ export function ProjectCostManager({
                           ? "−"
                           : ""}
                         {formatMoney(
-                          cost.amount,
+                          cost.effective_amount,
                         )}
                       </p>
                     </div>
@@ -1108,6 +1507,53 @@ export function ProjectCostManager({
                           cost.payment_status,
                         )}
                       </span>
+
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                        {cost.is_finalized
+                          ? "Final amount"
+                          : "Using estimate"}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-3 rounded-lg bg-slate-50 p-3">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                          Estimate
+                        </p>
+
+                        <p className="mt-1 text-sm font-bold text-slate-800">
+                          {formatMoney(
+                            cost.estimated_amount,
+                          )}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                          Final
+                        </p>
+
+                        <p className="mt-1 text-sm font-bold text-slate-800">
+                          {cost.final_amount ===
+                          null
+                            ? "—"
+                            : formatMoney(
+                                cost.final_amount,
+                              )}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                          Paid
+                        </p>
+
+                        <p className="mt-1 text-sm font-bold text-slate-800">
+                          {formatMoney(
+                            cost.amount_paid,
+                          )}
+                        </p>
+                      </div>
                     </div>
 
                     {cost.vendor_name ? (
@@ -1123,9 +1569,23 @@ export function ProjectCostManager({
 
                     {cost.notes ? (
                       <p className="mt-2 text-sm leading-6 text-slate-600">
-                        {cost.notes}
+                        {
+                          cost.notes
+                        }
                       </p>
                     ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        beginEditing(
+                          cost,
+                        )
+                      }
+                      className="mt-4 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700"
+                    >
+                      Edit Cost
+                    </button>
                   </article>
                 ),
               )}
