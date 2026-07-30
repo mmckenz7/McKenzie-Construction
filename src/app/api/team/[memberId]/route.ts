@@ -1,6 +1,8 @@
 import {
+  createForbiddenApiResponse,
   createUnauthorizedApiResponse,
-  getAuthenticatedApiUser,
+  getAuthenticatedAccess,
+  hasManagementAccess,
 } from "@/lib/api-auth";
 
 import { NextResponse } from "next/server";
@@ -100,11 +102,21 @@ export async function GET(
   request: Request,
   context: RouteContext,
 ) {
-  const user =
-    await getAuthenticatedApiUser();
+  const access =
+    await getAuthenticatedAccess();
 
-  if (!user) {
+  if (!access) {
     return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
+  if (
+    !hasManagementAccess(
+      access.teamMember.roles,
+    )
+  ) {
+    return createForbiddenApiResponse(
       request,
     );
   }
@@ -169,11 +181,21 @@ export async function PATCH(
   request: Request,
   context: RouteContext,
 ) {
-  const user =
-    await getAuthenticatedApiUser();
+  const access =
+    await getAuthenticatedAccess();
 
-  if (!user) {
+  if (!access) {
     return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
+  if (
+    !hasManagementAccess(
+      access.teamMember.roles,
+    )
+  ) {
+    return createForbiddenApiResponse(
       request,
     );
   }

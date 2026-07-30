@@ -1,6 +1,8 @@
 import {
+  createForbiddenApiResponse,
   createUnauthorizedApiResponse,
-  getAuthenticatedApiUser,
+  getAuthenticatedAccess,
+  hasManagementAccess,
 } from "@/lib/api-auth";
 
 import { NextResponse } from "next/server";
@@ -93,11 +95,21 @@ function validateRoles(value: unknown) {
 export async function GET(
   request: Request,
 ) {
-  const user =
-    await getAuthenticatedApiUser();
+  const access =
+    await getAuthenticatedAccess();
 
-  if (!user) {
+  if (!access) {
     return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
+  if (
+    !hasManagementAccess(
+      access.teamMember.roles,
+    )
+  ) {
+    return createForbiddenApiResponse(
       request,
     );
   }
@@ -149,11 +161,21 @@ export async function GET(
 }
 
 export async function POST(request: Request) {
-  const user =
-    await getAuthenticatedApiUser();
+  const access =
+    await getAuthenticatedAccess();
 
-  if (!user) {
+  if (!access) {
     return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
+  if (
+    !hasManagementAccess(
+      access.teamMember.roles,
+    )
+  ) {
+    return createForbiddenApiResponse(
       request,
     );
   }

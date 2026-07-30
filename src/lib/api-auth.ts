@@ -102,6 +102,42 @@ export async function getAuthenticatedApiUser() {
   return access?.user ?? null;
 }
 
+export function hasManagementAccess(
+  roles: string[],
+) {
+  return (
+    roles.includes("owner") ||
+    roles.includes("admin")
+  );
+}
+
+export function createForbiddenApiResponse(
+  request: NextRequest | Request,
+) {
+  const acceptHeader =
+    request.headers.get("accept") ?? "";
+
+  const expectsHtml =
+    acceptHeader.includes("text/html");
+
+  if (expectsHtml) {
+    return NextResponse.redirect(
+      new URL("/admin", request.url),
+    );
+  }
+
+  return NextResponse.json(
+    {
+      success: false,
+      error:
+        "Owner or administrator access is required.",
+    },
+    {
+      status: 403,
+    },
+  );
+}
+
 export function createUnauthorizedApiResponse(
   request: NextRequest | Request,
 ) {
