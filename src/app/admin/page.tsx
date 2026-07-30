@@ -263,14 +263,13 @@ function getLeadStageLabel(
   const stageKey =
     getLeadStageKey(lead);
 
-  const stage =
+  return (
     stageOptions.find(
       (option) =>
         option.value ===
         stageKey,
-    );
-
-  return stage?.label ?? "New";
+    )?.label ?? "New"
+  );
 }
 
 function getStageClasses(
@@ -678,9 +677,7 @@ export default async function AdminPage({
       }
 
       const dueDate =
-        new Date(
-          task.due_at,
-        );
+        new Date(task.due_at);
 
       return (
         !Number.isNaN(
@@ -737,6 +734,13 @@ export default async function AdminPage({
             className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
             Projects
+          </Link>
+
+          <Link
+            href="/admin/financials"
+            className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
+          >
+            Financials
           </Link>
 
           <Link
