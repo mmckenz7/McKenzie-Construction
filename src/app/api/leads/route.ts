@@ -7,6 +7,11 @@ import {
   createUnauthorizedApiResponse,
   getAuthenticatedApiUser,
 } from "@/lib/api-auth";
+import {
+  leadOwnerIsRequired,
+  resolveLeadOwner,
+  type CompanyAssignmentSettings,
+} from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 const allowedLeadStatuses = [
@@ -195,6 +200,82 @@ export async function POST(
       createAdminServerClient();
 
     const {
+      data: settingsData,
+      error: settingsError,
+    } = await supabase
+      .from("company_settings")
+      .select(
+        `
+          automatically_assign_new_leads,
+          automatically_assign_new_tasks,
+          automatically_assign_converted_projects,
+          allow_unassigned_leads,
+          allow_unassigned_tasks,
+          require_responsible_person,
+          require_task_assignee,
+          require_project_manager,
+          default_lead_owner_id,
+          default_estimator_id,
+          default_project_manager_id
+        `,
+      )
+      .limit(1)
+      .maybeSingle();
+
+    if (
+      settingsError ||
+      !settingsData
+    ) {
+      console.error(
+        "Public lead submission failed while loading company settings:",
+        settingsError,
+      );
+
+      return redirectTo(
+        "/contact?error=submission",
+      );
+    }
+
+    const assignmentSettings =
+      settingsData as CompanyAssignmentSettings;
+
+    let responsiblePersonId:
+      | string
+      | null = null;
+
+    try {
+      responsiblePersonId =
+        await resolveLeadOwner(
+          supabase,
+          assignmentSettings,
+        );
+    } catch (error) {
+      console.error(
+        "Public lead submission failed while resolving the lead owner:",
+        error,
+      );
+
+      return redirectTo(
+        "/contact?error=submission",
+      );
+    }
+
+    if (
+      !responsiblePersonId &&
+      leadOwnerIsRequired(
+        assignmentSettings,
+      )
+    ) {
+      console.error(
+        "Public lead submission failed: an active lead owner is required, but none could be resolved.",
+      );
+
+      return redirectTo(
+        "/contact?error=submission",
+      );
+    }
+
+    const {
       data: newLead,
       error: leadError,
     } = await supabase
@@ -226,6 +307,8 @@ export async function POST(
           consultationStatus,
         lead_status: "new",
         lead_source: "website",
+        responsible_person_id:
+          responsiblePersonId,
       })
       .select("id")
       .single();
@@ -275,6 +358,8 @@ export async function POST(
               requestedDate,
             requested_time:
               requestedTime,
+            responsible_person_id:
+              responsiblePersonId,
           },
         });
 

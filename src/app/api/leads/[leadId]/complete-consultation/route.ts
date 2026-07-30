@@ -2,6 +2,12 @@ import {
   createUnauthorizedApiResponse,
   getAuthenticatedApiUser,
 } from "@/lib/api-auth";
+import {
+  resolveTaskAssignee,
+  taskAssigneeIsRequired,
+  type CompanyAssignmentSettings,
+  type TaskAssignmentStrategy,
+} from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -34,12 +40,35 @@ type TaskRule = {
   is_active: boolean;
 };
 
-type CompanySettings = {
-  default_lead_owner_id: string | null;
-  default_estimator_id: string | null;
-  default_project_manager_id: string | null;
-  end_of_business_time: string | null;
-};
+type CompleteConsultationSettings =
+  CompanyAssignmentSettings & {
+    end_of_business_time: string | null;
+  };
+
+const allowedAssignmentStrategies =
+  new Set<TaskAssignmentStrategy>([
+    "specific_employee",
+    "lead_owner",
+    "default_lead_owner",
+    "default_estimator",
+    "default_project_manager",
+    "unassigned",
+  ]);
+
+function normalizeAssignmentStrategy(
+  value: string | null | undefined,
+): TaskAssignmentStrategy {
+  if (
+    value &&
+    allowedAssignmentStrategies.has(
+      value as TaskAssignmentStrategy,
+    )
+  ) {
+    return value as TaskAssignmentStrategy;
+  }
+
+  return "default_estimator";
+}
 
 function addBusinessDays(
   startingDate: Date,
@@ -49,11 +78,17 @@ function addBusinessDays(
   let daysAdded = 0;
 
   while (daysAdded < numberOfDays) {
-    result.setDate(result.getDate() + 1);
+    result.setDate(
+      result.getDate() + 1,
+    );
 
-    const dayOfWeek = result.getDay();
+    const dayOfWeek =
+      result.getDay();
 
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+    if (
+      dayOfWeek !== 0 &&
+      dayOfWeek !== 6
+    ) {
       daysAdded += 1;
     }
   }
@@ -79,7 +114,11 @@ function getEndOfBusinessParts(
 
   if (
     Number.isNaN(hours) ||
-    Number.isNaN(minutes)
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
   ) {
     return {
       hours: 17,
@@ -116,27 +155,37 @@ function setEndOfBusiness(
 
 function getTaskDueAt(
   taskRule: TaskRule | null,
-  companySettings: CompanySettings | null,
+  companySettings:
+    | CompleteConsultationSettings
+    | null,
   startingDate: Date,
 ) {
   const endOfBusinessTime =
-    companySettings?.end_of_business_time ??
+    companySettings
+      ?.end_of_business_time ??
     null;
 
   if (!taskRule) {
     return setEndOfBusiness(
-      addBusinessDays(startingDate, 2),
+      addBusinessDays(
+        startingDate,
+        2,
+      ),
       endOfBusinessTime,
     ).toISOString();
   }
 
   if (
-    taskRule.due_mode === "no_due_date"
+    taskRule.due_mode ===
+    "no_due_date"
   ) {
     return null;
   }
 
-  if (taskRule.due_mode === "same_day") {
+  if (
+    taskRule.due_mode ===
+    "same_day"
+  ) {
     return setEndOfBusiness(
       startingDate,
       endOfBusinessTime,
@@ -144,7 +193,8 @@ function getTaskDueAt(
   }
 
   if (
-    taskRule.due_mode === "business_days"
+    taskRule.due_mode ===
+    "business_days"
   ) {
     return setEndOfBusiness(
       addBusinessDays(
@@ -159,11 +209,11 @@ function getTaskDueAt(
   }
 
   if (
-    taskRule.due_mode === "calendar_days"
+    taskRule.due_mode ===
+    "calendar_days"
   ) {
-    const dueDate = new Date(
-      startingDate,
-    );
+    const dueDate =
+      new Date(startingDate);
 
     dueDate.setDate(
       dueDate.getDate() +
@@ -180,91 +230,31 @@ function getTaskDueAt(
   }
 
   return setEndOfBusiness(
-    addBusinessDays(startingDate, 2),
+    addBusinessDays(
+      startingDate,
+      2,
+    ),
     endOfBusinessTime,
   ).toISOString();
 }
 
-function resolveAssigneeId(
-  taskRule: TaskRule | null,
-  companySettings: CompanySettings | null,
-  lead: LeadRecord,
+function formatDateAndTime(
+  value: Date,
 ) {
-  if (!taskRule) {
-    return (
-      companySettings?.default_estimator_id ??
-      lead.responsible_person_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "specific_employee"
-  ) {
-    return (
-      taskRule.default_assignee_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "lead_owner"
-  ) {
-    return (
-      lead.responsible_person_id ??
-      companySettings?.default_lead_owner_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_lead_owner"
-  ) {
-    return (
-      companySettings?.default_lead_owner_id ??
-      lead.responsible_person_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_estimator"
-  ) {
-    return (
-      companySettings?.default_estimator_id ??
-      lead.responsible_person_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_project_manager"
-  ) {
-    return (
-      companySettings?.default_project_manager_id ??
-      null
-    );
-  }
-
-  return null;
-}
-
-function formatDateAndTime(value: Date) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(value);
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone:
+        "America/New_York",
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    },
+  ).format(value);
 }
 
 export async function POST(
@@ -284,7 +274,8 @@ export async function POST(
     const { leadId: rawLeadId } =
       await context.params;
 
-    const leadId = rawLeadId.trim();
+    const leadId =
+      rawLeadId.trim();
 
     if (!leadId) {
       return Response.json(
@@ -343,13 +334,24 @@ export async function POST(
           "task_key",
           "prepare_estimate",
         )
-        .eq("is_active", true)
+        .eq(
+          "is_active",
+          true,
+        )
         .maybeSingle(),
 
       supabase
         .from("company_settings")
         .select(
           `
+            automatically_assign_new_leads,
+            automatically_assign_new_tasks,
+            automatically_assign_converted_projects,
+            allow_unassigned_leads,
+            allow_unassigned_tasks,
+            require_responsible_person,
+            require_task_assignee,
+            require_project_manager,
             default_lead_owner_id,
             default_estimator_id,
             default_project_manager_id,
@@ -367,7 +369,8 @@ export async function POST(
       return Response.json(
         {
           error:
-            leadResult.error?.message ??
+            leadResult.error
+              ?.message ??
             "The lead could not be found.",
         },
         {
@@ -381,12 +384,35 @@ export async function POST(
         "Unable to load prepare-estimate task rule:",
         taskRuleResult.error,
       );
+
+      return Response.json(
+        {
+          error:
+            "The estimate task settings could not be loaded.",
+        },
+        {
+          status: 500,
+        },
+      );
     }
 
-    if (settingsResult.error) {
+    if (
+      settingsResult.error ||
+      !settingsResult.data
+    ) {
       console.error(
         "Unable to load company settings:",
         settingsResult.error,
+      );
+
+      return Response.json(
+        {
+          error:
+            "Company assignment settings could not be loaded.",
+        },
+        {
+          status: 500,
+        },
       );
     }
 
@@ -398,10 +424,11 @@ export async function POST(
         null) as TaskRule | null;
 
     const companySettings =
-      (settingsResult.data ??
-        null) as CompanySettings | null;
+      settingsResult.data as CompleteConsultationSettings;
 
-    const completedAt = new Date();
+    const completedAt =
+      new Date();
+
     const completedAtIso =
       completedAt.toISOString();
 
@@ -412,12 +439,107 @@ export async function POST(
         completedAt,
       );
 
-    const assignedToId =
-      resolveAssigneeId(
-        taskRule,
-        companySettings,
-        lead,
+    const assignmentStrategy =
+      normalizeAssignmentStrategy(
+        taskRule
+          ?.assignment_strategy,
       );
+
+    let assignedToId:
+      | string
+      | null = null;
+
+    try {
+      assignedToId =
+        await resolveTaskAssignee(
+          supabase,
+          {
+            settings:
+              companySettings,
+            assignmentStrategy,
+            defaultAssigneeId:
+              taskRule
+                ?.default_assignee_id ??
+              null,
+            leadOwnerId:
+              lead.responsible_person_id,
+          },
+        );
+    } catch (error) {
+      console.error(
+        "Unable to resolve prepare-estimate task assignee:",
+        error,
+      );
+
+      return Response.json(
+        {
+          error:
+            "The estimate task assignee could not be determined.",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
+    if (
+      !assignedToId &&
+      taskAssigneeIsRequired(
+        companySettings,
+      )
+    ) {
+      return Response.json(
+        {
+          error:
+            "An active task assignee is required before completing the consultation.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const taskTitle =
+      `Prepare estimate: ${
+        lead.name ?? "Customer"
+      }`;
+
+    const taskDescription =
+      taskRule?.description ??
+      "Prepare the project estimate and mark it sent when it has been delivered to the customer.";
+
+    const taskPriority =
+      taskRule
+        ?.default_priority ??
+      "high";
+
+    const taskCategory =
+      taskRule?.category ??
+      "sales";
+
+    const taskMetadata = {
+      created_by:
+        "complete_consultation_workflow",
+      task_rule_key:
+        taskRule?.task_key ??
+        "prepare_estimate",
+      task_type_id:
+        taskRule?.id ?? null,
+      consultation_completed_at:
+        completedAtIso,
+      estimate_due_at:
+        estimateDueAtIso,
+      customer_name:
+        lead.name,
+      project_type:
+        lead.project_type,
+      property_address:
+        lead.property_address,
+      assigned_to_id:
+        assignedToId,
+      assignment_strategy:
+        assignmentStrategy,
+    };
 
     const {
       error: leadUpdateError,
@@ -447,7 +569,8 @@ export async function POST(
 
     const consultationCompletion = {
       status: "completed",
-      completed_at: completedAtIso,
+      completed_at:
+        completedAtIso,
       completion_note:
         "The site consultation was completed.",
     };
@@ -461,7 +584,10 @@ export async function POST(
         .update(
           consultationCompletion,
         )
-        .eq("lead_id", leadId)
+        .eq(
+          "lead_id",
+          leadId,
+        )
         .eq(
           "task_type",
           "complete_consultation",
@@ -476,7 +602,10 @@ export async function POST(
         .update(
           consultationCompletion,
         )
-        .eq("lead_id", leadId)
+        .eq(
+          "lead_id",
+          leadId,
+        )
         .eq(
           "task_type",
           "complete_consultation",
@@ -507,7 +636,8 @@ export async function POST(
 
     const estimateCancellation = {
       status: "canceled",
-      canceled_at: completedAtIso,
+      canceled_at:
+        completedAtIso,
       completion_note:
         "Replaced by a newly created estimate task.",
     };
@@ -518,8 +648,13 @@ export async function POST(
     ] = await Promise.all([
       supabase
         .from("lead_tasks")
-        .update(estimateCancellation)
-        .eq("lead_id", leadId)
+        .update(
+          estimateCancellation,
+        )
+        .eq(
+          "lead_id",
+          leadId,
+        )
         .eq(
           "task_type",
           "prepare_estimate",
@@ -531,8 +666,13 @@ export async function POST(
 
       supabase
         .from("tasks")
-        .update(estimateCancellation)
-        .eq("lead_id", leadId)
+        .update(
+          estimateCancellation,
+        )
+        .eq(
+          "lead_id",
+          leadId,
+        )
         .eq(
           "task_type",
           "prepare_estimate",
@@ -561,112 +701,131 @@ export async function POST(
       );
     }
 
-    const taskTitle =
-      `Prepare estimate: ${
-        lead.name ?? "Customer"
-      }`;
-
-    const taskDescription =
-      taskRule?.description ??
-      "Prepare the project estimate and mark it sent when it has been delivered to the customer.";
-
-    const taskPriority =
-      taskRule?.default_priority ??
-      "high";
-
-    const taskCategory =
-      taskRule?.category ?? "sales";
-
-    const taskMetadata = {
-      created_by:
-        "complete_consultation_workflow",
-      task_rule_key:
-        taskRule?.task_key ??
-        "prepare_estimate",
-      consultation_completed_at:
-        completedAtIso,
-      estimate_due_at:
-        estimateDueAtIso,
-      customer_name: lead.name,
-      project_type:
-        lead.project_type,
-      property_address:
-        lead.property_address,
-      assigned_to_id:
-        assignedToId,
-    };
-
     const {
       data: legacyEstimateTask,
-      error: legacyTaskCreateError,
+      error:
+        legacyTaskCreateError,
     } = await supabase
       .from("lead_tasks")
       .insert({
-        lead_id: leadId,
+        lead_id:
+          leadId,
         task_type:
           "prepare_estimate",
-        title: taskTitle,
+        title:
+          taskTitle,
         description:
           taskDescription,
-        status: "open",
-        priority: taskPriority,
-        due_at: estimateDueAtIso,
+        status:
+          "open",
+        priority:
+          taskPriority,
+        due_at:
+          estimateDueAtIso,
         assigned_to_id:
           assignedToId,
-        assigned_at: assignedToId
-          ? completedAtIso
-          : null,
-        metadata: taskMetadata,
+        assigned_at:
+          assignedToId
+            ? completedAtIso
+            : null,
+        metadata:
+          taskMetadata,
       })
       .select("id")
       .single();
 
-    if (legacyTaskCreateError) {
+    if (
+      legacyTaskCreateError ||
+      !legacyEstimateTask
+    ) {
       console.error(
         "Unable to create lead estimate task:",
         legacyTaskCreateError,
+      );
+
+      return Response.json(
+        {
+          error:
+            legacyTaskCreateError
+              ?.message ??
+            "The lead estimate task could not be created.",
+        },
+        {
+          status: 500,
+        },
       );
     }
 
     const {
       data: companyEstimateTask,
-      error: companyTaskCreateError,
+      error:
+        companyTaskCreateError,
     } = await supabase
       .from("tasks")
       .insert({
-        lead_id: leadId,
+        lead_id:
+          leadId,
         task_type:
           "prepare_estimate",
         task_type_id:
-          taskRule?.id ?? null,
-        title: taskTitle,
+          taskRule?.id ??
+          null,
+        title:
+          taskTitle,
         description:
           taskDescription,
-        category: taskCategory,
-        status: "open",
-        priority: taskPriority,
-        due_at: estimateDueAtIso,
+        category:
+          taskCategory,
+        status:
+          "open",
+        priority:
+          taskPriority,
+        due_at:
+          estimateDueAtIso,
         assigned_to_id:
           assignedToId,
-        assigned_at: assignedToId
-          ? completedAtIso
-          : null,
+        assigned_at:
+          assignedToId
+            ? completedAtIso
+            : null,
         source_type:
           "complete_consultation_workflow",
         metadata: {
           ...taskMetadata,
           legacy_lead_task_id:
-            legacyEstimateTask?.id ??
-            null,
+            legacyEstimateTask.id,
         },
       })
       .select("id")
       .single();
 
-    if (companyTaskCreateError) {
+    if (
+      companyTaskCreateError ||
+      !companyEstimateTask
+    ) {
       console.error(
         "Unable to create company estimate task:",
         companyTaskCreateError,
+      );
+
+      await supabase
+        .from("lead_tasks")
+        .delete()
+        .eq(
+          "id",
+          legacyEstimateTask.id,
+        );
+
+      return Response.json(
+        {
+          error:
+            companyTaskCreateError
+              ?.message ??
+            "The company estimate task could not be created.",
+        },
+        {
+          status: 500,
+        },
       );
     }
 
@@ -683,11 +842,14 @@ export async function POST(
       >;
     }> = [
       {
-        lead_id: leadId,
+        lead_id:
+          leadId,
         activity_type:
           "consultation_completed",
-        channel: "consultation",
-        direction: "internal",
+        channel:
+          "consultation",
+        direction:
+          "internal",
         summary:
           "Site consultation completed",
         details:
@@ -704,42 +866,52 @@ export async function POST(
         },
       },
       {
-        lead_id: leadId,
+        lead_id:
+          leadId,
         activity_type:
           "estimate_started",
-        channel: "estimate",
-        direction: "internal",
+        channel:
+          "estimate",
+        direction:
+          "internal",
         summary:
           "Estimate preparation started",
-        details: estimateDueAtIso
-          ? `Estimate due ${formatDateAndTime(
-              new Date(
-                estimateDueAtIso,
-              ),
-            )}`
-          : "Estimate has no automatic due date.",
+        details:
+          estimateDueAtIso
+            ? `Estimate due ${formatDateAndTime(
+                new Date(
+                  estimateDueAtIso,
+                ),
+              )}`
+            : "Estimate has no automatic due date.",
         metadata: {
           estimate_due_at:
             estimateDueAtIso,
           legacy_task_id:
-            legacyEstimateTask?.id ??
-            null,
+            legacyEstimateTask.id,
           company_task_id:
-            companyEstimateTask?.id ??
-            null,
+            companyEstimateTask.id,
           assigned_to_id:
             assignedToId,
+          assignment_strategy:
+            assignmentStrategy,
           task_rule_key:
             taskRule?.task_key ??
             "prepare_estimate",
+          task_type_id:
+            taskRule?.id ??
+            null,
         },
       },
     ];
 
-    const { error: activityError } =
-      await supabase
-        .from("lead_activities")
-        .insert(activityRecords);
+    const {
+      error: activityError,
+    } = await supabase
+      .from("lead_activities")
+      .insert(
+        activityRecords,
+      );
 
     if (activityError) {
       console.error(
@@ -755,9 +927,9 @@ export async function POST(
       estimateDueAt:
         estimateDueAtIso,
       estimateTaskCreated:
-        Boolean(legacyEstimateTask),
+        true,
       companyTaskCreated:
-        Boolean(companyEstimateTask),
+        true,
       assignedToId,
     });
   } catch (error) {

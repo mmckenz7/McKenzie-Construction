@@ -2,6 +2,12 @@ import {
   createUnauthorizedApiResponse,
   getAuthenticatedApiUser,
 } from "@/lib/api-auth";
+import {
+  resolveTaskAssignee,
+  taskAssigneeIsRequired,
+  type CompanyAssignmentSettings,
+  type TaskAssignmentStrategy,
+} from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -26,6 +32,42 @@ type LeadRecord = {
   responsible_person_id: string | null;
 };
 
+type TaskTypeRecord = {
+  id: string;
+  name: string;
+  task_key: string;
+  description: string | null;
+  category: string;
+  default_priority: string;
+  assignment_strategy: string;
+  default_assignee_id: string | null;
+  is_active: boolean;
+};
+
+const allowedAssignmentStrategies =
+  new Set<TaskAssignmentStrategy>([
+    "specific_employee",
+    "lead_owner",
+    "default_lead_owner",
+    "default_estimator",
+    "default_project_manager",
+    "unassigned",
+  ]);
+
+function normalizeAssignmentStrategy(
+  value: string,
+): TaskAssignmentStrategy {
+  if (
+    allowedAssignmentStrategies.has(
+      value as TaskAssignmentStrategy,
+    )
+  ) {
+    return value as TaskAssignmentStrategy;
+  }
+
+  return "lead_owner";
+}
+
 function formatAppointmentForEmail(
   value: string,
 ) {
@@ -35,16 +77,20 @@ function formatAppointmentForEmail(
     return null;
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(date);
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone:
+        "America/New_York",
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    },
+  ).format(date);
 }
 
 export async function POST(
@@ -82,13 +128,13 @@ export async function POST(
       (await request.json()) as RequestBody;
 
     const appointmentAt =
-      typeof body.appointmentAt === "string"
+      typeof body.appointmentAt ===
+      "string"
         ? body.appointmentAt.trim()
         : "";
 
-    const appointmentDate = new Date(
-      appointmentAt,
-    );
+    const appointmentDate =
+      new Date(appointmentAt);
 
     if (
       !appointmentAt ||
@@ -110,32 +156,81 @@ export async function POST(
     const supabase =
       createAdminServerClient();
 
-    const {
-      data: leadData,
-      error: leadReadError,
-    } = await supabase
-      .from("leads")
-      .select(
-        `
-          id,
-          name,
-          email,
-          phone,
-          property_address,
-          project_type,
-          lead_status,
-          consultation_status,
-          responsible_person_id
-        `,
-      )
-      .eq("id", leadId)
-      .single();
+    const [
+      leadResult,
+      settingsResult,
+      taskTypeResult,
+    ] = await Promise.all([
+      supabase
+        .from("leads")
+        .select(
+          `
+            id,
+            name,
+            email,
+            phone,
+            property_address,
+            project_type,
+            lead_status,
+            consultation_status,
+            responsible_person_id
+          `,
+        )
+        .eq("id", leadId)
+        .single(),
 
-    if (leadReadError || !leadData) {
+      supabase
+        .from("company_settings")
+        .select(
+          `
+            automatically_assign_new_leads,
+            automatically_assign_new_tasks,
+            automatically_assign_converted_projects,
+            allow_unassigned_leads,
+            allow_unassigned_tasks,
+            require_responsible_person,
+            require_task_assignee,
+            require_project_manager,
+            default_lead_owner_id,
+            default_estimator_id,
+            default_project_manager_id
+          `,
+        )
+        .limit(1)
+        .maybeSingle(),
+
+      supabase
+        .from("task_types")
+        .select(
+          `
+            id,
+            name,
+            task_key,
+            description,
+            category,
+            default_priority,
+            assignment_strategy,
+            default_assignee_id,
+            is_active
+          `,
+        )
+        .eq(
+          "task_key",
+          "complete_consultation",
+        )
+        .eq("is_active", true)
+        .maybeSingle(),
+    ]);
+
+    if (
+      leadResult.error ||
+      !leadResult.data
+    ) {
       return Response.json(
         {
           error:
-            leadReadError?.message ??
+            leadResult.error
+              ?.message ??
             "The lead could not be found.",
         },
         {
@@ -144,8 +239,53 @@ export async function POST(
       );
     }
 
+    if (
+      settingsResult.error ||
+      !settingsResult.data
+    ) {
+      console.error(
+        "Unable to load company assignment settings:",
+        settingsResult.error,
+      );
+
+      return Response.json(
+        {
+          error:
+            "Company assignment settings could not be loaded.",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
+    if (taskTypeResult.error) {
+      console.error(
+        "Unable to load complete-consultation task type:",
+        taskTypeResult.error,
+      );
+
+      return Response.json(
+        {
+          error:
+            "The consultation task settings could not be loaded.",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
     const lead =
-      leadData as LeadRecord;
+      leadResult.data as LeadRecord;
+
+    const assignmentSettings =
+      settingsResult.data as CompanyAssignmentSettings;
+
+    const taskType =
+      taskTypeResult.data as
+        | TaskTypeRecord
+        | null;
 
     if (!lead.email) {
       return Response.json(
@@ -176,11 +316,107 @@ export async function POST(
       );
     }
 
+    const assignmentStrategy =
+      taskType
+        ? normalizeAssignmentStrategy(
+            taskType.assignment_strategy,
+          )
+        : "lead_owner";
+
+    let assignedToId:
+      | string
+      | null = null;
+
+    try {
+      assignedToId =
+        await resolveTaskAssignee(
+          supabase,
+          {
+            settings:
+              assignmentSettings,
+            assignmentStrategy,
+            defaultAssigneeId:
+              taskType
+                ?.default_assignee_id ??
+              null,
+            leadOwnerId:
+              lead.responsible_person_id,
+          },
+        );
+    } catch (error) {
+      console.error(
+        "Unable to resolve consultation task assignee:",
+        error,
+      );
+
+      return Response.json(
+        {
+          error:
+            "The consultation task assignee could not be determined.",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
+    if (
+      !assignedToId &&
+      taskAssigneeIsRequired(
+        assignmentSettings,
+      )
+    ) {
+      return Response.json(
+        {
+          error:
+            "An active task assignee is required before confirming the consultation.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
     const now =
       new Date().toISOString();
 
     const appointmentIso =
       appointmentDate.toISOString();
+
+    const taskTitle =
+      `Complete consultation: ${
+        lead.name ?? "Customer"
+      }`;
+
+    const taskDescription =
+      taskType?.description ??
+      "Complete the site consultation, record notes, and mark the visit complete.";
+
+    const taskCategory =
+      taskType?.category ??
+      "sales";
+
+    const taskPriority =
+      taskType
+        ?.default_priority ??
+      "high";
+
+    const taskMetadata = {
+      created_by:
+        "confirm_consultation_workflow",
+      appointment_at:
+        appointmentIso,
+      customer_name: lead.name,
+      project_type:
+        lead.project_type,
+      property_address:
+        lead.property_address,
+      phone: lead.phone,
+      assignment_strategy:
+        assignmentStrategy,
+      task_type_id:
+        taskType?.id ?? null,
+    };
 
     const {
       error: leadUpdateError,
@@ -191,7 +427,8 @@ export async function POST(
           "consultation_scheduled",
         consultation_status:
           "confirmed",
-        follow_up_at: appointmentIso,
+        follow_up_at:
+          appointmentIso,
       })
       .eq("id", leadId);
 
@@ -315,27 +552,6 @@ export async function POST(
       );
     }
 
-    const taskTitle =
-      `Complete consultation: ${
-        lead.name ?? "Customer"
-      }`;
-
-    const taskDescription =
-      "Complete the site consultation, record notes, and mark the visit complete.";
-
-    const taskMetadata = {
-      created_by:
-        "confirm_consultation_workflow",
-      appointment_at:
-        appointmentIso,
-      customer_name: lead.name,
-      project_type:
-        lead.project_type,
-      property_address:
-        lead.property_address,
-      phone: lead.phone,
-    };
-
     const {
       data: legacyTask,
       error: legacyTaskCreateError,
@@ -349,15 +565,18 @@ export async function POST(
         description:
           taskDescription,
         status: "open",
-        priority: "high",
-        due_at: appointmentIso,
+        priority:
+          taskPriority,
+        due_at:
+          appointmentIso,
         assigned_to_id:
-          lead.responsible_person_id,
+          assignedToId,
         assigned_at:
-          lead.responsible_person_id
+          assignedToId
             ? now
             : null,
-        metadata: taskMetadata,
+        metadata:
+          taskMetadata,
       })
       .select("id")
       .single();
@@ -366,6 +585,16 @@ export async function POST(
       console.error(
         "Unable to create lead consultation task:",
         legacyTaskCreateError,
+      );
+
+      return Response.json(
+        {
+          error:
+            legacyTaskCreateError.message,
+        },
+        {
+          status: 500,
+        },
       );
     }
 
@@ -378,17 +607,22 @@ export async function POST(
         lead_id: leadId,
         task_type:
           "complete_consultation",
+        task_type_id:
+          taskType?.id ?? null,
         title: taskTitle,
         description:
           taskDescription,
-        category: "sales",
+        category:
+          taskCategory,
         status: "open",
-        priority: "high",
-        due_at: appointmentIso,
+        priority:
+          taskPriority,
+        due_at:
+          appointmentIso,
         assigned_to_id:
-          lead.responsible_person_id,
+          assignedToId,
         assigned_at:
-          lead.responsible_person_id
+          assignedToId
             ? now
             : null,
         source_type:
@@ -396,7 +630,7 @@ export async function POST(
         metadata: {
           ...taskMetadata,
           legacy_lead_task_id:
-            legacyTask?.id ?? null,
+            legacyTask.id,
         },
       })
       .select("id")
@@ -406,6 +640,24 @@ export async function POST(
       console.error(
         "Unable to create company consultation task:",
         companyTaskCreateError,
+      );
+
+      await supabase
+        .from("lead_tasks")
+        .delete()
+        .eq(
+          "id",
+          legacyTask.id,
+        );
+
+      return Response.json(
+        {
+          error:
+            companyTaskCreateError.message,
+        },
+        {
+          status: 500,
+        },
       );
     }
 
@@ -481,8 +733,10 @@ McKenzie Construction
         lead_id: leadId,
         activity_type:
           "consultation_confirmed",
-        channel: "consultation",
-        direction: "internal",
+        channel:
+          "consultation",
+        direction:
+          "internal",
         summary:
           "Consultation confirmed",
         details:
@@ -501,7 +755,8 @@ McKenzie Construction
         activity_type:
           "task_created",
         channel: "task",
-        direction: "internal",
+        direction:
+          "internal",
         summary:
           "Complete consultation task created",
         details:
@@ -509,13 +764,18 @@ McKenzie Construction
         metadata: {
           task_type:
             "complete_consultation",
-          due_at: appointmentIso,
+          task_type_id:
+            taskType?.id ?? null,
+          due_at:
+            appointmentIso,
           assigned_to_id:
-            lead.responsible_person_id,
+            assignedToId,
+          assignment_strategy:
+            assignmentStrategy,
           legacy_task_id:
-            legacyTask?.id ?? null,
+            legacyTask.id,
           company_task_id:
-            companyTask?.id ?? null,
+            companyTask.id,
         },
       },
     ];
@@ -526,10 +786,12 @@ McKenzie Construction
         activity_type:
           "email_draft_created",
         channel: "email",
-        direction: "outbound",
+        direction:
+          "outbound",
         summary:
           "Consultation confirmation email draft created",
-        details: emailSubject,
+        details:
+          emailSubject,
         metadata: {
           email_draft_id:
             emailDraft.id,
@@ -539,10 +801,13 @@ McKenzie Construction
       });
     }
 
-    const { error: activityError } =
-      await supabase
-        .from("lead_activities")
-        .insert(activityRecords);
+    const {
+      error: activityError,
+    } = await supabase
+      .from("lead_activities")
+      .insert(
+        activityRecords,
+      );
 
     if (activityError) {
       console.error(
@@ -555,12 +820,11 @@ McKenzie Construction
       success: true,
       appointmentAt:
         appointmentIso,
+      assignedToId,
       emailDraftCreated:
         Boolean(emailDraft),
-      legacyTaskCreated:
-        Boolean(legacyTask),
-      companyTaskCreated:
-        Boolean(companyTask),
+      legacyTaskCreated: true,
+      companyTaskCreated: true,
     });
   } catch (error) {
     console.error(

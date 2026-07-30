@@ -3,6 +3,13 @@ import {
   NextResponse,
 } from "next/server";
 
+import {
+  resolveTaskAssignee,
+  taskAssigneeIsRequired,
+  validateActiveAssignee,
+  type CompanyAssignmentSettings,
+  type TaskAssignmentStrategy,
+} from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import { createAuthenticatedServerClient } from "@/lib/supabase/server";
 
@@ -29,6 +36,29 @@ const allowedRecurrenceRules = new Set([
   "weekly",
   "monthly",
 ]);
+
+const allowedAssignmentStrategies =
+  new Set<TaskAssignmentStrategy>([
+    "specific_employee",
+    "lead_owner",
+    "default_lead_owner",
+    "default_estimator",
+    "default_project_manager",
+    "unassigned",
+  ]);
+
+type TaskTypeRecord = {
+  id: string;
+  task_key: string;
+  assignment_strategy: string;
+  default_assignee_id: string | null;
+  is_active: boolean;
+};
+
+type LeadAssignmentRecord = {
+  id: string;
+  responsible_person_id: string | null;
+};
 
 async function requireAuthenticatedUser() {
   const supabase =
@@ -118,6 +148,20 @@ function normalizeRecurrenceRule(
   }
 
   return value;
+}
+
+function normalizeAssignmentStrategy(
+  value: string,
+): TaskAssignmentStrategy {
+  if (
+    allowedAssignmentStrategies.has(
+      value as TaskAssignmentStrategy,
+    )
+  ) {
+    return value as TaskAssignmentStrategy;
+  }
+
+  return "unassigned";
 }
 
 export async function GET() {
@@ -332,7 +376,7 @@ export async function POST(
       );
     }
 
-    const assignedToId =
+    const requestedAssigneeId =
       normalizeOptionalId(
         body.assignedToId,
       );
@@ -367,10 +411,233 @@ export async function POST(
         ? body.metadata
         : {};
 
-    const now = new Date().toISOString();
-
     const supabase =
       createAdminServerClient();
+
+    const {
+      data: settingsData,
+      error: settingsError,
+    } = await supabase
+      .from("company_settings")
+      .select(
+        `
+          automatically_assign_new_leads,
+          automatically_assign_new_tasks,
+          automatically_assign_converted_projects,
+          allow_unassigned_leads,
+          allow_unassigned_tasks,
+          require_responsible_person,
+          require_task_assignee,
+          require_project_manager,
+          default_lead_owner_id,
+          default_estimator_id,
+          default_project_manager_id
+        `,
+      )
+      .limit(1)
+      .maybeSingle();
+
+    if (
+      settingsError ||
+      !settingsData
+    ) {
+      console.error(
+        "Unable to load company task-assignment settings:",
+        settingsError,
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Company task settings could not be loaded.",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
+    const assignmentSettings =
+      settingsData as CompanyAssignmentSettings;
+
+    let taskType:
+      | TaskTypeRecord
+      | null = null;
+
+    if (taskTypeId) {
+      const {
+        data: taskTypeData,
+        error: taskTypeError,
+      } = await supabase
+        .from("task_types")
+        .select(
+          `
+            id,
+            task_key,
+            assignment_strategy,
+            default_assignee_id,
+            is_active
+          `,
+        )
+        .eq("id", taskTypeId)
+        .maybeSingle();
+
+      if (taskTypeError) {
+        console.error(
+          "Unable to load selected task type:",
+          taskTypeError,
+        );
+
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "The selected task type could not be loaded.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      if (
+        !taskTypeData ||
+        !taskTypeData.is_active
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Choose an active task type.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      taskType =
+        taskTypeData as TaskTypeRecord;
+    }
+
+    let lead:
+      | LeadAssignmentRecord
+      | null = null;
+
+    if (leadId) {
+      const {
+        data: leadData,
+        error: leadError,
+      } = await supabase
+        .from("leads")
+        .select(
+          "id, responsible_person_id",
+        )
+        .eq("id", leadId)
+        .maybeSingle();
+
+      if (leadError) {
+        console.error(
+          "Unable to load the selected lead:",
+          leadError,
+        );
+
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "The selected lead could not be loaded.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      if (!leadData) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "The selected lead no longer exists.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      lead =
+        leadData as LeadAssignmentRecord;
+    }
+
+    let assignedToId:
+      | string
+      | null = null;
+
+    if (requestedAssigneeId) {
+      assignedToId =
+        await validateActiveAssignee(
+          supabase,
+          requestedAssigneeId,
+        );
+
+      if (!assignedToId) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Choose an active team member as the task assignee.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+    } else if (
+      taskType &&
+      assignmentSettings
+        .automatically_assign_new_tasks
+    ) {
+      assignedToId =
+        await resolveTaskAssignee(
+          supabase,
+          {
+            settings:
+              assignmentSettings,
+            assignmentStrategy:
+              normalizeAssignmentStrategy(
+                taskType.assignment_strategy,
+              ),
+            defaultAssigneeId:
+              taskType.default_assignee_id,
+            leadOwnerId:
+              lead?.responsible_person_id ??
+              null,
+          },
+        );
+    }
+
+    if (
+      !assignedToId &&
+      taskAssigneeIsRequired(
+        assignmentSettings,
+      )
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "An active task assignee is required by the company settings.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const now = new Date().toISOString();
 
     const { data, error } =
       await supabase
@@ -384,7 +651,8 @@ export async function POST(
           category,
           task_type: recurrenceRule
             ? "recurring"
-            : "manual",
+            : taskType?.task_key ??
+              "manual",
           task_type_id: taskTypeId,
           status: "open",
           priority,

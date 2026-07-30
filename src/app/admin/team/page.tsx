@@ -1,6 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import TeamManager from "@/components/team-manager";
+import {
+  getAuthenticatedAccess,
+  hasManagementAccess,
+} from "@/lib/api-auth";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +43,20 @@ type CompanySettings = {
 };
 
 export default async function TeamPage() {
-  const supabase = createAdminServerClient();
+  const access =
+    await getAuthenticatedAccess();
+
+  if (
+    !access ||
+    !hasManagementAccess(
+      access.teamMember.roles,
+    )
+  ) {
+    redirect("/admin");
+  }
+
+  const supabase =
+    createAdminServerClient();
 
   const [teamResult, settingsResult] = await Promise.all([
     supabase

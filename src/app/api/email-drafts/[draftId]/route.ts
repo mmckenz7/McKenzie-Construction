@@ -2,7 +2,12 @@ import {
   createUnauthorizedApiResponse,
   getAuthenticatedApiUser,
 } from "@/lib/api-auth";
-
+import {
+  resolveTaskAssignee,
+  taskAssigneeIsRequired,
+  type CompanyAssignmentSettings,
+  type TaskAssignmentStrategy,
+} from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -47,17 +52,40 @@ type TaskRule = {
   is_active: boolean;
 };
 
-type CompanySettings = {
-  default_lead_owner_id: string | null;
-  default_estimator_id: string | null;
-  default_project_manager_id: string | null;
-  end_of_business_time: string | null;
-};
+type EmailDraftSettings =
+  CompanyAssignmentSettings & {
+    end_of_business_time: string | null;
+  };
+
+const allowedAssignmentStrategies =
+  new Set<TaskAssignmentStrategy>([
+    "specific_employee",
+    "lead_owner",
+    "default_lead_owner",
+    "default_estimator",
+    "default_project_manager",
+    "unassigned",
+  ]);
 
 function cleanText(value: unknown) {
   return typeof value === "string"
     ? value.trim()
     : "";
+}
+
+function normalizeAssignmentStrategy(
+  value: string | null | undefined,
+): TaskAssignmentStrategy {
+  if (
+    value &&
+    allowedAssignmentStrategies.has(
+      value as TaskAssignmentStrategy,
+    )
+  ) {
+    return value as TaskAssignmentStrategy;
+  }
+
+  return "lead_owner";
 }
 
 function addBusinessDays(
@@ -68,11 +96,17 @@ function addBusinessDays(
   let daysAdded = 0;
 
   while (daysAdded < numberOfDays) {
-    result.setDate(result.getDate() + 1);
+    result.setDate(
+      result.getDate() + 1,
+    );
 
-    const dayOfWeek = result.getDay();
+    const dayOfWeek =
+      result.getDay();
 
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+    if (
+      dayOfWeek !== 0 &&
+      dayOfWeek !== 6
+    ) {
       daysAdded += 1;
     }
   }
@@ -98,7 +132,11 @@ function getEndOfBusinessParts(
 
   if (
     Number.isNaN(hours) ||
-    Number.isNaN(minutes)
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
   ) {
     return {
       hours: 17,
@@ -119,21 +157,31 @@ function setEndOfBusiness(
   const result = new Date(date);
 
   const { hours, minutes } =
-    getEndOfBusinessParts(endOfBusinessTime);
+    getEndOfBusinessParts(
+      endOfBusinessTime,
+    );
 
-  result.setHours(hours, minutes, 0, 0);
+  result.setHours(
+    hours,
+    minutes,
+    0,
+    0,
+  );
 
   return result;
 }
 
 function getTaskDueAt(
   taskRule: TaskRule | null,
-  companySettings: CompanySettings | null,
+  companySettings:
+    | EmailDraftSettings
+    | null,
   startingDate: Date,
   fallbackBusinessDays: number,
 ) {
   const endOfBusinessTime =
-    companySettings?.end_of_business_time ??
+    companySettings
+      ?.end_of_business_time ??
     null;
 
   if (!taskRule) {
@@ -146,11 +194,17 @@ function getTaskDueAt(
     ).toISOString();
   }
 
-  if (taskRule.due_mode === "no_due_date") {
+  if (
+    taskRule.due_mode ===
+    "no_due_date"
+  ) {
     return null;
   }
 
-  if (taskRule.due_mode === "same_day") {
+  if (
+    taskRule.due_mode ===
+    "same_day"
+  ) {
     return setEndOfBusiness(
       startingDate,
       endOfBusinessTime,
@@ -158,25 +212,34 @@ function getTaskDueAt(
   }
 
   if (
-    taskRule.due_mode === "business_days"
+    taskRule.due_mode ===
+    "business_days"
   ) {
     return setEndOfBusiness(
       addBusinessDays(
         startingDate,
-        Math.max(taskRule.due_offset, 0),
+        Math.max(
+          taskRule.due_offset,
+          0,
+        ),
       ),
       endOfBusinessTime,
     ).toISOString();
   }
 
   if (
-    taskRule.due_mode === "calendar_days"
+    taskRule.due_mode ===
+    "calendar_days"
   ) {
-    const dueDate = new Date(startingDate);
+    const dueDate =
+      new Date(startingDate);
 
     dueDate.setDate(
       dueDate.getDate() +
-        Math.max(taskRule.due_offset, 0),
+        Math.max(
+          taskRule.due_offset,
+          0,
+        ),
     );
 
     return setEndOfBusiness(
@@ -192,74 +255,6 @@ function getTaskDueAt(
     ),
     endOfBusinessTime,
   ).toISOString();
-}
-
-function resolveAssigneeId(
-  taskRule: TaskRule | null,
-  companySettings: CompanySettings | null,
-  lead: LeadRecord | null,
-) {
-  if (!taskRule) {
-    return (
-      lead?.responsible_person_id ??
-      companySettings?.default_lead_owner_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "specific_employee"
-  ) {
-    return (
-      taskRule.default_assignee_id ?? null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "lead_owner"
-  ) {
-    return (
-      lead?.responsible_person_id ??
-      companySettings?.default_lead_owner_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_lead_owner"
-  ) {
-    return (
-      companySettings?.default_lead_owner_id ??
-      lead?.responsible_person_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_estimator"
-  ) {
-    return (
-      companySettings?.default_estimator_id ??
-      lead?.responsible_person_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_project_manager"
-  ) {
-    return (
-      companySettings?.default_project_manager_id ??
-      null
-    );
-  }
-
-  return null;
 }
 
 function isDraftAction(
@@ -290,7 +285,8 @@ export async function GET(
     const { draftId: rawDraftId } =
       await context.params;
 
-    const draftId = rawDraftId.trim();
+    const draftId =
+      rawDraftId.trim();
 
     if (!draftId) {
       return Response.json(
@@ -307,33 +303,38 @@ export async function GET(
     const supabase =
       createAdminServerClient();
 
-    const { data: draft, error } =
-      await supabase
-        .from("email_drafts")
-        .select(
-          `
-            id,
-            lead_id,
-            template_key,
-            to_email,
-            cc_email,
-            subject,
-            body,
-            status,
-            approved_at,
-            sent_at,
-            canceled_at,
-            external_message_id,
-            error_message,
-            metadata,
-            created_at,
-            updated_at
-          `,
-        )
-        .eq("id", draftId)
-        .single();
+    const {
+      data: draft,
+      error,
+    } = await supabase
+      .from("email_drafts")
+      .select(
+        `
+          id,
+          lead_id,
+          template_key,
+          to_email,
+          cc_email,
+          subject,
+          body,
+          status,
+          approved_at,
+          sent_at,
+          canceled_at,
+          external_message_id,
+          error_message,
+          metadata,
+          created_at,
+          updated_at
+        `,
+      )
+      .eq("id", draftId)
+      .single();
 
-    if (error || !draft) {
+    if (
+      error ||
+      !draft
+    ) {
       return Response.json(
         {
           error:
@@ -387,7 +388,8 @@ export async function PATCH(
     const { draftId: rawDraftId } =
       await context.params;
 
-    const draftId = rawDraftId.trim();
+    const draftId =
+      rawDraftId.trim();
 
     if (!draftId) {
       return Response.json(
@@ -404,7 +406,8 @@ export async function PATCH(
     const body =
       (await request.json()) as RequestBody;
 
-    const action = cleanText(body.action);
+    const action =
+      cleanText(body.action);
 
     if (!isDraftAction(action)) {
       return Response.json(
@@ -449,7 +452,8 @@ export async function PATCH(
       return Response.json(
         {
           error:
-            draftReadError?.message ??
+            draftReadError
+              ?.message ??
             "The email draft could not be found.",
         },
         {
@@ -459,7 +463,8 @@ export async function PATCH(
     }
 
     if (
-      existingDraft.status === "sent" &&
+      existingDraft.status ===
+        "sent" &&
       action !== "mark_sent"
     ) {
       return Response.json(
@@ -489,33 +494,44 @@ export async function PATCH(
       );
     }
 
-    const now = new Date();
-    const nowIso = now.toISOString();
+    const now =
+      new Date();
 
-    const leadId = String(
-      existingDraft.lead_id,
-    );
+    const nowIso =
+      now.toISOString();
+
+    const leadId =
+      String(
+        existingDraft.lead_id,
+      );
 
     const toEmail =
       body.toEmail === undefined
         ? existingDraft.to_email
-        : cleanText(body.toEmail);
+        : cleanText(
+            body.toEmail,
+          );
 
     const ccEmail =
       body.ccEmail === undefined
         ? existingDraft.cc_email
-        : cleanText(body.ccEmail) ||
-          null;
+        : cleanText(
+            body.ccEmail,
+          ) || null;
 
     const subject =
       body.subject === undefined
         ? existingDraft.subject
-        : cleanText(body.subject);
+        : cleanText(
+            body.subject,
+          );
 
     const emailBody =
       body.body === undefined
         ? existingDraft.body
-        : cleanText(body.body);
+        : cleanText(
+            body.body,
+          );
 
     if (
       action === "save" ||
@@ -565,13 +581,19 @@ export async function PATCH(
       } = await supabase
         .from("email_drafts")
         .update({
-          to_email: toEmail,
-          cc_email: ccEmail,
+          to_email:
+            toEmail,
+          cc_email:
+            ccEmail,
           subject,
-          body: emailBody,
-          status: "draft",
-          approved_at: null,
-          error_message: null,
+          body:
+            emailBody,
+          status:
+            "draft",
+          approved_at:
+            null,
+          error_message:
+            null,
         })
         .eq("id", draftId)
         .select("*")
@@ -580,7 +602,8 @@ export async function PATCH(
       if (error) {
         return Response.json(
           {
-            error: error.message,
+            error:
+              error.message,
           },
           {
             status: 500,
@@ -588,25 +611,30 @@ export async function PATCH(
         );
       }
 
-      const { error: activityError } =
-        await supabase
-          .from("lead_activities")
-          .insert({
-            lead_id: leadId,
-            activity_type:
-              "email_draft_updated",
-            channel: "email",
-            direction: "internal",
-            summary:
-              "Email draft updated",
-            details: subject,
-            metadata: {
-              email_draft_id:
-                draftId,
-              template_key:
-                existingDraft.template_key,
-            },
-          });
+      const {
+        error: activityError,
+      } = await supabase
+        .from("lead_activities")
+        .insert({
+          lead_id:
+            leadId,
+          activity_type:
+            "email_draft_updated",
+          channel:
+            "email",
+          direction:
+            "internal",
+          summary:
+            "Email draft updated",
+          details:
+            subject,
+          metadata: {
+            email_draft_id:
+              draftId,
+            template_key:
+              existingDraft.template_key,
+          },
+        });
 
       if (activityError) {
         console.error(
@@ -618,7 +646,8 @@ export async function PATCH(
       return Response.json({
         success: true,
         action,
-        draft: updatedDraft,
+        draft:
+          updatedDraft,
       });
     }
 
@@ -629,13 +658,19 @@ export async function PATCH(
       } = await supabase
         .from("email_drafts")
         .update({
-          to_email: toEmail,
-          cc_email: ccEmail,
+          to_email:
+            toEmail,
+          cc_email:
+            ccEmail,
           subject,
-          body: emailBody,
-          status: "approved",
-          approved_at: nowIso,
-          error_message: null,
+          body:
+            emailBody,
+          status:
+            "approved",
+          approved_at:
+            nowIso,
+          error_message:
+            null,
         })
         .eq("id", draftId)
         .select("*")
@@ -644,7 +679,8 @@ export async function PATCH(
       if (error) {
         return Response.json(
           {
-            error: error.message,
+            error:
+              error.message,
           },
           {
             status: 500,
@@ -652,26 +688,32 @@ export async function PATCH(
         );
       }
 
-      const { error: activityError } =
-        await supabase
-          .from("lead_activities")
-          .insert({
-            lead_id: leadId,
-            activity_type:
-              "email_draft_approved",
-            channel: "email",
-            direction: "internal",
-            summary:
-              "Email draft approved",
-            details: subject,
-            metadata: {
-              email_draft_id:
-                draftId,
-              template_key:
-                existingDraft.template_key,
-              approved_at: nowIso,
-            },
-          });
+      const {
+        error: activityError,
+      } = await supabase
+        .from("lead_activities")
+        .insert({
+          lead_id:
+            leadId,
+          activity_type:
+            "email_draft_approved",
+          channel:
+            "email",
+          direction:
+            "internal",
+          summary:
+            "Email draft approved",
+          details:
+            subject,
+          metadata: {
+            email_draft_id:
+              draftId,
+            template_key:
+              existingDraft.template_key,
+            approved_at:
+              nowIso,
+          },
+        });
 
       if (activityError) {
         console.error(
@@ -683,7 +725,8 @@ export async function PATCH(
       return Response.json({
         success: true,
         action,
-        draft: approvedDraft,
+        draft:
+          approvedDraft,
       });
     }
 
@@ -694,8 +737,10 @@ export async function PATCH(
       } = await supabase
         .from("email_drafts")
         .update({
-          status: "canceled",
-          canceled_at: nowIso,
+          status:
+            "canceled",
+          canceled_at:
+            nowIso,
         })
         .eq("id", draftId)
         .select("*")
@@ -704,7 +749,8 @@ export async function PATCH(
       if (error) {
         return Response.json(
           {
-            error: error.message,
+            error:
+              error.message,
           },
           {
             status: 500,
@@ -713,8 +759,10 @@ export async function PATCH(
       }
 
       const taskCancellation = {
-        status: "canceled",
-        canceled_at: nowIso,
+        status:
+          "canceled",
+        canceled_at:
+          nowIso,
         completion_note:
           "The related email draft was canceled.",
       };
@@ -725,8 +773,13 @@ export async function PATCH(
       ] = await Promise.all([
         supabase
           .from("lead_tasks")
-          .update(taskCancellation)
-          .eq("lead_id", leadId)
+          .update(
+            taskCancellation,
+          )
+          .eq(
+            "lead_id",
+            leadId,
+          )
           .eq(
             "task_type",
             "review_follow_up_email",
@@ -738,8 +791,13 @@ export async function PATCH(
 
         supabase
           .from("tasks")
-          .update(taskCancellation)
-          .eq("lead_id", leadId)
+          .update(
+            taskCancellation,
+          )
+          .eq(
+            "lead_id",
+            leadId,
+          )
           .eq(
             "task_type",
             "review_follow_up_email",
@@ -750,41 +808,50 @@ export async function PATCH(
           ]),
       ]);
 
-      if (legacyTaskResult.error) {
+      if (
+        legacyTaskResult.error
+      ) {
         console.error(
           "Unable to cancel lead email-review task:",
           legacyTaskResult.error,
         );
       }
 
-      if (companyTaskResult.error) {
+      if (
+        companyTaskResult.error
+      ) {
         console.error(
           "Unable to cancel company email-review task:",
           companyTaskResult.error,
         );
       }
 
-      const { error: activityError } =
-        await supabase
-          .from("lead_activities")
-          .insert({
-            lead_id: leadId,
-            activity_type:
-              "email_draft_canceled",
-            channel: "email",
-            direction: "internal",
-            summary:
-              "Email draft canceled",
-            details:
-              existingDraft.subject,
-            metadata: {
-              email_draft_id:
-                draftId,
-              template_key:
-                existingDraft.template_key,
-              canceled_at: nowIso,
-            },
-          });
+      const {
+        error: activityError,
+      } = await supabase
+        .from("lead_activities")
+        .insert({
+          lead_id:
+            leadId,
+          activity_type:
+            "email_draft_canceled",
+          channel:
+            "email",
+          direction:
+            "internal",
+          summary:
+            "Email draft canceled",
+          details:
+            existingDraft.subject,
+          metadata: {
+            email_draft_id:
+              draftId,
+            template_key:
+              existingDraft.template_key,
+            canceled_at:
+              nowIso,
+          },
+        });
 
       if (activityError) {
         console.error(
@@ -796,7 +863,8 @@ export async function PATCH(
       return Response.json({
         success: true,
         action,
-        draft: canceledDraft,
+        draft:
+          canceledDraft,
       });
     }
 
@@ -856,13 +924,24 @@ export async function PATCH(
             "task_key",
             "proposal_follow_up",
           )
-          .eq("is_active", true)
+          .eq(
+            "is_active",
+            true,
+          )
           .maybeSingle(),
 
         supabase
           .from("company_settings")
           .select(
             `
+              automatically_assign_new_leads,
+              automatically_assign_new_tasks,
+              automatically_assign_converted_projects,
+              allow_unassigned_leads,
+              allow_unassigned_tasks,
+              require_responsible_person,
+              require_task_assignee,
+              require_project_manager,
               default_lead_owner_id,
               default_estimator_id,
               default_project_manager_id,
@@ -873,71 +952,208 @@ export async function PATCH(
           .maybeSingle(),
       ]);
 
-      if (leadResult.error) {
-        console.error(
-          "Unable to load lead for next follow-up:",
-          leadResult.error,
+      if (
+        leadResult.error ||
+        !leadResult.data
+      ) {
+        return Response.json(
+          {
+            error:
+              leadResult.error
+                ?.message ??
+              "The lead could not be loaded.",
+          },
+          {
+            status: 404,
+          },
         );
       }
 
-      if (followUpRuleResult.error) {
+      if (
+        followUpRuleResult.error
+      ) {
         console.error(
           "Unable to load proposal follow-up rule:",
           followUpRuleResult.error,
         );
+
+        return Response.json(
+          {
+            error:
+              "The proposal follow-up task settings could not be loaded.",
+          },
+          {
+            status: 500,
+          },
+        );
       }
 
-      if (settingsResult.error) {
+      if (
+        settingsResult.error ||
+        !settingsResult.data
+      ) {
         console.error(
           "Unable to load company settings:",
           settingsResult.error,
         );
+
+        return Response.json(
+          {
+            error:
+              "Company assignment settings could not be loaded.",
+          },
+          {
+            status: 500,
+          },
+        );
       }
 
       const lead =
-        (leadResult.data ??
-          null) as LeadRecord | null;
+        leadResult.data as LeadRecord;
 
       const followUpRule =
         (followUpRuleResult.data ??
           null) as TaskRule | null;
 
       const companySettings =
-        (settingsResult.data ??
-          null) as CompanySettings | null;
+        settingsResult.data as EmailDraftSettings;
 
       const metadata =
         existingDraft.metadata &&
         typeof existingDraft.metadata ===
-          "object"
-          ? (existingDraft.metadata as Record<
-              string,
-              unknown
-            >)
+          "object" &&
+        !Array.isArray(
+          existingDraft.metadata,
+        )
+          ? (
+              existingDraft.metadata as Record<
+                string,
+                unknown
+              >
+            )
           : {};
 
       const shouldScheduleNextCall =
-        metadata.next_phone_follow_up_after_send ===
+        metadata
+          .next_phone_follow_up_after_send ===
         true;
+
+      let nextFollowUpAt:
+        | string
+        | null = null;
+
+      let assignedToId:
+        | string
+        | null = null;
+
+      let assignmentStrategy:
+        | TaskAssignmentStrategy
+        | null = null;
+
+      let requestedBusinessDays =
+        3;
+
+      if (shouldScheduleNextCall) {
+        requestedBusinessDays =
+          typeof metadata
+            .next_phone_follow_up_business_days ===
+          "number"
+            ? Math.max(
+                Math.trunc(
+                  metadata
+                    .next_phone_follow_up_business_days,
+                ),
+                0,
+              )
+            : 3;
+
+        nextFollowUpAt =
+          getTaskDueAt(
+            followUpRule,
+            companySettings,
+            now,
+            requestedBusinessDays,
+          );
+
+        assignmentStrategy =
+          normalizeAssignmentStrategy(
+            followUpRule
+              ?.assignment_strategy,
+          );
+
+        try {
+          assignedToId =
+            await resolveTaskAssignee(
+              supabase,
+              {
+                settings:
+                  companySettings,
+                assignmentStrategy,
+                defaultAssigneeId:
+                  followUpRule
+                    ?.default_assignee_id ??
+                  null,
+                leadOwnerId:
+                  lead.responsible_person_id,
+              },
+            );
+        } catch (error) {
+          console.error(
+            "Unable to resolve next phone follow-up assignee:",
+            error,
+          );
+
+          return Response.json(
+            {
+              error:
+                "The next phone follow-up assignee could not be determined.",
+            },
+            {
+              status: 500,
+            },
+          );
+        }
+
+        if (
+          !assignedToId &&
+          taskAssigneeIsRequired(
+            companySettings,
+          )
+        ) {
+          return Response.json(
+            {
+              error:
+                "An active task assignee is required before marking this email sent.",
+            },
+            {
+              status: 400,
+            },
+          );
+        }
+      }
 
       const {
         data: sentDraft,
-        error,
+        error: sentDraftError,
       } = await supabase
         .from("email_drafts")
         .update({
-          status: "sent",
-          sent_at: nowIso,
-          error_message: null,
+          status:
+            "sent",
+          sent_at:
+            nowIso,
+          error_message:
+            null,
         })
         .eq("id", draftId)
         .select("*")
         .single();
 
-      if (error) {
+      if (sentDraftError) {
         return Response.json(
           {
-            error: error.message,
+            error:
+              sentDraftError.message,
           },
           {
             status: 500,
@@ -946,8 +1162,10 @@ export async function PATCH(
       }
 
       const reviewCompletion = {
-        status: "completed",
-        completed_at: nowIso,
+        status:
+          "completed",
+        completed_at:
+          nowIso,
         completion_note:
           "The approved email was marked sent.",
       };
@@ -958,8 +1176,13 @@ export async function PATCH(
       ] = await Promise.all([
         supabase
           .from("lead_tasks")
-          .update(reviewCompletion)
-          .eq("lead_id", leadId)
+          .update(
+            reviewCompletion,
+          )
+          .eq(
+            "lead_id",
+            leadId,
+          )
           .eq(
             "task_type",
             "review_follow_up_email",
@@ -971,8 +1194,13 @@ export async function PATCH(
 
         supabase
           .from("tasks")
-          .update(reviewCompletion)
-          .eq("lead_id", leadId)
+          .update(
+            reviewCompletion,
+          )
+          .eq(
+            "lead_id",
+            leadId,
+          )
           .eq(
             "task_type",
             "review_follow_up_email",
@@ -983,23 +1211,23 @@ export async function PATCH(
           ]),
       ]);
 
-      if (legacyReviewResult.error) {
+      if (
+        legacyReviewResult.error
+      ) {
         console.error(
           "Unable to complete lead email-review task:",
           legacyReviewResult.error,
         );
       }
 
-      if (companyReviewResult.error) {
+      if (
+        companyReviewResult.error
+      ) {
         console.error(
           "Unable to complete company email-review task:",
           companyReviewResult.error,
         );
       }
-
-      let nextFollowUpAt:
-        | string
-        | null = null;
 
       let legacyFollowUpTaskId:
         | string
@@ -1010,34 +1238,11 @@ export async function PATCH(
         | null = null;
 
       if (shouldScheduleNextCall) {
-        const requestedBusinessDays =
-          typeof metadata.next_phone_follow_up_business_days ===
-          "number"
-            ? Math.max(
-                Math.trunc(
-                  metadata.next_phone_follow_up_business_days,
-                ),
-                0,
-              )
-            : 3;
-
-        nextFollowUpAt = getTaskDueAt(
-          followUpRule,
-          companySettings,
-          now,
-          requestedBusinessDays,
-        );
-
-        const assignedToId =
-          resolveAssigneeId(
-            followUpRule,
-            companySettings,
-            lead,
-          );
-
         const followUpCancellation = {
-          status: "canceled",
-          canceled_at: nowIso,
+          status:
+            "canceled",
+          canceled_at:
+            nowIso,
           completion_note:
             "Replaced by the newly scheduled follow-up call.",
         };
@@ -1051,7 +1256,10 @@ export async function PATCH(
             .update(
               followUpCancellation,
             )
-            .eq("lead_id", leadId)
+            .eq(
+              "lead_id",
+              leadId,
+            )
             .in("task_type", [
               "first_phone_follow_up",
               "phone_follow_up",
@@ -1066,7 +1274,10 @@ export async function PATCH(
             .update(
               followUpCancellation,
             )
-            .eq("lead_id", leadId)
+            .eq(
+              "lead_id",
+              leadId,
+            )
             .in("task_type", [
               "first_phone_follow_up",
               "phone_follow_up",
@@ -1077,14 +1288,18 @@ export async function PATCH(
             ]),
         ]);
 
-        if (legacyCancelResult.error) {
+        if (
+          legacyCancelResult.error
+        ) {
           console.error(
             "Unable to cancel older lead follow-up tasks:",
             legacyCancelResult.error,
           );
         }
 
-        if (companyCancelResult.error) {
+        if (
+          companyCancelResult.error
+        ) {
           console.error(
             "Unable to cancel older company follow-up tasks:",
             companyCancelResult.error,
@@ -1093,34 +1308,44 @@ export async function PATCH(
 
         const taskTitle =
           `Follow up with ${
-            lead?.name ?? "Customer"
+            lead.name ??
+            "Customer"
           }`;
 
         const taskDescription =
-          followUpRule?.description ??
+          followUpRule
+            ?.description ??
           "Call the customer after the estimate follow-up email was sent.";
 
         const taskPriority =
-          followUpRule?.default_priority ??
+          followUpRule
+            ?.default_priority ??
           "high";
 
         const taskCategory =
-          followUpRule?.category ??
+          followUpRule
+            ?.category ??
           "sales";
 
         const taskMetadata = {
           created_by:
             "email_draft_sent_workflow",
           task_rule_key:
-            followUpRule?.task_key ??
+            followUpRule
+              ?.task_key ??
             "proposal_follow_up",
+          task_type_id:
+            followUpRule
+              ?.id ??
+            null,
+          assignment_strategy:
+            assignmentStrategy,
           email_draft_id:
             draftId,
           phone:
-            lead?.phone ?? null,
+            lead.phone,
           project_type:
-            lead?.project_type ??
-            null,
+            lead.project_type,
           fallback_follow_up_business_days:
             requestedBusinessDays,
           assigned_to_id:
@@ -1134,13 +1359,16 @@ export async function PATCH(
         } = await supabase
           .from("lead_tasks")
           .insert({
-            lead_id: leadId,
+            lead_id:
+              leadId,
             task_type:
               "phone_follow_up",
-            title: taskTitle,
+            title:
+              taskTitle,
             description:
               taskDescription,
-            status: "open",
+            status:
+              "open",
             priority:
               taskPriority,
             due_at:
@@ -1158,17 +1386,46 @@ export async function PATCH(
           .single();
 
         if (
-          legacyFollowUpTaskError
+          legacyFollowUpTaskError ||
+          !legacyFollowUpTask
         ) {
           console.error(
             "Unable to create next lead phone follow-up:",
             legacyFollowUpTaskError,
           );
+
+          await supabase
+            .from("email_drafts")
+            .update({
+              status:
+                "approved",
+              sent_at:
+                null,
+              error_message:
+                "Follow-up task creation failed while marking the draft sent.",
+            })
+            .eq(
+              "id",
+              draftId,
+            );
+
+          return Response.json(
+            {
+              error:
+                legacyFollowUpTaskError
+                  ?.message ??
+                "The next lead follow-up task could not be created.",
+            },
+            {
+              status: 500,
+            },
+          );
         }
 
         legacyFollowUpTaskId =
-          legacyFollowUpTask?.id ??
-          null;
+          String(
+            legacyFollowUpTask.id,
+          );
 
         const {
           data: companyFollowUpTask,
@@ -1177,18 +1434,22 @@ export async function PATCH(
         } = await supabase
           .from("tasks")
           .insert({
-            lead_id: leadId,
+            lead_id:
+              leadId,
             task_type:
               "phone_follow_up",
             task_type_id:
-              followUpRule?.id ??
+              followUpRule
+                ?.id ??
               null,
-            title: taskTitle,
+            title:
+              taskTitle,
             description:
               taskDescription,
             category:
               taskCategory,
-            status: "open",
+            status:
+              "open",
             priority:
               taskPriority,
             due_at:
@@ -1211,17 +1472,56 @@ export async function PATCH(
           .single();
 
         if (
-          companyFollowUpTaskError
+          companyFollowUpTaskError ||
+          !companyFollowUpTask
         ) {
           console.error(
             "Unable to create next company phone follow-up:",
             companyFollowUpTaskError,
           );
+
+          await Promise.all([
+            supabase
+              .from("lead_tasks")
+              .delete()
+              .eq(
+                "id",
+                legacyFollowUpTaskId,
+              ),
+
+            supabase
+              .from("email_drafts")
+              .update({
+                status:
+                  "approved",
+                sent_at:
+                  null,
+                error_message:
+                  "Company follow-up task creation failed while marking the draft sent.",
+              })
+              .eq(
+                "id",
+                draftId,
+              ),
+          ]);
+
+          return Response.json(
+            {
+              error:
+                companyFollowUpTaskError
+                  ?.message ??
+                "The next company follow-up task could not be created.",
+            },
+            {
+              status: 500,
+            },
+          );
         }
 
         companyFollowUpTaskId =
-          companyFollowUpTask?.id ??
-          null;
+          String(
+            companyFollowUpTask.id,
+          );
 
         const {
           error: leadUpdateError,
@@ -1233,7 +1533,10 @@ export async function PATCH(
             lead_status:
               "customer_reviewing",
           })
-          .eq("id", leadId);
+          .eq(
+            "id",
+            leadId,
+          );
 
         if (leadUpdateError) {
           console.error(
@@ -1256,11 +1559,14 @@ export async function PATCH(
         >;
       }> = [
         {
-          lead_id: leadId,
+          lead_id:
+            leadId,
           activity_type:
             "email_sent",
-          channel: "email",
-          direction: "outbound",
+          channel:
+            "email",
+          direction:
+            "outbound",
           summary:
             "Email marked sent",
           details:
@@ -1270,7 +1576,8 @@ export async function PATCH(
               draftId,
             template_key:
               existingDraft.template_key,
-            sent_at: nowIso,
+            sent_at:
+              nowIso,
             delivery_method:
               "manual_until_email_provider_connected",
           },
@@ -1279,11 +1586,14 @@ export async function PATCH(
 
       if (nextFollowUpAt) {
         activityRecords.push({
-          lead_id: leadId,
+          lead_id:
+            leadId,
           activity_type:
             "phone_follow_up_scheduled",
-          channel: "task",
-          direction: "internal",
+          channel:
+            "task",
+          direction:
+            "internal",
           summary:
             "Next phone follow-up scheduled",
           details:
@@ -1298,16 +1608,28 @@ export async function PATCH(
             company_task_id:
               companyFollowUpTaskId,
             task_rule_key:
-              followUpRule?.task_key ??
+              followUpRule
+                ?.task_key ??
               "proposal_follow_up",
+            task_type_id:
+              followUpRule
+                ?.id ??
+              null,
+            assigned_to_id:
+              assignedToId,
+            assignment_strategy:
+              assignmentStrategy,
           },
         });
       }
 
-      const { error: activityError } =
-        await supabase
-          .from("lead_activities")
-          .insert(activityRecords);
+      const {
+        error: activityError,
+      } = await supabase
+        .from("lead_activities")
+        .insert(
+          activityRecords,
+        );
 
       if (activityError) {
         console.error(
@@ -1319,8 +1641,10 @@ export async function PATCH(
       return Response.json({
         success: true,
         action,
-        draft: sentDraft,
+        draft:
+          sentDraft,
         nextFollowUpAt,
+        assignedToId,
         followUpTaskCreated:
           Boolean(
             legacyFollowUpTaskId,

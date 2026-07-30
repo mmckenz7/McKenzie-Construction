@@ -2,6 +2,12 @@ import {
   createUnauthorizedApiResponse,
   getAuthenticatedApiUser,
 } from "@/lib/api-auth";
+import {
+  resolveTaskAssignee,
+  taskAssigneeIsRequired,
+  type CompanyAssignmentSettings,
+  type TaskAssignmentStrategy,
+} from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -37,12 +43,35 @@ type TaskRule = {
   is_active: boolean;
 };
 
-type CompanySettings = {
-  default_lead_owner_id: string | null;
-  default_estimator_id: string | null;
-  default_project_manager_id: string | null;
-  end_of_business_time: string | null;
-};
+type SendEstimateSettings =
+  CompanyAssignmentSettings & {
+    end_of_business_time: string | null;
+  };
+
+const allowedAssignmentStrategies =
+  new Set<TaskAssignmentStrategy>([
+    "specific_employee",
+    "lead_owner",
+    "default_lead_owner",
+    "default_estimator",
+    "default_project_manager",
+    "unassigned",
+  ]);
+
+function normalizeAssignmentStrategy(
+  value: string | null | undefined,
+): TaskAssignmentStrategy {
+  if (
+    value &&
+    allowedAssignmentStrategies.has(
+      value as TaskAssignmentStrategy,
+    )
+  ) {
+    return value as TaskAssignmentStrategy;
+  }
+
+  return "lead_owner";
+}
 
 function addBusinessDays(
   startingDate: Date,
@@ -52,11 +81,17 @@ function addBusinessDays(
   let daysAdded = 0;
 
   while (daysAdded < numberOfDays) {
-    result.setDate(result.getDate() + 1);
+    result.setDate(
+      result.getDate() + 1,
+    );
 
-    const dayOfWeek = result.getDay();
+    const dayOfWeek =
+      result.getDay();
 
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+    if (
+      dayOfWeek !== 0 &&
+      dayOfWeek !== 6
+    ) {
       daysAdded += 1;
     }
   }
@@ -82,7 +117,11 @@ function getEndOfBusinessParts(
 
   if (
     Number.isNaN(hours) ||
-    Number.isNaN(minutes)
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
   ) {
     return {
       hours: 17,
@@ -119,27 +158,37 @@ function setEndOfBusiness(
 
 function getTaskDueAt(
   taskRule: TaskRule | null,
-  companySettings: CompanySettings | null,
+  companySettings:
+    | SendEstimateSettings
+    | null,
   startingDate: Date,
 ) {
   const endOfBusinessTime =
-    companySettings?.end_of_business_time ??
+    companySettings
+      ?.end_of_business_time ??
     null;
 
   if (!taskRule) {
     return setEndOfBusiness(
-      addBusinessDays(startingDate, 2),
+      addBusinessDays(
+        startingDate,
+        2,
+      ),
       endOfBusinessTime,
     ).toISOString();
   }
 
   if (
-    taskRule.due_mode === "no_due_date"
+    taskRule.due_mode ===
+    "no_due_date"
   ) {
     return null;
   }
 
-  if (taskRule.due_mode === "same_day") {
+  if (
+    taskRule.due_mode ===
+    "same_day"
+  ) {
     return setEndOfBusiness(
       startingDate,
       endOfBusinessTime,
@@ -147,7 +196,8 @@ function getTaskDueAt(
   }
 
   if (
-    taskRule.due_mode === "business_days"
+    taskRule.due_mode ===
+    "business_days"
   ) {
     return setEndOfBusiness(
       addBusinessDays(
@@ -162,11 +212,11 @@ function getTaskDueAt(
   }
 
   if (
-    taskRule.due_mode === "calendar_days"
+    taskRule.due_mode ===
+    "calendar_days"
   ) {
-    const dueDate = new Date(
-      startingDate,
-    );
+    const dueDate =
+      new Date(startingDate);
 
     dueDate.setDate(
       dueDate.getDate() +
@@ -183,91 +233,31 @@ function getTaskDueAt(
   }
 
   return setEndOfBusiness(
-    addBusinessDays(startingDate, 2),
+    addBusinessDays(
+      startingDate,
+      2,
+    ),
     endOfBusinessTime,
   ).toISOString();
 }
 
-function resolveAssigneeId(
-  taskRule: TaskRule | null,
-  companySettings: CompanySettings | null,
-  lead: LeadRecord,
+function formatDateAndTime(
+  value: Date,
 ) {
-  if (!taskRule) {
-    return (
-      lead.responsible_person_id ??
-      companySettings?.default_lead_owner_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "specific_employee"
-  ) {
-    return (
-      taskRule.default_assignee_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "lead_owner"
-  ) {
-    return (
-      lead.responsible_person_id ??
-      companySettings?.default_lead_owner_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_lead_owner"
-  ) {
-    return (
-      companySettings?.default_lead_owner_id ??
-      lead.responsible_person_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_estimator"
-  ) {
-    return (
-      companySettings?.default_estimator_id ??
-      lead.responsible_person_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_project_manager"
-  ) {
-    return (
-      companySettings?.default_project_manager_id ??
-      null
-    );
-  }
-
-  return null;
-}
-
-function formatDateAndTime(value: Date) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(value);
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone:
+        "America/New_York",
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    },
+  ).format(value);
 }
 
 export async function POST(
@@ -287,7 +277,8 @@ export async function POST(
     const { leadId: rawLeadId } =
       await context.params;
 
-    const leadId = rawLeadId.trim();
+    const leadId =
+      rawLeadId.trim();
 
     if (!leadId) {
       return Response.json(
@@ -349,13 +340,24 @@ export async function POST(
           "task_key",
           "proposal_follow_up",
         )
-        .eq("is_active", true)
+        .eq(
+          "is_active",
+          true,
+        )
         .maybeSingle(),
 
       supabase
         .from("company_settings")
         .select(
           `
+            automatically_assign_new_leads,
+            automatically_assign_new_tasks,
+            automatically_assign_converted_projects,
+            allow_unassigned_leads,
+            allow_unassigned_tasks,
+            require_responsible_person,
+            require_task_assignee,
+            require_project_manager,
             default_lead_owner_id,
             default_estimator_id,
             default_project_manager_id,
@@ -373,7 +375,8 @@ export async function POST(
       return Response.json(
         {
           error:
-            leadResult.error?.message ??
+            leadResult.error
+              ?.message ??
             "The lead could not be found.",
         },
         {
@@ -387,12 +390,35 @@ export async function POST(
         "Unable to load proposal follow-up task rule:",
         taskRuleResult.error,
       );
+
+      return Response.json(
+        {
+          error:
+            "The proposal follow-up task settings could not be loaded.",
+        },
+        {
+          status: 500,
+        },
+      );
     }
 
-    if (settingsResult.error) {
+    if (
+      settingsResult.error ||
+      !settingsResult.data
+    ) {
       console.error(
         "Unable to load company settings:",
         settingsResult.error,
+      );
+
+      return Response.json(
+        {
+          error:
+            "Company assignment settings could not be loaded.",
+        },
+        {
+          status: 500,
+        },
       );
     }
 
@@ -404,10 +430,11 @@ export async function POST(
         null) as TaskRule | null;
 
     const companySettings =
-      (settingsResult.data ??
-        null) as CompanySettings | null;
+      settingsResult.data as SendEstimateSettings;
 
-    const sentAt = new Date();
+    const sentAt =
+      new Date();
+
     const sentAtIso =
       sentAt.toISOString();
 
@@ -418,19 +445,120 @@ export async function POST(
         sentAt,
       );
 
-    const assignedToId =
-      resolveAssigneeId(
-        taskRule,
-        companySettings,
-        lead,
+    const assignmentStrategy =
+      normalizeAssignmentStrategy(
+        taskRule
+          ?.assignment_strategy,
       );
+
+    let assignedToId:
+      | string
+      | null = null;
+
+    try {
+      assignedToId =
+        await resolveTaskAssignee(
+          supabase,
+          {
+            settings:
+              companySettings,
+            assignmentStrategy,
+            defaultAssigneeId:
+              taskRule
+                ?.default_assignee_id ??
+              null,
+            leadOwnerId:
+              lead.responsible_person_id,
+          },
+        );
+    } catch (error) {
+      console.error(
+        "Unable to resolve proposal follow-up task assignee:",
+        error,
+      );
+
+      return Response.json(
+        {
+          error:
+            "The proposal follow-up task assignee could not be determined.",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
+    if (
+      !assignedToId &&
+      taskAssigneeIsRequired(
+        companySettings,
+      )
+    ) {
+      return Response.json(
+        {
+          error:
+            "An active task assignee is required before marking the estimate as sent.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const taskTitle =
+      `Call about estimate: ${
+        lead.name ?? "Customer"
+      }`;
+
+    const taskDescription =
+      taskRule?.description ??
+      "Call the customer to follow up on the estimate. Record the call outcome when complete.";
+
+    const taskPriority =
+      taskRule
+        ?.default_priority ??
+      "high";
+
+    const taskCategory =
+      taskRule?.category ??
+      "sales";
+
+    const taskMetadata = {
+      created_by:
+        "send_estimate_workflow",
+      task_rule_key:
+        taskRule?.task_key ??
+        "proposal_follow_up",
+      task_type_id:
+        taskRule?.id ?? null,
+      estimate_sent_at:
+        sentAtIso,
+      customer_name:
+        lead.name,
+      phone:
+        lead.phone,
+      email:
+        lead.email,
+      project_type:
+        lead.project_type,
+      property_address:
+        lead.property_address,
+      preferred_contact_method:
+        lead.preferred_contact_method,
+      follow_up_number: 1,
+      assigned_to_id:
+        assignedToId,
+      assignment_strategy:
+        assignmentStrategy,
+    };
 
     const {
       error: leadUpdateError,
     } = await supabase
       .from("leads")
       .update({
-        lead_status: "proposal_sent",
+        lead_status:
+          "proposal_sent",
         follow_up_at:
           followUpAtIso,
       })
@@ -449,8 +577,10 @@ export async function POST(
     }
 
     const estimateCompletion = {
-      status: "completed",
-      completed_at: sentAtIso,
+      status:
+        "completed",
+      completed_at:
+        sentAtIso,
       completion_note:
         "The estimate was sent to the customer.",
     };
@@ -461,8 +591,13 @@ export async function POST(
     ] = await Promise.all([
       supabase
         .from("lead_tasks")
-        .update(estimateCompletion)
-        .eq("lead_id", leadId)
+        .update(
+          estimateCompletion,
+        )
+        .eq(
+          "lead_id",
+          leadId,
+        )
         .eq(
           "task_type",
           "prepare_estimate",
@@ -474,8 +609,13 @@ export async function POST(
 
       supabase
         .from("tasks")
-        .update(estimateCompletion)
-        .eq("lead_id", leadId)
+        .update(
+          estimateCompletion,
+        )
+        .eq(
+          "lead_id",
+          leadId,
+        )
         .eq(
           "task_type",
           "prepare_estimate",
@@ -486,14 +626,18 @@ export async function POST(
         ]),
     ]);
 
-    if (legacyEstimateResult.error) {
+    if (
+      legacyEstimateResult.error
+    ) {
       console.error(
         "Unable to complete lead estimate task:",
         legacyEstimateResult.error,
       );
     }
 
-    if (companyEstimateResult.error) {
+    if (
+      companyEstimateResult.error
+    ) {
       console.error(
         "Unable to complete company estimate task:",
         companyEstimateResult.error,
@@ -501,8 +645,10 @@ export async function POST(
     }
 
     const followUpCancellation = {
-      status: "canceled",
-      canceled_at: sentAtIso,
+      status:
+        "canceled",
+      canceled_at:
+        sentAtIso,
       completion_note:
         "Replaced by a newly scheduled proposal follow-up.",
     };
@@ -518,8 +664,13 @@ export async function POST(
     ] = await Promise.all([
       supabase
         .from("lead_tasks")
-        .update(followUpCancellation)
-        .eq("lead_id", leadId)
+        .update(
+          followUpCancellation,
+        )
+        .eq(
+          "lead_id",
+          leadId,
+        )
         .in(
           "task_type",
           followUpTaskTypes,
@@ -531,8 +682,13 @@ export async function POST(
 
       supabase
         .from("tasks")
-        .update(followUpCancellation)
-        .eq("lead_id", leadId)
+        .update(
+          followUpCancellation,
+        )
+        .eq(
+          "lead_id",
+          leadId,
+        )
         .in(
           "task_type",
           followUpTaskTypes,
@@ -543,128 +699,149 @@ export async function POST(
         ]),
     ]);
 
-    if (legacyCancelResult.error) {
+    if (
+      legacyCancelResult.error
+    ) {
       console.error(
         "Unable to cancel older lead follow-up tasks:",
         legacyCancelResult.error,
       );
     }
 
-    if (companyCancelResult.error) {
+    if (
+      companyCancelResult.error
+    ) {
       console.error(
         "Unable to cancel older company follow-up tasks:",
         companyCancelResult.error,
       );
     }
 
-    const taskTitle =
-      `Call about estimate: ${
-        lead.name ?? "Customer"
-      }`;
-
-    const taskDescription =
-      taskRule?.description ??
-      "Call the customer to follow up on the estimate. Record the call outcome when complete.";
-
-    const taskPriority =
-      taskRule?.default_priority ??
-      "high";
-
-    const taskCategory =
-      taskRule?.category ?? "sales";
-
-    const taskMetadata = {
-      created_by:
-        "send_estimate_workflow",
-      task_rule_key:
-        taskRule?.task_key ??
-        "proposal_follow_up",
-      estimate_sent_at: sentAtIso,
-      customer_name: lead.name,
-      phone: lead.phone,
-      email: lead.email,
-      project_type:
-        lead.project_type,
-      property_address:
-        lead.property_address,
-      preferred_contact_method:
-        lead.preferred_contact_method,
-      follow_up_number: 1,
-      assigned_to_id:
-        assignedToId,
-    };
-
     const {
       data: legacyFollowUpTask,
-      error: legacyTaskCreateError,
+      error:
+        legacyTaskCreateError,
     } = await supabase
       .from("lead_tasks")
       .insert({
-        lead_id: leadId,
+        lead_id:
+          leadId,
         task_type:
           "first_phone_follow_up",
-        title: taskTitle,
+        title:
+          taskTitle,
         description:
           taskDescription,
-        status: "open",
-        priority: taskPriority,
-        due_at: followUpAtIso,
+        status:
+          "open",
+        priority:
+          taskPriority,
+        due_at:
+          followUpAtIso,
         assigned_to_id:
           assignedToId,
-        assigned_at: assignedToId
-          ? sentAtIso
-          : null,
-        metadata: taskMetadata,
+        assigned_at:
+          assignedToId
+            ? sentAtIso
+            : null,
+        metadata:
+          taskMetadata,
       })
       .select("id")
       .single();
 
-    if (legacyTaskCreateError) {
+    if (
+      legacyTaskCreateError ||
+      !legacyFollowUpTask
+    ) {
       console.error(
         "Unable to create lead proposal follow-up task:",
         legacyTaskCreateError,
+      );
+
+      return Response.json(
+        {
+          error:
+            legacyTaskCreateError
+              ?.message ??
+            "The lead proposal follow-up task could not be created.",
+        },
+        {
+          status: 500,
+        },
       );
     }
 
     const {
       data: companyFollowUpTask,
-      error: companyTaskCreateError,
+      error:
+        companyTaskCreateError,
     } = await supabase
       .from("tasks")
       .insert({
-        lead_id: leadId,
+        lead_id:
+          leadId,
         task_type:
           "first_phone_follow_up",
         task_type_id:
-          taskRule?.id ?? null,
-        title: taskTitle,
+          taskRule?.id ??
+          null,
+        title:
+          taskTitle,
         description:
           taskDescription,
-        category: taskCategory,
-        status: "open",
-        priority: taskPriority,
-        due_at: followUpAtIso,
+        category:
+          taskCategory,
+        status:
+          "open",
+        priority:
+          taskPriority,
+        due_at:
+          followUpAtIso,
         assigned_to_id:
           assignedToId,
-        assigned_at: assignedToId
-          ? sentAtIso
-          : null,
+        assigned_at:
+          assignedToId
+            ? sentAtIso
+            : null,
         source_type:
           "send_estimate_workflow",
         metadata: {
           ...taskMetadata,
           legacy_lead_task_id:
-            legacyFollowUpTask?.id ??
-            null,
+            legacyFollowUpTask.id,
         },
       })
       .select("id")
       .single();
 
-    if (companyTaskCreateError) {
+    if (
+      companyTaskCreateError ||
+      !companyFollowUpTask
+    ) {
       console.error(
         "Unable to create company proposal follow-up task:",
         companyTaskCreateError,
+      );
+
+      await supabase
+        .from("lead_tasks")
+        .delete()
+        .eq(
+          "id",
+          legacyFollowUpTask.id,
+        );
+
+      return Response.json(
+        {
+          error:
+            companyTaskCreateError
+              ?.message ??
+            "The company proposal follow-up task could not be created.",
+        },
+        {
+          status: 500,
+        },
       );
     }
 
@@ -681,15 +858,20 @@ export async function POST(
       >;
     }> = [
       {
-        lead_id: leadId,
+        lead_id:
+          leadId,
         activity_type:
           "estimate_sent",
-        channel: "estimate",
-        direction: "outbound",
+        channel:
+          "estimate",
+        direction:
+          "outbound",
         summary:
           "Estimate sent to customer",
         details:
-          formatDateAndTime(sentAt),
+          formatDateAndTime(
+            sentAt,
+          ),
         metadata: {
           previous_lead_status:
             lead.lead_status,
@@ -700,41 +882,54 @@ export async function POST(
         },
       },
       {
-        lead_id: leadId,
+        lead_id:
+          leadId,
         activity_type:
           "phone_follow_up_scheduled",
-        channel: "task",
-        direction: "internal",
+        channel:
+          "task",
+        direction:
+          "internal",
         summary:
           "First proposal follow-up scheduled",
-        details: followUpAtIso
-          ? `Follow-up due ${formatDateAndTime(
-              new Date(followUpAtIso),
-            )}`
-          : "Follow-up has no automatic due date.",
+        details:
+          followUpAtIso
+            ? `Follow-up due ${formatDateAndTime(
+                new Date(
+                  followUpAtIso,
+                ),
+              )}`
+            : "Follow-up has no automatic due date.",
         metadata: {
           task_type:
             "first_phone_follow_up",
           task_rule_key:
             taskRule?.task_key ??
             "proposal_follow_up",
+          task_type_id:
+            taskRule?.id ??
+            null,
+          assignment_strategy:
+            assignmentStrategy,
           legacy_task_id:
-            legacyFollowUpTask?.id ??
-            null,
+            legacyFollowUpTask.id,
           company_task_id:
-            companyFollowUpTask?.id ??
-            null,
-          due_at: followUpAtIso,
+            companyFollowUpTask.id,
+          due_at:
+            followUpAtIso,
           assigned_to_id:
             assignedToId,
         },
       },
     ];
 
-    const { error: activityError } =
-      await supabase
-        .from("lead_activities")
-        .insert(activityRecords);
+    const {
+      error: activityError,
+    } = await supabase
+      .from("lead_activities")
+      .insert(
+        activityRecords,
+      );
 
     if (activityError) {
       console.error(
@@ -745,12 +940,14 @@ export async function POST(
 
     return Response.json({
       success: true,
-      estimateSentAt: sentAtIso,
-      followUpAt: followUpAtIso,
+      estimateSentAt:
+        sentAtIso,
+      followUpAt:
+        followUpAtIso,
       followUpTaskCreated:
-        Boolean(legacyFollowUpTask),
+        true,
       companyTaskCreated:
-        Boolean(companyFollowUpTask),
+        true,
       assignedToId,
     });
   } catch (error) {

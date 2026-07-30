@@ -2,6 +2,12 @@ import {
   createUnauthorizedApiResponse,
   getAuthenticatedApiUser,
 } from "@/lib/api-auth";
+import {
+  resolveTaskAssignee,
+  taskAssigneeIsRequired,
+  type CompanyAssignmentSettings,
+  type TaskAssignmentStrategy,
+} from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -48,12 +54,10 @@ type TaskRule = {
   is_active: boolean;
 };
 
-type CompanySettings = {
-  default_lead_owner_id: string | null;
-  default_estimator_id: string | null;
-  default_project_manager_id: string | null;
-  end_of_business_time: string | null;
-};
+type CallOutcomeSettings =
+  CompanyAssignmentSettings & {
+    end_of_business_time: string | null;
+  };
 
 type NewTaskInput = {
   taskType: string;
@@ -75,12 +79,37 @@ const allowedOutcomes: CallOutcome[] = [
   "callback_requested",
 ];
 
+const allowedAssignmentStrategies =
+  new Set<TaskAssignmentStrategy>([
+    "specific_employee",
+    "lead_owner",
+    "default_lead_owner",
+    "default_estimator",
+    "default_project_manager",
+    "unassigned",
+  ]);
+
 function isCallOutcome(
   value: string,
 ): value is CallOutcome {
   return allowedOutcomes.includes(
     value as CallOutcome,
   );
+}
+
+function normalizeAssignmentStrategy(
+  value: string | null | undefined,
+): TaskAssignmentStrategy {
+  if (
+    value &&
+    allowedAssignmentStrategies.has(
+      value as TaskAssignmentStrategy,
+    )
+  ) {
+    return value as TaskAssignmentStrategy;
+  }
+
+  return "lead_owner";
 }
 
 function addBusinessDays(
@@ -91,9 +120,12 @@ function addBusinessDays(
   let daysAdded = 0;
 
   while (daysAdded < numberOfDays) {
-    result.setDate(result.getDate() + 1);
+    result.setDate(
+      result.getDate() + 1,
+    );
 
-    const dayOfWeek = result.getDay();
+    const dayOfWeek =
+      result.getDay();
 
     if (
       dayOfWeek !== 0 &&
@@ -124,7 +156,11 @@ function getEndOfBusinessParts(
 
   if (
     Number.isNaN(hours) ||
-    Number.isNaN(minutes)
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
   ) {
     return {
       hours: 17,
@@ -161,11 +197,14 @@ function setEndOfBusiness(
 
 function getTaskDueAt(
   taskRule: TaskRule | null,
-  companySettings: CompanySettings | null,
+  companySettings:
+    | CallOutcomeSettings
+    | null,
   startingDate: Date,
 ) {
   const endOfBusinessTime =
-    companySettings?.end_of_business_time ??
+    companySettings
+      ?.end_of_business_time ??
     null;
 
   if (!taskRule) {
@@ -176,13 +215,15 @@ function getTaskDueAt(
   }
 
   if (
-    taskRule.due_mode === "no_due_date"
+    taskRule.due_mode ===
+    "no_due_date"
   ) {
     return null;
   }
 
   if (
-    taskRule.due_mode === "same_day"
+    taskRule.due_mode ===
+    "same_day"
   ) {
     return setEndOfBusiness(
       startingDate,
@@ -191,7 +232,8 @@ function getTaskDueAt(
   }
 
   if (
-    taskRule.due_mode === "business_days"
+    taskRule.due_mode ===
+    "business_days"
   ) {
     return setEndOfBusiness(
       addBusinessDays(
@@ -206,11 +248,11 @@ function getTaskDueAt(
   }
 
   if (
-    taskRule.due_mode === "calendar_days"
+    taskRule.due_mode ===
+    "calendar_days"
   ) {
-    const dueDate = new Date(
-      startingDate,
-    );
+    const dueDate =
+      new Date(startingDate);
 
     dueDate.setDate(
       dueDate.getDate() +
@@ -232,86 +274,23 @@ function getTaskDueAt(
   ).toISOString();
 }
 
-function resolveAssigneeId(
-  taskRule: TaskRule | null,
-  companySettings: CompanySettings | null,
-  lead: LeadRecord,
+function formatDateAndTime(
+  value: Date,
 ) {
-  if (!taskRule) {
-    return (
-      lead.responsible_person_id ??
-      companySettings?.default_lead_owner_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "specific_employee"
-  ) {
-    return (
-      taskRule.default_assignee_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "lead_owner"
-  ) {
-    return (
-      lead.responsible_person_id ??
-      companySettings?.default_lead_owner_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_lead_owner"
-  ) {
-    return (
-      companySettings?.default_lead_owner_id ??
-      lead.responsible_person_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_estimator"
-  ) {
-    return (
-      companySettings?.default_estimator_id ??
-      lead.responsible_person_id ??
-      null
-    );
-  }
-
-  if (
-    taskRule.assignment_strategy ===
-    "default_project_manager"
-  ) {
-    return (
-      companySettings?.default_project_manager_id ??
-      null
-    );
-  }
-
-  return null;
-}
-
-function formatDateAndTime(value: Date) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(value);
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone:
+        "America/New_York",
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    },
+  ).format(value);
 }
 
 function getOutcomeLabel(
@@ -349,7 +328,8 @@ export async function POST(
     const { leadId: rawLeadId } =
       await context.params;
 
-    const leadId = rawLeadId.trim();
+    const leadId =
+      rawLeadId.trim();
 
     if (!leadId) {
       return Response.json(
@@ -367,7 +347,8 @@ export async function POST(
       (await request.json()) as RequestBody;
 
     const outcome =
-      typeof body.outcome === "string"
+      typeof body.outcome ===
+      "string"
         ? body.outcome.trim()
         : "";
 
@@ -384,23 +365,27 @@ export async function POST(
     }
 
     const notes =
-      typeof body.notes === "string"
+      typeof body.notes ===
+      "string"
         ? body.notes.trim()
         : "";
 
     const callbackAt =
-      typeof body.callbackAt === "string"
+      typeof body.callbackAt ===
+      "string"
         ? body.callbackAt.trim()
         : "";
 
-    let callbackDate: Date | null = null;
+    let callbackDate:
+      | Date
+      | null = null;
 
     if (
-      outcome === "callback_requested"
+      outcome ===
+      "callback_requested"
     ) {
-      callbackDate = new Date(
-        callbackAt,
-      );
+      callbackDate =
+        new Date(callbackAt);
 
       if (
         !callbackAt ||
@@ -468,7 +453,10 @@ export async function POST(
           "task_key",
           "review_email_draft",
         )
-        .eq("is_active", true)
+        .eq(
+          "is_active",
+          true,
+        )
         .maybeSingle(),
 
       supabase
@@ -492,13 +480,24 @@ export async function POST(
           "task_key",
           "customer_callback",
         )
-        .eq("is_active", true)
+        .eq(
+          "is_active",
+          true,
+        )
         .maybeSingle(),
 
       supabase
         .from("company_settings")
         .select(
           `
+            automatically_assign_new_leads,
+            automatically_assign_new_tasks,
+            automatically_assign_converted_projects,
+            allow_unassigned_leads,
+            allow_unassigned_tasks,
+            require_responsible_person,
+            require_task_assignee,
+            require_project_manager,
             default_lead_owner_id,
             default_estimator_id,
             default_project_manager_id,
@@ -516,7 +515,8 @@ export async function POST(
       return Response.json(
         {
           error:
-            leadResult.error?.message ??
+            leadResult.error
+              ?.message ??
             "The lead could not be found.",
         },
         {
@@ -525,24 +525,61 @@ export async function POST(
       );
     }
 
-    if (reviewTaskRuleResult.error) {
+    if (
+      reviewTaskRuleResult.error
+    ) {
       console.error(
         "Unable to load review-email task rule:",
         reviewTaskRuleResult.error,
       );
+
+      return Response.json(
+        {
+          error:
+            "The email-review task settings could not be loaded.",
+        },
+        {
+          status: 500,
+        },
+      );
     }
 
-    if (callbackTaskRuleResult.error) {
+    if (
+      callbackTaskRuleResult.error
+    ) {
       console.error(
         "Unable to load callback task rule:",
         callbackTaskRuleResult.error,
       );
+
+      return Response.json(
+        {
+          error:
+            "The callback task settings could not be loaded.",
+        },
+        {
+          status: 500,
+        },
+      );
     }
 
-    if (settingsResult.error) {
+    if (
+      settingsResult.error ||
+      !settingsResult.data
+    ) {
       console.error(
         "Unable to load company settings:",
         settingsResult.error,
+      );
+
+      return Response.json(
+        {
+          error:
+            "Company assignment settings could not be loaded.",
+        },
+        {
+          status: 500,
+        },
       );
     }
 
@@ -558,12 +595,14 @@ export async function POST(
         null) as TaskRule | null;
 
     const companySettings =
-      (settingsResult.data ??
-        null) as CompanySettings | null;
+      settingsResult.data as CallOutcomeSettings;
 
     if (
-      (outcome === "no_answer" ||
-        outcome === "left_voicemail") &&
+      (
+        outcome === "no_answer" ||
+        outcome ===
+          "left_voicemail"
+      ) &&
       !lead.email
     ) {
       return Response.json(
@@ -577,7 +616,8 @@ export async function POST(
       );
     }
 
-    const occurredAt = new Date();
+    const occurredAt =
+      new Date();
 
     const occurredAtIso =
       occurredAt.toISOString();
@@ -585,14 +625,16 @@ export async function POST(
     const outcomeLabel =
       getOutcomeLabel(outcome);
 
-    const completionNote = notes
-      ? `${outcomeLabel}. ${notes}`
-      : outcomeLabel;
+    const completionNote =
+      notes
+        ? `${outcomeLabel}. ${notes}`
+        : outcomeLabel;
 
     async function completePhoneTasks() {
       const updateValues = {
         status: "completed",
-        completed_at: occurredAtIso,
+        completed_at:
+          occurredAtIso,
         completion_note:
           completionNote,
       };
@@ -610,7 +652,10 @@ export async function POST(
         supabase
           .from("lead_tasks")
           .update(updateValues)
-          .eq("lead_id", leadId)
+          .eq(
+            "lead_id",
+            leadId,
+          )
           .in(
             "task_type",
             taskTypes,
@@ -623,7 +668,10 @@ export async function POST(
         supabase
           .from("tasks")
           .update(updateValues)
-          .eq("lead_id", leadId)
+          .eq(
+            "lead_id",
+            leadId,
+          )
           .in(
             "task_type",
             taskTypes,
@@ -652,7 +700,8 @@ export async function POST(
     async function cancelCallbackTasks() {
       const updateValues = {
         status: "canceled",
-        canceled_at: occurredAtIso,
+        canceled_at:
+          occurredAtIso,
         completion_note:
           "Replaced by a newly scheduled callback.",
       };
@@ -664,7 +713,10 @@ export async function POST(
         supabase
           .from("lead_tasks")
           .update(updateValues)
-          .eq("lead_id", leadId)
+          .eq(
+            "lead_id",
+            leadId,
+          )
           .eq(
             "task_type",
             "callback_customer",
@@ -677,7 +729,10 @@ export async function POST(
         supabase
           .from("tasks")
           .update(updateValues)
-          .eq("lead_id", leadId)
+          .eq(
+            "lead_id",
+            leadId,
+          )
           .eq(
             "task_type",
             "callback_customer",
@@ -717,28 +772,38 @@ export async function POST(
       } = await supabase
         .from("lead_tasks")
         .insert({
-          lead_id: leadId,
+          lead_id:
+            leadId,
           task_type:
             input.taskType,
-          title: input.title,
+          title:
+            input.title,
           description:
             input.description,
-          status: "open",
+          status:
+            "open",
           priority:
             input.priority,
-          due_at: input.dueAt,
+          due_at:
+            input.dueAt,
           assigned_to_id:
             input.assignedToId,
-          assigned_at: assignedAt,
-          metadata: input.metadata,
+          assigned_at:
+            assignedAt,
+          metadata:
+            input.metadata,
         })
         .select("id")
         .single();
 
-      if (legacyTaskError) {
-        console.error(
-          `Unable to create ${input.taskType} lead task:`,
-          legacyTaskError,
+      if (
+        legacyTaskError ||
+        !legacyTask
+      ) {
+        throw new Error(
+          legacyTaskError
+            ?.message ??
+            `Unable to create ${input.taskType} lead task.`,
         );
       }
 
@@ -748,85 +813,181 @@ export async function POST(
       } = await supabase
         .from("tasks")
         .insert({
-          lead_id: leadId,
+          lead_id:
+            leadId,
           task_type:
             input.taskType,
           task_type_id:
             input.taskRule?.id ??
             null,
-          title: input.title,
+          title:
+            input.title,
           description:
             input.description,
           category:
             input.category,
-          status: "open",
+          status:
+            "open",
           priority:
             input.priority,
-          due_at: input.dueAt,
+          due_at:
+            input.dueAt,
           assigned_to_id:
             input.assignedToId,
-          assigned_at: assignedAt,
+          assigned_at:
+            assignedAt,
           source_type:
             input.sourceType,
           metadata: {
             ...input.metadata,
             legacy_lead_task_id:
-              legacyTask?.id ?? null,
+              legacyTask.id,
           },
         })
         .select("id")
         .single();
 
-      if (companyTaskError) {
-        console.error(
-          `Unable to create ${input.taskType} company task:`,
-          companyTaskError,
+      if (
+        companyTaskError ||
+        !companyTask
+      ) {
+        await supabase
+          .from("lead_tasks")
+          .delete()
+          .eq(
+            "id",
+            legacyTask.id,
+          );
+
+        throw new Error(
+          companyTaskError
+            ?.message ??
+            `Unable to create ${input.taskType} company task.`,
         );
       }
 
       return {
         legacyTaskId:
-          legacyTask?.id ?? null,
+          String(legacyTask.id),
         companyTaskId:
-          companyTask?.id ?? null,
+          String(companyTask.id),
       };
     }
 
-    let emailDraftId: string | null =
-      null;
+    let emailDraftId:
+      | string
+      | null = null;
 
-    let emailDraftCreated = false;
-    let reviewTaskCreated = false;
-    let callbackTaskCreated = false;
-    let nextFollowUpAt: string | null =
-      null;
+    let emailDraftCreated =
+      false;
+
+    let reviewTaskCreated =
+      false;
+
+    let callbackTaskCreated =
+      false;
+
+    let nextFollowUpAt:
+      | string
+      | null = null;
 
     let reviewTaskIds: {
-      legacyTaskId: string | null;
-      companyTaskId: string | null;
+      legacyTaskId: string;
+      companyTaskId: string;
     } | null = null;
 
     let callbackTaskIds: {
-      legacyTaskId: string | null;
-      companyTaskId: string | null;
+      legacyTaskId: string;
+      companyTaskId: string;
     } | null = null;
 
     if (
       outcome === "no_answer" ||
-      outcome === "left_voicemail"
+      outcome ===
+        "left_voicemail"
     ) {
+      const reviewDueAt =
+        getTaskDueAt(
+          reviewTaskRule,
+          companySettings,
+          occurredAt,
+        );
+
+      const reviewAssignmentStrategy =
+        normalizeAssignmentStrategy(
+          reviewTaskRule
+            ?.assignment_strategy,
+        );
+
+      let reviewAssignedToId:
+        | string
+        | null = null;
+
+      try {
+        reviewAssignedToId =
+          await resolveTaskAssignee(
+            supabase,
+            {
+              settings:
+                companySettings,
+              assignmentStrategy:
+                reviewAssignmentStrategy,
+              defaultAssigneeId:
+                reviewTaskRule
+                  ?.default_assignee_id ??
+                null,
+              leadOwnerId:
+                lead.responsible_person_id,
+            },
+          );
+      } catch (error) {
+        console.error(
+          "Unable to resolve email-review task assignee:",
+          error,
+        );
+
+        return Response.json(
+          {
+            error:
+              "The email-review task assignee could not be determined.",
+          },
+          {
+            status: 500,
+          },
+        );
+      }
+
+      if (
+        !reviewAssignedToId &&
+        taskAssigneeIsRequired(
+          companySettings,
+        )
+      ) {
+        return Response.json(
+          {
+            error:
+              "An active task assignee is required before creating the follow-up email review.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
       const emailSubject =
         "Following up on your McKenzie Construction estimate";
 
       const openingSentence =
-        outcome === "left_voicemail"
+        outcome ===
+        "left_voicemail"
           ? "I just tried to reach you by phone and left a voicemail."
           : "I just tried to reach you by phone but was unable to connect.";
 
       const emailBody = `Hi ${lead.name ?? "there"},
 
 ${openingSentence} I wanted to follow up regarding the estimate for your ${
-        lead.project_type ?? "project"
+        lead.project_type ??
+        "project"
       }.
 
 Please let me know whether you have any questions, would like to discuss changes, or are ready to move forward. You can reply to this email or call me at 865-263-3811.
@@ -843,19 +1004,26 @@ McKenzie Construction
       } = await supabase
         .from("email_drafts")
         .insert({
-          lead_id: leadId,
+          lead_id:
+            leadId,
           template_key:
-            outcome === "left_voicemail"
+            outcome ===
+            "left_voicemail"
               ? "estimate_follow_up_voicemail"
               : "estimate_follow_up_no_answer",
-          to_email: lead.email,
-          subject: emailSubject,
-          body: emailBody,
-          status: "draft",
+          to_email:
+            lead.email,
+          subject:
+            emailSubject,
+          body:
+            emailBody,
+          status:
+            "draft",
           metadata: {
             created_by:
               "call_outcome_workflow",
-            call_outcome: outcome,
+            call_outcome:
+              outcome,
             call_attempted_at:
               occurredAtIso,
             next_phone_follow_up_after_send:
@@ -879,7 +1047,8 @@ McKenzie Construction
         return Response.json(
           {
             error:
-              draftError?.message ??
+              draftError
+                ?.message ??
               "Unable to create the follow-up email draft.",
           },
           {
@@ -891,64 +1060,90 @@ McKenzie Construction
       emailDraftId =
         String(emailDraft.id);
 
-      emailDraftCreated = true;
+      emailDraftCreated =
+        true;
 
-      const reviewDueAt =
-        getTaskDueAt(
-          reviewTaskRule,
-          companySettings,
-          occurredAt,
-        );
-
-      const reviewAssignedToId =
-        resolveAssigneeId(
-          reviewTaskRule,
-          companySettings,
-          lead,
-        );
-
-      reviewTaskIds =
-        await createTaskPair({
-          taskType:
-            "review_follow_up_email",
-          taskRule: reviewTaskRule,
-          title: `Review follow-up email: ${
-            lead.name ?? "Customer"
-          }`,
-          description:
-            reviewTaskRule?.description ??
-            "Review the prepared follow-up email, make any job-specific changes, and approve it for sending.",
-          category:
-            reviewTaskRule?.category ??
-            "sales",
-          priority:
-            reviewTaskRule?.default_priority ??
-            "high",
-          dueAt: reviewDueAt,
-          assignedToId:
-            reviewAssignedToId,
-          sourceType:
-            "call_outcome_workflow",
-          metadata: {
-            created_by:
-              "call_outcome_workflow",
-            task_rule_key:
-              reviewTaskRule?.task_key ??
-              "review_email_draft",
-            email_draft_id:
-              emailDraftId,
-            call_outcome: outcome,
-            customer_name: lead.name,
-            assigned_to_id:
+      try {
+        reviewTaskIds =
+          await createTaskPair({
+            taskType:
+              "review_follow_up_email",
+            taskRule:
+              reviewTaskRule,
+            title: `Review follow-up email: ${
+              lead.name ??
+              "Customer"
+            }`,
+            description:
+              reviewTaskRule
+                ?.description ??
+              "Review the prepared follow-up email, make any job-specific changes, and approve it for sending.",
+            category:
+              reviewTaskRule
+                ?.category ??
+              "sales",
+            priority:
+              reviewTaskRule
+                ?.default_priority ??
+              "high",
+            dueAt:
+              reviewDueAt,
+            assignedToId:
               reviewAssignedToId,
+            sourceType:
+              "call_outcome_workflow",
+            metadata: {
+              created_by:
+                "call_outcome_workflow",
+              task_rule_key:
+                reviewTaskRule
+                  ?.task_key ??
+                "review_email_draft",
+              task_type_id:
+                reviewTaskRule
+                  ?.id ??
+                null,
+              assignment_strategy:
+                reviewAssignmentStrategy,
+              email_draft_id:
+                emailDraftId,
+              call_outcome:
+                outcome,
+              customer_name:
+                lead.name,
+              assigned_to_id:
+                reviewAssignedToId,
+            },
+          });
+      } catch (error) {
+        await supabase
+          .from("email_drafts")
+          .delete()
+          .eq(
+            "id",
+            emailDraftId,
+          );
+
+        console.error(
+          "Unable to create email-review tasks:",
+          error,
+        );
+
+        return Response.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Unable to create the email-review task.",
           },
-        });
+          {
+            status: 500,
+          },
+        );
+      }
 
       reviewTaskCreated =
-        Boolean(
-          reviewTaskIds.legacyTaskId ||
-            reviewTaskIds.companyTaskId,
-        );
+        true;
 
       nextFollowUpAt =
         reviewDueAt;
@@ -961,7 +1156,10 @@ McKenzie Construction
           follow_up_at:
             reviewDueAt,
         })
-        .eq("id", leadId);
+        .eq(
+          "id",
+          leadId,
+        );
 
       if (leadUpdateError) {
         console.error(
@@ -972,66 +1170,151 @@ McKenzie Construction
     }
 
     if (
-      outcome === "callback_requested" &&
+      outcome ===
+        "callback_requested" &&
       callbackDate
     ) {
       const callbackAtIso =
         callbackDate.toISOString();
 
+      const callbackAssignmentStrategy =
+        normalizeAssignmentStrategy(
+          callbackTaskRule
+            ?.assignment_strategy,
+        );
+
+      let callbackAssignedToId:
+        | string
+        | null = null;
+
+      try {
+        callbackAssignedToId =
+          await resolveTaskAssignee(
+            supabase,
+            {
+              settings:
+                companySettings,
+              assignmentStrategy:
+                callbackAssignmentStrategy,
+              defaultAssigneeId:
+                callbackTaskRule
+                  ?.default_assignee_id ??
+                null,
+              leadOwnerId:
+                lead.responsible_person_id,
+            },
+          );
+      } catch (error) {
+        console.error(
+          "Unable to resolve callback task assignee:",
+          error,
+        );
+
+        return Response.json(
+          {
+            error:
+              "The callback task assignee could not be determined.",
+          },
+          {
+            status: 500,
+          },
+        );
+      }
+
+      if (
+        !callbackAssignedToId &&
+        taskAssigneeIsRequired(
+          companySettings,
+        )
+      ) {
+        return Response.json(
+          {
+            error:
+              "An active task assignee is required before scheduling the callback.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
       await cancelCallbackTasks();
 
-      const callbackAssignedToId =
-        resolveAssigneeId(
-          callbackTaskRule,
-          companySettings,
-          lead,
+      try {
+        callbackTaskIds =
+          await createTaskPair({
+            taskType:
+              "callback_customer",
+            taskRule:
+              callbackTaskRule,
+            title: `Call back: ${
+              lead.name ??
+              "Customer"
+            }`,
+            description:
+              callbackTaskRule
+                ?.description ??
+              "Call the customer back at the requested date and time.",
+            category:
+              callbackTaskRule
+                ?.category ??
+              "sales",
+            priority:
+              callbackTaskRule
+                ?.default_priority ??
+              "high",
+            dueAt:
+              callbackAtIso,
+            assignedToId:
+              callbackAssignedToId,
+            sourceType:
+              "call_outcome_workflow",
+            metadata: {
+              created_by:
+                "call_outcome_workflow",
+              task_rule_key:
+                callbackTaskRule
+                  ?.task_key ??
+                "customer_callback",
+              task_type_id:
+                callbackTaskRule
+                  ?.id ??
+                null,
+              assignment_strategy:
+                callbackAssignmentStrategy,
+              customer_name:
+                lead.name,
+              phone:
+                lead.phone,
+              callback_requested_at:
+                occurredAtIso,
+              callback_at:
+                callbackAtIso,
+              assigned_to_id:
+                callbackAssignedToId,
+            },
+          });
+      } catch (error) {
+        console.error(
+          "Unable to create callback tasks:",
+          error,
         );
 
-      callbackTaskIds =
-        await createTaskPair({
-          taskType:
-            "callback_customer",
-          taskRule:
-            callbackTaskRule,
-          title: `Call back: ${
-            lead.name ?? "Customer"
-          }`,
-          description:
-            callbackTaskRule?.description ??
-            "Call the customer back at the requested date and time.",
-          category:
-            callbackTaskRule?.category ??
-            "sales",
-          priority:
-            callbackTaskRule?.default_priority ??
-            "high",
-          dueAt: callbackAtIso,
-          assignedToId:
-            callbackAssignedToId,
-          sourceType:
-            "call_outcome_workflow",
-          metadata: {
-            created_by:
-              "call_outcome_workflow",
-            task_rule_key:
-              callbackTaskRule?.task_key ??
-              "customer_callback",
-            customer_name: lead.name,
-            phone: lead.phone,
-            callback_requested_at:
-              occurredAtIso,
-            callback_at:
-              callbackAtIso,
-            assigned_to_id:
-              callbackAssignedToId,
+        return Response.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Unable to create the callback task.",
           },
-        });
+          {
+            status: 500,
+          },
+        );
+      }
 
       callbackTaskCreated =
-        Boolean(
-          callbackTaskIds.legacyTaskId ||
-            callbackTaskIds.companyTaskId,
-        );
+        true;
 
       const {
         error: leadUpdateError,
@@ -1041,7 +1324,10 @@ McKenzie Construction
           follow_up_at:
             callbackAtIso,
         })
-        .eq("id", leadId);
+        .eq(
+          "id",
+          leadId,
+        );
 
       if (leadUpdateError) {
         console.error(
@@ -1060,9 +1346,13 @@ McKenzie Construction
       } = await supabase
         .from("leads")
         .update({
-          follow_up_at: null,
+          follow_up_at:
+            null,
         })
-        .eq("id", leadId);
+        .eq(
+          "id",
+          leadId,
+        );
 
       if (leadUpdateError) {
         console.error(
@@ -1087,16 +1377,22 @@ McKenzie Construction
       >;
     }> = [
       {
-        lead_id: leadId,
+        lead_id:
+          leadId,
         activity_type:
           "phone_call_outcome",
-        channel: "call",
-        direction: "outbound",
-        summary: outcomeLabel,
-        details: notes || null,
+        channel:
+          "call",
+        direction:
+          "outbound",
+        summary:
+          outcomeLabel,
+        details:
+          notes || null,
         metadata: {
           outcome,
-          phone: lead.phone,
+          phone:
+            lead.phone,
           occurred_at:
             occurredAtIso,
           previous_follow_up_at:
@@ -1105,13 +1401,19 @@ McKenzie Construction
       },
     ];
 
-    if (emailDraftCreated) {
+    if (
+      emailDraftCreated &&
+      reviewTaskIds
+    ) {
       activityRecords.push({
-        lead_id: leadId,
+        lead_id:
+          leadId,
         activity_type:
           "email_draft_created",
-        channel: "email",
-        direction: "outbound",
+        channel:
+          "email",
+        direction:
+          "outbound",
         summary:
           "Estimate follow-up email draft created",
         details:
@@ -1119,24 +1421,31 @@ McKenzie Construction
         metadata: {
           email_draft_id:
             emailDraftId,
-          call_outcome: outcome,
+          call_outcome:
+            outcome,
           legacy_review_task_id:
-            reviewTaskIds?.legacyTaskId ??
-            null,
+            reviewTaskIds
+              .legacyTaskId,
           company_review_task_id:
-            reviewTaskIds?.companyTaskId ??
-            null,
+            reviewTaskIds
+              .companyTaskId,
         },
       });
     }
 
-    if (callbackDate) {
+    if (
+      callbackDate &&
+      callbackTaskIds
+    ) {
       activityRecords.push({
-        lead_id: leadId,
+        lead_id:
+          leadId,
         activity_type:
           "callback_scheduled",
-        channel: "task",
-        direction: "internal",
+        channel:
+          "task",
+        direction:
+          "internal",
         summary:
           "Customer callback scheduled",
         details:
@@ -1147,19 +1456,22 @@ McKenzie Construction
           callback_at:
             callbackDate.toISOString(),
           legacy_task_id:
-            callbackTaskIds?.legacyTaskId ??
-            null,
+            callbackTaskIds
+              .legacyTaskId,
           company_task_id:
-            callbackTaskIds?.companyTaskId ??
-            null,
+            callbackTaskIds
+              .companyTaskId,
         },
       });
     }
 
-    const { error: activityError } =
-      await supabase
-        .from("lead_activities")
-        .insert(activityRecords);
+    const {
+      error: activityError,
+    } = await supabase
+      .from("lead_activities")
+      .insert(
+        activityRecords,
+      );
 
     if (activityError) {
       console.error(

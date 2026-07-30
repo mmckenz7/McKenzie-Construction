@@ -1,6 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import TaskTypeManager from "@/components/task-type-manager";
+import {
+  getAuthenticatedAccess,
+  hasManagementAccess,
+} from "@/lib/api-auth";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +42,20 @@ type CompanySettings = {
 };
 
 export default async function TaskSettingsPage() {
-  const supabase = createAdminServerClient();
+  const access =
+    await getAuthenticatedAccess();
+
+  if (
+    !access ||
+    !hasManagementAccess(
+      access.teamMember.roles,
+    )
+  ) {
+    redirect("/admin");
+  }
+
+  const supabase =
+    createAdminServerClient();
 
   const [
     taskTypesResult,
