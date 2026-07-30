@@ -117,13 +117,6 @@ const initialSummary: FinancialSummary = {
   noScheduledDateValue: 0,
 };
 
-const defaultFilters: FilterState = {
-  view: "confirmed",
-  timeframe: "90",
-  startDate: "",
-  endDate: "",
-};
-
 const viewOptions = [
   {
     value: "confirmed",
@@ -186,24 +179,36 @@ const timeframeOptions = [
   },
 ];
 
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(value);
+function formatMoney(
+  value: number,
+) {
+  return new Intl.NumberFormat(
+    "en-US",
+    {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    },
+  ).format(value);
 }
 
-function formatDetailedMoney(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+function formatDetailedMoney(
+  value: number,
+) {
+  return new Intl.NumberFormat(
+    "en-US",
+    {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    },
+  ).format(value);
 }
 
-function formatPercent(value: number | null) {
+function formatPercent(
+  value: number | null,
+) {
   if (value === null) {
     return "—";
   }
@@ -211,7 +216,9 @@ function formatPercent(value: number | null) {
   return `${value.toFixed(1)}%`;
 }
 
-function formatLabel(value: string) {
+function formatLabel(
+  value: string,
+) {
   return value
     .split("_")
     .map(
@@ -222,14 +229,17 @@ function formatLabel(value: string) {
     .join(" ");
 }
 
-function formatDate(value: string | null) {
+function formatDate(
+  value: string | null,
+) {
   if (!value) {
     return "Unscheduled";
   }
 
-  const date = new Date(
-    `${value}T00:00:00`,
-  );
+  const date =
+    new Date(
+      `${value}T00:00:00`,
+    );
 
   if (
     Number.isNaN(
@@ -249,7 +259,9 @@ function formatDate(value: string | null) {
   ).format(date);
 }
 
-function getViewLabel(view: string) {
+function getViewLabel(
+  view: string,
+) {
   return (
     viewOptions.find(
       (option) =>
@@ -340,16 +352,24 @@ function buildFinancialUrl(
 }
 
 export default function FinancialsPage() {
-  const [filters, setFilters] =
-    useState<FilterState>({
-      ...defaultFilters,
-    });
+  const [
+    filters,
+    setFilters,
+  ] = useState<FilterState>({
+    view: "confirmed",
+    timeframe: "90",
+    startDate: "",
+    endDate: "",
+  });
 
   const [
     appliedFilters,
     setAppliedFilters,
   ] = useState<FilterState>({
-    ...defaultFilters,
+    view: "confirmed",
+    timeframe: "90",
+    startDate: "",
+    endDate: "",
   });
 
   const [
@@ -381,18 +401,22 @@ export default function FinancialsPage() {
     ManagerBreakdown[]
   >([]);
 
-  const [items, setItems] =
-    useState<FinancialItem[]>(
-      [],
-    );
+  const [
+    items,
+    setItems,
+  ] = useState<
+    FinancialItem[]
+  >([]);
 
   const [
     isLoading,
     setIsLoading,
   ] = useState(true);
 
-  const [error, setError] =
-    useState("");
+  const [
+    error,
+    setError,
+  ] = useState("");
 
   const loadFinancials =
     useCallback(
@@ -564,13 +588,20 @@ export default function FinancialsPage() {
   }
 
   function resetFilters() {
-    setFilters({
-      ...defaultFilters,
-    });
+    const defaultFilters = {
+      view: "confirmed",
+      timeframe: "90",
+      startDate: "",
+      endDate: "",
+    };
 
-    setAppliedFilters({
-      ...defaultFilters,
-    });
+    setFilters(
+      defaultFilters,
+    );
+
+    setAppliedFilters(
+      defaultFilters,
+    );
   }
 
   return (
@@ -607,13 +638,6 @@ export default function FinancialsPage() {
           >
             Tasks
           </Link>
-
-          <Link
-            href="/admin/team"
-            className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
-          >
-            Team
-          </Link>
         </div>
 
         <header className="rounded-2xl bg-slate-950 px-6 py-7 text-white shadow-sm sm:px-8">
@@ -628,12 +652,11 @@ export default function FinancialsPage() {
               </h1>
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-                Review confirmed
-                upcoming work,
-                contract value,
-                recorded costs,
-                unpaid obligations,
-                and projected profit.
+                Review confirmed backlog,
+                upcoming contract value,
+                recorded costs, unpaid
+                obligations, and current
+                projected profit.
               </p>
             </div>
 
@@ -659,9 +682,7 @@ export default function FinancialsPage() {
 
         <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <form
-            onSubmit={
-              handleSubmit
-            }
+            onSubmit={handleSubmit}
             className="grid gap-4 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_auto]"
           >
             <label>
@@ -670,16 +691,11 @@ export default function FinancialsPage() {
               </span>
 
               <select
-                value={
-                  filters.view
-                }
-                onChange={(
-                  event,
-                ) =>
+                value={filters.view}
+                onChange={(event) =>
                   updateFilter(
                     "view",
-                    event.target
-                      .value,
+                    event.target.value,
                   )
                 }
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950"
@@ -694,9 +710,7 @@ export default function FinancialsPage() {
                         option.value
                       }
                     >
-                      {
-                        option.label
-                      }
+                      {option.label}
                     </option>
                   ),
                 )}
@@ -712,13 +726,10 @@ export default function FinancialsPage() {
                 value={
                   filters.timeframe
                 }
-                onChange={(
-                  event,
-                ) =>
+                onChange={(event) =>
                   updateFilter(
                     "timeframe",
-                    event.target
-                      .value,
+                    event.target.value,
                   )
                 }
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950"
@@ -733,9 +744,7 @@ export default function FinancialsPage() {
                         option.value
                       }
                     >
-                      {
-                        option.label
-                      }
+                      {option.label}
                     </option>
                   ),
                 )}
@@ -745,9 +754,7 @@ export default function FinancialsPage() {
             <div className="flex items-end gap-3">
               <button
                 type="submit"
-                disabled={
-                  isLoading
-                }
+                disabled={isLoading}
                 className="rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800 disabled:opacity-60"
               >
                 {isLoading
@@ -757,12 +764,8 @@ export default function FinancialsPage() {
 
               <button
                 type="button"
-                onClick={
-                  resetFilters
-                }
-                disabled={
-                  isLoading
-                }
+                onClick={resetFilters}
+                disabled={isLoading}
                 className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-60"
               >
                 Reset
@@ -782,13 +785,10 @@ export default function FinancialsPage() {
                     value={
                       filters.startDate
                     }
-                    onChange={(
-                      event,
-                    ) =>
+                    onChange={(event) =>
                       updateFilter(
                         "startDate",
-                        event.target
-                          .value,
+                        event.target.value,
                       )
                     }
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950"
@@ -805,13 +805,10 @@ export default function FinancialsPage() {
                     value={
                       filters.endDate
                     }
-                    onChange={(
-                      event,
-                    ) =>
+                    onChange={(event) =>
                       updateFilter(
                         "endDate",
-                        event.target
-                          .value,
+                        event.target.value,
                       )
                     }
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950"
@@ -843,9 +840,7 @@ export default function FinancialsPage() {
             </p>
 
             <p className="mt-2 text-xs text-emerald-700">
-              {
-                summary.recordCount
-              }{" "}
+              {summary.recordCount}{" "}
               {summary.recordCount ===
               1
                 ? "record"
@@ -887,8 +882,7 @@ export default function FinancialsPage() {
             </p>
 
             <p className="mt-2 text-xs text-red-700">
-              Gross costs less
-              refunds
+              Gross costs less refunds
             </p>
           </article>
 
@@ -908,8 +902,7 @@ export default function FinancialsPage() {
                   : "text-red-700"
               }`}
             >
-              Current Projected
-              Profit
+              Current Projected Profit
             </p>
 
             <p
@@ -1020,19 +1013,21 @@ export default function FinancialsPage() {
 
         <section className="mt-6 grid gap-6 xl:grid-cols-2">
           <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-widest text-amber-700">
-              Timing
-            </p>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-amber-700">
+                Timing
+              </p>
 
-            <h2 className="mt-1 text-xl font-bold text-slate-950">
-              Monthly Value
-            </h2>
+              <h2 className="mt-1 text-xl font-bold text-slate-950">
+                Monthly Value
+              </h2>
+            </div>
 
             {monthlyBreakdown.length ===
             0 ? (
               <p className="mt-6 text-sm text-slate-600">
-                No dated records
-                match this report.
+                No dated records match
+                this report.
               </p>
             ) : (
               <div className="mt-6 space-y-5">
@@ -1120,13 +1115,15 @@ export default function FinancialsPage() {
           </article>
 
           <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-widest text-amber-700">
-              Work Mix
-            </p>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-amber-700">
+                Work Mix
+              </p>
 
-            <h2 className="mt-1 text-xl font-bold text-slate-950">
-              Value by Project Type
-            </h2>
+              <h2 className="mt-1 text-xl font-bold text-slate-950">
+                Value by Project Type
+              </h2>
+            </div>
 
             {projectTypeBreakdown.length ===
             0 ? (
@@ -1173,9 +1170,7 @@ export default function FinancialsPage() {
                           </td>
 
                           <td className="px-4 py-4 text-right text-sm font-semibold text-slate-700">
-                            {
-                              type.count
-                            }
+                            {type.count}
                           </td>
 
                           <td className="px-4 py-4 text-right text-sm font-bold text-slate-950">
@@ -1207,8 +1202,8 @@ export default function FinancialsPage() {
             </p>
 
             <h2 className="mt-1 text-xl font-bold text-slate-950">
-              Confirmed Work by
-              Project Manager
+              Confirmed Work by Project
+              Manager
             </h2>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -1278,21 +1273,18 @@ export default function FinancialsPage() {
 
           {isLoading ? (
             <div className="p-10 text-center text-sm text-slate-600">
-              Loading financial
-              data...
+              Loading financial data...
             </div>
-          ) : items.length ===
-            0 ? (
+          ) : items.length === 0 ? (
             <div className="p-10 text-center">
               <h3 className="text-lg font-bold text-slate-950">
-                No records match
-                this report
+                No records match this
+                report
               </h3>
 
               <p className="mt-2 text-sm text-slate-600">
-                Try a longer
-                timeframe or another
-                financial view.
+                Try a longer timeframe or
+                another financial view.
               </p>
             </div>
           ) : (
