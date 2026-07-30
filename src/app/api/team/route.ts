@@ -1,3 +1,8 @@
+import {
+  createUnauthorizedApiResponse,
+  getAuthenticatedApiUser,
+} from "@/lib/api-auth";
+
 import { NextResponse } from "next/server";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -85,7 +90,18 @@ function validateRoles(value: unknown) {
   };
 }
 
-export async function GET() {
+export async function GET(
+  request: Request,
+) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
   const supabase = createAdminServerClient();
 
   const { data, error } = await supabase
@@ -133,6 +149,15 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
   let body: CreateTeamMemberBody;
 
   try {

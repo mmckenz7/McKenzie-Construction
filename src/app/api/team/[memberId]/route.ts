@@ -1,3 +1,8 @@
+import {
+  createUnauthorizedApiResponse,
+  getAuthenticatedApiUser,
+} from "@/lib/api-auth";
+
 import { NextResponse } from "next/server";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -92,9 +97,18 @@ function validateRoles(value: unknown) {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: RouteContext,
 ) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
   const { memberId } = await context.params;
 
   const supabase = createAdminServerClient();
@@ -155,6 +169,15 @@ export async function PATCH(
   request: Request,
   context: RouteContext,
 ) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
   const { memberId } = await context.params;
 
   let body: UpdateTeamMemberBody;

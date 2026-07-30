@@ -1,4 +1,9 @@
 import {
+  createUnauthorizedApiResponse,
+  getAuthenticatedApiUser,
+} from "@/lib/api-auth";
+
+import {
   NextRequest,
   NextResponse,
 } from "next/server";
@@ -95,6 +100,15 @@ export async function GET(
   request: NextRequest,
   context: RouteContext,
 ) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
   try {
     const { taskTypeId } =
       await context.params;
@@ -164,6 +178,15 @@ export async function PATCH(
   request: NextRequest,
   context: RouteContext,
 ) {
+  const user =
+    await getAuthenticatedApiUser();
+
+  if (!user) {
+    return createUnauthorizedApiResponse(
+      request,
+    );
+  }
+
   try {
     const { taskTypeId } =
       await context.params;
