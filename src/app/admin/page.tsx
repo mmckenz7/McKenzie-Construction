@@ -92,7 +92,9 @@ const stageOptions: StageOption[] = [
 function displayValue(
   value: string | null | undefined,
 ) {
-  return value?.trim() ? value : "—";
+  return value?.trim()
+    ? value
+    : "—";
 }
 
 function titleCase(
@@ -104,8 +106,10 @@ function titleCase(
 
   return value
     .replaceAll("_", " ")
-    .replace(/\b\w/g, (character) =>
-      character.toUpperCase(),
+    .replace(
+      /\b\w/g,
+      (character) =>
+        character.toUpperCase(),
     );
 }
 
@@ -118,17 +122,25 @@ function formatDateAndTime(
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return value;
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone:
+        "America/New_York",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    },
+  ).format(date);
 }
 
 function formatRelativeDate(
@@ -140,19 +152,26 @@ function formatRelativeDate(
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return "—";
   }
 
   const difference =
-    date.getTime() - Date.now();
+    date.getTime() -
+    Date.now();
 
   const absoluteDifference =
     Math.abs(difference);
 
-  const minutes = Math.round(
-    absoluteDifference / 60000,
-  );
+  const minutes =
+    Math.round(
+      absoluteDifference /
+        60000,
+    );
 
   if (minutes < 60) {
     return difference < 0
@@ -160,9 +179,11 @@ function formatRelativeDate(
       : `in ${minutes}m`;
   }
 
-  const hours = Math.round(
-    absoluteDifference / 3600000,
-  );
+  const hours =
+    Math.round(
+      absoluteDifference /
+        3600000,
+    );
 
   if (hours < 24) {
     return difference < 0
@@ -170,21 +191,31 @@ function formatRelativeDate(
       : `in ${hours}h`;
   }
 
-  const days = Math.round(
-    absoluteDifference / 86400000,
-  );
+  const days =
+    Math.round(
+      absoluteDifference /
+        86400000,
+    );
 
   return difference < 0
     ? `${days}d ago`
     : `in ${days}d`;
 }
 
-function getLeadStageKey(lead: Lead) {
-  if (lead.lead_status === "won") {
+function getLeadStageKey(
+  lead: Lead,
+) {
+  if (
+    lead.lead_status ===
+    "won"
+  ) {
     return "won";
   }
 
-  if (lead.lead_status === "lost") {
+  if (
+    lead.lead_status ===
+    "lost"
+  ) {
     return "lost";
   }
 
@@ -226,19 +257,25 @@ function getLeadStageKey(lead: Lead) {
   return "new";
 }
 
-function getLeadStageLabel(lead: Lead) {
+function getLeadStageLabel(
+  lead: Lead,
+) {
   const stageKey =
     getLeadStageKey(lead);
 
-  const stage = stageOptions.find(
-    (option) =>
-      option.value === stageKey,
-  );
+  const stage =
+    stageOptions.find(
+      (option) =>
+        option.value ===
+        stageKey,
+    );
 
   return stage?.label ?? "New";
 }
 
-function getStageClasses(lead: Lead) {
+function getStageClasses(
+  lead: Lead,
+) {
   const stage =
     getLeadStageKey(lead);
 
@@ -251,14 +288,17 @@ function getStageClasses(lead: Lead) {
   }
 
   if (
-    stage === "proposal_sent" ||
-    stage === "customer_reviewing"
+    stage ===
+      "proposal_sent" ||
+    stage ===
+      "customer_reviewing"
   ) {
     return "bg-violet-100 text-violet-800";
   }
 
   if (
-    stage === "estimate_in_progress"
+    stage ===
+    "estimate_in_progress"
   ) {
     return "bg-sky-100 text-sky-800";
   }
@@ -287,30 +327,42 @@ function getDueClasses(
     return "text-slate-500";
   }
 
-  const dueDate = new Date(dueAt);
+  const dueDate =
+    new Date(dueAt);
 
-  if (Number.isNaN(dueDate.getTime())) {
+  if (
+    Number.isNaN(
+      dueDate.getTime(),
+    )
+  ) {
     return "text-slate-500";
   }
 
   const difference =
-    dueDate.getTime() - Date.now();
+    dueDate.getTime() -
+    Date.now();
 
   if (difference < 0) {
     return "font-bold text-red-700";
   }
 
-  if (difference < 86400000) {
+  if (
+    difference <
+    86400000
+  ) {
     return "font-bold text-amber-700";
   }
 
   return "font-semibold text-slate-700";
 }
 
-function isOpenTask(task: LeadTask) {
+function isOpenTask(
+  task: LeadTask,
+) {
   return (
     task.status === "open" ||
-    task.status === "in_progress"
+    task.status ===
+      "in_progress"
   );
 }
 
@@ -326,21 +378,32 @@ function getNewestActivityDate(
   );
 }
 
-function getPeriodStart(period: string) {
+function getPeriodStart(
+  period: string,
+) {
   const now = new Date();
 
   if (period === "7") {
-    now.setDate(now.getDate() - 7);
+    now.setDate(
+      now.getDate() - 7,
+    );
+
     return now;
   }
 
   if (period === "30") {
-    now.setDate(now.getDate() - 30);
+    now.setDate(
+      now.getDate() - 30,
+    );
+
     return now;
   }
 
   if (period === "90") {
-    now.setDate(now.getDate() - 90);
+    now.setDate(
+      now.getDate() - 90,
+    );
+
     return now;
   }
 
@@ -373,7 +436,9 @@ export default async function AdminPage({
     "7",
     "30",
     "90",
-  ].includes(parameters.period ?? "")
+  ].includes(
+    parameters.period ?? "",
+  )
     ? parameters.period!
     : "all";
 
@@ -388,9 +453,12 @@ export default async function AdminPage({
     supabase
       .from("leads")
       .select("*")
-      .order("created_at", {
-        ascending: false,
-      }),
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        },
+      ),
 
     supabase
       .from("lead_tasks")
@@ -410,9 +478,12 @@ export default async function AdminPage({
         "open",
         "in_progress",
       ])
-      .order("due_at", {
-        ascending: true,
-      }),
+      .order(
+        "due_at",
+        {
+          ascending: true,
+        },
+      ),
 
     supabase
       .from("lead_activities")
@@ -424,13 +495,17 @@ export default async function AdminPage({
           created_at
         `,
       )
-      .order("occurred_at", {
-        ascending: false,
-      }),
+      .order(
+        "occurred_at",
+        {
+          ascending: false,
+        },
+      ),
   ]);
 
   const leads =
-    (leadsResult.data ?? []) as Lead[];
+    (leadsResult.data ??
+      []) as Lead[];
 
   const tasks =
     (tasksResult.data ??
@@ -441,19 +516,23 @@ export default async function AdminPage({
       []) as LeadActivity[];
 
   const openTaskByLead =
-    new Map<string, LeadTask>();
+    new Map<
+      string,
+      LeadTask
+    >();
 
   for (const task of tasks) {
     if (!isOpenTask(task)) {
       continue;
     }
 
-    const leadId = String(
-      task.lead_id,
-    );
+    const leadId =
+      String(task.lead_id);
 
     const existing =
-      openTaskByLead.get(leadId);
+      openTaskByLead.get(
+        leadId,
+      );
 
     if (!existing) {
       openTaskByLead.set(
@@ -471,13 +550,17 @@ export default async function AdminPage({
           ).getTime()
         : Number.POSITIVE_INFINITY;
 
-    const taskTime = task.due_at
-      ? new Date(
-          task.due_at,
-        ).getTime()
-      : Number.POSITIVE_INFINITY;
+    const taskTime =
+      task.due_at
+        ? new Date(
+            task.due_at,
+          ).getTime()
+        : Number.POSITIVE_INFINITY;
 
-    if (taskTime < existingTime) {
+    if (
+      taskTime <
+      existingTime
+    ) {
       openTaskByLead.set(
         leadId,
         task,
@@ -486,12 +569,19 @@ export default async function AdminPage({
   }
 
   const latestActivityByLead =
-    new Map<string, LeadActivity>();
+    new Map<
+      string,
+      LeadActivity
+    >();
 
-  for (const activity of activities) {
-    const leadId = String(
-      activity.lead_id,
-    );
+  for (
+    const activity of
+    activities
+  ) {
+    const leadId =
+      String(
+        activity.lead_id,
+      );
 
     if (
       !latestActivityByLead.has(
@@ -506,15 +596,18 @@ export default async function AdminPage({
   }
 
   const periodStart =
-    getPeriodStart(selectedPeriod);
+    getPeriodStart(
+      selectedPeriod,
+    );
 
-  const filteredLeads = leads.filter(
-    (lead) => {
+  const filteredLeads =
+    leads.filter((lead) => {
       const stageKey =
         getLeadStageKey(lead);
 
       if (
-        selectedStage === "all" &&
+        selectedStage ===
+          "all" &&
         (stageKey === "won" ||
           stageKey === "lost")
       ) {
@@ -522,8 +615,10 @@ export default async function AdminPage({
       }
 
       if (
-        selectedStage !== "all" &&
-        stageKey !== selectedStage
+        selectedStage !==
+          "all" &&
+        stageKey !==
+          selectedStage
       ) {
         return false;
       }
@@ -538,7 +633,8 @@ export default async function AdminPage({
 
         if (
           !createdDate ||
-          createdDate < periodStart
+          createdDate <
+            periodStart
         ) {
           return false;
         }
@@ -562,8 +658,7 @@ export default async function AdminPage({
       return searchableText.includes(
         searchQuery,
       );
-    },
-  );
+    });
 
   const activeLeadCount =
     leads.filter((lead) => {
@@ -582,9 +677,10 @@ export default async function AdminPage({
         return false;
       }
 
-      const dueDate = new Date(
-        task.due_at,
-      );
+      const dueDate =
+        new Date(
+          task.due_at,
+        );
 
       return (
         !Number.isNaN(
@@ -598,7 +694,9 @@ export default async function AdminPage({
   const estimateCount =
     leads.filter(
       (lead) =>
-        getLeadStageKey(lead) ===
+        getLeadStageKey(
+          lead,
+        ) ===
         "estimate_in_progress",
     ).length;
 
@@ -608,7 +706,8 @@ export default async function AdminPage({
         getLeadStageKey(lead);
 
       return (
-        stage === "proposal_sent" ||
+        stage ===
+          "proposal_sent" ||
         stage ===
           "customer_reviewing"
       );
@@ -617,13 +716,51 @@ export default async function AdminPage({
   const wonCount =
     leads.filter(
       (lead) =>
-        getLeadStageKey(lead) ===
-        "won",
+        getLeadStageKey(
+          lead,
+        ) === "won",
     ).length;
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-[1500px]">
+        <div className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3">
+          <Link
+            href="/admin/customers"
+            className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
+          >
+            Customers
+          </Link>
+
+          <Link
+            href="/admin/projects"
+            className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
+          >
+            Projects
+          </Link>
+
+          <Link
+            href="/admin/tasks"
+            className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
+          >
+            Tasks
+          </Link>
+
+          <Link
+            href="/admin/team"
+            className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
+          >
+            Team
+          </Link>
+
+          <Link
+            href="/admin/settings/tasks"
+            className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
+          >
+            Task Settings
+          </Link>
+        </div>
+
         <header className="rounded-2xl bg-slate-950 px-6 py-7 text-white shadow-sm sm:px-8">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
             <div>
@@ -637,8 +774,9 @@ export default async function AdminPage({
 
               <p className="mt-2 text-sm text-slate-300">
                 Review current stages,
-                deadlines, and next actions
-                without opening every lead.
+                deadlines, and next
+                actions without opening
+                every lead.
               </p>
             </div>
 
@@ -718,7 +856,8 @@ export default async function AdminPage({
                   type="search"
                   name="q"
                   defaultValue={
-                    parameters.q ?? ""
+                    parameters.q ??
+                    ""
                   }
                   placeholder="Customer, phone, project, or address"
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950"
@@ -740,10 +879,16 @@ export default async function AdminPage({
                   {stageOptions.map(
                     (option) => (
                       <option
-                        key={option.value}
-                        value={option.value}
+                        key={
+                          option.value
+                        }
+                        value={
+                          option.value
+                        }
                       >
-                        {option.label}
+                        {
+                          option.label
+                        }
                       </option>
                     ),
                   )}
@@ -801,18 +946,24 @@ export default async function AdminPage({
           {leadsResult.error ? (
             <div className="p-6">
               <p className="font-semibold text-red-700">
-                {leadsResult.error.message}
+                {
+                  leadsResult.error
+                    .message
+                }
               </p>
             </div>
-          ) : filteredLeads.length === 0 ? (
+          ) : filteredLeads.length ===
+            0 ? (
             <div className="p-10 text-center">
               <h2 className="text-lg font-bold text-slate-950">
-                No leads match these filters
+                No leads match
+                these filters
               </h2>
 
               <p className="mt-2 text-sm text-slate-600">
-                Clear the search or select
-                another stage.
+                Clear the search
+                or select another
+                stage.
               </p>
             </div>
           ) : (
@@ -861,7 +1012,9 @@ export default async function AdminPage({
                     {filteredLeads.map(
                       (lead) => {
                         const leadId =
-                          String(lead.id);
+                          String(
+                            lead.id,
+                          );
 
                         const nextTask =
                           openTaskByLead.get(
@@ -881,7 +1034,9 @@ export default async function AdminPage({
 
                         return (
                           <tr
-                            key={leadId}
+                            key={
+                              leadId
+                            }
                             className="border-b border-slate-100 transition hover:bg-slate-50"
                           >
                             <td className="px-5 py-4">
@@ -970,7 +1125,9 @@ export default async function AdminPage({
                                     href={`tel:${lead.phone}`}
                                     className="font-semibold text-slate-800 hover:underline"
                                   >
-                                    {lead.phone}
+                                    {
+                                      lead.phone
+                                    }
                                   </a>
                                 ) : null}
 
@@ -979,7 +1136,9 @@ export default async function AdminPage({
                                     href={`mailto:${lead.email}`}
                                     className="max-w-[190px] truncate text-xs text-slate-500 hover:underline"
                                   >
-                                    {lead.email}
+                                    {
+                                      lead.email
+                                    }
                                   </a>
                                 ) : null}
 
@@ -1023,7 +1182,9 @@ export default async function AdminPage({
                 {filteredLeads.map(
                   (lead) => {
                     const leadId =
-                      String(lead.id);
+                      String(
+                        lead.id,
+                      );
 
                     const nextTask =
                       openTaskByLead.get(
@@ -1043,7 +1204,9 @@ export default async function AdminPage({
 
                     return (
                       <Link
-                        key={leadId}
+                        key={
+                          leadId
+                        }
                         href={`/admin/leads/${encodeURIComponent(
                           leadId,
                         )}`}
