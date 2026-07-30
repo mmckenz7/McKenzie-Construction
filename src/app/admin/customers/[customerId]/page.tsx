@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CustomerProjectManager } from "@/components/customer-project-manager";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const dynamic = "force-dynamic";
@@ -55,13 +56,41 @@ type CustomerTask = {
   created_at: string;
 };
 
+type Project = {
+  id: string;
+  project_name: string;
+  project_type: string | null;
+  description: string | null;
+  property_address: string | null;
+  status: string;
+  project_manager_id: string | null;
+  estimated_value: number | null;
+  contract_value: number | null;
+  start_date: string | null;
+  target_completion_date: string | null;
+  completed_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type CompanySettings = {
+  automatically_assign_converted_projects: boolean;
+  require_project_manager: boolean;
+  default_project_manager_id: string | null;
+};
+
 function displayValue(
   value: string | null | undefined,
 ) {
-  return value?.trim() ? value : "—";
+  return value?.trim()
+    ? value
+    : "—";
 }
 
-function formatStatus(value: string) {
+function formatStatus(
+  value: string,
+) {
   return value
     .split("_")
     .map(
@@ -79,25 +108,41 @@ function formatDateAndTime(
     return "—";
   }
 
-  const date = new Date(value);
+  const date =
+    new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return value;
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    },
+  ).format(date);
 }
 
-function buildAddress(customer: Customer) {
-  const cityStatePostal = [
+function buildAddress(
+  customer: Customer,
+) {
+  const cityState = [
     customer.city,
     customer.state,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  const cityStatePostal = [
+    cityState,
     customer.postal_code,
   ]
     .filter(Boolean)
@@ -112,19 +157,28 @@ function buildAddress(customer: Customer) {
     .join(", ");
 }
 
-function getTaskClasses(task: CustomerTask) {
-  if (task.status === "completed") {
+function getTaskClasses(
+  task: CustomerTask,
+) {
+  if (
+    task.status ===
+    "completed"
+  ) {
     return "border-emerald-200 bg-emerald-50";
   }
 
-  if (task.status === "canceled") {
+  if (
+    task.status ===
+    "canceled"
+  ) {
     return "border-slate-200 bg-slate-50";
   }
 
   if (
     task.due_at &&
-    new Date(task.due_at).getTime() <
-      Date.now()
+    new Date(
+      task.due_at,
+    ).getTime() < Date.now()
   ) {
     return "border-red-300 bg-red-50";
   }
@@ -135,8 +189,9 @@ function getTaskClasses(task: CustomerTask) {
 export default async function CustomerDetailPage({
   params,
 }: CustomerPageProps) {
-  const { customerId: rawCustomerId } =
-    await params;
+  const {
+    customerId: rawCustomerId,
+  } = await params;
 
   const customerId =
     rawCustomerId.trim();
@@ -148,32 +203,36 @@ export default async function CustomerDetailPage({
   const supabase =
     createAdminServerClient();
 
-  const customerResult = await supabase
-    .from("customers")
-    .select(
-      `
-        id,
-        source_lead_id,
-        customer_name,
-        first_name,
-        last_name,
-        email,
-        phone,
-        address_line_1,
-        address_line_2,
-        city,
-        state,
-        postal_code,
-        project_type,
-        notes,
-        status,
-        assigned_to,
-        created_at,
-        updated_at
-      `,
-    )
-    .eq("id", customerId)
-    .single();
+  const customerResult =
+    await supabase
+      .from("customers")
+      .select(
+        `
+          id,
+          source_lead_id,
+          customer_name,
+          first_name,
+          last_name,
+          email,
+          phone,
+          address_line_1,
+          address_line_2,
+          city,
+          state,
+          postal_code,
+          project_type,
+          notes,
+          status,
+          assigned_to,
+          created_at,
+          updated_at
+        `,
+      )
+      .eq(
+        "id",
+        customerId,
+      )
+      .single();
 
   if (
     customerResult.error ||
@@ -186,8 +245,11 @@ export default async function CustomerDetailPage({
     customerResult.data as Customer;
 
   const [
-    teamMemberResult,
+    assignedEmployeeResult,
     tasksResult,
+    projectsResult,
+    activeTeamResult,
+    companySettingsResult,
   ] = await Promise.all([
     customer.assigned_to
       ? supabase
@@ -229,35 +291,135 @@ export default async function CustomerDetailPage({
           created_at
         `,
       )
-      .eq("customer_id", customerId)
-      .order("due_at", {
-        ascending: true,
-        nullsFirst: false,
-      })
-      .order("created_at", {
-        ascending: false,
-      }),
+      .eq(
+        "customer_id",
+        customerId,
+      )
+      .order(
+        "due_at",
+        {
+          ascending: true,
+          nullsFirst: false,
+        },
+      )
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        },
+      ),
+
+    supabase
+      .from("projects")
+      .select(
+        `
+          id,
+          project_name,
+          project_type,
+          description,
+          property_address,
+          status,
+          project_manager_id,
+          estimated_value,
+          contract_value,
+          start_date,
+          target_completion_date,
+          completed_at,
+          notes,
+          created_at,
+          updated_at
+        `,
+      )
+      .eq(
+        "customer_id",
+        customerId,
+      )
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        },
+      ),
+
+    supabase
+      .from("team_members")
+      .select(
+        `
+          id,
+          name,
+          email,
+          phone,
+          job_title
+        `,
+      )
+      .eq(
+        "status",
+        "active",
+      )
+      .order(
+        "name",
+        {
+          ascending: true,
+        },
+      ),
+
+    supabase
+      .from("company_settings")
+      .select(
+        `
+          automatically_assign_converted_projects,
+          require_project_manager,
+          default_project_manager_id
+        `,
+      )
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const assignedEmployee =
-    (teamMemberResult.data ??
+    (assignedEmployeeResult.data ??
       null) as TeamMember | null;
 
   const tasks =
     (tasksResult.data ??
       []) as CustomerTask[];
 
-  const openTasks = tasks.filter(
-    (task) =>
-      task.status === "open" ||
-      task.status === "in_progress",
-  );
+  const projects =
+    (projectsResult.data ??
+      []) as Project[];
 
-  const closedTasks = tasks.filter(
-    (task) =>
-      task.status !== "open" &&
-      task.status !== "in_progress",
-  );
+  const activeTeamMembers =
+    (activeTeamResult.data ??
+      []) as TeamMember[];
+
+  const companySettings =
+    (companySettingsResult.data ??
+      {
+        automatically_assign_converted_projects:
+          false,
+        require_project_manager:
+          false,
+        default_project_manager_id:
+          null,
+      }) as CompanySettings;
+
+  const openTasks =
+    tasks.filter(
+      (task) =>
+        task.status ===
+          "open" ||
+        task.status ===
+          "in_progress",
+    );
+
+  const closedTasks =
+    tasks.filter(
+      (task) =>
+        task.status !==
+          "open" &&
+        task.status !==
+          "in_progress",
+    );
 
   const address =
     buildAddress(customer);
@@ -286,7 +448,9 @@ export default async function CustomerDetailPage({
                 </p>
 
                 <h1 className="mt-2 text-3xl font-bold sm:text-4xl">
-                  {customer.customer_name}
+                  {
+                    customer.customer_name
+                  }
                 </h1>
 
                 <p className="mt-2 text-sm text-slate-300">
@@ -305,7 +469,7 @@ export default async function CustomerDetailPage({
             </div>
           </div>
 
-          <div className="grid gap-0 lg:grid-cols-4">
+          <div className="grid gap-0 lg:grid-cols-5">
             <section className="border-b border-slate-200 p-6 lg:border-b-0 lg:border-r">
               <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
                 Phone
@@ -346,13 +510,23 @@ export default async function CustomerDetailPage({
 
             <section className="border-b border-slate-200 p-6 lg:border-b-0 lg:border-r">
               <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
-                Project
+                Project Type
               </p>
 
               <p className="mt-2 text-sm font-semibold text-slate-950">
                 {displayValue(
                   customer.project_type,
                 )}
+              </p>
+            </section>
+
+            <section className="border-b border-slate-200 p-6 lg:border-b-0 lg:border-r">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                Projects
+              </p>
+
+              <p className="mt-2 text-sm font-semibold text-slate-950">
+                {projects.length}
               </p>
             </section>
 
@@ -370,13 +544,91 @@ export default async function CustomerDetailPage({
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
+            <CustomerProjectManager
+              customerId={
+                customer.id
+              }
+              customerName={
+                customer.customer_name
+              }
+              defaultProjectType={
+                customer.project_type
+              }
+              defaultPropertyAddress={
+                address || null
+              }
+              projects={
+                projects
+              }
+              teamMembers={
+                activeTeamMembers
+              }
+              automaticallyAssignProjects={
+                companySettings
+                  .automatically_assign_converted_projects
+              }
+              requireProjectManager={
+                companySettings
+                  .require_project_manager
+              }
+              defaultProjectManagerId={
+                companySettings
+                  .default_project_manager_id
+              }
+            />
+
+            {projectsResult.error ? (
+              <section className="rounded-2xl border border-red-200 bg-red-50 p-6">
+                <h2 className="font-bold text-red-800">
+                  Unable to load projects
+                </h2>
+
+                <p className="mt-2 text-sm text-red-700">
+                  {
+                    projectsResult.error
+                      .message
+                  }
+                </p>
+              </section>
+            ) : null}
+
+            {activeTeamResult.error ? (
+              <section className="rounded-2xl border border-red-200 bg-red-50 p-6">
+                <h2 className="font-bold text-red-800">
+                  Unable to load project managers
+                </h2>
+
+                <p className="mt-2 text-sm text-red-700">
+                  {
+                    activeTeamResult.error
+                      .message
+                  }
+                </p>
+              </section>
+            ) : null}
+
+            {companySettingsResult.error ? (
+              <section className="rounded-2xl border border-red-200 bg-red-50 p-6">
+                <h2 className="font-bold text-red-800">
+                  Unable to load project assignment settings
+                </h2>
+
+                <p className="mt-2 text-sm text-red-700">
+                  {
+                    companySettingsResult
+                      .error.message
+                  }
+                </p>
+              </section>
+            ) : null}
+
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <p className="text-xs font-bold uppercase tracking-widest text-amber-700">
                 Customer Record
               </p>
 
               <h2 className="mt-1 text-2xl font-bold text-slate-950">
-                Contact and Project Details
+                Contact Details
               </h2>
 
               <div className="mt-6 grid gap-8 md:grid-cols-2">
@@ -416,7 +668,8 @@ export default async function CustomerDetailPage({
                       </dt>
 
                       <dd className="mt-1 font-semibold leading-6 text-slate-950">
-                        {address || "—"}
+                        {address ||
+                          "—"}
                       </dd>
                     </div>
                   </dl>
@@ -424,22 +677,10 @@ export default async function CustomerDetailPage({
 
                 <div>
                   <h3 className="font-bold text-slate-950">
-                    Project
+                    Customer
                   </h3>
 
                   <dl className="mt-4 space-y-4 text-sm">
-                    <div>
-                      <dt className="text-slate-500">
-                        Project type
-                      </dt>
-
-                      <dd className="mt-1 font-semibold text-slate-950">
-                        {displayValue(
-                          customer.project_type,
-                        )}
-                      </dd>
-                    </div>
-
                     <div>
                       <dt className="text-slate-500">
                         Customer status
@@ -449,6 +690,17 @@ export default async function CustomerDetailPage({
                         {formatStatus(
                           customer.status,
                         )}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-slate-500">
+                        Assigned employee
+                      </dt>
+
+                      <dd className="mt-1 font-semibold text-slate-950">
+                        {assignedEmployee?.name ??
+                          "Unassigned"}
                       </dd>
                     </div>
 
@@ -501,17 +753,19 @@ export default async function CustomerDetailPage({
                 Assigned Employee
               </p>
 
-              {teamMemberResult.error ? (
+              {assignedEmployeeResult.error ? (
                 <p className="mt-4 text-sm font-semibold text-red-700">
                   {
-                    teamMemberResult.error
-                      .message
+                    assignedEmployeeResult
+                      .error.message
                   }
                 </p>
               ) : assignedEmployee ? (
                 <div className="mt-4">
                   <h2 className="text-lg font-bold text-slate-950">
-                    {assignedEmployee.name}
+                    {
+                      assignedEmployee.name
+                    }
                   </h2>
 
                   <p className="mt-1 text-sm text-slate-600">
@@ -525,7 +779,9 @@ export default async function CustomerDetailPage({
                       href={`mailto:${assignedEmployee.email}`}
                       className="mt-4 block text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4"
                     >
-                      {assignedEmployee.email}
+                      {
+                        assignedEmployee.email
+                      }
                     </a>
                   ) : null}
 
@@ -534,7 +790,9 @@ export default async function CustomerDetailPage({
                       href={`tel:${assignedEmployee.phone}`}
                       className="mt-2 block text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4"
                     >
-                      {assignedEmployee.phone}
+                      {
+                        assignedEmployee.phone
+                      }
                     </a>
                   ) : null}
                 </div>
@@ -564,47 +822,57 @@ export default async function CustomerDetailPage({
 
               {tasksResult.error ? (
                 <p className="mt-4 text-sm font-semibold text-red-700">
-                  {tasksResult.error.message}
+                  {
+                    tasksResult.error
+                      .message
+                  }
                 </p>
-              ) : openTasks.length === 0 ? (
+              ) : openTasks.length ===
+                0 ? (
                 <p className="mt-4 text-sm text-slate-600">
                   No open customer tasks.
                 </p>
               ) : (
                 <div className="mt-4 space-y-3">
-                  {openTasks.map((task) => (
-                    <article
-                      key={task.id}
-                      className={`rounded-xl border p-4 ${getTaskClasses(
-                        task,
-                      )}`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <h3 className="text-sm font-bold text-slate-950">
-                          {task.title}
-                        </h3>
+                  {openTasks.map(
+                    (task) => (
+                      <article
+                        key={task.id}
+                        className={`rounded-xl border p-4 ${getTaskClasses(
+                          task,
+                        )}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-sm font-bold text-slate-950">
+                            {
+                              task.title
+                            }
+                          </h3>
 
-                        <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">
-                          {formatStatus(
-                            task.priority,
+                          <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                            {formatStatus(
+                              task.priority,
+                            )}
+                          </span>
+                        </div>
+
+                        {task.description ? (
+                          <p className="mt-2 text-xs leading-5 text-slate-700">
+                            {
+                              task.description
+                            }
+                          </p>
+                        ) : null}
+
+                        <p className="mt-3 text-xs font-semibold text-slate-600">
+                          Due:{" "}
+                          {formatDateAndTime(
+                            task.due_at,
                           )}
-                        </span>
-                      </div>
-
-                      {task.description ? (
-                        <p className="mt-2 text-xs leading-5 text-slate-700">
-                          {task.description}
                         </p>
-                      ) : null}
-
-                      <p className="mt-3 text-xs font-semibold text-slate-600">
-                        Due:{" "}
-                        {formatDateAndTime(
-                          task.due_at,
-                        )}
-                      </p>
-                    </article>
-                  ))}
+                      </article>
+                    ),
+                  )}
                 </div>
               )}
             </section>
@@ -617,30 +885,34 @@ export default async function CustomerDetailPage({
                 </summary>
 
                 <div className="mt-4 space-y-3">
-                  {closedTasks.map((task) => (
-                    <article
-                      key={task.id}
-                      className="rounded-xl border border-slate-200 bg-slate-50 p-4"
-                    >
-                      <h3 className="text-sm font-bold text-slate-800">
-                        {task.title}
-                      </h3>
-
-                      <p className="mt-1 text-xs font-semibold text-slate-500">
-                        {formatStatus(
-                          task.status,
-                        )}
-                      </p>
-
-                      {task.completion_note ? (
-                        <p className="mt-2 text-xs leading-5 text-slate-600">
+                  {closedTasks.map(
+                    (task) => (
+                      <article
+                        key={task.id}
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                      >
+                        <h3 className="text-sm font-bold text-slate-800">
                           {
-                            task.completion_note
+                            task.title
                           }
+                        </h3>
+
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          {formatStatus(
+                            task.status,
+                          )}
                         </p>
-                      ) : null}
-                    </article>
-                  ))}
+
+                        {task.completion_note ? (
+                          <p className="mt-2 text-xs leading-5 text-slate-600">
+                            {
+                              task.completion_note
+                            }
+                          </p>
+                        ) : null}
+                      </article>
+                    ),
+                  )}
                 </div>
               </details>
             ) : null}
