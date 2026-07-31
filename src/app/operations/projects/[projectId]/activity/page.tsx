@@ -150,12 +150,53 @@ function getActorName(
   return "System";
 }
 
+function formatMetadataLabel(
+  value: string,
+) {
+  return value
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) =>
+      letter.toUpperCase(),
+    );
+}
+
+function formatMetadataValue(
+  value: unknown,
+) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return "—";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  if (
+    typeof value === "string"
+  ) {
+    return value.replaceAll("_", " ");
+  }
+
+  if (
+    typeof value === "number"
+  ) {
+    return String(value);
+  }
+
+  return JSON.stringify(value);
+}
+
 function metadataRows(
   metadata: Record<string, unknown>,
 ) {
   const hiddenKeys = new Set([
     "review_id",
     "review_item_id",
+    "changed_fields",
   ]);
 
   return Object.entries(metadata)
@@ -168,21 +209,57 @@ function metadataRows(
     )
     .map(([key, value]) => ({
       key,
-      label: key
-        .replaceAll("_", " ")
-        .replace(/\b\w/g, (letter) =>
-          letter.toUpperCase(),
-        ),
+      label:
+        formatMetadataLabel(key),
       value:
-        typeof value === "boolean"
-          ? value
-            ? "Yes"
-            : "No"
-          : String(value).replaceAll(
-              "_",
-              " ",
-            ),
+        formatMetadataValue(value),
     }));
+}
+
+function projectChangeRows(
+  metadata: Record<string, unknown>,
+) {
+  const changedFields =
+    metadata.changed_fields;
+
+  if (
+    !changedFields ||
+    typeof changedFields !== "object" ||
+    Array.isArray(changedFields)
+  ) {
+    return [];
+  }
+
+  return Object.entries(
+    changedFields as Record<
+      string,
+      unknown
+    >,
+  ).map(([field, rawChange]) => {
+    const change =
+      rawChange &&
+      typeof rawChange === "object" &&
+      !Array.isArray(rawChange)
+        ? rawChange as Record<
+            string,
+            unknown
+          >
+        : {};
+
+    return {
+      field,
+      label:
+        formatMetadataLabel(field),
+      previous:
+        formatMetadataValue(
+          change.previous,
+        ),
+      current:
+        formatMetadataValue(
+          change.current,
+        ),
+    };
+  });
 }
 
 export default function ProjectActivityPage() {
@@ -420,6 +497,11 @@ export default function ProjectActivityPage() {
                   entry.metadata,
                 );
 
+              const projectChanges =
+                projectChangeRows(
+                  entry.metadata,
+                );
+
               return (
                 <article
                   key={entry.id}
@@ -464,6 +546,45 @@ export default function ProjectActivityPage() {
                       </p>
                     )}
 
+                    {projectChanges.length > 0 && (
+                      <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+                        <div className="grid grid-cols-[1fr_1fr_1fr] bg-slate-100 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
+                          <span>Field</span>
+                          <span>Previous</span>
+                          <span>Current</span>
+                        </div>
+
+                        {projectChanges.map(
+                          (change) => (
+                            <div
+                              key={
+                                change.field
+                              }
+                              className="grid grid-cols-[1fr_1fr_1fr] gap-3 border-t border-slate-200 px-4 py-3 text-sm"
+                            >
+                              <span className="font-bold text-slate-800">
+                                {
+                                  change.label
+                                }
+                              </span>
+
+                              <span className="break-words text-slate-500">
+                                {
+                                  change.previous
+                                }
+                              </span>
+
+                              <span className="break-words font-semibold text-slate-950">
+                                {
+                                  change.current
+                                }
+                              </span>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    )}
+
                     {metadata.length > 0 && (
                       <dl className="mt-5 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-3">
                         {metadata.map(
@@ -475,7 +596,7 @@ export default function ProjectActivityPage() {
                                 {row.label}
                               </dt>
 
-                              <dd className="mt-1 text-sm font-semibold capitalize text-slate-800">
+                              <dd className="mt-1 break-words text-sm font-semibold capitalize text-slate-800">
                                 {row.value}
                               </dd>
                             </div>
