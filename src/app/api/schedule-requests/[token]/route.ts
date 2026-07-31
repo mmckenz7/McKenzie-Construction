@@ -179,6 +179,24 @@ export async function POST(
 
   const supabase = createAdminServerClient();
 
+
+  if (
+    schedule_request.status === "submitted" ||
+    schedule_request.submitted_at
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        alreadySubmitted: true,
+        error:
+          "This schedule response has already been submitted.",
+      },
+      {
+        status: 409,
+      },
+    );
+  }
+
   const { data, error } = await supabase.rpc(
     "submit_schedule_request_by_token",
     {

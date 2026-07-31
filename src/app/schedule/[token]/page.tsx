@@ -36,6 +36,7 @@ type ApiResponse = {
   success: boolean;
   request?: ScheduleRequest;
   expired?: boolean;
+  alreadySubmitted?: boolean;
   error?: string;
 };
 
@@ -192,7 +193,20 @@ export default function ScheduleRequestPage() {
           return;
         }
 
-        if (!response.ok || !result.success) {
+        if (
+        result.alreadySubmitted
+      ) {
+        setSubmitted(true);
+
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
+
+        return;
+      }
+
+      if (!response.ok || !result.success) {
           setError(
             result.expired
               ? copy.en.expired
