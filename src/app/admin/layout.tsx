@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { logout } from "@/app/login/actions";
 import { getAuthenticatedAccess } from "@/lib/api-auth";
 import { createAuthenticatedServerClient } from "@/lib/supabase/server";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 
 type AdminLayoutProps = {
   children: React.ReactNode;
@@ -160,6 +161,10 @@ export default async function AdminLayout({
           </Link>
 
           <div className="flex flex-col gap-3 lg:items-end">
+            <div className="flex flex-wrap items-center gap-3">
+              <WorkspaceSwitcher />
+            </div>
+
             <nav
               aria-label="Admin navigation"
               className="flex flex-wrap items-center gap-2"
