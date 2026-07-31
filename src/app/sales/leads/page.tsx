@@ -730,7 +730,7 @@ export default async function AdminPage({
           </Link>
 
           <Link
-            href="/admin/projects"
+            href="/operations/projects"
             className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
             Projects
@@ -744,7 +744,7 @@ export default async function AdminPage({
           </Link>
 
           <Link
-            href="/admin/tasks"
+            href="/operations/tasks"
             className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
             Tasks

@@ -527,14 +527,14 @@ export default async function ProjectsPage({
           </Link>
 
           <Link
-            href="/admin/customers"
+            href="/sales/customers"
             className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
             Customers
           </Link>
 
           <Link
-            href="/admin/tasks"
+            href="/operations/tasks"
             className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
             Tasks
@@ -568,7 +568,7 @@ export default async function ProjectsPage({
             </div>
 
             <Link
-              href="/admin/customers"
+              href="/sales/customers"
               className="inline-flex w-fit rounded-lg bg-amber-400 px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-amber-300"
             >
               Create From Customer
@@ -806,7 +806,7 @@ export default async function ProjectsPage({
               </p>
 
               <Link
-                href="/admin/customers"
+                href="/sales/customers"
                 className="mt-6 inline-flex rounded-lg bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
               >
                 View Customers
