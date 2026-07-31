@@ -13,7 +13,7 @@ type AdminLayoutProps = {
 
 const standardNavigationItems = [
   {
-    label: "Leads",
+    label: "Administration",
     href: "/admin",
   },
   {

@@ -6,7 +6,7 @@ const cards = [
     value: "Open lead dashboard",
     description:
       "Review new inquiries, lead status, assignments, and customer information.",
-    href: "/admin",
+    href: "/sales/leads",
     button: "View Leads",
   },
   {

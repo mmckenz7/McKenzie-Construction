@@ -30,7 +30,7 @@ const navigationItems = [
   },
   {
     label: "Leads",
-    href: "/admin",
+    href: "/sales/leads",
   },
 ];
 
