@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProjectScheduleReadiness } from "@/components/project-schedule-readiness";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
@@ -1113,6 +1114,10 @@ export default async function ProjectsPage({
           )}
         </section>
       </div>
+      <ProjectScheduleReadiness
+        projectId={projectId}
+      />
+
     </main>
   );
 }
