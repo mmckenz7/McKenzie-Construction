@@ -349,6 +349,16 @@ export async function GET(
         "string"
           ? review.submitted_at
           : null,
+      reviewedAt:
+        typeof review.reviewed_at ===
+        "string"
+          ? review.reviewed_at
+          : null,
+      reviewedBy:
+        typeof review.reviewed_by ===
+        "string"
+          ? review.reviewed_by
+          : null,
       expiresAt:
         typeof review.expires_at ===
         "string"

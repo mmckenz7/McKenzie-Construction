@@ -345,6 +345,16 @@ export async function GET(
         reviewResultValue,
       submittedAt,
       openedAt,
+      reviewedAt:
+        typeof raw.reviewed_at ===
+        "string"
+          ? raw.reviewed_at
+          : null,
+      reviewedBy:
+        typeof raw.reviewed_by ===
+        "string"
+          ? raw.reviewed_by
+          : null,
       createdAt,
       activityAt:
         submittedAt ??
@@ -385,10 +395,21 @@ export async function GET(
         );
       }
 
-      return (
+      if (item.reviewedAt) {
+        return false;
+      }
+
+      if (
         item.reviewResult ===
-          "issues_reported" &&
-        item.unresolvedIssues > 0
+        "issues_reported"
+      ) {
+        return (
+          item.unresolvedIssues > 0
+        );
+      }
+
+      return (
+        item.status === "submitted"
       );
     }).length;
 

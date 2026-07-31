@@ -72,6 +72,8 @@ const activityLabels: Record<
     "Material review opened",
   material_review_submitted:
     "Material review submitted",
+  material_review_reviewed:
+    "Material review completed",
   material_issue_reported:
     "Material issue",
   material_issue_updated:

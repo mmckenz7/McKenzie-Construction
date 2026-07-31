@@ -38,6 +38,8 @@ type InboxItem = {
   demoDurationDays?: number | null;
   totalDurationDays?: number | null;
   reviewResult?: string | null;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
   totalIssues?: number;
   unresolvedIssues?: number;
   notes?: string | null;
@@ -112,11 +114,21 @@ function requiresAttention(
     );
   }
 
-  return (
+  if (item.reviewedAt) {
+    return false;
+  }
+
+  if (
     item.reviewResult ===
-      "issues_reported" &&
-    (item.unresolvedIssues ?? 0) > 0
-  );
+    "issues_reported"
+  ) {
+    return (
+      (item.unresolvedIssues ?? 0) >
+      0
+    );
+  }
+
+  return item.status === "submitted";
 }
 
 export default function OperationsInboxPage() {
@@ -567,7 +579,7 @@ function InboxCard({
           />
         </dl>
       ) : (
-        <dl className="mt-5 grid gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-3">
+        <dl className="mt-5 grid gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">
           <Info
             label="Result"
             value={
@@ -589,6 +601,15 @@ function InboxCard({
             value={String(
               item.unresolvedIssues ?? 0,
             )}
+          />
+
+          <Info
+            label="Office Review"
+            value={
+              item.reviewedAt
+                ? "Completed"
+                : "Pending"
+            }
           />
         </dl>
       )}

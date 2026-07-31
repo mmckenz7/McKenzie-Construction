@@ -52,6 +52,8 @@ type MaterialReview = {
   sentAt: string | null;
   openedAt: string | null;
   submittedAt: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
   expiresAt: string | null;
   project: {
     id: string;
@@ -126,6 +128,11 @@ export default function MaterialReviewDetailPage() {
 
   const [notice, setNotice] =
     useState("");
+
+  const [
+    markingComplete,
+    setMarkingComplete,
+  ] = useState(false);
 
   async function loadReview() {
     setLoading(true);
@@ -247,6 +254,54 @@ export default function MaterialReviewDetailPage() {
     setNotice("Review link copied.");
   }
 
+  async function markComplete() {
+    if (!review) {
+      return;
+    }
+
+    setMarkingComplete(true);
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `/api/material-reviews/manage/${review.id}/review`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+        };
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        setNotice(
+          result.error ??
+            "Could not mark the material review complete.",
+        );
+        return;
+      }
+
+      setNotice(
+        "Material review marked complete.",
+      );
+
+      await loadReview();
+    } catch {
+      setNotice(
+        "Could not mark the material review complete.",
+      );
+    } finally {
+      setMarkingComplete(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
@@ -304,15 +359,54 @@ export default function MaterialReviewDetailPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() =>
-            void copyReviewLink()
-          }
-          className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800"
-        >
-          Copy Review Link
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          {review.status ===
+            "submitted" &&
+            !review.reviewedAt && (
+              <button
+                type="button"
+                disabled={
+                  markingComplete ||
+                  openIssueCount > 0
+                }
+                onClick={() =>
+                  void markComplete()
+                }
+                title={
+                  openIssueCount > 0
+                    ? "Resolve or dismiss all material issues first."
+                    : undefined
+                }
+                className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {markingComplete
+                  ? "Saving..."
+                  : openIssueCount > 0
+                    ? `Resolve ${openIssueCount} Open Issue${
+                        openIssueCount === 1
+                          ? ""
+                          : "s"
+                      }`
+                    : "Mark Complete"}
+              </button>
+            )}
+
+          {review.reviewedAt && (
+            <span className="rounded-xl bg-emerald-100 px-4 py-3 text-center text-sm font-bold text-emerald-800">
+              Completed
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={() =>
+              void copyReviewLink()
+            }
+            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800"
+          >
+            Copy Review Link
+          </button>
+        </div>
       </div>
 
       {notice && (
@@ -341,9 +435,14 @@ export default function MaterialReviewDetailPage() {
         />
 
         <Stat
-          label="Submitted"
+          label={
+            review.reviewedAt
+              ? "Completed"
+              : "Submitted"
+          }
           value={formatDate(
-            review.submittedAt,
+            review.reviewedAt ??
+              review.submittedAt,
           )}
         />
       </section>
