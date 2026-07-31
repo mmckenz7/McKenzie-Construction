@@ -41,6 +41,14 @@ const cards = [
     href: "/operations/schedule-requests",
     button: "Open Schedule Requests",
   },
+  {
+    title: "Messages",
+    value: "Installer communication",
+    description:
+      "Keep project conversations, original messages, translations, and delivery status together.",
+    href: "/operations/messages",
+    button: "Open Messages",
+  },
 ];
 
 export default function OperationsDashboardPage() {
