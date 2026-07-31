@@ -2,53 +2,34 @@
 
 import { useRouter } from "next/navigation";
 
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+
 export default function AllWorkPage() {
   const router = useRouter();
 
   return (
-    <main style={styles.page}>
-      <header style={styles.header}>
+    <main className="min-h-screen bg-slate-100 px-4 py-8 sm:px-6">
+      <header className="mx-auto mb-8 flex max-w-7xl flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p style={styles.eyebrow}>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-600">
             McKenzie Construction
           </p>
 
-          <h1 style={styles.heading}>
+          <h1 className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">
             All Work
           </h1>
 
-          <p style={styles.subheading}>
+          <p className="mt-3 text-base text-slate-600">
             Your company-wide command center.
           </p>
         </div>
 
-        <select
-          defaultValue="/all-work"
-          onChange={(event) =>
-            router.push(event.target.value)
-          }
-          style={styles.selector}
-          aria-label="Choose workspace"
-        >
-          <option value="/all-work">
-            All Work
-          </option>
-          <option value="/sales">
-            Sales
-          </option>
-          <option value="/operations">
-            Operations
-          </option>
-          <option value="/admin">
-            Administration
-          </option>
-          <option value="/workspace">
-            Workspace selector
-          </option>
-        </select>
+        <div className="rounded-xl bg-slate-950 p-3 shadow-sm">
+          <WorkspaceSwitcher />
+        </div>
       </header>
 
-      <section style={styles.grid}>
+      <section className="mx-auto grid max-w-7xl gap-5 md:grid-cols-3">
         <DashboardCard
           title="Sales"
           value="Lead activity"
@@ -76,17 +57,16 @@ export default function AllWorkPage() {
         />
       </section>
 
-      <section style={styles.placeholder}>
-        <h2 style={styles.placeholderTitle}>
-          Company priorities will appear here
+      <section className="mx-auto mt-6 max-w-7xl rounded-2xl border border-dashed border-slate-300 bg-white p-7">
+        <h2 className="text-xl font-bold text-slate-950">
+          Company priorities
         </h2>
 
-        <p style={styles.placeholderText}>
-          We will connect this dashboard to live
-          leads, projects, installer messages,
-          material deliveries, schedule conflicts,
-          and financial information as each
-          platform is completed.
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+          Live lead follow-ups, upcoming project
+          starts, installer responses, material
+          delivery conflicts, unread messages,
+          and financial alerts will appear here.
         </p>
       </section>
     </main>
@@ -107,134 +87,26 @@ function DashboardCard({
   onClick: () => void;
 }) {
   return (
-    <article style={styles.card}>
-      <span style={styles.cardLabel}>
+    <article className="flex min-h-64 flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <span className="text-sm font-bold text-amber-700">
         {title}
       </span>
 
-      <strong style={styles.cardValue}>
+      <strong className="mt-3 text-xl text-slate-950">
         {value}
       </strong>
 
-      <p style={styles.cardDescription}>
+      <p className="mt-3 flex-1 text-sm leading-6 text-slate-600">
         {description}
       </p>
 
       <button
         type="button"
         onClick={onClick}
-        style={styles.button}
+        className="mt-6 rounded-lg bg-slate-950 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
       >
         {buttonText}
       </button>
     </article>
   );
 }
-
-const styles: Record<
-  string,
-  React.CSSProperties
-> = {
-  page: {
-    minHeight: "100vh",
-    padding: "32px",
-    background: "#f5f5f2",
-  },
-  header: {
-    maxWidth: "1200px",
-    margin: "0 auto 28px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: "24px",
-    flexWrap: "wrap",
-  },
-  eyebrow: {
-    margin: "0 0 6px",
-    fontSize: "13px",
-    fontWeight: 700,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    opacity: 0.6,
-  },
-  heading: {
-    margin: 0,
-    fontSize: "42px",
-  },
-  subheading: {
-    margin: "8px 0 0",
-    opacity: 0.65,
-  },
-  selector: {
-    minWidth: "210px",
-    padding: "12px 14px",
-    borderRadius: "10px",
-    border: "1px solid rgba(0,0,0,0.2)",
-    background: "#ffffff",
-    fontSize: "16px",
-  },
-  grid: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit, minmax(250px, 1fr))",
-    gap: "18px",
-  },
-  card: {
-    padding: "24px",
-    borderRadius: "16px",
-    background: "#ffffff",
-    border: "1px solid rgba(0,0,0,0.1)",
-    boxShadow:
-      "0 8px 24px rgba(0,0,0,0.05)",
-  },
-  cardLabel: {
-    display: "block",
-    marginBottom: "10px",
-    fontSize: "14px",
-    fontWeight: 700,
-    opacity: 0.6,
-  },
-  cardValue: {
-    display: "block",
-    marginBottom: "10px",
-    fontSize: "23px",
-  },
-  cardDescription: {
-    minHeight: "72px",
-    margin: 0,
-    lineHeight: 1.5,
-    opacity: 0.7,
-  },
-  button: {
-    width: "100%",
-    marginTop: "20px",
-    padding: "12px 16px",
-    border: 0,
-    borderRadius: "10px",
-    background: "#1d1d1b",
-    color: "#ffffff",
-    fontSize: "15px",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  placeholder: {
-    maxWidth: "1200px",
-    margin: "22px auto 0",
-    padding: "28px",
-    borderRadius: "16px",
-    background: "#ffffff",
-    border: "1px dashed rgba(0,0,0,0.2)",
-  },
-  placeholderTitle: {
-    margin: "0 0 10px",
-    fontSize: "22px",
-  },
-  placeholderText: {
-    maxWidth: "760px",
-    margin: 0,
-    lineHeight: 1.6,
-    opacity: 0.68,
-  },
-};
