@@ -6,7 +6,7 @@ const cards = [
     value: "Active jobs",
     description:
       "Review project details, job progress, costs, assignments, and customer information.",
-    href: "/admin/projects",
+    href: "/operations/projects",
     button: "View Projects",
   },
   {

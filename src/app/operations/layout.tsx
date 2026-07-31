@@ -30,11 +30,11 @@ const navigationItems = [
   },
   {
     label: "Projects",
-    href: "/admin/projects",
+    href: "/operations/projects",
   },
   {
     label: "Tasks",
-    href: "/admin/tasks",
+    href: "/operations/tasks",
   },
 ];
 
