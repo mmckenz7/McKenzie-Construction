@@ -1126,6 +1126,32 @@ export default async function ProjectsPage({
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-amber-700">
+              Scope and Pricing
+            </p>
+
+            <h2 className="mt-2 text-xl font-bold text-slate-950">
+              Change Orders
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Track added work, customer pricing, approval status,
+              cost, profit, and schedule impact.
+            </p>
+          </div>
+
+          <Link
+            href={`/operations/projects/${projectId}/change-orders`}
+            className="shrink-0 rounded-xl bg-amber-700 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-amber-800"
+          >
+            Open Change Orders
+          </Link>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-blue-700">
               Project History
             </p>

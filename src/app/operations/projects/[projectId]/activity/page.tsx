@@ -81,6 +81,16 @@ const activityLabels: Record<
   message_created: "Message",
   project_updated: "Project update",
   project_note: "Project note",
+  change_order_created:
+    "Change order created",
+  change_order_updated:
+    "Change order updated",
+  change_order_approved:
+    "Change order approved",
+  change_order_declined:
+    "Change order declined",
+  change_order_completed:
+    "Change order completed",
   system: "System",
 };
 
@@ -176,6 +186,13 @@ function getActivityHref(
   }
 
   if (
+    entry.sourceTable ===
+    "project_change_orders"
+  ) {
+    return `/operations/projects/${projectId}/change-orders`;
+  }
+
+  if (
     entry.activityType ===
     "project_updated"
   ) {
@@ -209,6 +226,13 @@ function getActivityLinkLabel(
     "project_messages"
   ) {
     return "Open Messages";
+  }
+
+  if (
+    entry.sourceTable ===
+    "project_change_orders"
+  ) {
+    return "Open Change Orders";
   }
 
   if (
