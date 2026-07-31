@@ -45,6 +45,10 @@ const navigationItems = [
     href: "/operations/schedule",
   },
   {
+    label: "Materials",
+    href: "/operations/materials",
+  },
+  {
     label: "Schedule Requests",
     href: "/operations/schedule-requests",
   },

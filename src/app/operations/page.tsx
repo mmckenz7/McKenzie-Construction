@@ -22,7 +22,7 @@ const cards = [
     value: "Delivery readiness",
     description:
       "Track takeoffs, supplier confirmations, delivery dates, phase readiness, and shortages.",
-    href: "/admin/materials",
+    href: "/operations/materials",
     button: "Open Materials",
   },
   {
