@@ -46,7 +46,6 @@ export default function PortalRouterPage() {
         const response = await fetch(
           "/api/me/access",
           {
-            method: "GET",
             credentials: "include",
             cache: "no-store",
           },
@@ -61,18 +60,7 @@ export default function PortalRouterPage() {
           }
 
           if (response.status === 401) {
-            setMessage(
-              "Your session has expired. Redirecting to sign in...",
-            );
-
             router.replace("/login");
-            return;
-          }
-
-          if (result.needsProfile) {
-            setMessage(
-              "This login has not been assigned an application profile.",
-            );
             return;
           }
 
@@ -83,37 +71,49 @@ export default function PortalRouterPage() {
           return;
         }
 
+        const access =
+          result.access?.portal_access ?? {};
+
+        const internalPortals = (
+          [
+            "sales",
+            "operations",
+            "admin",
+          ] as PortalName[]
+        ).filter(
+          (portal) => access[portal] === true,
+        );
+
+        const subcontractorOnly =
+          access.subcontractor === true &&
+          internalPortals.length === 0;
+
+        if (subcontractorOnly) {
+          router.replace("/subcontractor");
+          return;
+        }
+
+        if (internalPortals.length > 1) {
+          router.replace("/workspace");
+          return;
+        }
+
+        if (internalPortals.length === 1) {
+          router.replace(
+            PORTAL_ROUTES[internalPortals[0]],
+          );
+          return;
+        }
+
         const defaultPortal =
           result.access?.default_portal;
 
         if (
           defaultPortal &&
-          result.access?.portal_access?.[
-            defaultPortal
-          ] !== false
+          access[defaultPortal] === true
         ) {
           router.replace(
             PORTAL_ROUTES[defaultPortal],
-          );
-          return;
-        }
-
-        const firstAvailablePortal = (
-          Object.keys(
-            PORTAL_ROUTES,
-          ) as PortalName[]
-        ).find(
-          (portal) =>
-            result.access?.portal_access?.[
-              portal
-            ] === true,
-        );
-
-        if (firstAvailablePortal) {
-          router.replace(
-            PORTAL_ROUTES[
-              firstAvailablePortal
-            ],
           );
           return;
         }
