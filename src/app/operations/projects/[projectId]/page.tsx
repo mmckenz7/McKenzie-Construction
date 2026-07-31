@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProjectMaterialPhases } from "@/components/project-material-phases";
 import { ProjectScheduleReadiness } from "@/components/project-schedule-readiness";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -1114,6 +1115,10 @@ export default async function ProjectsPage({
           )}
         </section>
       </div>
+      <ProjectMaterialPhases
+        projectId={projectId}
+      />
+
       <ProjectScheduleReadiness
         projectId={projectId}
       />
