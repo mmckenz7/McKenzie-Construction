@@ -534,7 +534,7 @@ export default async function ProjectsPage({
           </Link>
 
           <Link
-            href="/operations/tasks"
+            href="/admin/tasks"
             className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
             Tasks
