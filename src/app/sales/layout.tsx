@@ -32,6 +32,10 @@ const navigationItems = [
     label: "Leads",
     href: "/sales/leads",
   },
+  {
+    label: "Customers",
+    href: "/sales/customers",
+  },
 ];
 
 const futureItems = [

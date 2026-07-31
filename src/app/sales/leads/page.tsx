@@ -723,7 +723,7 @@ export default async function AdminPage({
       <div className="mx-auto max-w-[1500px]">
         <div className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3">
           <Link
-            href="/admin/customers"
+            href="/sales/customers"
             className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
             Customers
@@ -1045,7 +1045,7 @@ export default async function AdminPage({
                           >
                             <td className="px-5 py-4">
                               <Link
-                                href={`/admin/leads/${encodeURIComponent(
+                                href={`/sales/leads/${encodeURIComponent(
                                   leadId,
                                 )}`}
                                 className="block"
@@ -1163,7 +1163,7 @@ export default async function AdminPage({
 
                             <td className="px-5 py-4 text-right">
                               <Link
-                                href={`/admin/leads/${encodeURIComponent(
+                                href={`/sales/leads/${encodeURIComponent(
                                   leadId,
                                 )}`}
                                 aria-label={`Open ${displayValue(
@@ -1211,7 +1211,7 @@ export default async function AdminPage({
                         key={
                           leadId
                         }
-                        href={`/admin/leads/${encodeURIComponent(
+                        href={`/sales/leads/${encodeURIComponent(
                           leadId,
                         )}`}
                         className="block p-5 transition hover:bg-slate-50"
