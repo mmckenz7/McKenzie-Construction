@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useSearchParams } from "next/navigation";
 
 type Project = {
   id: string;
@@ -71,6 +72,9 @@ function formatDate(value: string) {
 }
 
 export default function MessagesPage() {
+  const searchParams =
+    useSearchParams();
+
   const [projects, setProjects] =
     useState<Project[]>([]);
 
@@ -137,17 +141,56 @@ export default function MessagesPage() {
         return;
       }
 
-      setProjects(
-        result.projects ?? [],
-      );
+      const loadedProjects =
+        result.projects ?? [];
 
+      const loadedSubcontractors =
+        result.subcontractors ?? [];
+
+      const loadedThreads =
+        result.threads ?? [];
+
+      setProjects(loadedProjects);
       setSubcontractors(
-        result.subcontractors ?? [],
+        loadedSubcontractors,
       );
+      setThreads(loadedThreads);
 
-      setThreads(
-        result.threads ?? [],
-      );
+      const requestedProjectId =
+        searchParams.get("projectId");
+
+      if (
+        requestedProjectId &&
+        loadedProjects.some(
+          (project) =>
+            project.id ===
+            requestedProjectId,
+        )
+      ) {
+        setProjectId(
+          requestedProjectId,
+        );
+
+        const matchingThread =
+          loadedThreads.find(
+            (thread) =>
+              thread.projectId ===
+              requestedProjectId,
+          );
+
+        if (matchingThread) {
+          setSubcontractorId(
+            matchingThread.subcontractorId,
+          );
+
+          setLanguage(
+            matchingThread.preferredLanguage ===
+              "es"
+              ? "es"
+              : "en",
+          );
+        }
+      }
     } catch {
       setNotice(
         "Could not load messages.",

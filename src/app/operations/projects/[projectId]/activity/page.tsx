@@ -128,6 +128,97 @@ function getCategory(
   return "project";
 }
 
+function getActivityHref(
+  entry: ActivityEntry,
+  projectId: string,
+) {
+  if (
+    entry.sourceTable ===
+      "subcontractor_material_reviews" &&
+    entry.sourceId
+  ) {
+    return `/operations/material-reviews/${entry.sourceId}`;
+  }
+
+  if (
+    entry.sourceTable ===
+    "subcontractor_material_issues"
+  ) {
+    const reviewId =
+      typeof entry.metadata.review_id ===
+      "string"
+        ? entry.metadata.review_id
+        : null;
+
+    if (reviewId) {
+      return `/operations/material-reviews/${reviewId}`;
+    }
+
+    return "/operations/material-reviews";
+  }
+
+  if (
+    entry.sourceTable ===
+    "subcontractor_schedule_requests"
+  ) {
+    return "/operations/schedule-requests";
+  }
+
+  if (
+    entry.sourceTable ===
+    "project_messages"
+  ) {
+    return `/operations/messages?projectId=${encodeURIComponent(
+      projectId,
+    )}`;
+  }
+
+  if (
+    entry.activityType ===
+    "project_updated"
+  ) {
+    return `/operations/projects/${projectId}`;
+  }
+
+  return null;
+}
+
+function getActivityLinkLabel(
+  entry: ActivityEntry,
+) {
+  if (
+    entry.sourceTable ===
+      "subcontractor_material_reviews" ||
+    entry.sourceTable ===
+      "subcontractor_material_issues"
+  ) {
+    return "Open Material Review";
+  }
+
+  if (
+    entry.sourceTable ===
+    "subcontractor_schedule_requests"
+  ) {
+    return "Open Schedule Requests";
+  }
+
+  if (
+    entry.sourceTable ===
+    "project_messages"
+  ) {
+    return "Open Messages";
+  }
+
+  if (
+    entry.activityType ===
+    "project_updated"
+  ) {
+    return "Open Project";
+  }
+
+  return "Open Activity";
+}
+
 function getActorName(
   entry: ActivityEntry,
 ) {
@@ -702,6 +793,12 @@ export default function ProjectActivityPage() {
                   entry.metadata,
                 );
 
+              const activityHref =
+                getActivityHref(
+                  entry,
+                  params.projectId,
+                );
+
               return (
                 <article
                   key={entry.id}
@@ -803,6 +900,19 @@ export default function ProjectActivityPage() {
                           ),
                         )}
                       </dl>
+                    )}
+
+                    {activityHref && (
+                      <div className="mt-5 border-t border-slate-200 pt-5">
+                        <Link
+                          href={activityHref}
+                          className="inline-flex rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800 transition hover:bg-blue-100"
+                        >
+                          {getActivityLinkLabel(
+                            entry,
+                          )}
+                        </Link>
+                      </div>
                     )}
                   </div>
                 </article>
