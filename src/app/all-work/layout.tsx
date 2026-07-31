@@ -2,6 +2,10 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createAuthenticatedServerClient } from "@/lib/supabase/server";
+import {
+  countInternalWorkspaces,
+  getWorkspaceAccess,
+} from "@/lib/workspace-access";
 
 type AllWorkLayoutProps = {
   children: React.ReactNode;
@@ -43,6 +47,17 @@ export default async function AllWorkLayout({
         requestedPath,
       )}`,
     );
+  }
+
+  const workspaceResult =
+    await getWorkspaceAccess();
+
+  if (
+    countInternalWorkspaces(
+      workspaceResult.access,
+    ) < 2
+  ) {
+    redirect("/portal");
   }
 
   return children;

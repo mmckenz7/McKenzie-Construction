@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 import { logout } from "@/app/login/actions";
 import { getAuthenticatedAccess } from "@/lib/api-auth";
 import { createAuthenticatedServerClient } from "@/lib/supabase/server";
+import {
+  canAccessWorkspace,
+  getWorkspaceAccess,
+} from "@/lib/workspace-access";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 
 type AdminLayoutProps = {
@@ -87,6 +91,18 @@ export default async function AdminLayout({
         requestedPath,
       )}`,
     );
+  }
+
+  const workspaceResult =
+    await getWorkspaceAccess();
+
+  if (
+    !canAccessWorkspace(
+      workspaceResult.access,
+      "admin",
+    )
+  ) {
+    redirect("/portal");
   }
 
   const access =

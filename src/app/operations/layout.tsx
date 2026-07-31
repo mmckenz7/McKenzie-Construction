@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 import { logout } from "@/app/login/actions";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { createAuthenticatedServerClient } from "@/lib/supabase/server";
+import {
+  canAccessWorkspace,
+  getWorkspaceAccess,
+} from "@/lib/workspace-access";
 
 type OperationsLayoutProps = {
   children: React.ReactNode;
@@ -68,6 +72,18 @@ export default async function OperationsLayout({
         requestedPath,
       )}`,
     );
+  }
+
+  const workspaceResult =
+    await getWorkspaceAccess();
+
+  if (
+    !canAccessWorkspace(
+      workspaceResult.access,
+      "operations",
+    )
+  ) {
+    redirect("/portal");
   }
 
   return (
