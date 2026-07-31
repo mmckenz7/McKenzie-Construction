@@ -223,6 +223,16 @@ export async function GET(
         raw.team_members,
       ),
       submittedAt,
+      reviewedAt:
+        typeof raw.reviewed_at ===
+        "string"
+          ? raw.reviewed_at
+          : null,
+      reviewedBy:
+        typeof raw.reviewed_by ===
+        "string"
+          ? raw.reviewed_by
+          : null,
       createdAt,
       activityAt:
         submittedAt ?? createdAt,
@@ -370,7 +380,8 @@ export async function GET(
         "schedule_response"
       ) {
         return (
-          item.status === "submitted"
+          item.status === "submitted" &&
+          !item.reviewedAt
         );
       }
 
@@ -391,7 +402,8 @@ export async function GET(
         scheduleItems.filter(
           (item) =>
             item.status ===
-            "submitted",
+              "submitted" &&
+            !item.reviewedAt,
         ).length,
       materialIssues:
         reviewItems.reduce(

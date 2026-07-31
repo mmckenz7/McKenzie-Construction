@@ -26,6 +26,8 @@ type InboxItem = {
     email: string | null;
   } | null;
   submittedAt: string | null;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
   createdAt: string;
   activityAt: string;
   href: string;
@@ -104,7 +106,10 @@ function requiresAttention(
     item.type ===
     "schedule_response"
   ) {
-    return item.status === "submitted";
+    return (
+      item.status === "submitted" &&
+      !item.reviewedAt
+    );
   }
 
   return (
@@ -364,6 +369,56 @@ function InboxCard({
   const attention =
     requiresAttention(item);
 
+  const [reviewing, setReviewing] =
+    useState(false);
+
+  const [localReviewedAt, setLocalReviewedAt] =
+    useState<string | null>(
+      item.reviewedAt ?? null,
+    );
+
+  async function markReviewed() {
+    setReviewing(true);
+
+    try {
+      const response = await fetch(
+        `/api/schedule-requests/${item.id}/review`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          result?: {
+            reviewed_at?: string;
+          };
+        };
+
+      if (!response.ok || !result.success) {
+        window.alert(
+          result.error ??
+            "Could not mark this response reviewed.",
+        );
+        return;
+      }
+
+      setLocalReviewedAt(
+        result.result?.reviewed_at ??
+          new Date().toISOString(),
+      );
+    } catch {
+      window.alert(
+        "Could not mark this response reviewed.",
+      );
+    } finally {
+      setReviewing(false);
+    }
+  }
+
   return (
     <article
       className={`rounded-2xl border bg-white p-6 shadow-sm ${
@@ -416,6 +471,33 @@ function InboxCard({
         </div>
 
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+          {item.type ===
+            "schedule_response" &&
+            item.status ===
+              "submitted" &&
+            !localReviewedAt && (
+              <button
+                type="button"
+                disabled={reviewing}
+                onClick={() =>
+                  void markReviewed()
+                }
+                className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-800 disabled:opacity-50"
+              >
+                {reviewing
+                  ? "Saving..."
+                  : "Mark Reviewed"}
+              </button>
+            )}
+
+          {item.type ===
+            "schedule_response" &&
+            localReviewedAt && (
+              <span className="rounded-xl bg-emerald-100 px-4 py-3 text-center text-sm font-bold text-emerald-800">
+                Reviewed
+              </span>
+            )}
+
           {item.project?.id && (
             <Link
               href={`/operations/projects/${item.project.id}`}
