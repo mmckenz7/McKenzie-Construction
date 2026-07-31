@@ -499,12 +499,21 @@ function InboxCard({
             )}
 
           {item.project?.id && (
-            <Link
-              href={`/operations/projects/${item.project.id}`}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-bold text-slate-700"
-            >
-              Open Project
-            </Link>
+            <>
+              <Link
+                href={`/operations/projects/${item.project.id}`}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-bold text-slate-700"
+              >
+                Open Project
+              </Link>
+
+              <Link
+                href={`/operations/projects/${item.project.id}/activity`}
+                className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-center text-sm font-bold text-blue-800"
+              >
+                Project Timeline
+              </Link>
+            </>
           )}
 
           <Link
