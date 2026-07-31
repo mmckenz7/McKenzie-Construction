@@ -53,6 +53,10 @@ const navigationItems = [
     href: "/operations/installers",
   },
   {
+    label: "Messages",
+    href: "/operations/messages",
+  },
+  {
     label: "Schedule Requests",
     href: "/operations/schedule-requests",
   },
@@ -60,7 +64,6 @@ const navigationItems = [
 
 const futureItems = [
   "Calendar",
-  "Messages",
 ];
 
 export default async function OperationsLayout({
