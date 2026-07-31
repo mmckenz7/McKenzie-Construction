@@ -49,6 +49,10 @@ const navigationItems = [
     href: "/operations/materials",
   },
   {
+    label: "Material Reviews",
+    href: "/operations/material-reviews",
+  },
+  {
     label: "Installers",
     href: "/operations/installers",
   },
