@@ -2,6 +2,14 @@ import Link from "next/link";
 
 const cards = [
   {
+    title: "Inbox",
+    value: "Installer activity",
+    description:
+      "Review submitted schedules, material approvals, and unresolved installer issues.",
+    href: "/operations/inbox",
+    button: "Open Inbox",
+  },
+  {
     title: "Projects",
     value: "Active jobs",
     description:

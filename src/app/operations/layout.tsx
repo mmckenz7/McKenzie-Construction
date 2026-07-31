@@ -33,6 +33,10 @@ const navigationItems = [
     href: "/operations",
   },
   {
+    label: "Inbox",
+    href: "/operations/inbox",
+  },
+  {
     label: "Projects",
     href: "/operations/projects",
   },
