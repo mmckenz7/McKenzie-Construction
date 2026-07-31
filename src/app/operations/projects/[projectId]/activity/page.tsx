@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  FormEvent,
   useEffect,
   useMemo,
   useState,
@@ -74,6 +75,7 @@ const activityLabels: Record<
     "Material issue updated",
   message_created: "Message",
   project_updated: "Project update",
+  project_note: "Project note",
   system: "System",
 };
 
@@ -282,6 +284,23 @@ export default function ProjectActivityPage() {
   const [error, setError] =
     useState("");
 
+  const [showNoteForm, setShowNoteForm] =
+    useState(false);
+
+  const [noteTitle, setNoteTitle] =
+    useState("");
+
+  const [
+    noteDescription,
+    setNoteDescription,
+  ] = useState("");
+
+  const [savingNote, setSavingNote] =
+    useState(false);
+
+  const [noteNotice, setNoteNotice] =
+    useState("");
+
   async function loadActivity() {
     setLoading(true);
     setError("");
@@ -326,6 +345,76 @@ export default function ProjectActivityPage() {
   useEffect(() => {
     void loadActivity();
   }, [params.projectId]);
+
+  async function saveNote(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    setNoteNotice("");
+
+    if (
+      !noteTitle.trim() ||
+      !noteDescription.trim()
+    ) {
+      setNoteNotice(
+        "Enter a note title and details.",
+      );
+      return;
+    }
+
+    setSavingNote(true);
+
+    try {
+      const response = await fetch(
+        `/api/projects/${params.projectId}/activity/notes`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            title: noteTitle,
+            description:
+              noteDescription,
+          }),
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+        };
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        setNoteNotice(
+          result.error ??
+            "Could not save the project note.",
+        );
+        return;
+      }
+
+      setNoteTitle("");
+      setNoteDescription("");
+      setShowNoteForm(false);
+      setNoteNotice(
+        "Project note saved.",
+      );
+
+      await loadActivity();
+    } catch {
+      setNoteNotice(
+        "Could not save the project note.",
+      );
+    } finally {
+      setSavingNote(false);
+    }
+  }
 
   const filteredActivity =
     useMemo(() => {
@@ -399,16 +488,112 @@ export default function ProjectActivityPage() {
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() =>
-            void loadActivity()
-          }
-          className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800"
-        >
-          Refresh
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={() =>
+              setShowNoteForm(
+                (current) => !current,
+              )
+            }
+            className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-bold text-white"
+          >
+            {showNoteForm
+              ? "Cancel Note"
+              : "Add Project Note"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              void loadActivity()
+            }
+            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {showNoteForm && (
+        <form
+          onSubmit={saveNote}
+          className="mt-7 rounded-2xl border border-blue-200 bg-blue-50 p-6"
+        >
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-blue-700">
+              Internal Project Note
+            </p>
+
+            <h2 className="mt-2 text-xl font-bold text-slate-950">
+              Add to Project Timeline
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              This note is stored permanently in the project activity history.
+            </p>
+          </div>
+
+          <label className="mt-5 block">
+            <span className="mb-2 block text-sm font-bold text-slate-800">
+              Note Title
+            </span>
+
+            <input
+              type="text"
+              maxLength={150}
+              value={noteTitle}
+              onChange={(event) =>
+                setNoteTitle(
+                  event.target.value,
+                )
+              }
+              placeholder="Customer requested railing change"
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm"
+            />
+          </label>
+
+          <label className="mt-4 block">
+            <span className="mb-2 block text-sm font-bold text-slate-800">
+              Details
+            </span>
+
+            <textarea
+              rows={5}
+              value={noteDescription}
+              onChange={(event) =>
+                setNoteDescription(
+                  event.target.value,
+                )
+              }
+              placeholder="Add the full details, decision, or conversation summary."
+              className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm"
+            />
+          </label>
+
+          {noteNotice && (
+            <p className="mt-4 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-700">
+              {noteNotice}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={savingNote}
+            className="mt-4 w-full rounded-xl bg-blue-950 px-5 py-4 text-base font-bold text-white disabled:opacity-60"
+          >
+            {savingNote
+              ? "Saving Note..."
+              : "Save Project Note"}
+          </button>
+        </form>
+      )}
+
+      {!showNoteForm && noteNotice && (
+        <p className="mt-6 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+          {noteNotice}
+        </p>
+      )}
 
       <div className="mt-7 flex flex-wrap gap-2">
         <FilterButton
