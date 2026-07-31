@@ -53,6 +53,7 @@ type ApiResponse = {
   success: boolean;
   review?: MaterialReview;
   expired?: boolean;
+  alreadySubmitted?: boolean;
   error?: string;
 };
 
@@ -247,6 +248,14 @@ export default function MaterialReviewPage() {
           setResult(
             "issues_reported",
           );
+        }
+
+        if (
+          result.review.status ===
+            "submitted" ||
+          result.review.submitted_at
+        ) {
+          setSubmitted(true);
         }
       } catch {
         if (mounted) {

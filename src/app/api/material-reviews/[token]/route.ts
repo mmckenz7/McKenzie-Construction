@@ -258,9 +258,27 @@ export async function POST(
   }
 
   if (
-    review.expires_at &&
-    new Date(review.expires_at) <
-      new Date()
+    review.status === "cancelled"
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "This material review has been cancelled.",
+      },
+      {
+        status: 410,
+      },
+    );
+  }
+
+  if (
+    review.status === "expired" ||
+    (
+      review.expires_at &&
+      new Date(review.expires_at) <
+        new Date()
+    )
   ) {
     await supabase
       .from(
@@ -269,7 +287,8 @@ export async function POST(
       .update({
         status: "expired",
       })
-      .eq("id", review.id);
+      .eq("id", review.id)
+      .neq("status", "submitted");
 
     return NextResponse.json(
       {
@@ -279,6 +298,37 @@ export async function POST(
       },
       {
         status: 410,
+      },
+    );
+  }
+
+  if (
+    review.status === "submitted" ||
+    review.submitted_at
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        alreadySubmitted: true,
+        error:
+          "This material review has already been submitted.",
+      },
+      {
+        status: 409,
+      },
+    );
+  }
+
+  if (review.reviewed_at) {
+    return NextResponse.json(
+      {
+        success: false,
+        alreadySubmitted: true,
+        error:
+          "This material review has already been completed.",
+      },
+      {
+        status: 409,
       },
     );
   }
