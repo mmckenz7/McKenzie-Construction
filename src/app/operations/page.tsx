@@ -11,11 +11,11 @@ const cards = [
   },
   {
     title: "Schedule",
-    value: "Company calendar",
+    value: "Project scheduling",
     description:
-      "Coordinate demo, construction, crews, installers, deliveries, and project start dates.",
-    href: "#schedule",
-    button: "Coming Soon",
+      "Review demo readiness, installer availability, material-safe dates, and calculated construction starts.",
+    href: "/operations/schedule",
+    button: "Open Schedule",
   },
   {
     title: "Materials",
