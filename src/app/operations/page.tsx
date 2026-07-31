@@ -26,6 +26,14 @@ const cards = [
     button: "Open Materials",
   },
   {
+    title: "Material Reviews",
+    value: "Installer approval",
+    description:
+      "Send price-free material lists to installers and review approvals, shortages, and quantity corrections.",
+    href: "/operations/material-reviews",
+    button: "Open Material Reviews",
+  },
+  {
     title: "Installers",
     value: "Crew availability",
     description:
