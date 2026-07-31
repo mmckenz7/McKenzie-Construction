@@ -1123,6 +1123,34 @@ export default async function ProjectsPage({
         projectId={projectId}
       />
 
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-blue-700">
+              Project History
+            </p>
+
+            <h2 className="mt-2 text-xl font-bold text-slate-950">
+              Activity Timeline
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Review installer schedule responses, material approvals,
+              reported issues, messages, and project updates in chronological order.
+            </p>
+          </div>
+
+          <Link
+            href={`/operations/projects/${projectId}/activity`}
+            className="shrink-0 rounded-xl bg-blue-950 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-blue-900"
+          >
+            Open Project Timeline
+          </Link>
+        </div>
+      </section>
+
+
+
     </main>
   );
 }
