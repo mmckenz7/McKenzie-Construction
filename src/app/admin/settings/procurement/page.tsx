@@ -13,13 +13,10 @@ type SupplierLocation = {
   supplier_id: string;
   name: string;
   store_number: string | null;
-  address_line_1: string | null;
-  address_line_2: string | null;
   city: string | null;
   state: string | null;
   postal_code: string | null;
   phone: string | null;
-  email: string | null;
   contact_name: string | null;
   contact_phone: string | null;
   contact_email: string | null;
@@ -43,7 +40,6 @@ type Supplier = {
 
 type ProcurementSettings = {
   id: string;
-  company_name: string;
   default_pricing_strategy:
     | "preferred_supplier"
     | "best_available"
@@ -65,83 +61,89 @@ type ProcurementSettings = {
   always_flag_missing_item: boolean;
 };
 
-type SettingsResponse = {
-  success: boolean;
-  settings?: ProcurementSettings;
-  suppliers?: Supplier[];
-  error?: string;
+type SupplierForm = {
+  name: string;
+  supplierType: string;
+  websiteUrl: string;
+  accountNumber: string;
+  supportsCsvImport: boolean;
+  supportsQuoteImport: boolean;
+  supportsLiveLookup: boolean;
 };
-
-type Notice = {
-  type: "success" | "error";
-  message: string;
-} | null;
 
 type LocationForm = {
   supplierId: string;
   name: string;
   storeNumber: string;
-  addressLine1: string;
-  addressLine2: string;
   city: string;
   state: string;
   postalCode: string;
   phone: string;
-  email: string;
   contactName: string;
   contactPhone: string;
   contactEmail: string;
   isDefault: boolean;
 };
 
+type Notice =
+  | {
+      type: "success" | "error";
+      message: string;
+    }
+  | null;
+
+const emptySupplierForm: SupplierForm = {
+  name: "",
+  supplierType: "local_supplier",
+  websiteUrl: "",
+  accountNumber: "",
+  supportsCsvImport: true,
+  supportsQuoteImport: true,
+  supportsLiveLookup: false,
+};
+
 const emptyLocationForm: LocationForm = {
   supplierId: "",
   name: "",
   storeNumber: "",
-  addressLine1: "",
-  addressLine2: "",
   city: "",
   state: "TN",
   postalCode: "",
   phone: "",
-  email: "",
   contactName: "",
   contactPhone: "",
   contactEmail: "",
   isDefault: false,
 };
 
-function formatSupplierType(value: string) {
+function money(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function supplierTypeLabel(value: string) {
   return value
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function formatLocation(location: SupplierLocation) {
-  const locality = [
+function locationLabel(location: SupplierLocation) {
+  const details = [
     location.city,
     location.state,
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-  const parts = [
-    location.name,
-    locality,
     location.store_number
       ? `Store ${location.store_number}`
       : null,
-  ].filter(Boolean);
+  ]
+    .filter(Boolean)
+    .join(" • ");
 
-  return parts.join(" — ");
-}
-
-function parseNumber(value: string) {
-  const parsed = Number(value);
-
-  return Number.isFinite(parsed)
-    ? parsed
-    : 0;
+  return details
+    ? `${location.name} — ${details}`
+    : location.name;
 }
 
 export default function ProcurementSettingsPage() {
@@ -151,36 +153,40 @@ export default function ProcurementSettingsPage() {
   const [suppliers, setSuppliers] =
     useState<Supplier[]>([]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [supplierForm, setSupplierForm] =
+    useState<SupplierForm>(emptySupplierForm);
 
+  const [locationForm, setLocationForm] =
+    useState<LocationForm>(emptyLocationForm);
+
+  const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] =
     useState(false);
-
+  const [savingSupplier, setSavingSupplier] =
+    useState(false);
   const [savingLocation, setSavingLocation] =
     useState(false);
 
   const [notice, setNotice] =
     useState<Notice>(null);
 
-  const [locationForm, setLocationForm] =
-    useState<LocationForm>(emptyLocationForm);
-
   const loadData = useCallback(async () => {
     setLoading(true);
-    setNotice(null);
 
     try {
       const response = await fetch(
         "/api/procurement-settings",
         {
-          method: "GET",
           cache: "no-store",
         },
       );
 
-      const data =
-        (await response.json()) as SettingsResponse;
+      const data = (await response.json()) as {
+        success: boolean;
+        settings?: ProcurementSettings;
+        suppliers?: Supplier[];
+        error?: string;
+      };
 
       if (!response.ok || !data.success) {
         throw new Error(
@@ -189,19 +195,18 @@ export default function ProcurementSettingsPage() {
         );
       }
 
-      setSettings(data.settings ?? null);
-      setSuppliers(data.suppliers ?? []);
+      const nextSuppliers = data.suppliers ?? [];
 
-      if (
-        !locationForm.supplierId &&
-        data.suppliers?.length
-      ) {
-        setLocationForm((current) => ({
-          ...current,
-          supplierId:
-            data.suppliers?.[0]?.id ?? "",
-        }));
-      }
+      setSettings(data.settings ?? null);
+      setSuppliers(nextSuppliers);
+
+      setLocationForm((current) => ({
+        ...current,
+        supplierId:
+          current.supplierId ||
+          nextSuppliers[0]?.id ||
+          "",
+      }));
     } catch (error) {
       setNotice({
         type: "error",
@@ -213,58 +218,42 @@ export default function ProcurementSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [locationForm.supplierId]);
+  }, []);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
-  const preferredSupplier =
-    useMemo(
-      () =>
-        suppliers.find(
-          (supplier) =>
-            supplier.id ===
-            settings?.preferred_supplier_id,
-        ) ?? null,
-      [
-        suppliers,
-        settings?.preferred_supplier_id,
-      ],
-    );
+  const preferredSupplier = useMemo(
+    () =>
+      suppliers.find(
+        (supplier) =>
+          supplier.id ===
+          settings?.preferred_supplier_id,
+      ) ?? null,
+    [
+      settings?.preferred_supplier_id,
+      suppliers,
+    ],
+  );
 
-  const lowesSupplier =
-    useMemo(
-      () =>
-        suppliers.find(
-          (supplier) =>
-            supplier.id ===
-            settings?.lowes_supplier_id,
-        ) ??
-        suppliers.find(
-          (supplier) =>
-            supplier.slug === "lowes",
-        ) ??
-        null,
-      [
-        suppliers,
-        settings?.lowes_supplier_id,
-      ],
-    );
-
-  const selectedLocationSupplier =
-    useMemo(
-      () =>
-        suppliers.find(
-          (supplier) =>
-            supplier.id ===
-            locationForm.supplierId,
-        ) ?? null,
-      [
-        suppliers,
-        locationForm.supplierId,
-      ],
-    );
+  const lowesSupplier = useMemo(
+    () =>
+      suppliers.find(
+        (supplier) =>
+          supplier.id ===
+          settings?.lowes_supplier_id,
+      ) ??
+      suppliers.find(
+        (supplier) =>
+          supplier.slug === "lowes",
+      ) ??
+      null,
+    [
+      settings?.lowes_supplier_id,
+      suppliers,
+    ],
+  );
 
   function updateSetting<
     Key extends keyof ProcurementSettings,
@@ -337,8 +326,11 @@ export default function ProcurementSettingsPage() {
         },
       );
 
-      const data =
-        (await response.json()) as SettingsResponse;
+      const data = (await response.json()) as {
+        success: boolean;
+        settings?: ProcurementSettings;
+        error?: string;
+      };
 
       if (!response.ok || !data.success) {
         throw new Error(
@@ -353,8 +345,7 @@ export default function ProcurementSettingsPage() {
 
       setNotice({
         type: "success",
-        message:
-          "Procurement settings saved.",
+        message: "Procurement settings saved.",
       });
     } catch (error) {
       setNotice({
@@ -369,7 +360,92 @@ export default function ProcurementSettingsPage() {
     }
   }
 
-  async function addLocation(
+  async function createSupplier(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!supplierForm.name.trim()) {
+      setNotice({
+        type: "error",
+        message: "Supplier name is required.",
+      });
+
+      return;
+    }
+
+    setSavingSupplier(true);
+    setNotice(null);
+
+    try {
+      const response = await fetch(
+        "/api/suppliers",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            entityType: "supplier",
+            name: supplierForm.name,
+            supplierType:
+              supplierForm.supplierType,
+            websiteUrl:
+              supplierForm.websiteUrl,
+            accountNumber:
+              supplierForm.accountNumber,
+            supportsCsvImport:
+              supplierForm.supportsCsvImport,
+            supportsQuoteImport:
+              supplierForm.supportsQuoteImport,
+            supportsLiveLookup:
+              supplierForm.supportsLiveLookup,
+          }),
+        },
+      );
+
+      const data = (await response.json()) as {
+        success: boolean;
+        supplier?: Supplier;
+        error?: string;
+      };
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ??
+            "Supplier could not be created.",
+        );
+      }
+
+      setSupplierForm(emptySupplierForm);
+
+      setNotice({
+        type: "success",
+        message: `${data.supplier?.name ?? "Supplier"} created.`,
+      });
+
+      await loadData();
+
+      if (data.supplier?.id) {
+        setLocationForm((current) => ({
+          ...current,
+          supplierId: data.supplier?.id ?? "",
+        }));
+      }
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Supplier could not be created.",
+      });
+    } finally {
+      setSavingSupplier(false);
+    }
+  }
+
+  async function createLocation(
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
@@ -405,16 +481,11 @@ export default function ProcurementSettingsPage() {
             name: locationForm.name,
             storeNumber:
               locationForm.storeNumber,
-            addressLine1:
-              locationForm.addressLine1,
-            addressLine2:
-              locationForm.addressLine2,
             city: locationForm.city,
             state: locationForm.state,
             postalCode:
               locationForm.postalCode,
             phone: locationForm.phone,
-            email: locationForm.email,
             contactName:
               locationForm.contactName,
             contactPhone:
@@ -427,16 +498,15 @@ export default function ProcurementSettingsPage() {
         },
       );
 
-      const data =
-        (await response.json()) as {
-          success: boolean;
-          error?: string;
-        };
+      const data = (await response.json()) as {
+        success: boolean;
+        error?: string;
+      };
 
       if (!response.ok || !data.success) {
         throw new Error(
           data.error ??
-            "Supplier location could not be added.",
+            "Supplier location could not be created.",
         );
       }
 
@@ -450,8 +520,7 @@ export default function ProcurementSettingsPage() {
 
       setNotice({
         type: "success",
-        message:
-          "Supplier location added.",
+        message: "Supplier location created.",
       });
 
       await loadData();
@@ -461,70 +530,16 @@ export default function ProcurementSettingsPage() {
         message:
           error instanceof Error
             ? error.message
-            : "Supplier location could not be added.",
+            : "Supplier location could not be created.",
       });
     } finally {
       setSavingLocation(false);
     }
   }
 
-  async function deactivateLocation(
-    location: SupplierLocation,
-  ) {
-    const confirmed = window.confirm(
-      `Deactivate ${location.name}?`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setNotice(null);
-
-    try {
-      const response = await fetch(
-        `/api/suppliers?entityType=location&id=${encodeURIComponent(
-          location.id,
-        )}`,
-        {
-          method: "DELETE",
-        },
-      );
-
-      const data =
-        (await response.json()) as {
-          success: boolean;
-          error?: string;
-        };
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.error ??
-            "Supplier location could not be deactivated.",
-        );
-      }
-
-      setNotice({
-        type: "success",
-        message:
-          "Supplier location deactivated.",
-      });
-
-      await loadData();
-    } catch (error) {
-      setNotice({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Supplier location could not be deactivated.",
-      });
-    }
-  }
-
   if (loading) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <p className="text-sm text-slate-600">
           Loading procurement settings…
         </p>
@@ -534,12 +549,8 @@ export default function ProcurementSettingsPage() {
 
   if (!settings) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-semibold text-slate-900">
-          Procurement settings
-        </h1>
-
-        <p className="mt-4 text-sm text-red-700">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+        <p className="text-red-700">
           Procurement settings are unavailable.
         </p>
       </main>
@@ -548,7 +559,7 @@ export default function ProcurementSettingsPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-medium text-slate-500">
             Admin settings
@@ -559,17 +570,26 @@ export default function ProcurementSettingsPage() {
           </h1>
 
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Control supplier preferences, Lowe&apos;s fallback
-            pricing, price freshness, and discrepancy alerts.
+            Manage suppliers, branches, pricing preferences,
+            fallback sources, and quote discrepancy rules.
           </p>
         </div>
 
-        <a
-          href="/admin"
-          className="text-sm font-medium text-slate-700 underline underline-offset-4"
-        >
-          Back to admin
-        </a>
+        <div className="flex gap-4 text-sm font-medium">
+          <a
+            href="/admin/materials"
+            className="text-slate-700 underline underline-offset-4"
+          >
+            Material catalog
+          </a>
+
+          <a
+            href="/admin"
+            className="text-slate-700 underline underline-offset-4"
+          >
+            Back to admin
+          </a>
+        </div>
       </div>
 
       {notice ? (
@@ -584,7 +604,7 @@ export default function ProcurementSettingsPage() {
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
+      <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
         <form
           onSubmit={saveSettings}
           className="space-y-8"
@@ -594,15 +614,10 @@ export default function ProcurementSettingsPage() {
               Price-source strategy
             </h2>
 
-            <p className="mt-1 text-sm text-slate-600">
-              This controls the default supplier-selection behavior
-              for new estimates.
-            </p>
-
             <div className="mt-5 grid gap-5 md:grid-cols-2">
-              <label className="block">
+              <label>
                 <span className="text-sm font-medium text-slate-800">
-                  Default pricing strategy
+                  Default strategy
                 </span>
 
                 <select
@@ -616,7 +631,7 @@ export default function ProcurementSettingsPage() {
                         .value as ProcurementSettings["default_pricing_strategy"],
                     )
                   }
-                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                 >
                   <option value="best_available">
                     Best available
@@ -627,7 +642,7 @@ export default function ProcurementSettingsPage() {
                   </option>
 
                   <option value="lowes_fallback">
-                    Lowe&apos;s fallback
+                    Lowe&apos;s first
                   </option>
 
                   <option value="manual">
@@ -636,7 +651,32 @@ export default function ProcurementSettingsPage() {
                 </select>
               </label>
 
-              <label className="block">
+              <label>
+                <span className="text-sm font-medium text-slate-800">
+                  Maximum saved-price age
+                </span>
+
+                <input
+                  type="number"
+                  min="1"
+                  value={
+                    settings.maximum_price_age_days
+                  }
+                  onChange={(event) =>
+                    updateSetting(
+                      "maximum_price_age_days",
+                      Math.max(
+                        1,
+                        Number(event.target.value) ||
+                          1,
+                      ),
+                    )
+                  }
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label>
                 <span className="text-sm font-medium text-slate-800">
                   Preferred supplier
                 </span>
@@ -657,7 +697,7 @@ export default function ProcurementSettingsPage() {
                       null,
                     );
                   }}
-                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                 >
                   <option value="">
                     No preferred supplier
@@ -674,7 +714,7 @@ export default function ProcurementSettingsPage() {
                 </select>
               </label>
 
-              <label className="block">
+              <label>
                 <span className="text-sm font-medium text-slate-800">
                   Preferred location
                 </span>
@@ -691,7 +731,7 @@ export default function ProcurementSettingsPage() {
                     )
                   }
                   disabled={!preferredSupplier}
-                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100"
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
                 >
                   <option value="">
                     Any location
@@ -703,46 +743,11 @@ export default function ProcurementSettingsPage() {
                         key={location.id}
                         value={location.id}
                       >
-                        {formatLocation(location)}
+                        {locationLabel(location)}
                       </option>
                     ),
                   )}
                 </select>
-              </label>
-
-              <label className="block">
-                <span className="text-sm font-medium text-slate-800">
-                  Maximum saved-price age
-                </span>
-
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={
-                      settings.maximum_price_age_days
-                    }
-                    onChange={(event) =>
-                      updateSetting(
-                        "maximum_price_age_days",
-                        Math.max(
-                          1,
-                          Math.round(
-                            parseNumber(
-                              event.target.value,
-                            ),
-                          ),
-                        ),
-                      )
-                    }
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
-                  />
-
-                  <span className="text-sm text-slate-600">
-                    days
-                  </span>
-                </div>
               </label>
             </div>
           </section>
@@ -752,12 +757,7 @@ export default function ProcurementSettingsPage() {
               Lowe&apos;s fallback
             </h2>
 
-            <p className="mt-1 text-sm text-slate-600">
-              Use this store when a reliable supplier price is not
-              available.
-            </p>
-
-            <div className="mt-5 space-y-5">
+            <div className="mt-5 space-y-4">
               <label className="flex items-start gap-3">
                 <input
                   type="checkbox"
@@ -770,22 +770,16 @@ export default function ProcurementSettingsPage() {
                       event.target.checked,
                     )
                   }
-                  className="mt-1 h-4 w-4 rounded border-slate-300"
+                  className="mt-1 h-4 w-4"
                 />
 
-                <span>
-                  <span className="block text-sm font-medium text-slate-800">
-                    Allow Lowe&apos;s fallback pricing
-                  </span>
-
-                  <span className="block text-sm text-slate-600">
-                    Use Lowe&apos;s when no current supplier or
-                    quote price is available.
-                  </span>
+                <span className="text-sm text-slate-800">
+                  Allow Lowe&apos;s fallback when no
+                  current supplier price exists.
                 </span>
               </label>
 
-              <label className="block">
+              <label>
                 <span className="text-sm font-medium text-slate-800">
                   Default Lowe&apos;s store
                 </span>
@@ -804,10 +798,10 @@ export default function ProcurementSettingsPage() {
                   disabled={
                     !settings.allow_lowes_fallback
                   }
-                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100"
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
                 >
                   <option value="">
-                    Select a Lowe&apos;s location
+                    Select a Lowe&apos;s store
                   </option>
 
                   {lowesSupplier?.supplier_locations.map(
@@ -816,21 +810,12 @@ export default function ProcurementSettingsPage() {
                         key={location.id}
                         value={location.id}
                       >
-                        {formatLocation(location)}
+                        {locationLabel(location)}
                       </option>
                     ),
                   )}
                 </select>
               </label>
-
-              {lowesSupplier &&
-              lowesSupplier.supplier_locations.length ===
-                0 ? (
-                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  Add your preferred Lowe&apos;s location in the
-                  supplier-location form on this page.
-                </p>
-              ) : null}
 
               <label className="flex items-start gap-3">
                 <input
@@ -844,18 +829,12 @@ export default function ProcurementSettingsPage() {
                       event.target.checked,
                     )
                   }
-                  className="mt-1 h-4 w-4 rounded border-slate-300"
+                  className="mt-1 h-4 w-4"
                 />
 
-                <span>
-                  <span className="block text-sm font-medium text-slate-800">
-                    Allow live product lookup
-                  </span>
-
-                  <span className="block text-sm text-slate-600">
-                    Attempt a current store-level lookup for
-                    unmatched materials.
-                  </span>
+                <span className="text-sm text-slate-800">
+                  Allow live product lookup for missing
+                  prices.
                 </span>
               </label>
 
@@ -871,139 +850,117 @@ export default function ProcurementSettingsPage() {
                       event.target.checked,
                     )
                   }
-                  className="mt-1 h-4 w-4 rounded border-slate-300"
+                  className="mt-1 h-4 w-4"
                 />
 
-                <span>
-                  <span className="block text-sm font-medium text-slate-800">
-                    Allow nearby-store substitution
-                  </span>
-
-                  <span className="block text-sm text-slate-600">
-                    Check nearby stores when the selected location
-                    does not have a usable match.
-                  </span>
+                <span className="text-sm text-slate-800">
+                  Allow nearby-store substitution.
                 </span>
               </label>
 
-              <label className="block max-w-sm">
+              <label>
                 <span className="text-sm font-medium text-slate-800">
                   Nearby-store radius
                 </span>
 
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={
-                      settings.nearby_store_radius_miles
-                    }
-                    onChange={(event) =>
-                      updateSetting(
-                        "nearby_store_radius_miles",
-                        Math.max(
+                <input
+                  type="number"
+                  min="0"
+                  value={
+                    settings.nearby_store_radius_miles
+                  }
+                  onChange={(event) =>
+                    updateSetting(
+                      "nearby_store_radius_miles",
+                      Math.max(
+                        0,
+                        Number(event.target.value) ||
                           0,
-                          parseNumber(
-                            event.target.value,
-                          ),
-                        ),
-                      )
-                    }
-                    disabled={
-                      !settings.allow_nearby_store_substitution
-                    }
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100"
-                  />
-
-                  <span className="text-sm text-slate-600">
-                    miles
-                  </span>
-                </div>
+                      ),
+                    )
+                  }
+                  disabled={
+                    !settings.allow_nearby_store_substitution
+                  }
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+                />
               </label>
             </div>
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-950">
-              Discrepancy alerts
+              Discrepancy rules
             </h2>
 
-            <p className="mt-1 text-sm text-slate-600">
-              Ignore minor price noise while still catching shortages,
-              product mismatches, and meaningful quote differences.
-            </p>
-
-            <div className="mt-5 grid gap-5 md:grid-cols-2">
-              <label className="block">
+            <div className="mt-5 grid gap-5 sm:grid-cols-2">
+              <label>
                 <span className="text-sm font-medium text-slate-800">
-                  Flag individual line differences over
+                  Line threshold
                 </span>
 
-                <div className="mt-2 flex items-center rounded-lg border border-slate-300 bg-white">
-                  <span className="px-3 text-sm text-slate-500">
-                    $
-                  </span>
-
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={
-                      settings.line_discrepancy_threshold
-                    }
-                    onChange={(event) =>
-                      updateSetting(
-                        "line_discrepancy_threshold",
-                        Math.max(
+                <input
+                  type="number"
+                  min="0"
+                  value={
+                    settings.line_discrepancy_threshold
+                  }
+                  onChange={(event) =>
+                    updateSetting(
+                      "line_discrepancy_threshold",
+                      Math.max(
+                        0,
+                        Number(event.target.value) ||
                           0,
-                          parseNumber(
-                            event.target.value,
-                          ),
-                        ),
-                      )
-                    }
-                    className="w-full rounded-r-lg border-0 px-0 py-2 pr-3 text-sm text-slate-900 outline-none"
-                  />
-                </div>
+                      ),
+                    )
+                  }
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+
+                <span className="mt-1 block text-xs text-slate-500">
+                  Currently{" "}
+                  {money(
+                    settings.line_discrepancy_threshold,
+                  )}
+                </span>
               </label>
 
-              <label className="block">
+              <label>
                 <span className="text-sm font-medium text-slate-800">
-                  Flag total quote differences over
+                  Whole-quote threshold
                 </span>
 
-                <div className="mt-2 flex items-center rounded-lg border border-slate-300 bg-white">
-                  <span className="px-3 text-sm text-slate-500">
-                    $
-                  </span>
-
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={
-                      settings.quote_discrepancy_threshold
-                    }
-                    onChange={(event) =>
-                      updateSetting(
-                        "quote_discrepancy_threshold",
-                        Math.max(
+                <input
+                  type="number"
+                  min="0"
+                  value={
+                    settings.quote_discrepancy_threshold
+                  }
+                  onChange={(event) =>
+                    updateSetting(
+                      "quote_discrepancy_threshold",
+                      Math.max(
+                        0,
+                        Number(event.target.value) ||
                           0,
-                          parseNumber(
-                            event.target.value,
-                          ),
-                        ),
-                      )
-                    }
-                    className="w-full rounded-r-lg border-0 px-0 py-2 pr-3 text-sm text-slate-900 outline-none"
-                  />
-                </div>
+                      ),
+                    )
+                  }
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+
+                <span className="mt-1 block text-xs text-slate-500">
+                  Currently{" "}
+                  {money(
+                    settings.quote_discrepancy_threshold,
+                  )}
+                </span>
               </label>
             </div>
 
-            <div className="mt-5 grid gap-3">
-              <label className="flex items-center gap-3 text-sm text-slate-800">
+            <div className="mt-5 space-y-3">
+              <label className="flex items-center gap-3 text-sm">
                 <input
                   type="checkbox"
                   checked={
@@ -1015,13 +972,12 @@ export default function ProcurementSettingsPage() {
                       event.target.checked,
                     )
                   }
-                  className="h-4 w-4 rounded border-slate-300"
                 />
 
-                Always flag quantities that are short
+                Always flag short quantities
               </label>
 
-              <label className="flex items-center gap-3 text-sm text-slate-800">
+              <label className="flex items-center gap-3 text-sm">
                 <input
                   type="checkbox"
                   checked={
@@ -1033,13 +989,12 @@ export default function ProcurementSettingsPage() {
                       event.target.checked,
                     )
                   }
-                  className="h-4 w-4 rounded border-slate-300"
                 />
 
                 Always flag product mismatches
               </label>
 
-              <label className="flex items-center gap-3 text-sm text-slate-800">
+              <label className="flex items-center gap-3 text-sm">
                 <input
                   type="checkbox"
                   checked={
@@ -1051,7 +1006,6 @@ export default function ProcurementSettingsPage() {
                       event.target.checked,
                     )
                   }
-                  className="h-4 w-4 rounded border-slate-300"
                 />
 
                 Always flag missing items
@@ -1059,32 +1013,210 @@ export default function ProcurementSettingsPage() {
             </div>
           </section>
 
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={savingSettings}
-              className="rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {savingSettings
-                ? "Saving…"
-                : "Save procurement settings"}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={savingSettings}
+            className="w-full rounded-lg bg-slate-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {savingSettings
+              ? "Saving…"
+              : "Save procurement settings"}
+          </button>
         </form>
 
         <div className="space-y-8">
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-950">
-              Add supplier location
+              Add new supplier
             </h2>
 
             <p className="mt-1 text-sm text-slate-600">
-              Add branches, stores, and supplier-rep contact
-              information.
+              Suppliers can be used for any trade,
+              including lumber, electrical, plumbing,
+              roofing, HVAC, flooring, and landscaping.
             </p>
 
             <form
-              onSubmit={addLocation}
+              onSubmit={createSupplier}
+              className="mt-5 space-y-4"
+            >
+              <label className="block">
+                <span className="text-sm font-medium text-slate-800">
+                  Supplier name
+                </span>
+
+                <input
+                  type="text"
+                  value={supplierForm.name}
+                  onChange={(event) =>
+                    setSupplierForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  placeholder="Ferguson, ABC Supply, local vendor"
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-800">
+                  Supplier type
+                </span>
+
+                <select
+                  value={
+                    supplierForm.supplierType
+                  }
+                  onChange={(event) =>
+                    setSupplierForm((current) => ({
+                      ...current,
+                      supplierType:
+                        event.target.value,
+                    }))
+                  }
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="local_supplier">
+                    Local supplier
+                  </option>
+
+                  <option value="national_supplier">
+                    National supplier
+                  </option>
+
+                  <option value="retailer">
+                    Retailer
+                  </option>
+
+                  <option value="manufacturer">
+                    Manufacturer
+                  </option>
+
+                  <option value="other">
+                    Other
+                  </option>
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-800">
+                  Website
+                </span>
+
+                <input
+                  type="url"
+                  value={
+                    supplierForm.websiteUrl
+                  }
+                  onChange={(event) =>
+                    setSupplierForm((current) => ({
+                      ...current,
+                      websiteUrl:
+                        event.target.value,
+                    }))
+                  }
+                  placeholder="https://"
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-800">
+                  Account number
+                </span>
+
+                <input
+                  type="text"
+                  value={
+                    supplierForm.accountNumber
+                  }
+                  onChange={(event) =>
+                    setSupplierForm((current) => ({
+                      ...current,
+                      accountNumber:
+                        event.target.value,
+                    }))
+                  }
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <div className="space-y-3 rounded-lg bg-slate-50 p-3">
+                <label className="flex items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={
+                      supplierForm.supportsCsvImport
+                    }
+                    onChange={(event) =>
+                      setSupplierForm((current) => ({
+                        ...current,
+                        supportsCsvImport:
+                          event.target.checked,
+                      }))
+                    }
+                  />
+
+                  Allow CSV price imports
+                </label>
+
+                <label className="flex items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={
+                      supplierForm.supportsQuoteImport
+                    }
+                    onChange={(event) =>
+                      setSupplierForm((current) => ({
+                        ...current,
+                        supportsQuoteImport:
+                          event.target.checked,
+                      }))
+                    }
+                  />
+
+                  Allow AI quote imports
+                </label>
+
+                <label className="flex items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={
+                      supplierForm.supportsLiveLookup
+                    }
+                    onChange={(event) =>
+                      setSupplierForm((current) => ({
+                        ...current,
+                        supportsLiveLookup:
+                          event.target.checked,
+                      }))
+                    }
+                  />
+
+                  Supplier supports live lookup
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingSupplier}
+                className="w-full rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {savingSupplier
+                  ? "Creating…"
+                  : "Create supplier"}
+              </button>
+            </form>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-950">
+              Add supplier location
+            </h2>
+
+            <form
+              onSubmit={createLocation}
               className="mt-5 space-y-4"
             >
               <label className="block">
@@ -1097,15 +1229,13 @@ export default function ProcurementSettingsPage() {
                     locationForm.supplierId
                   }
                   onChange={(event) =>
-                    setLocationForm(
-                      (current) => ({
-                        ...current,
-                        supplierId:
-                          event.target.value,
-                      }),
-                    )
+                    setLocationForm((current) => ({
+                      ...current,
+                      supplierId:
+                        event.target.value,
+                    }))
                   }
-                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                 >
                   <option value="">
                     Select supplier
@@ -1122,29 +1252,27 @@ export default function ProcurementSettingsPage() {
                 </select>
               </label>
 
-              <label className="block">
-                <span className="text-sm font-medium text-slate-800">
-                  Location name
-                </span>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label>
+                  <span className="text-sm font-medium text-slate-800">
+                    Location name
+                  </span>
 
-                <input
-                  type="text"
-                  value={locationForm.name}
-                  onChange={(event) =>
-                    setLocationForm(
-                      (current) => ({
+                  <input
+                    type="text"
+                    value={locationForm.name}
+                    onChange={(event) =>
+                      setLocationForm((current) => ({
                         ...current,
                         name: event.target.value,
-                      }),
-                    )
-                  }
-                  placeholder="Halls, Knoxville, West Town"
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
-                />
-              </label>
+                      }))
+                    }
+                    placeholder="Knoxville, Halls, West"
+                    className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
+                <label>
                   <span className="text-sm font-medium text-slate-800">
                     Store number
                   </span>
@@ -1155,21 +1283,59 @@ export default function ProcurementSettingsPage() {
                       locationForm.storeNumber
                     }
                     onChange={(event) =>
-                      setLocationForm(
-                        (current) => ({
-                          ...current,
-                          storeNumber:
-                            event.target.value,
-                        }),
-                      )
+                      setLocationForm((current) => ({
+                        ...current,
+                        storeNumber:
+                          event.target.value,
+                      }))
                     }
-                    className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                    className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-[1fr_80px_120px]">
+                <label>
+                  <span className="text-sm font-medium text-slate-800">
+                    City
+                  </span>
+
+                  <input
+                    type="text"
+                    value={locationForm.city}
+                    onChange={(event) =>
+                      setLocationForm((current) => ({
+                        ...current,
+                        city: event.target.value,
+                      }))
+                    }
+                    className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   />
                 </label>
 
-                <label className="block">
+                <label>
                   <span className="text-sm font-medium text-slate-800">
-                    ZIP code
+                    State
+                  </span>
+
+                  <input
+                    type="text"
+                    maxLength={2}
+                    value={locationForm.state}
+                    onChange={(event) =>
+                      setLocationForm((current) => ({
+                        ...current,
+                        state:
+                          event.target.value.toUpperCase(),
+                      }))
+                    }
+                    className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+
+                <label>
+                  <span className="text-sm font-medium text-slate-800">
+                    ZIP
                   </span>
 
                   <input
@@ -1178,86 +1344,13 @@ export default function ProcurementSettingsPage() {
                       locationForm.postalCode
                     }
                     onChange={(event) =>
-                      setLocationForm(
-                        (current) => ({
-                          ...current,
-                          postalCode:
-                            event.target.value,
-                        }),
-                      )
-                    }
-                    className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
-                  />
-                </label>
-              </div>
-
-              <label className="block">
-                <span className="text-sm font-medium text-slate-800">
-                  Street address
-                </span>
-
-                <input
-                  type="text"
-                  value={
-                    locationForm.addressLine1
-                  }
-                  onChange={(event) =>
-                    setLocationForm(
-                      (current) => ({
+                      setLocationForm((current) => ({
                         ...current,
-                        addressLine1:
+                        postalCode:
                           event.target.value,
-                      }),
-                    )
-                  }
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
-                />
-              </label>
-
-              <div className="grid gap-4 sm:grid-cols-[1fr_100px]">
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-800">
-                    City
-                  </span>
-
-                  <input
-                    type="text"
-                    value={
-                      locationForm.city
+                      }))
                     }
-                    onChange={(event) =>
-                      setLocationForm(
-                        (current) => ({
-                          ...current,
-                          city: event.target.value,
-                        }),
-                      )
-                    }
-                    className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-800">
-                    State
-                  </span>
-
-                  <input
-                    type="text"
-                    maxLength={2}
-                    value={
-                      locationForm.state
-                    }
-                    onChange={(event) =>
-                      setLocationForm(
-                        (current) => ({
-                          ...current,
-                          state:
-                            event.target.value.toUpperCase(),
-                        }),
-                      )
-                    }
-                    className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                    className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   />
                 </label>
               </div>
@@ -1271,14 +1364,12 @@ export default function ProcurementSettingsPage() {
                   type="tel"
                   value={locationForm.phone}
                   onChange={(event) =>
-                    setLocationForm(
-                      (current) => ({
-                        ...current,
-                        phone: event.target.value,
-                      }),
-                    )
+                    setLocationForm((current) => ({
+                      ...current,
+                      phone: event.target.value,
+                    }))
                   }
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 />
               </label>
 
@@ -1288,120 +1379,94 @@ export default function ProcurementSettingsPage() {
                 </p>
 
                 <div className="mt-3 space-y-4">
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-800">
-                      Contact name
-                    </span>
+                  <input
+                    type="text"
+                    value={
+                      locationForm.contactName
+                    }
+                    onChange={(event) =>
+                      setLocationForm((current) => ({
+                        ...current,
+                        contactName:
+                          event.target.value,
+                      }))
+                    }
+                    placeholder="Representative name"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
 
-                    <input
-                      type="text"
-                      value={
-                        locationForm.contactName
-                      }
-                      onChange={(event) =>
-                        setLocationForm(
-                          (current) => ({
-                            ...current,
-                            contactName:
-                              event.target.value,
-                          }),
-                        )
-                      }
-                      className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
-                    />
-                  </label>
+                  <input
+                    type="tel"
+                    value={
+                      locationForm.contactPhone
+                    }
+                    onChange={(event) =>
+                      setLocationForm((current) => ({
+                        ...current,
+                        contactPhone:
+                          event.target.value,
+                      }))
+                    }
+                    placeholder="Representative phone"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
 
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-800">
-                      Contact phone
-                    </span>
-
-                    <input
-                      type="tel"
-                      value={
-                        locationForm.contactPhone
-                      }
-                      onChange={(event) =>
-                        setLocationForm(
-                          (current) => ({
-                            ...current,
-                            contactPhone:
-                              event.target.value,
-                          }),
-                        )
-                      }
-                      className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-800">
-                      Contact email
-                    </span>
-
-                    <input
-                      type="email"
-                      value={
-                        locationForm.contactEmail
-                      }
-                      onChange={(event) =>
-                        setLocationForm(
-                          (current) => ({
-                            ...current,
-                            contactEmail:
-                              event.target.value,
-                          }),
-                        )
-                      }
-                      className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
-                    />
-                  </label>
+                  <input
+                    type="email"
+                    value={
+                      locationForm.contactEmail
+                    }
+                    onChange={(event) =>
+                      setLocationForm((current) => ({
+                        ...current,
+                        contactEmail:
+                          event.target.value,
+                      }))
+                    }
+                    placeholder="Representative email"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
                 </div>
               </div>
 
-              <label className="flex items-center gap-3 text-sm text-slate-800">
+              <label className="flex items-center gap-3 text-sm">
                 <input
                   type="checkbox"
                   checked={
                     locationForm.isDefault
                   }
                   onChange={(event) =>
-                    setLocationForm(
-                      (current) => ({
-                        ...current,
-                        isDefault:
-                          event.target.checked,
-                      }),
-                    )
+                    setLocationForm((current) => ({
+                      ...current,
+                      isDefault:
+                        event.target.checked,
+                    }))
                   }
-                  className="h-4 w-4 rounded border-slate-300"
                 />
 
-                Make this the default location for{" "}
-                {selectedLocationSupplier?.name ??
-                  "this supplier"}
+                Make this the default location
               </label>
 
               <button
                 type="submit"
                 disabled={savingLocation}
-                className="w-full rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {savingLocation
-                  ? "Adding…"
-                  : "Add supplier location"}
+                  ? "Creating…"
+                  : "Create location"}
               </button>
             </form>
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-950">
-              Suppliers
+              Current suppliers
             </h2>
 
-            <div className="mt-5 space-y-5">
+            <div className="mt-5 space-y-4">
               {suppliers.map((supplier) => (
-                <div
+                <article
                   key={supplier.id}
                   className="rounded-lg border border-slate-200 p-4"
                 >
@@ -1412,7 +1477,7 @@ export default function ProcurementSettingsPage() {
                       </p>
 
                       <p className="mt-1 text-xs text-slate-500">
-                        {formatSupplierType(
+                        {supplierTypeLabel(
                           supplier.supplier_type,
                         )}
                       </p>
@@ -1420,77 +1485,55 @@ export default function ProcurementSettingsPage() {
 
                     <div className="flex flex-wrap justify-end gap-1">
                       {supplier.supports_csv_import ? (
-                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs">
                           CSV
                         </span>
                       ) : null}
 
                       {supplier.supports_quote_import ? (
-                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
-                          Quote import
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs">
+                          AI quotes
                         </span>
                       ) : null}
 
                       {supplier.supports_live_lookup ? (
-                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
-                          Live lookup
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs">
+                          Live
                         </span>
                       ) : null}
                     </div>
                   </div>
 
-                  <div className="mt-4 space-y-3">
-                    {supplier.supplier_locations.length >
-                    0 ? (
+                  <div className="mt-3 space-y-2">
+                    {supplier.supplier_locations.length ? (
                       supplier.supplier_locations.map(
                         (location) => (
                           <div
                             key={location.id}
-                            className="flex items-start justify-between gap-3 rounded-md bg-slate-50 px-3 py-2"
+                            className="rounded-md bg-slate-50 px-3 py-2"
                           >
-                            <div>
-                              <p className="text-sm font-medium text-slate-900">
-                                {location.name}
+                            <p className="text-sm font-medium text-slate-900">
+                              {location.name}
 
-                                {location.is_default ? (
-                                  <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">
-                                    Default
-                                  </span>
-                                ) : null}
-                              </p>
-
-                              <p className="mt-1 text-xs text-slate-600">
-                                {[
-                                  location.city,
-                                  location.state,
-                                  location.store_number
-                                    ? `Store ${location.store_number}`
-                                    : null,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" • ") ||
-                                  "No address details"}
-                              </p>
-
-                              {location.contact_name ? (
-                                <p className="mt-1 text-xs text-slate-600">
-                                  Rep:{" "}
-                                  {location.contact_name}
-                                </p>
+                              {location.is_default ? (
+                                <span className="ml-2 text-xs text-emerald-700">
+                                  Default
+                                </span>
                               ) : null}
-                            </div>
+                            </p>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void deactivateLocation(
-                                  location,
-                                )
-                              }
-                              className="text-xs font-medium text-red-700 underline underline-offset-4"
-                            >
-                              Deactivate
-                            </button>
+                            <p className="mt-1 text-xs text-slate-600">
+                              {[
+                                location.city,
+                                location.state,
+                                location.contact_name
+                                  ? `Rep: ${location.contact_name}`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" • ") ||
+                                "No additional details"}
+                            </p>
                           </div>
                         ),
                       )
@@ -1500,7 +1543,7 @@ export default function ProcurementSettingsPage() {
                       </p>
                     )}
                   </div>
-                </div>
+                </article>
               ))}
             </div>
           </section>
