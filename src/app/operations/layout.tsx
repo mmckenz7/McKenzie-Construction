@@ -49,6 +49,10 @@ const navigationItems = [
     href: "/operations/materials",
   },
   {
+    label: "Installers",
+    href: "/operations/installers",
+  },
+  {
     label: "Schedule Requests",
     href: "/operations/schedule-requests",
   },
@@ -56,8 +60,6 @@ const navigationItems = [
 
 const futureItems = [
   "Calendar",
-  "Installers",
-  "Materials",
   "Messages",
 ];
 

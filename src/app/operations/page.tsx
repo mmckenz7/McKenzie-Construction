@@ -29,9 +29,9 @@ const cards = [
     title: "Installers",
     value: "Crew availability",
     description:
-      "Request availability, review responses, confirm schedules, and communicate with installers.",
-    href: "#installers",
-    button: "Coming Soon",
+      "Review installers, request availability, and track schedule responses.",
+    href: "/operations/installers",
+    button: "Open Installers",
   },
   {
     title: "Schedule Requests",
