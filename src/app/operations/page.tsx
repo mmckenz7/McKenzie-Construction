@@ -33,6 +33,14 @@ const cards = [
     href: "#installers",
     button: "Coming Soon",
   },
+  {
+    title: "Schedule Requests",
+    value: "Installer responses",
+    description:
+      "Create secure links for installers to submit demo dates, construction dates, durations, and notes.",
+    href: "/operations/schedule-requests",
+    button: "Open Schedule Requests",
+  },
 ];
 
 export default function OperationsDashboardPage() {
