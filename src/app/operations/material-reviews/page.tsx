@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import {
   FormEvent,
   useEffect,
@@ -733,17 +735,26 @@ export default function MaterialReviewsPage() {
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void copyText(
-                          reviewLink,
-                        )
-                      }
-                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700"
-                    >
-                      Copy Link
-                    </button>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Link
+                        href={`/operations/material-reviews/${review.id}`}
+                        className="rounded-lg bg-blue-950 px-4 py-2 text-center text-sm font-bold text-white"
+                      >
+                        View Review
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void copyText(
+                            reviewLink,
+                          )
+                        }
+                        className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700"
+                      >
+                        Copy Link
+                      </button>
+                    </div>
                   </div>
 
                   <dl className="mt-5 grid gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-3">
