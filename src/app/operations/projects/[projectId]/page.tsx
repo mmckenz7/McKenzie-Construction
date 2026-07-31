@@ -1140,12 +1140,21 @@ export default async function ProjectsPage({
             </p>
           </div>
 
-          <Link
-            href={`/operations/projects/${projectId}/activity`}
-            className="shrink-0 rounded-xl bg-blue-950 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-blue-900"
-          >
-            Open Project Timeline
-          </Link>
+          <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
+            <Link
+              href={`/operations/projects/${projectId}/activity?addNote=true`}
+              className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-3 text-center text-sm font-bold text-blue-800 transition hover:bg-blue-100"
+            >
+              Add Project Note
+            </Link>
+
+            <Link
+              href={`/operations/projects/${projectId}/activity`}
+              className="rounded-xl bg-blue-950 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-blue-900"
+            >
+              Open Project Timeline
+            </Link>
+          </div>
         </div>
       </section>
 

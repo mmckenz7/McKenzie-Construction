@@ -7,7 +7,10 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useParams } from "next/navigation";
+import {
+  useParams,
+  useSearchParams,
+} from "next/navigation";
 
 type ActivityEntry = {
   id: string;
@@ -269,6 +272,9 @@ export default function ProjectActivityPage() {
     projectId: string;
   }>();
 
+  const searchParams =
+    useSearchParams();
+
   const [project, setProject] =
     useState<Project | null>(null);
 
@@ -345,6 +351,15 @@ export default function ProjectActivityPage() {
   useEffect(() => {
     void loadActivity();
   }, [params.projectId]);
+
+  useEffect(() => {
+    if (
+      searchParams.get("addNote") ===
+      "true"
+    ) {
+      setShowNoteForm(true);
+    }
+  }, [searchParams]);
 
   async function saveNote(
     event: FormEvent<HTMLFormElement>,
