@@ -16,6 +16,15 @@ type ChangeOrderStatus =
   | "completed"
   | "cancelled";
 
+type ChangeOrderLineItem = {
+  id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  sales_total: number;
+};
+
 type ChangeOrder = {
   id: string;
   change_order_number: number;
@@ -32,9 +41,14 @@ type ChangeOrder = {
   customer_response_notes:
     | string
     | null;
+  customer_acknowledged_terms?: boolean;
+  customer_agreement_text?:
+    | string
+    | null;
   approval_expires_at:
     | string
     | null;
+  line_items?: ChangeOrderLineItem[];
   project: {
     id: string;
     name: string;
@@ -100,6 +114,11 @@ export default function ChangeOrderApprovalPage() {
 
   const [notes, setNotes] =
     useState("");
+
+  const [
+    acknowledgedTerms,
+    setAcknowledgedTerms,
+  ] = useState(false);
 
   const [selectedResponse, setSelectedResponse] =
     useState<
@@ -219,6 +238,13 @@ export default function ChangeOrderApprovalPage() {
       return;
     }
 
+    if (!acknowledgedTerms) {
+      setError(
+        "Acknowledge the change-order terms before submitting.",
+      );
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -235,6 +261,7 @@ export default function ChangeOrderApprovalPage() {
               selectedResponse,
             customerName,
             notes: notes || null,
+            acknowledgedTerms,
           }),
         },
       );
@@ -434,6 +461,20 @@ export default function ChangeOrderApprovalPage() {
                 <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-800">
                   {
                     changeOrder.customer_response_notes
+                  }
+                </p>
+              </>
+            )}
+
+            {changeOrder.customer_agreement_text && (
+              <>
+                <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Customer Agreement
+                </p>
+
+                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                  {
+                    changeOrder.customer_agreement_text
                   }
                 </p>
               </>
@@ -660,6 +701,31 @@ export default function ChangeOrderApprovalPage() {
               />
             </label>
 
+            <label className="mt-5 flex items-start gap-3 rounded-xl border border-slate-300 bg-slate-50 p-4">
+              <input
+                type="checkbox"
+                checked={
+                  acknowledgedTerms
+                }
+                onChange={(event) =>
+                  setAcknowledgedTerms(
+                    event.target.checked,
+                  )
+                }
+                className="mt-1 h-4 w-4 shrink-0"
+              />
+
+              <span className="text-sm leading-6 text-slate-700">
+                {selectedResponse ===
+                "approved"
+                  ? "I approve this change order, including the stated price and schedule impact, and authorize McKenzie Construction to proceed with the described work."
+                  : selectedResponse ===
+                      "declined"
+                    ? "I decline this change order and understand that McKenzie Construction is not authorized to proceed with the described additional work."
+                    : "I have reviewed the change-order details and understand that my submitted response will be recorded."}
+              </span>
+            </label>
+
             {error && (
               <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                 {error}
@@ -670,7 +736,8 @@ export default function ChangeOrderApprovalPage() {
               type="submit"
               disabled={
                 submitting ||
-                !selectedResponse
+                !selectedResponse ||
+                !acknowledgedTerms
               }
               className="mt-5 w-full rounded-xl bg-slate-950 px-5 py-4 text-base font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >

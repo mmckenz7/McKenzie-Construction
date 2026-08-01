@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import {
+  createPublicTokenFailure,
+  isPublicTokenBodyTooLarge,
+  minimizeScheduleRequestPayload,
+} from "@/lib/public-token-api";
 
 type RouteContext = {
   params: Promise<{
@@ -30,15 +35,8 @@ export async function GET(
   const { token } = await context.params;
 
   if (!isUuid(token)) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Invalid schedule request link.",
-      },
-      {
-        status: 400,
-      },
-    );
+    const failure = createPublicTokenFailure("unavailable");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
   const supabase = createAdminServerClient();
@@ -51,50 +49,23 @@ export async function GET(
   );
 
   if (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      {
-        status: 500,
-      },
-    );
+    const failure = createPublicTokenFailure("unexpected");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
-  if (!data) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Schedule request not found.",
-      },
-      {
-        status: 404,
-      },
-    );
-  }
-
-  if (
+  if (!data || (
     typeof data === "object" &&
     data !== null &&
     "expired" in data &&
     data.expired === true
-  ) {
-    return NextResponse.json(
-      {
-        success: false,
-        expired: true,
-        error: "This schedule request has expired.",
-      },
-      {
-        status: 410,
-      },
-    );
+  )) {
+    const failure = createPublicTokenFailure("unavailable");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
   return NextResponse.json({
     success: true,
-    request: data,
+    request: minimizeScheduleRequestPayload(data),
   });
 }
 
@@ -105,15 +76,12 @@ export async function POST(
   const { token } = await context.params;
 
   if (!isUuid(token)) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Invalid schedule request link.",
-      },
-      {
-        status: 400,
-      },
-    );
+    const failure = createPublicTokenFailure("unavailable");
+    return NextResponse.json(failure.body, { status: failure.status });
+  }
+
+  if (isPublicTokenBodyTooLarge(request.headers.get("content-length"))) {
+    return NextResponse.json({ success: false, error: "Invalid form submission." }, { status: 413 });
   }
 
   let body: SubmitBody;
@@ -164,7 +132,14 @@ export async function POST(
 
   if (
     typeof body.demoDurationDays !== "number" ||
-    typeof body.totalDurationDays !== "number"
+    typeof body.totalDurationDays !== "number" ||
+    !Number.isInteger(body.demoDurationDays) ||
+    !Number.isInteger(body.totalDurationDays) ||
+    body.demoDurationDays < 1 ||
+    body.demoDurationDays > 365 ||
+    body.totalDurationDays < body.demoDurationDays ||
+    body.totalDurationDays > 730 ||
+    (body.notes?.length ?? 0) > 4_000
   ) {
     return NextResponse.json(
       {
@@ -179,10 +154,32 @@ export async function POST(
 
   const supabase = createAdminServerClient();
 
+  const {
+    data: scheduleRequest,
+    error: scheduleRequestError,
+  } = await supabase.rpc(
+    "get_schedule_request_by_token",
+    {
+      requested_token: token,
+    },
+  );
 
   if (
-    schedule_request.status === "submitted" ||
-    schedule_request.submitted_at
+    scheduleRequestError ||
+    !scheduleRequest ||
+    typeof scheduleRequest !== "object"
+  ) {
+    const failure = createPublicTokenFailure(
+      scheduleRequestError ? "unexpected" : "unavailable",
+    );
+    return NextResponse.json(failure.body, { status: failure.status });
+  }
+
+  if (
+    ("status" in scheduleRequest &&
+      scheduleRequest.status === "submitted") ||
+    ("submitted_at" in scheduleRequest &&
+      Boolean(scheduleRequest.submitted_at))
   ) {
     return NextResponse.json(
       {
@@ -215,15 +212,8 @@ export async function POST(
   );
 
   if (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      {
-        status: 500,
-      },
-    );
+    const failure = createPublicTokenFailure("unexpected");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
   if (
@@ -231,16 +221,26 @@ export async function POST(
     typeof data !== "object" ||
     data.success !== true
   ) {
+    if (
+      data &&
+      typeof data === "object" &&
+      "already_submitted" in data &&
+      data.already_submitted === true
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          alreadySubmitted: true,
+          error: "This schedule response has already been submitted.",
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
-        error:
-          typeof data === "object" &&
-          data !== null &&
-          "error" in data &&
-          typeof data.error === "string"
-            ? data.error
-            : "The schedule response could not be submitted.",
+        error: "The schedule response could not be submitted.",
       },
       {
         status: 400,
@@ -250,9 +250,5 @@ export async function POST(
 
   return NextResponse.json({
     success: true,
-    requestId:
-      "request_id" in data
-        ? data.request_id
-        : null,
   });
 }

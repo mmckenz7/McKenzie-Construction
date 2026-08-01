@@ -2,6 +2,7 @@ import {
   NextRequest,
   NextResponse,
 } from "next/server";
+import { randomUUID } from "node:crypto";
 
 import {
   createUnauthorizedApiResponse,
@@ -405,6 +406,7 @@ export async function POST(
         project_id: body.projectId,
         subcontractor_id:
           body.subcontractorId,
+        secure_token: randomUUID(),
         language,
         status: "pending",
         review_result: null,

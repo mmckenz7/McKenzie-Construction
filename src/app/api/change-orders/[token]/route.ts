@@ -4,6 +4,11 @@ import {
 } from "next/server";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import {
+  createPublicTokenFailure,
+  isPublicTokenBodyTooLarge,
+  minimizeChangeOrderPayload,
+} from "@/lib/public-token-api";
 
 type RouteContext = {
   params: Promise<{
@@ -15,6 +20,7 @@ type SubmitResponseBody = {
   response?: "approved" | "declined";
   customerName?: string;
   notes?: string | null;
+  acknowledgedTerms?: boolean;
 };
 
 function isUuid(value: string) {
@@ -31,16 +37,8 @@ export async function GET(
     await context.params;
 
   if (!isUuid(token)) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Invalid change-order approval link.",
-      },
-      {
-        status: 400,
-      },
-    );
+    const failure = createPublicTokenFailure("unavailable");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
   const supabase =
@@ -55,52 +53,23 @@ export async function GET(
     );
 
   if (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      {
-        status: 500,
-      },
-    );
+    const failure = createPublicTokenFailure("unexpected");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
-  if (!data) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Change order not found.",
-      },
-      {
-        status: 404,
-      },
-    );
-  }
-
-  if (
+  if (!data || (
     typeof data === "object" &&
     data !== null &&
-    "expired" in data &&
-    data.expired === true
-  ) {
-    return NextResponse.json(
-      {
-        success: false,
-        expired: true,
-        error:
-          "This change-order approval link has expired.",
-      },
-      {
-        status: 410,
-      },
-    );
+    (("expired" in data && data.expired === true) ||
+      ("superseded" in data && data.superseded === true))
+  )) {
+    const failure = createPublicTokenFailure("unavailable");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
   return NextResponse.json({
     success: true,
-    changeOrder: data,
+    changeOrder: minimizeChangeOrderPayload(data),
   });
 }
 
@@ -112,15 +81,14 @@ export async function POST(
     await context.params;
 
   if (!isUuid(token)) {
+    const failure = createPublicTokenFailure("unavailable");
+    return NextResponse.json(failure.body, { status: failure.status });
+  }
+
+  if (isPublicTokenBodyTooLarge(request.headers.get("content-length"))) {
     return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Invalid change-order approval link.",
-      },
-      {
-        status: 400,
-      },
+      { success: false, error: "Invalid response submission." },
+      { status: 413 },
     );
   }
 
@@ -174,6 +142,28 @@ export async function POST(
     );
   }
 
+  if (customerName.length > 160 || (body.notes?.length ?? 0) > 4_000) {
+    return NextResponse.json(
+      { success: false, error: "Invalid response submission." },
+      { status: 400 },
+    );
+  }
+
+  if (
+    body.acknowledgedTerms !== true
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "You must acknowledge the change-order terms before submitting.",
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
   const forwardedFor =
     request.headers.get(
       "x-forwarded-for",
@@ -193,7 +183,7 @@ export async function POST(
 
   const { data, error } =
     await supabase.rpc(
-      "submit_change_order_response",
+      "submit_change_order_response_v2",
       {
         requested_token: token,
         requested_response:
@@ -203,19 +193,14 @@ export async function POST(
         requested_notes:
           body.notes?.trim() || null,
         requested_ip: customerIp,
+        requested_user_agent: request.headers.get("user-agent"),
+        requested_acknowledged_terms: true,
       },
     );
 
   if (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      {
-        status: 400,
-      },
-    );
+    const failure = createPublicTokenFailure("unavailable");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
   if (
@@ -228,7 +213,11 @@ export async function POST(
       {
         success: false,
         alreadySubmitted: true,
-        result: data,
+        result: {
+          status: "status" in data ? data.status : null,
+          approved_at: "approved_at" in data ? data.approved_at : null,
+          declined_at: "declined_at" in data ? data.declined_at : null,
+        },
       },
       {
         status: 409,
@@ -238,6 +227,10 @@ export async function POST(
 
   return NextResponse.json({
     success: true,
-    result: data,
+    result: data && typeof data === "object" ? {
+      status: "status" in data ? data.status : null,
+      approved_at: "approved_at" in data ? data.approved_at : null,
+      declined_at: "declined_at" in data ? data.declined_at : null,
+    } : null,
   });
 }

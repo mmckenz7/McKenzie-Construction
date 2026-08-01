@@ -4,6 +4,11 @@ import {
 } from "next/server";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import {
+  createPublicTokenFailure,
+  isPublicTokenBodyTooLarge,
+  minimizeMaterialReviewPayload,
+} from "@/lib/public-token-api";
 
 type RouteContext = {
   params: Promise<{
@@ -48,15 +53,8 @@ export async function GET(
   const { token } = await context.params;
 
   if (!isUuid(token)) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Invalid material review link.",
-      },
-      {
-        status: 400,
-      },
-    );
+    const failure = createPublicTokenFailure("unavailable");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
   const supabase =
@@ -71,51 +69,23 @@ export async function GET(
     );
 
   if (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      {
-        status: 500,
-      },
-    );
+    const failure = createPublicTokenFailure("unexpected");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
-  if (!data) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Material review not found.",
-      },
-      {
-        status: 404,
-      },
-    );
-  }
-
-  if (
+  if (!data || (
     typeof data === "object" &&
     data !== null &&
     "expired" in data &&
     data.expired === true
-  ) {
-    return NextResponse.json(
-      {
-        success: false,
-        expired: true,
-        error:
-          "This material review has expired.",
-      },
-      {
-        status: 410,
-      },
-    );
+  )) {
+    const failure = createPublicTokenFailure("unavailable");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
   return NextResponse.json({
     success: true,
-    review: data,
+    review: minimizeMaterialReviewPayload(data),
   });
 }
 
@@ -126,15 +96,12 @@ export async function POST(
   const { token } = await context.params;
 
   if (!isUuid(token)) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Invalid material review link.",
-      },
-      {
-        status: 400,
-      },
-    );
+    const failure = createPublicTokenFailure("unavailable");
+    return NextResponse.json(failure.body, { status: failure.status });
+  }
+
+  if (isPublicTokenBodyTooLarge(request.headers.get("content-length"))) {
+    return NextResponse.json({ success: false, error: "Invalid form submission." }, { status: 413 });
   }
 
   let body: SubmitBody;
@@ -193,6 +160,24 @@ export async function POST(
       : [];
 
   if (
+    issues.length > 50 ||
+    (body.notes?.length ?? 0) > 4_000 ||
+    issues.some((issue) =>
+      (issue.notes?.length ?? 0) > 2_000 ||
+      (issue.reviewItemId !== null &&
+        issue.reviewItemId !== undefined &&
+        !isUuid(issue.reviewItemId)) ||
+      (issue.reportedQuantity !== null &&
+        issue.reportedQuantity !== undefined &&
+        (!Number.isFinite(issue.reportedQuantity) ||
+          issue.reportedQuantity < 0 ||
+          issue.reportedQuantity > 1_000_000)),
+    )
+  ) {
+    return NextResponse.json({ success: false, error: "Invalid form submission." }, { status: 400 });
+  }
+
+  if (
     body.reviewResult ===
       "issues_reported" &&
     issues.length === 0
@@ -244,17 +229,8 @@ export async function POST(
     .single();
 
   if (reviewError || !review) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          reviewError?.message ??
-          "Material review not found.",
-      },
-      {
-        status: 404,
-      },
-    );
+    const failure = createPublicTokenFailure("unavailable");
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
   if (
@@ -337,6 +313,7 @@ export async function POST(
     body.notes?.trim() || null;
 
   const {
+    data: updatedReview,
     error: updateError,
   } = await supabase
     .from(
@@ -359,16 +336,23 @@ export async function POST(
       submitted_at:
         new Date().toISOString(),
     })
-    .eq("id", review.id);
+    .eq("id", review.id)
+    .in("status", ["pending", "opened"])
+    .is("submitted_at", null)
+    .select("id")
+    .maybeSingle();
 
-  if (updateError) {
+  if (updateError || !updatedReview) {
     return NextResponse.json(
       {
         success: false,
-        error: updateError.message,
+        alreadySubmitted: !updateError,
+        error: updateError
+          ? "The request could not be completed."
+          : "This material review has already been submitted.",
       },
       {
-        status: 500,
+        status: updateError ? 500 : 409,
       },
     );
   }
@@ -385,7 +369,7 @@ export async function POST(
     return NextResponse.json(
       {
         success: false,
-        error: deleteError.message,
+        error: "The request could not be completed.",
       },
       {
         status: 500,
@@ -432,7 +416,7 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error: issueError.message,
+          error: "The request could not be completed.",
         },
         {
           status: 500,
@@ -443,6 +427,5 @@ export async function POST(
 
   return NextResponse.json({
     success: true,
-    reviewId: review.id,
   });
 }
