@@ -7,6 +7,9 @@ import { createAdminServerClient } from "@/lib/supabase/admin-server";
 export const dynamic = "force-dynamic";
 
 type ProjectsPageProps = {
+  params: Promise<{
+    projectId: string;
+  }>;
   searchParams: Promise<{
     q?: string;
     status?: string;
@@ -256,8 +259,12 @@ function getScheduleClasses(
 }
 
 export default async function ProjectsPage({
+  params,
   searchParams,
 }: ProjectsPageProps) {
+  const { projectId } =
+    await params;
+
   const parameters =
     await searchParams;
 

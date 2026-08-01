@@ -67,6 +67,26 @@ export default function AdministrationDashboardPage() {
           </article>
         ))}
       </section>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-bold text-slate-950">
+          Feature Settings
+        </h2>
+
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Enable or disable advanced
+          workflows for each company or
+          workspace.
+        </p>
+
+        <a
+          href="/admin/settings/features"
+          className="mt-5 inline-flex rounded-xl bg-blue-950 px-4 py-3 text-sm font-bold text-white"
+        >
+          Manage Features
+        </a>
+      </section>
+
     </main>
   );
 }
