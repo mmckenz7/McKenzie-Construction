@@ -94,6 +94,10 @@ const activityLabels: Record<
     "Change order completed",
   change_order_response_reviewed:
     "Change order response reviewed",
+  change_order_approval_reminder:
+    "Change order approval reminder",
+  change_order_approval_expired:
+    "Change order approval expired",
   system: "System",
 };
 

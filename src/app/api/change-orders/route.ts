@@ -39,9 +39,76 @@ function normalizeProject(
   };
 }
 
+function daysBetween(
+  earlierValue: string | null,
+  laterValue = new Date(),
+) {
+  if (!earlierValue) {
+    return null;
+  }
+
+  const earlier =
+    new Date(earlierValue);
+
+  if (
+    Number.isNaN(
+      earlier.getTime(),
+    )
+  ) {
+    return null;
+  }
+
+  return Math.floor(
+    (
+      laterValue.getTime() -
+      earlier.getTime()
+    ) /
+      86_400_000,
+  );
+}
+
+function daysUntil(
+  futureValue: string | null,
+) {
+  if (!futureValue) {
+    return null;
+  }
+
+  const future =
+    new Date(futureValue);
+
+  if (
+    Number.isNaN(
+      future.getTime(),
+    )
+  ) {
+    return null;
+  }
+
+  return Math.ceil(
+    (
+      future.getTime() -
+      Date.now()
+    ) /
+      86_400_000,
+  );
+}
+
 function normalizeChangeOrder(
   record: Record<string, unknown>,
 ) {
+  const approvalSentAt =
+    typeof record.approval_sent_at ===
+    "string"
+      ? record.approval_sent_at
+      : null;
+
+  const approvalExpiresAt =
+    typeof record.approval_expires_at ===
+    "string"
+      ? record.approval_expires_at
+      : null;
+
   return {
     id: String(record.id ?? ""),
     projectId: String(
@@ -90,21 +157,31 @@ function normalizeChangeOrder(
       "string"
         ? record.customer_response_notes
         : null,
-    approvalSentAt:
-      typeof record.approval_sent_at ===
-      "string"
-        ? record.approval_sent_at
-        : null,
+    approvalSentAt,
+    approvalAgeDays:
+      daysBetween(
+        approvalSentAt,
+      ),
     approvalOpenedAt:
       typeof record.approval_opened_at ===
       "string"
         ? record.approval_opened_at
         : null,
-    approvalExpiresAt:
-      typeof record.approval_expires_at ===
+    approvalExpiresAt,
+    approvalExpiresInDays:
+      daysUntil(
+        approvalExpiresAt,
+      ),
+    approvalReminderSentAt:
+      typeof record.approval_reminder_sent_at ===
       "string"
-        ? record.approval_expires_at
+        ? record.approval_reminder_sent_at
         : null,
+    approvalReminderCount:
+      typeof record.approval_reminder_count ===
+      "number"
+        ? record.approval_reminder_count
+        : 0,
     approvedAt:
       typeof record.approved_at ===
       "string"
@@ -147,8 +224,15 @@ export async function GET(
   const supabase =
     createAdminServerClient();
 
-  const { data, error } =
-    await supabase
+  await supabase.rpc(
+    "expire_change_order_approvals",
+  );
+
+  const [
+    changeOrdersResult,
+    responseCountsResult,
+  ] = await Promise.all([
+    supabase
       .from("project_change_orders")
       .select(`
         *,
@@ -157,7 +241,23 @@ export async function GET(
       .order("updated_at", {
         ascending: false,
       })
-      .limit(250);
+      .limit(250),
+
+    supabase
+      .from(
+        "project_change_order_responses",
+      )
+      .select(
+        "change_order_id",
+      ),
+  ]);
+
+  const data =
+    changeOrdersResult.data;
+
+  const error =
+    changeOrdersResult.error ??
+    responseCountsResult.error;
 
   if (error) {
     return NextResponse.json(

@@ -39,8 +39,6 @@ type InboxItem = {
   demoDurationDays?: number | null;
   totalDurationDays?: number | null;
   reviewResult?: string | null;
-  reviewedAt?: string | null;
-  reviewedBy?: string | null;
   totalIssues?: number;
   unresolvedIssues?: number;
   notes?: string | null;

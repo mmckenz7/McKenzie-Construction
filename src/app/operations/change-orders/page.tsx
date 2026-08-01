@@ -21,14 +21,19 @@ type ChangeOrder = {
   approvedByName: string | null;
   approvalToken: string | null;
   customerResponseNotes: string | null;
+  customerAcknowledgedTerms: boolean;
+  customerAgreementText: string | null;
   approvalSentAt: string | null;
   approvalOpenedAt: string | null;
   approvalExpiresAt: string | null;
+  approvalReminderSentAt: string | null;
+  approvalReminderCount: number;
   approvedAt: string | null;
   declinedAt: string | null;
   responseReviewedAt:
     | string
     | null;
+  responseCount: number;
   createdAt: string;
   updatedAt: string;
   project: {
@@ -118,6 +123,10 @@ function statusClasses(
     status === "cancelled"
   ) {
     return "bg-red-100 text-red-800";
+  }
+
+  if (status === "expired") {
+    return "bg-orange-100 text-orange-800";
   }
 
   if (status === "in_progress") {
@@ -275,7 +284,7 @@ export default function ChangeOrdersOverviewPage() {
 
       setNotice(
         changeOrder.approvalToken
-          ? "Old approval link disabled. New approval link copied."
+          ? "Old approval and response record cleared. New approval link copied."
           : "Customer approval link created and copied.",
       );
 
@@ -336,6 +345,130 @@ export default function ChangeOrdersOverviewPage() {
     setNotice(
       "Customer text message copied.",
     );
+  }
+
+  async function revokeApprovalLink(
+    changeOrder: ChangeOrder,
+  ) {
+    const confirmed =
+      window.confirm(
+        "Disable this customer approval link and return the change order to Draft?",
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setActionChangeOrderId(
+      changeOrder.id,
+    );
+    setNotice("");
+    setError("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${changeOrder.projectId}/change-orders/${changeOrder.id}/revoke-approval`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+        };
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        setError(
+          result.error ??
+            "Could not revoke the customer approval link.",
+        );
+        return;
+      }
+
+      setNotice(
+        "Customer approval link revoked. Change order returned to Draft.",
+      );
+
+      await loadChangeOrders();
+    } catch {
+      setError(
+        "Could not revoke the customer approval link.",
+      );
+    } finally {
+      setActionChangeOrderId("");
+    }
+  }
+
+  async function copyReminderMessage(
+    changeOrder: ChangeOrder,
+  ) {
+    if (!changeOrder.approvalToken) {
+      return;
+    }
+
+    setActionChangeOrderId(
+      changeOrder.id,
+    );
+    setNotice("");
+    setError("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${changeOrder.projectId}/change-orders/${changeOrder.id}/reminder`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+        };
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        setError(
+          result.error ??
+            "Could not record the approval reminder.",
+        );
+        return;
+      }
+
+      const link =
+        `${window.location.origin}/change-order/${changeOrder.approvalToken}`;
+
+      const message =
+        `Reminder from McKenzie Construction: Change Order #${changeOrder.changeOrderNumber} for ${changeOrder.project?.name ?? "your project"} is still waiting for your response. ` +
+        `The amount is ${formatCurrency(
+          changeOrder.amount,
+        )}. Review and respond here: ${link}`;
+
+      await navigator.clipboard.writeText(
+        message,
+      );
+
+      setNotice(
+        "Reminder recorded and customer text copied.",
+      );
+
+      await loadChangeOrders();
+    } catch {
+      setError(
+        "Could not record the approval reminder.",
+      );
+    } finally {
+      setActionChangeOrderId("");
+    }
   }
 
   async function markResponseReviewed(
@@ -466,15 +599,24 @@ export default function ChangeOrdersOverviewPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() =>
-            void loadChangeOrders()
-          }
-          className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800"
-        >
-          Refresh
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link
+            href="/operations/change-orders/responses"
+            className="rounded-xl border border-violet-300 bg-violet-50 px-4 py-3 text-center text-sm font-bold text-violet-800"
+          >
+            Response Archive
+          </Link>
+
+          <button
+            type="button"
+            onClick={() =>
+              void loadChangeOrders()
+            }
+            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -686,7 +828,7 @@ export default function ChangeOrdersOverviewPage() {
                     </div>
                   </div>
 
-                  <dl className="mt-5 grid gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-5">
+                  <dl className="mt-5 grid gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-6">
                     <Info
                       label="Customer Price"
                       value={formatCurrency(
@@ -716,6 +858,13 @@ export default function ChangeOrdersOverviewPage() {
                     <Info
                       label="Schedule Impact"
                       value={`${changeOrder.scheduleImpactDays} days`}
+                    />
+
+                    <Info
+                      label="Response Records"
+                      value={String(
+                        changeOrder.responseCount,
+                      )}
                     />
 
                     <Info
@@ -813,6 +962,46 @@ export default function ChangeOrdersOverviewPage() {
                               >
                                 Copy Text
                               </button>
+
+                              {changeOrder.status ===
+                                "pending_customer" && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      actionChangeOrderId ===
+                                      changeOrder.id
+                                    }
+                                    onClick={() =>
+                                      void copyReminderMessage(
+                                        changeOrder,
+                                      )
+                                    }
+                                    className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                                  >
+                                    {actionChangeOrderId ===
+                                    changeOrder.id
+                                      ? "Saving..."
+                                      : "Copy Reminder"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      actionChangeOrderId ===
+                                      changeOrder.id
+                                    }
+                                    onClick={() =>
+                                      void revokeApprovalLink(
+                                        changeOrder,
+                                      )
+                                    }
+                                    className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-bold text-red-700 disabled:opacity-50"
+                                  >
+                                    Revoke Link
+                                  </button>
+                                </>
+                              )}
                             </>
                           )}
                         </div>
@@ -850,6 +1039,28 @@ export default function ChangeOrdersOverviewPage() {
                       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-violet-950">
                         {
                           changeOrder.customerResponseNotes
+                        }
+                      </p>
+                    </div>
+                  )}
+
+                  {changeOrder.customerAgreementText && (
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
+                          Customer Agreement
+                        </p>
+
+                        {changeOrder.customerAcknowledgedTerms && (
+                          <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800">
+                            Acknowledged
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                        {
+                          changeOrder.customerAgreementText
                         }
                       </p>
                     </div>

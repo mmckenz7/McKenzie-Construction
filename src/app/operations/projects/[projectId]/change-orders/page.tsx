@@ -9,6 +9,8 @@ import {
 } from "react";
 import { useParams } from "next/navigation";
 
+import { useFeatures } from "@/components/features/use-features";
+
 type Project = {
   id: string;
   name: string;
@@ -23,6 +25,47 @@ type ChangeOrderStatus =
   | "in_progress"
   | "completed"
   | "cancelled";
+
+type ChangeOrderRevision = {
+  id: string;
+  projectId: string;
+  changeOrderNumber: number;
+  title: string;
+  status: string;
+  amount: number;
+  scheduleImpactDays: number;
+  revisedFromChangeOrderId:
+    | string
+    | null;
+  revisionNumber: number;
+  supersededByChangeOrderId:
+    | string
+    | null;
+  supersededAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ChangeOrderResponse = {
+  id: string;
+  response:
+    | "approved"
+    | "declined";
+  customerName: string;
+  customerNotes: string | null;
+  agreementText: string;
+  acknowledgedTerms: boolean;
+  submittedAt: string;
+  changeOrderNumber: number;
+  title: string;
+  description: string;
+  reason: string | null;
+  amount: number;
+  scheduleImpactDays: number;
+  customerNotesSnapshot:
+    | string
+    | null;
+};
 
 type ChangeOrder = {
   id: string;
@@ -43,8 +86,18 @@ type ChangeOrder = {
   approvalSentAt: string | null;
   approvalOpenedAt: string | null;
   approvalExpiresAt: string | null;
+  approvalReminderSentAt: string | null;
+  approvalReminderCount: number;
   customerResponseNotes: string | null;
+  customerAcknowledgedTerms: boolean;
+  customerAgreementText: string | null;
   responseReviewedAt: string | null;
+  revisedFromChangeOrderId: string | null;
+  revisionNumber: number;
+  supersededByChangeOrderId:
+    | string
+    | null;
+  supersededAt: string | null;
   responseReviewedBy: string | null;
   approvedAt: string | null;
   declinedAt: string | null;
@@ -165,6 +218,9 @@ export default function ChangeOrdersPage() {
     projectId: string;
   }>();
 
+  const { isEnabled } =
+    useFeatures();
+
   const [project, setProject] =
     useState<Project | null>(null);
 
@@ -241,6 +297,51 @@ export default function ChangeOrdersPage() {
   const [
     reviewingResponseId,
     setReviewingResponseId,
+  ] = useState("");
+
+  const [
+    creatingRevisionId,
+    setCreatingRevisionId,
+  ] = useState("");
+
+  const [
+    responseHistoryByOrder,
+    setResponseHistoryByOrder,
+  ] = useState<
+    Record<
+      string,
+      ChangeOrderResponse[]
+    >
+  >({});
+
+  const [
+    revisionHistoryByOrder,
+    setRevisionHistoryByOrder,
+  ] = useState<
+    Record<
+      string,
+      ChangeOrderRevision[]
+    >
+  >({});
+
+  const [
+    loadingRevisionsId,
+    setLoadingRevisionsId,
+  ] = useState("");
+
+  const [
+    openRevisionsId,
+    setOpenRevisionsId,
+  ] = useState("");
+
+  const [
+    loadingHistoryId,
+    setLoadingHistoryId,
+  ] = useState("");
+
+  const [
+    openHistoryId,
+    setOpenHistoryId,
   ] = useState("");
 
   const [notice, setNotice] =
@@ -468,7 +569,7 @@ export default function ChangeOrdersPage() {
 
       setNotice(
         changeOrder.approvalToken
-          ? "Old approval link disabled. New link created and copied."
+          ? "Old approval and response record cleared. New link created and copied."
           : "Customer approval link created and copied.",
       );
 
@@ -526,6 +627,341 @@ export default function ChangeOrdersPage() {
     setNotice(
       "Customer text message copied.",
     );
+  }
+
+  async function createRevision(
+    changeOrder: ChangeOrder,
+  ) {
+    const confirmed =
+      window.confirm(
+        `Create an editable revision of Change Order #${changeOrder.changeOrderNumber}? The original record will remain unchanged.`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setCreatingRevisionId(
+      changeOrder.id,
+    );
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${params.projectId}/change-orders/${changeOrder.id}/revision`,
+        {
+          method: "POST",
+          credentials: "include",
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          revision?: {
+            id?: string;
+            changeOrderNumber?: number;
+            revisionNumber?: number;
+            copiedLineItemCount?: number;
+          };
+        };
+
+      const revisionId =
+        result.revision?.id;
+
+      if (
+        !response.ok ||
+        !result.success ||
+        !revisionId
+      ) {
+        setNotice(
+          result.error ??
+            "Could not create the change-order revision.",
+        );
+        return;
+      }
+
+      setNotice(
+        `Revision ${result.revision?.revisionNumber ?? ""} created with ${result.revision?.copiedLineItemCount ?? 0} copied line items.`,
+      );
+
+      await loadChangeOrders();
+
+      window.location.href =
+        `/operations/projects/${params.projectId}/change-orders/${revisionId}/items`;
+    } catch {
+      setNotice(
+        "Could not create the change-order revision.",
+      );
+    } finally {
+      setCreatingRevisionId("");
+    }
+  }
+
+  async function revokeApprovalLink(
+    changeOrder: ChangeOrder,
+  ) {
+    const confirmed =
+      window.confirm(
+        "Disable this customer approval link and return the change order to Draft?",
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setCreatingApprovalId(
+      changeOrder.id,
+    );
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${params.projectId}/change-orders/${changeOrder.id}/revoke-approval`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+        };
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        setNotice(
+          result.error ??
+            "Could not revoke the customer approval link.",
+        );
+        return;
+      }
+
+      setNotice(
+        "Customer approval link revoked. Change order returned to Draft.",
+      );
+
+      await loadChangeOrders();
+    } catch {
+      setNotice(
+        "Could not revoke the customer approval link.",
+      );
+    } finally {
+      setCreatingApprovalId("");
+    }
+  }
+
+  async function copyReminderMessage(
+    changeOrder: ChangeOrder,
+  ) {
+    if (!changeOrder.approvalToken) {
+      return;
+    }
+
+    setCreatingApprovalId(
+      changeOrder.id,
+    );
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${params.projectId}/change-orders/${changeOrder.id}/reminder`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+        };
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        setNotice(
+          result.error ??
+            "Could not record the approval reminder.",
+        );
+        return;
+      }
+
+      const link =
+        `${window.location.origin}/change-order/` +
+        changeOrder.approvalToken;
+
+      const message =
+        `Reminder from McKenzie Construction: Change Order #${changeOrder.changeOrderNumber} is still waiting for your response. ` +
+        `The amount is ${formatCurrency(
+          changeOrder.amount,
+        )}. Review and respond here: ${link}`;
+
+      await navigator.clipboard.writeText(
+        message,
+      );
+
+      setNotice(
+        "Reminder recorded and customer text copied.",
+      );
+
+      await loadChangeOrders();
+    } catch {
+      setNotice(
+        "Could not record the approval reminder.",
+      );
+    } finally {
+      setCreatingApprovalId("");
+    }
+  }
+
+  async function toggleRevisionHistory(
+    changeOrder: ChangeOrder,
+  ) {
+    if (
+      openRevisionsId ===
+      changeOrder.id
+    ) {
+      setOpenRevisionsId("");
+      return;
+    }
+
+    setOpenRevisionsId(
+      changeOrder.id,
+    );
+
+    if (
+      revisionHistoryByOrder[
+        changeOrder.id
+      ]
+    ) {
+      return;
+    }
+
+    setLoadingRevisionsId(
+      changeOrder.id,
+    );
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${params.projectId}/change-orders/${changeOrder.id}/revisions`,
+        {
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          revisions?: ChangeOrderRevision[];
+        };
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        setNotice(
+          result.error ??
+            "Could not load revision history.",
+        );
+        return;
+      }
+
+      setRevisionHistoryByOrder(
+        (current) => ({
+          ...current,
+          [changeOrder.id]:
+            result.revisions ?? [],
+        }),
+      );
+    } catch {
+      setNotice(
+        "Could not load revision history.",
+      );
+    } finally {
+      setLoadingRevisionsId("");
+    }
+  }
+
+  async function toggleResponseHistory(
+    changeOrder: ChangeOrder,
+  ) {
+    if (
+      openHistoryId ===
+      changeOrder.id
+    ) {
+      setOpenHistoryId("");
+      return;
+    }
+
+    setOpenHistoryId(
+      changeOrder.id,
+    );
+
+    if (
+      responseHistoryByOrder[
+        changeOrder.id
+      ]
+    ) {
+      return;
+    }
+
+    setLoadingHistoryId(
+      changeOrder.id,
+    );
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${params.projectId}/change-orders/${changeOrder.id}/responses`,
+        {
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          responses?: ChangeOrderResponse[];
+        };
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        setNotice(
+          result.error ??
+            "Could not load customer response history.",
+        );
+        return;
+      }
+
+      setResponseHistoryByOrder(
+        (current) => ({
+          ...current,
+          [changeOrder.id]:
+            result.responses ?? [],
+        }),
+      );
+    } catch {
+      setNotice(
+        "Could not load customer response history.",
+      );
+    } finally {
+      setLoadingHistoryId("");
+    }
   }
 
   async function markResponseReviewed(
@@ -963,6 +1399,23 @@ export default function ChangeOrdersPage() {
                         {changeOrder.title}
                       </h2>
 
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {changeOrder.revisionNumber > 0 && (
+                          <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-800">
+                            Revision{" "}
+                            {
+                              changeOrder.revisionNumber
+                            }
+                          </span>
+                        )}
+
+                        {changeOrder.supersededByChangeOrderId && (
+                          <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">
+                            Superseded
+                          </span>
+                        )}
+                      </div>
+
                       <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                         {
                           changeOrder.description
@@ -1011,12 +1464,14 @@ export default function ChangeOrdersPage() {
                         )}
                       </select>
 
-                      {![
-                        "completed",
-                        "cancelled",
-                      ].includes(
-                        changeOrder.status,
-                      ) && (
+                      {!changeOrder
+                        .supersededByChangeOrderId &&
+                        ![
+                          "completed",
+                          "cancelled",
+                        ].includes(
+                          changeOrder.status,
+                        ) && (
                         <button
                           type="button"
                           disabled={
@@ -1090,6 +1545,365 @@ export default function ChangeOrdersPage() {
                       }
                     />
                   </dl>
+
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    {isEnabled(
+                      "change_order_vendor_requests",
+                    ) &&
+                      !changeOrder
+                        .supersededByChangeOrderId && (
+                      <a
+                        href={`/operations/projects/${params.projectId}/change-orders/${changeOrder.id}/vendor-requests`}
+                        className="rounded-xl border border-cyan-300 bg-cyan-50 px-4 py-3 text-sm font-bold text-cyan-800"
+                      >
+                        Request Updated Schedule & Costs
+                      </a>
+                    )}
+
+                    {[
+                      "approved",
+                      "in_progress",
+                      "completed",
+                    ].includes(
+                      changeOrder.status,
+                    ) &&
+                      !changeOrder
+                        .supersededByChangeOrderId && (
+                      <a
+                        href={`/operations/projects/${params.projectId}/change-orders/${changeOrder.id}/billing`}
+                        className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800"
+                      >
+                        Billing & Payments
+                      </a>
+                    )}
+
+                    <a
+                      href={`/operations/projects/${params.projectId}/change-orders/${changeOrder.id}/items`}
+                      className={`rounded-xl px-4 py-3 text-sm font-bold ${
+                        changeOrder.status ===
+                        "draft"
+                          ? "bg-blue-950 text-white"
+                          : "border border-slate-300 bg-white text-slate-700"
+                      }`}
+                    >
+                      {changeOrder.status ===
+                      "draft"
+                        ? "Edit Line Items"
+                        : "View Line Items"}
+                    </a>
+
+                    <button
+                      type="button"
+                      disabled={
+                        loadingHistoryId ===
+                        changeOrder.id
+                      }
+                      onClick={() =>
+                        void toggleResponseHistory(
+                          changeOrder,
+                        )
+                      }
+                      className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 disabled:opacity-50"
+                    >
+                      {loadingHistoryId ===
+                      changeOrder.id
+                        ? "Loading History..."
+                        : openHistoryId ===
+                            changeOrder.id
+                          ? "Hide Response History"
+                          : "View Response History"}
+                    </button>
+
+                    {changeOrder.status !==
+                      "draft" &&
+                      !changeOrder
+                        .supersededByChangeOrderId && (
+                      <button
+                        type="button"
+                        disabled={
+                          creatingRevisionId ===
+                          changeOrder.id
+                        }
+                        onClick={() =>
+                          void createRevision(
+                            changeOrder,
+                          )
+                        }
+                        className="rounded-xl border border-violet-300 bg-violet-50 px-4 py-3 text-sm font-bold text-violet-800 disabled:opacity-50"
+                      >
+                        {creatingRevisionId ===
+                        changeOrder.id
+                          ? "Creating Revision..."
+                          : "Create Revision"}
+                      </button>
+                    )}
+
+                    {(changeOrder.revisionNumber > 0 ||
+                      changeOrder.revisedFromChangeOrderId) && (
+                      <button
+                        type="button"
+                        disabled={
+                          loadingRevisionsId ===
+                          changeOrder.id
+                        }
+                        onClick={() =>
+                          void toggleRevisionHistory(
+                            changeOrder,
+                          )
+                        }
+                        className="rounded-xl border border-violet-300 bg-white px-4 py-3 text-sm font-bold text-violet-800 disabled:opacity-50"
+                      >
+                        {loadingRevisionsId ===
+                        changeOrder.id
+                          ? "Loading Revisions..."
+                          : openRevisionsId ===
+                              changeOrder.id
+                            ? "Hide Revisions"
+                            : "View Revisions"}
+                      </button>
+                    )}
+                  </div>
+
+                  {openRevisionsId ===
+                    changeOrder.id && (
+                    <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-5">
+                      <p className="text-xs font-bold uppercase tracking-wide text-violet-700">
+                        Revision History
+                      </p>
+
+                      <div className="mt-4 grid gap-3">
+                        {(revisionHistoryByOrder[
+                          changeOrder.id
+                        ] ?? []).map(
+                          (revision) => {
+                            const current =
+                              revision.id ===
+                              changeOrder.id;
+
+                            return (
+                              <article
+                                key={
+                                  revision.id
+                                }
+                                className={`rounded-xl border p-4 ${
+                                  current
+                                    ? "border-violet-400 bg-white"
+                                    : "border-violet-200 bg-white/70"
+                                }`}
+                              >
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-800">
+                                        {revision.revisionNumber ===
+                                        0
+                                          ? "Original"
+                                          : `Revision ${revision.revisionNumber}`}
+                                      </span>
+
+                                      {current && (
+                                        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
+                                          Current
+                                        </span>
+                                      )}
+
+                                      {revision.supersededByChangeOrderId && (
+                                        <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">
+                                          Superseded
+                                        </span>
+                                      )}
+
+                                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold capitalize text-slate-700">
+                                        {revision.status.replaceAll(
+                                          "_",
+                                          " ",
+                                        )}
+                                      </span>
+                                    </div>
+
+                                    <p className="mt-3 font-bold text-slate-950">
+                                      Change Order #
+                                      {
+                                        revision.changeOrderNumber
+                                      }
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-slate-600">
+                                      {
+                                        revision.title
+                                      }
+                                    </p>
+
+                                    <p className="mt-2 text-sm font-semibold text-slate-800">
+                                      {formatCurrency(
+                                        revision.amount,
+                                      )}{" "}
+                                      ·{" "}
+                                      {
+                                        revision.scheduleImpactDays
+                                      }{" "}
+                                      days
+                                    </p>
+
+                                    {revision.supersededAt && (
+                                      <p className="mt-1 text-sm text-slate-500">
+                                        Superseded{" "}
+                                        {formatDate(
+                                          revision.supersededAt,
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  <a
+                                    href={`/operations/projects/${params.projectId}/change-orders/${revision.id}/items`}
+                                    className="rounded-lg border border-violet-300 bg-white px-4 py-2 text-center text-sm font-bold text-violet-800"
+                                  >
+                                    {revision.status ===
+                                    "draft"
+                                      ? "Edit Revision"
+                                      : "View Revision"}
+                                  </a>
+                                </div>
+                              </article>
+                            );
+                          },
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {openHistoryId ===
+                    changeOrder.id && (
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-5">
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
+                        Customer Response History
+                      </p>
+
+                      {(responseHistoryByOrder[
+                        changeOrder.id
+                      ] ?? []).length ===
+                      0 ? (
+                        <p className="mt-3 text-sm text-slate-600">
+                          No archived customer
+                          responses yet.
+                        </p>
+                      ) : (
+                        <div className="mt-4 space-y-4">
+                          {responseHistoryByOrder[
+                            changeOrder.id
+                          ].map(
+                            (
+                              response,
+                              index,
+                            ) => (
+                              <article
+                                key={
+                                  response.id
+                                }
+                                className="rounded-xl border border-slate-200 bg-white p-4"
+                              >
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span
+                                        className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
+                                          response.response ===
+                                          "approved"
+                                            ? "bg-emerald-100 text-emerald-800"
+                                            : "bg-red-100 text-red-800"
+                                        }`}
+                                      >
+                                        {
+                                          response.response
+                                        }
+                                      </span>
+
+                                      <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                        Response{" "}
+                                        {
+                                          responseHistoryByOrder[
+                                            changeOrder.id
+                                          ].length -
+                                            index
+                                        }
+                                      </span>
+                                    </div>
+
+                                    <p className="mt-3 font-bold text-slate-950">
+                                      {
+                                        response.customerName
+                                      }
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-slate-600">
+                                      {formatDate(
+                                        response.submittedAt,
+                                      )}
+                                    </p>
+                                  </div>
+
+                                  <div className="text-left sm:text-right">
+                                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                      Amount
+                                    </p>
+
+                                    <p className="mt-1 font-bold text-slate-950">
+                                      {formatCurrency(
+                                        response.amount,
+                                      )}
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-slate-600">
+                                      {
+                                        response.scheduleImpactDays
+                                      }{" "}
+                                      days
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 rounded-lg bg-slate-50 p-4">
+                                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                    Agreement
+                                  </p>
+
+                                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                                    {
+                                      response.agreementText
+                                    }
+                                  </p>
+                                </div>
+
+                                {response.customerNotes && (
+                                  <div className="mt-4">
+                                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                      Customer Comments
+                                    </p>
+
+                                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                                      {
+                                        response.customerNotes
+                                      }
+                                    </p>
+                                  </div>
+                                )}
+
+                                <a
+                                  href={`/operations/projects/${params.projectId}/change-orders/${changeOrder.id}/responses/${response.id}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-4 inline-flex rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800"
+                                >
+                                  Open Printable Record
+                                </a>
+                              </article>
+                            ),
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {[
                     "approved",
@@ -1207,6 +2021,46 @@ export default function ChangeOrdersPage() {
                           >
                             Copy Text Message
                           </button>
+
+                          {changeOrder.status ===
+                            "pending_customer" && (
+                            <>
+                              <button
+                                type="button"
+                                disabled={
+                                  creatingApprovalId ===
+                                  changeOrder.id
+                                }
+                                onClick={() =>
+                                  void copyReminderMessage(
+                                    changeOrder,
+                                  )
+                                }
+                                className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                              >
+                                {creatingApprovalId ===
+                                changeOrder.id
+                                  ? "Saving..."
+                                  : "Copy Reminder"}
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={
+                                  creatingApprovalId ===
+                                  changeOrder.id
+                                }
+                                onClick={() =>
+                                  void revokeApprovalLink(
+                                    changeOrder,
+                                  )
+                                }
+                                className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-bold text-red-700 disabled:opacity-50"
+                              >
+                                Revoke Link
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -1219,6 +2073,28 @@ export default function ChangeOrdersPage() {
                           <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-emerald-950">
                             {
                               changeOrder.customerResponseNotes
+                            }
+                          </p>
+                        </div>
+                      )}
+
+                      {changeOrder.customerAgreementText && (
+                        <div className="mt-4 border-t border-emerald-200 pt-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+                              Customer Agreement
+                            </p>
+
+                            {changeOrder.customerAcknowledgedTerms && (
+                              <span className="rounded-full bg-white px-2 py-1 text-xs font-bold text-emerald-800">
+                                Acknowledged
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-emerald-950">
+                            {
+                              changeOrder.customerAgreementText
                             }
                           </p>
                         </div>

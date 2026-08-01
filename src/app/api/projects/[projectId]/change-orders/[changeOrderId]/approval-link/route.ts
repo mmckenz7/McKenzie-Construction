@@ -11,6 +11,7 @@ import {
   createUnauthorizedApiResponse,
   getAuthenticatedApiUser,
 } from "@/lib/api-auth";
+import { checkApiFeature } from "@/lib/features/server";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -34,6 +35,28 @@ export async function PATCH(
   request: NextRequest,
   context: RouteContext,
 ) {
+  const featureAccess =
+    await checkApiFeature(
+      request,
+      "change_order_customer_approval",
+    );
+
+  if (!featureAccess.enabled) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "This feature is disabled for the current account.",
+        featureKey:
+          "change_order_customer_approval",
+      },
+      {
+        status: 403,
+      },
+    );
+  }
+
+
   const authUser =
     await getAuthenticatedApiUser();
 
@@ -105,7 +128,8 @@ export async function PATCH(
         change_order_number,
         title,
         status,
-        approval_token
+        approval_token,
+        superseded_by_change_order_id
       `,
     )
     .eq("id", changeOrderId)
@@ -168,6 +192,20 @@ export async function PATCH(
         customer_response_notes:
           null,
         customer_response_ip: null,
+        customer_response_user_agent:
+          null,
+        customer_acknowledged_terms:
+          false,
+        customer_agreement_text:
+          null,
+        response_reviewed_at:
+          null,
+        response_reviewed_by:
+          null,
+        approval_reminder_sent_at:
+          null,
+        approval_reminder_count:
+          0,
       })
       .eq("id", changeOrderId)
       .eq("project_id", projectId)

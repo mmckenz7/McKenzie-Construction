@@ -129,6 +129,16 @@ function normalizeChangeOrder(
       "string"
         ? record.approval_expires_at
         : null,
+    approvalReminderSentAt:
+      typeof record.approval_reminder_sent_at ===
+      "string"
+        ? record.approval_reminder_sent_at
+        : null,
+    approvalReminderCount:
+      typeof record.approval_reminder_count ===
+      "number"
+        ? record.approval_reminder_count
+        : 0,
     customerResponseNotes:
       typeof record.customer_response_notes ===
       "string"
@@ -203,6 +213,10 @@ export async function GET(
 
   const supabase =
     createAdminServerClient();
+
+  await supabase.rpc(
+    "expire_change_order_approvals",
+  );
 
   const [
     projectResult,

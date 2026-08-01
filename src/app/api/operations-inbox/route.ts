@@ -9,6 +9,27 @@ import {
 } from "@/lib/api-auth";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
+type InboxItem = {
+  id: string;
+  type:
+    | "schedule_response"
+    | "material_review"
+    | "change_order";
+  status: string;
+  title: string;
+  project: ReturnType<typeof normalizeProject>;
+  installer: ReturnType<typeof normalizeInstaller>;
+  submittedAt: string | null;
+  createdAt: string;
+  activityAt: string;
+  href: string;
+  reviewedAt?: string | null;
+  responseReviewedAt?: string | null;
+  reviewResult?: string | null;
+  unresolvedIssues: number;
+  [key: string]: unknown;
+};
+
 function normalizeProject(
   value: unknown,
 ) {
@@ -85,6 +106,10 @@ export async function GET(
 
   const supabase =
     createAdminServerClient();
+
+  await supabase.rpc(
+    "expire_change_order_approvals",
+  );
 
   const [
     scheduleResult,
@@ -203,7 +228,7 @@ export async function GET(
     );
   }
 
-  const scheduleItems = (
+  const scheduleItems: InboxItem[] = (
     scheduleResult.data ?? []
   ).map((record) => {
     const raw =
@@ -248,6 +273,7 @@ export async function GET(
         "string"
           ? raw.reviewed_by
           : null,
+      unresolvedIssues: 0,
       createdAt,
       activityAt:
         submittedAt ?? createdAt,
@@ -294,7 +320,7 @@ export async function GET(
     };
   });
 
-  const reviewItems = (
+  const reviewItems: InboxItem[] = (
     reviewResult.data ?? []
   ).map((record) => {
     const raw =
@@ -388,7 +414,7 @@ export async function GET(
     };
   });
 
-  const changeOrderItems = (
+  const changeOrderItems: InboxItem[] = (
     changeOrdersResult.data ?? []
   ).map((record) => {
     const raw =
@@ -502,6 +528,7 @@ export async function GET(
         "string"
           ? raw.response_reviewed_by
           : null,
+      unresolvedIssues: 0,
       customerResponseNotes:
         typeof raw
           .customer_response_notes ===
