@@ -41,6 +41,10 @@ const navigationItems = [
     href: "/operations/projects",
   },
   {
+    label: "Change Orders",
+    href: "/operations/change-orders",
+  },
+  {
     label: "Tasks",
     href: "/operations/tasks",
   },

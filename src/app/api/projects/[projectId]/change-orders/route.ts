@@ -109,6 +109,41 @@ function normalizeChangeOrder(
       "string"
         ? record.approved_by_name
         : null,
+    approvalToken:
+      typeof record.approval_token ===
+      "string"
+        ? record.approval_token
+        : null,
+    approvalSentAt:
+      typeof record.approval_sent_at ===
+      "string"
+        ? record.approval_sent_at
+        : null,
+    approvalOpenedAt:
+      typeof record.approval_opened_at ===
+      "string"
+        ? record.approval_opened_at
+        : null,
+    approvalExpiresAt:
+      typeof record.approval_expires_at ===
+      "string"
+        ? record.approval_expires_at
+        : null,
+    customerResponseNotes:
+      typeof record.customer_response_notes ===
+      "string"
+        ? record.customer_response_notes
+        : null,
+    responseReviewedAt:
+      typeof record.response_reviewed_at ===
+      "string"
+        ? record.response_reviewed_at
+        : null,
+    responseReviewedBy:
+      typeof record.response_reviewed_by ===
+      "string"
+        ? record.response_reviewed_by
+        : null,
     approvedAt:
       typeof record.approved_at ===
       "string"

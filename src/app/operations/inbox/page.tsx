@@ -11,7 +11,8 @@ type InboxItem = {
   id: string;
   type:
     | "schedule_response"
-    | "material_review";
+    | "material_review"
+    | "change_order";
   status: string;
   title: string;
   project: {
@@ -43,6 +44,19 @@ type InboxItem = {
   totalIssues?: number;
   unresolvedIssues?: number;
   notes?: string | null;
+  changeOrderNumber?: number;
+  changeOrderTitle?: string;
+  amount?: number;
+  scheduleImpactDays?: number;
+  approvalSentAt?: string | null;
+  approvalOpenedAt?: string | null;
+  approvalExpiresAt?: string | null;
+  approvedAt?: string | null;
+  declinedAt?: string | null;
+  approvedByName?: string | null;
+  responseReviewedAt?: string | null;
+  responseReviewedBy?: string | null;
+  customerResponseNotes?: string | null;
 };
 
 type InboxResponse = {
@@ -53,6 +67,8 @@ type InboxResponse = {
     needsAttention: number;
     submittedSchedules: number;
     materialIssues: number;
+    changeOrdersAwaitingResponse: number;
+    changeOrderResponses: number;
   };
   error?: string;
 };
@@ -61,7 +77,8 @@ type Filter =
   | "attention"
   | "all"
   | "schedules"
-  | "materials";
+  | "materials"
+  | "change_orders";
 
 function formatDate(
   value: string | null | undefined,
@@ -114,6 +131,18 @@ function requiresAttention(
     );
   }
 
+  if (
+    item.type === "change_order"
+  ) {
+    return (
+      (
+        item.status === "approved" ||
+        item.status === "declined"
+      ) &&
+      !item.responseReviewedAt
+    );
+  }
+
   if (item.reviewedAt) {
     return false;
   }
@@ -141,6 +170,8 @@ export default function OperationsInboxPage() {
       needsAttention: 0,
       submittedSchedules: 0,
       materialIssues: 0,
+      changeOrdersAwaitingResponse: 0,
+      changeOrderResponses: 0,
     });
 
   const [filter, setFilter] =
@@ -187,6 +218,8 @@ export default function OperationsInboxPage() {
           needsAttention: 0,
           submittedSchedules: 0,
           materialIssues: 0,
+          changeOrdersAwaitingResponse: 0,
+          changeOrderResponses: 0,
         },
       );
     } catch {
@@ -226,9 +259,18 @@ export default function OperationsInboxPage() {
           );
         }
 
+        if (
+          filter === "materials"
+        ) {
+          return (
+            item.type ===
+            "material_review"
+          );
+        }
+
         return (
           item.type ===
-          "material_review"
+          "change_order"
         );
       }),
     [filter, items],
@@ -264,7 +306,7 @@ export default function OperationsInboxPage() {
         </button>
       </div>
 
-      <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryCard
           label="Needs Attention"
           value={
@@ -283,6 +325,13 @@ export default function OperationsInboxPage() {
           label="Open Material Issues"
           value={
             summary.materialIssues
+          }
+        />
+
+        <SummaryCard
+          label="Change Orders Waiting"
+          value={
+            summary.changeOrdersAwaitingResponse
           }
         />
 
@@ -333,6 +382,20 @@ export default function OperationsInboxPage() {
           }
         >
           Material Reviews
+        </FilterButton>
+
+        <FilterButton
+          active={
+            filter ===
+            "change_orders"
+          }
+          onClick={() =>
+            setFilter(
+              "change_orders",
+            )
+          }
+        >
+          Change Orders
         </FilterButton>
       </div>
 
@@ -389,6 +452,13 @@ function InboxCard({
       item.reviewedAt ?? null,
     );
 
+  const [
+    localResponseReviewedAt,
+    setLocalResponseReviewedAt,
+  ] = useState<string | null>(
+    item.responseReviewedAt ?? null,
+  );
+
   async function markReviewed() {
     setReviewing(true);
 
@@ -431,6 +501,59 @@ function InboxCard({
     }
   }
 
+  async function markChangeOrderResponseReviewed() {
+    if (
+      item.type !== "change_order" ||
+      !item.project?.id
+    ) {
+      return;
+    }
+
+    setReviewing(true);
+
+    try {
+      const response = await fetch(
+        `/api/projects/${item.project.id}/change-orders/${item.id}/review-response`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          result?: {
+            response_reviewed_at?: string;
+          };
+        };
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        window.alert(
+          result.error ??
+            "Could not mark this customer response reviewed.",
+        );
+        return;
+      }
+
+      setLocalResponseReviewedAt(
+        result.result
+          ?.response_reviewed_at ??
+          new Date().toISOString(),
+      );
+    } catch {
+      window.alert(
+        "Could not mark this customer response reviewed.",
+      );
+    } finally {
+      setReviewing(false);
+    }
+  }
+
   return (
     <article
       className={`rounded-2xl border bg-white p-6 shadow-sm ${
@@ -447,13 +570,19 @@ function InboxCard({
                 item.type ===
                 "schedule_response"
                   ? "bg-blue-100 text-blue-800"
-                  : "bg-emerald-100 text-emerald-800"
+                  : item.type ===
+                      "change_order"
+                    ? "bg-violet-100 text-violet-800"
+                    : "bg-emerald-100 text-emerald-800"
               }`}
             >
               {item.type ===
               "schedule_response"
                 ? "Schedule"
-                : "Materials"}
+                : item.type ===
+                    "change_order"
+                  ? "Change Order"
+                  : "Materials"}
             </span>
 
             {attention && (
@@ -510,6 +639,35 @@ function InboxCard({
               </span>
             )}
 
+          {item.type ===
+            "change_order" &&
+            [
+              "approved",
+              "declined",
+            ].includes(item.status) &&
+            !localResponseReviewedAt && (
+              <button
+                type="button"
+                disabled={reviewing}
+                onClick={() =>
+                  void markChangeOrderResponseReviewed()
+                }
+                className="rounded-xl border border-violet-300 bg-violet-50 px-4 py-3 text-center text-sm font-bold text-violet-800 disabled:opacity-50"
+              >
+                {reviewing
+                  ? "Saving..."
+                  : "Mark Response Reviewed"}
+              </button>
+            )}
+
+          {item.type ===
+            "change_order" &&
+            localResponseReviewedAt && (
+              <span className="rounded-xl bg-violet-100 px-4 py-3 text-center text-sm font-bold text-violet-800">
+                Response Reviewed
+              </span>
+            )}
+
           {item.project?.id && (
             <>
               <Link
@@ -539,7 +697,7 @@ function InboxCard({
 
       {item.type ===
       "schedule_response" ? (
-        <dl className="mt-5 grid gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">
+        <dl className="mt-5 grid gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-5">
           <Info
             label="Demo Start"
             value={formatDateOnly(
@@ -575,6 +733,63 @@ function InboxCard({
                 undefined
                 ? "—"
                 : `${item.totalDurationDays} days`
+            }
+          />
+        </dl>
+      ) : item.type ===
+        "change_order" ? (
+        <dl className="mt-5 grid gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Info
+            label="Change Order"
+            value={`#${
+              item.changeOrderNumber ?? 0
+            } — ${
+              item.changeOrderTitle ??
+              "Change order"
+            }`}
+          />
+
+          <Info
+            label="Amount"
+            value={new Intl.NumberFormat(
+              "en-US",
+              {
+                style: "currency",
+                currency: "USD",
+              },
+            ).format(
+              item.amount ?? 0,
+            )}
+          />
+
+          <Info
+            label="Status"
+            value={item.status.replaceAll(
+              "_",
+              " ",
+            )}
+          />
+
+          <Info
+            label="Schedule Impact"
+            value={`${
+              item.scheduleImpactDays ?? 0
+            } days`}
+          />
+
+          <Info
+            label="Office Review"
+            value={
+              localResponseReviewedAt
+                ? "Reviewed"
+                : [
+                    "approved",
+                    "declined",
+                  ].includes(
+                    item.status,
+                  )
+                  ? "Needs Review"
+                  : "Waiting on Customer"
             }
           />
         </dl>

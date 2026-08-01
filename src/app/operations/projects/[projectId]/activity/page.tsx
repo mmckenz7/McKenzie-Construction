@@ -54,6 +54,7 @@ type Filter =
   | "schedules"
   | "materials"
   | "messages"
+  | "change_orders"
   | "project";
 
 const activityLabels: Record<
@@ -91,6 +92,8 @@ const activityLabels: Record<
     "Change order declined",
   change_order_completed:
     "Change order completed",
+  change_order_response_reviewed:
+    "Change order response reviewed",
   system: "System",
 };
 
@@ -135,6 +138,14 @@ function getCategory(
     "message_created"
   ) {
     return "messages";
+  }
+
+  if (
+    activityType.startsWith(
+      "change_order_",
+    )
+  ) {
+    return "change_orders";
   }
 
   return "project";
@@ -583,6 +594,12 @@ export default function ProjectActivityPage() {
             entry.activityType,
           ) === "messages",
       ).length,
+      changeOrders: activity.filter(
+        (entry) =>
+          getCategory(
+            entry.activityType,
+          ) === "change_orders",
+      ).length,
       project: activity.filter(
         (entry) =>
           getCategory(
@@ -768,6 +785,20 @@ export default function ProjectActivityPage() {
           }
         >
           Messages ({counts.messages})
+        </FilterButton>
+
+        <FilterButton
+          active={
+            filter ===
+            "change_orders"
+          }
+          onClick={() =>
+            setFilter(
+              "change_orders",
+            )
+          }
+        >
+          Change Orders ({counts.changeOrders})
         </FilterButton>
 
         <FilterButton

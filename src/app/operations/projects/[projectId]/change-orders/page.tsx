@@ -39,6 +39,13 @@ type ChangeOrder = {
   internalNotes: string | null;
   requestedBy: string | null;
   approvedByName: string | null;
+  approvalToken: string | null;
+  approvalSentAt: string | null;
+  approvalOpenedAt: string | null;
+  approvalExpiresAt: string | null;
+  customerResponseNotes: string | null;
+  responseReviewedAt: string | null;
+  responseReviewedBy: string | null;
   approvedAt: string | null;
   declinedAt: string | null;
   completedAt: string | null;
@@ -226,6 +233,16 @@ export default function ChangeOrdersPage() {
   const [updatingId, setUpdatingId] =
     useState("");
 
+  const [
+    creatingApprovalId,
+    setCreatingApprovalId,
+  ] = useState("");
+
+  const [
+    reviewingResponseId,
+    setReviewingResponseId,
+  ] = useState("");
+
   const [notice, setNotice] =
     useState("");
 
@@ -391,6 +408,171 @@ export default function ChangeOrdersPage() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function createApprovalLink(
+    changeOrder: ChangeOrder,
+  ) {
+    setCreatingApprovalId(
+      changeOrder.id,
+    );
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${params.projectId}/change-orders/${changeOrder.id}/approval-link`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            expiresInDays: 14,
+          }),
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          changeOrder?: {
+            approvalToken?: string;
+          };
+        };
+
+      if (
+        !response.ok ||
+        !result.success ||
+        !result.changeOrder
+          ?.approvalToken
+      ) {
+        setNotice(
+          result.error ??
+            "Could not create the customer approval link.",
+        );
+        return;
+      }
+
+      const link =
+        `${window.location.origin}/change-order/` +
+        result.changeOrder
+          .approvalToken;
+
+      await navigator.clipboard.writeText(
+        link,
+      );
+
+      setNotice(
+        changeOrder.approvalToken
+          ? "Old approval link disabled. New link created and copied."
+          : "Customer approval link created and copied.",
+      );
+
+      await loadChangeOrders();
+    } catch {
+      setNotice(
+        "Could not create the customer approval link.",
+      );
+    } finally {
+      setCreatingApprovalId("");
+    }
+  }
+
+  async function copyApprovalLink(
+    changeOrder: ChangeOrder,
+  ) {
+    if (!changeOrder.approvalToken) {
+      return;
+    }
+
+    const link =
+      `${window.location.origin}/change-order/` +
+      changeOrder.approvalToken;
+
+    await navigator.clipboard.writeText(
+      link,
+    );
+
+    setNotice(
+      "Customer approval link copied.",
+    );
+  }
+
+  async function copyApprovalMessage(
+    changeOrder: ChangeOrder,
+  ) {
+    if (!changeOrder.approvalToken) {
+      return;
+    }
+
+    const link =
+      `${window.location.origin}/change-order/` +
+      changeOrder.approvalToken;
+
+    const message =
+      `McKenzie Construction has sent Change Order #${changeOrder.changeOrderNumber} for your review. ` +
+      `The change-order amount is ${formatCurrency(
+        changeOrder.amount,
+      )}. Review and respond here: ${link}`;
+
+    await navigator.clipboard.writeText(
+      message,
+    );
+
+    setNotice(
+      "Customer text message copied.",
+    );
+  }
+
+  async function markResponseReviewed(
+    changeOrder: ChangeOrder,
+  ) {
+    setReviewingResponseId(
+      changeOrder.id,
+    );
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${params.projectId}/change-orders/${changeOrder.id}/review-response`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+        };
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        setNotice(
+          result.error ??
+            "Could not mark the customer response reviewed.",
+        );
+        return;
+      }
+
+      setNotice(
+        "Customer response marked reviewed.",
+      );
+
+      await loadChangeOrders();
+    } catch {
+      setNotice(
+        "Could not mark the customer response reviewed.",
+      );
+    } finally {
+      setReviewingResponseId("");
     }
   }
 
@@ -797,36 +979,68 @@ export default function ChangeOrdersPage() {
                       )}
                     </div>
 
-                    <select
-                      value={changeOrder.status}
-                      disabled={
-                        updatingId ===
-                        changeOrder.id
-                      }
-                      onChange={(event) =>
-                        void updateStatus(
-                          changeOrder,
-                          event.target
-                            .value as ChangeOrderStatus,
-                        )
-                      }
-                      className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold"
-                    >
-                      {statuses.map(
-                        (status) => (
-                          <option
-                            key={
-                              status.value
-                            }
-                            value={
-                              status.value
-                            }
-                          >
-                            {status.label}
-                          </option>
-                        ),
+                    <div className="flex flex-col gap-3">
+                      <select
+                        value={changeOrder.status}
+                        disabled={
+                          updatingId ===
+                          changeOrder.id
+                        }
+                        onChange={(event) =>
+                          void updateStatus(
+                            changeOrder,
+                            event.target
+                              .value as ChangeOrderStatus,
+                          )
+                        }
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold"
+                      >
+                        {statuses.map(
+                          (status) => (
+                            <option
+                              key={
+                                status.value
+                              }
+                              value={
+                                status.value
+                              }
+                            >
+                              {status.label}
+                            </option>
+                          ),
+                        )}
+                      </select>
+
+                      {![
+                        "completed",
+                        "cancelled",
+                      ].includes(
+                        changeOrder.status,
+                      ) && (
+                        <button
+                          type="button"
+                          disabled={
+                            creatingApprovalId ===
+                            changeOrder.id
+                          }
+                          onClick={() =>
+                            void createApprovalLink(
+                              changeOrder,
+                            )
+                          }
+                          className="rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+                        >
+                          {creatingApprovalId ===
+                          changeOrder.id
+                            ? "Creating..."
+                            : changeOrder.approvalToken &&
+                                changeOrder.status ===
+                                  "pending_customer"
+                              ? "Replace Approval Link"
+                              : "Create Approval Link"}
+                        </button>
                       )}
-                    </select>
+                    </div>
                   </div>
 
                   <dl className="mt-5 grid gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -876,6 +1090,141 @@ export default function ChangeOrdersPage() {
                       }
                     />
                   </dl>
+
+                  {[
+                    "approved",
+                    "declined",
+                  ].includes(
+                    changeOrder.status,
+                  ) && (
+                    <div className="mt-5 flex flex-col gap-3 rounded-xl border border-violet-200 bg-violet-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wide text-violet-800">
+                          Customer Response
+                        </p>
+
+                        <p className="mt-2 text-sm font-semibold capitalize text-violet-950">
+                          {changeOrder.status}
+                          {changeOrder.approvedByName
+                            ? ` by ${changeOrder.approvedByName}`
+                            : ""}
+                        </p>
+
+                        <p className="mt-1 text-sm text-violet-800">
+                          {changeOrder.responseReviewedAt
+                            ? `Reviewed ${formatDate(
+                                changeOrder.responseReviewedAt,
+                              )}`
+                            : "Waiting for office review"}
+                        </p>
+                      </div>
+
+                      {!changeOrder.responseReviewedAt ? (
+                        <button
+                          type="button"
+                          disabled={
+                            reviewingResponseId ===
+                            changeOrder.id
+                          }
+                          onClick={() =>
+                            void markResponseReviewed(
+                              changeOrder,
+                            )
+                          }
+                          className="rounded-xl bg-violet-800 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+                        >
+                          {reviewingResponseId ===
+                          changeOrder.id
+                            ? "Saving..."
+                            : "Mark Response Reviewed"}
+                        </button>
+                      ) : (
+                        <span className="rounded-xl bg-white px-4 py-3 text-center text-sm font-bold text-violet-800">
+                          Reviewed
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {changeOrder.approvalToken && (
+                    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+                            Customer Approval Link
+                          </p>
+
+                          <p className="mt-2 text-sm font-semibold text-emerald-950">
+                            {changeOrder.approvalOpenedAt
+                              ? `Opened ${formatDate(
+                                  changeOrder.approvalOpenedAt,
+                                )}`
+                              : changeOrder.approvalSentAt
+                                ? `Created ${formatDate(
+                                    changeOrder.approvalSentAt,
+                                  )}`
+                                : "Ready to send"}
+                          </p>
+
+                          <p className="mt-1 text-sm text-emerald-800">
+                            Expires:{" "}
+                            {formatDate(
+                              changeOrder.approvalExpiresAt,
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <a
+                            href={`/change-order/${changeOrder.approvalToken}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-center text-sm font-bold text-emerald-800"
+                          >
+                            Preview
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void copyApprovalLink(
+                                changeOrder,
+                              )
+                            }
+                            className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-emerald-800"
+                          >
+                            Copy Link
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void copyApprovalMessage(
+                                changeOrder,
+                              )
+                            }
+                            className="rounded-lg bg-emerald-900 px-4 py-2 text-sm font-bold text-white"
+                          >
+                            Copy Text Message
+                          </button>
+                        </div>
+                      </div>
+
+                      {changeOrder.customerResponseNotes && (
+                        <div className="mt-4 border-t border-emerald-200 pt-4">
+                          <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+                            Customer Response Notes
+                          </p>
+
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-emerald-950">
+                            {
+                              changeOrder.customerResponseNotes
+                            }
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {(changeOrder.customerNotes ||
                     changeOrder.internalNotes) && (

@@ -90,6 +90,7 @@ export async function GET(
     scheduleResult,
     reviewResult,
     issuesResult,
+    changeOrdersResult,
   ] = await Promise.all([
     supabase
       .from(
@@ -128,12 +129,26 @@ export async function GET(
       .select(
         "id, review_id, status",
       ),
+
+    supabase
+      .from(
+        "project_change_orders",
+      )
+      .select(`
+        *,
+        projects (*)
+      `)
+      .order("updated_at", {
+        ascending: false,
+      })
+      .limit(100),
   ]);
 
   const firstError =
     scheduleResult.error ??
     reviewResult.error ??
-    issuesResult.error;
+    issuesResult.error ??
+    changeOrdersResult.error;
 
   if (firstError) {
     return NextResponse.json(
@@ -373,9 +388,143 @@ export async function GET(
     };
   });
 
+  const changeOrderItems = (
+    changeOrdersResult.data ?? []
+  ).map((record) => {
+    const raw =
+      record as Record<string, unknown>;
+
+    const id = String(
+      raw.id ?? "",
+    );
+
+    const status = String(
+      raw.status ?? "draft",
+    );
+
+    const approvalOpenedAt =
+      typeof raw.approval_opened_at ===
+      "string"
+        ? raw.approval_opened_at
+        : null;
+
+    const approvalSentAt =
+      typeof raw.approval_sent_at ===
+      "string"
+        ? raw.approval_sent_at
+        : null;
+
+    const approvedAt =
+      typeof raw.approved_at ===
+      "string"
+        ? raw.approved_at
+        : null;
+
+    const declinedAt =
+      typeof raw.declined_at ===
+      "string"
+        ? raw.declined_at
+        : null;
+
+    const updatedAt =
+      typeof raw.updated_at ===
+      "string"
+        ? raw.updated_at
+        : new Date(0).toISOString();
+
+    const createdAt =
+      typeof raw.created_at ===
+      "string"
+        ? raw.created_at
+        : updatedAt;
+
+    return {
+      id,
+      type: "change_order",
+      status,
+      title:
+        status === "approved"
+          ? "Change order approved"
+          : status === "declined"
+            ? "Change order declined"
+            : approvalOpenedAt
+              ? "Customer opened change order"
+              : status ===
+                  "pending_customer"
+                ? "Change order awaiting customer"
+                : "Change order updated",
+      project: normalizeProject(
+        raw.projects,
+      ),
+      installer: null,
+      submittedAt:
+        approvedAt ?? declinedAt,
+      createdAt,
+      activityAt:
+        approvedAt ??
+        declinedAt ??
+        approvalOpenedAt ??
+        approvalSentAt ??
+        updatedAt,
+      changeOrderNumber: Number(
+        raw.change_order_number ?? 0,
+      ),
+      changeOrderTitle: String(
+        raw.title ?? "Change order",
+      ),
+      amount: Number(
+        raw.amount ?? 0,
+      ),
+      scheduleImpactDays: Number(
+        raw.schedule_impact_days ?? 0,
+      ),
+      approvalSentAt,
+      approvalOpenedAt,
+      approvalExpiresAt:
+        typeof raw.approval_expires_at ===
+        "string"
+          ? raw.approval_expires_at
+          : null,
+      approvedAt,
+      declinedAt,
+      approvedByName:
+        typeof raw.approved_by_name ===
+        "string"
+          ? raw.approved_by_name
+          : null,
+      responseReviewedAt:
+        typeof raw.response_reviewed_at ===
+        "string"
+          ? raw.response_reviewed_at
+          : null,
+      responseReviewedBy:
+        typeof raw.response_reviewed_by ===
+        "string"
+          ? raw.response_reviewed_by
+          : null,
+      customerResponseNotes:
+        typeof raw
+          .customer_response_notes ===
+        "string"
+          ? raw
+              .customer_response_notes
+          : null,
+      notes:
+        typeof raw.customer_notes ===
+        "string"
+          ? raw.customer_notes
+          : null,
+      href:
+        `/operations/projects/${String(
+          raw.project_id ?? "",
+        )}/change-orders`,
+    };
+  });
+
   const items = [
     ...scheduleItems,
     ...reviewItems,
+    ...changeOrderItems,
   ].sort((a, b) => {
     return (
       new Date(b.activityAt).getTime() -
@@ -392,6 +541,19 @@ export async function GET(
         return (
           item.status === "submitted" &&
           !item.reviewedAt
+        );
+      }
+
+      if (
+        item.type ===
+        "change_order"
+      ) {
+        return (
+          (
+            item.status === "approved" ||
+            item.status === "declined"
+          ) &&
+          !item.responseReviewedAt
         );
       }
 
@@ -433,6 +595,20 @@ export async function GET(
             item.unresolvedIssues,
           0,
         ),
+      changeOrdersAwaitingResponse:
+        changeOrderItems.filter(
+          (item) =>
+            item.status ===
+            "pending_customer",
+        ).length,
+      changeOrderResponses:
+        changeOrderItems.filter(
+          (item) =>
+            item.status ===
+              "approved" ||
+            item.status ===
+              "declined",
+        ).length,
     },
   });
 }
