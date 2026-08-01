@@ -6,6 +6,7 @@ import {
   isPublicTokenBodyTooLarge,
   minimizeScheduleRequestPayload,
 } from "@/lib/public-token-api";
+import { enforcePublicTokenRateLimit } from "@/lib/public-token-rate-limit";
 
 type RouteContext = {
   params: Promise<{
@@ -29,10 +30,19 @@ function isUuid(value: string) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: RouteContext,
 ) {
   const { token } = await context.params;
+
+  const rateLimitResponse = await enforcePublicTokenRateLimit({
+    request,
+    token,
+    routeCategory: "schedule_request",
+    method: "GET",
+  });
+
+  if (rateLimitResponse) return rateLimitResponse;
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
@@ -74,6 +84,15 @@ export async function POST(
   context: RouteContext,
 ) {
   const { token } = await context.params;
+
+  const rateLimitResponse = await enforcePublicTokenRateLimit({
+    request,
+    token,
+    routeCategory: "schedule_request",
+    method: "POST",
+  });
+
+  if (rateLimitResponse) return rateLimitResponse;
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
