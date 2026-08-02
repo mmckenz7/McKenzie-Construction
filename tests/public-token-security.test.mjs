@@ -14,6 +14,9 @@ import {
   minimizeVendorRequestPayload,
   publicTokenJson,
 } from "../src/lib/public-token-api.ts";
+import {
+  createRateLimitFailureDiagnostic,
+} from "../src/lib/public-token-rate-limit-core.ts";
 
 const migration = readFileSync(
   "supabase/migrations/20260801080000_public_token_rpc_acl_hardening.sql",
@@ -32,6 +35,10 @@ const routes = [
 ].map((path) => readFileSync(path, "utf8"));
 const materialReviewCreationRoute = readFileSync(
   "src/app/api/material-reviews/route.ts",
+  "utf8",
+);
+const rateLimitSource = readFileSync(
+  "src/lib/public-token-rate-limit.ts",
   "utf8",
 );
 
@@ -107,6 +114,64 @@ test("Supabase failure logs contain only sanitized operational metadata", () => 
   ]) {
     assert.equal(serialized.includes(sensitiveValue), false);
   }
+});
+
+test("rate-limit RPC diagnostics include only sanitized failure metadata", () => {
+  const previousVercelEnvironment = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = "test";
+  const diagnostic = createRateLimitFailureDiagnostic({
+    error: {
+      code: "57014",
+      status: 504,
+      message: "secret-token customer@example.com",
+      details: "203.0.113.10 service-role-key",
+      body: { customerName: "Private Customer" },
+    },
+    source: "rpc_error_response",
+    routeCategory: "change_order",
+    method: "POST",
+  });
+  if (previousVercelEnvironment === undefined) {
+    delete process.env.VERCEL_ENV;
+  } else {
+    process.env.VERCEL_ENV = previousVercelEnvironment;
+  }
+
+  assert.deepEqual(diagnostic, {
+    supabaseErrorCode: "57014",
+    httpStatus: 504,
+    errorCategory: "postgres",
+    failureSource: "rpc_error_response",
+    routeCategory: "change_order",
+    method: "POST",
+    runtimeEnvironment: "test",
+  });
+
+  const serialized = JSON.stringify(diagnostic);
+  for (const sensitiveValue of [
+    "secret-token",
+    "customer@example.com",
+    "203.0.113.10",
+    "service-role-key",
+    "Private Customer",
+  ]) {
+    assert.equal(serialized.includes(sensitiveValue), false);
+  }
+});
+
+test("rate-limit failures stay generic and fail closed without retry", () => {
+  assert.match(rateLimitSource, /public_token_rate_limit_check_failed/);
+  assert.match(rateLimitSource, /source: "transport_exception"/);
+  assert.match(rateLimitSource, /source: error \? "rpc_error_response" : "invalid_rpc_result"/);
+  assert.match(
+    rateLimitSource,
+    /\{ success: false, error: "This request is temporarily unavailable\." \}/,
+  );
+  assert.match(rateLimitSource, /status: 503/);
+  assert.match(rateLimitSource, /"Cache-Control": "no-store"/);
+  assert.equal((rateLimitSource.match(/supabase\.rpc/g) ?? []).length, 1);
+  assert.match(rateLimitSource, /if \(result\.allowed !== true\)/);
+  assert.match(rateLimitSource, /return null;/);
 });
 
 test("public-token JSON responses preserve status and headers while enforcing no-store", async () => {

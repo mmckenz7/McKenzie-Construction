@@ -4,6 +4,7 @@ import { createHmac } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import {
+  createRateLimitFailureDiagnostic,
   createRateLimitResponse,
   createRateLimitTelemetry,
   getPublicTokenRateLimitPolicy,
@@ -60,28 +61,51 @@ export async function enforcePublicTokenRateLimit(input: {
   const tokenKey = hashIdentifier(secret, "token", input.token);
   const policy = getPublicTokenRateLimitPolicy(input.method);
   const supabase = createAdminServerClient();
-  const { data, error } = await supabase.rpc(
-    "check_public_token_rate_limit",
-    {
-      requested_route_category: input.routeCategory,
-      requested_method: input.method,
-      requested_network_key: networkKey,
-      requested_token_key: tokenKey,
-      requested_window_seconds: policy.windowSeconds,
-      requested_network_limit: policy.networkLimit,
-      requested_token_limit: policy.tokenLimit,
-    },
-  );
+  let data: unknown;
+  let error: unknown;
+
+  try {
+    const result = await supabase.rpc(
+      "check_public_token_rate_limit",
+      {
+        requested_route_category: input.routeCategory,
+        requested_method: input.method,
+        requested_network_key: networkKey,
+        requested_token_key: tokenKey,
+        requested_window_seconds: policy.windowSeconds,
+        requested_network_limit: policy.networkLimit,
+        requested_token_limit: policy.tokenLimit,
+      },
+    );
+    data = result.data;
+    error = result.error;
+  } catch (transportError) {
+    console.error(
+      "public_token_rate_limit_check_failed",
+      createRateLimitFailureDiagnostic({
+        error: transportError,
+        source: "transport_exception",
+        routeCategory: input.routeCategory,
+        method: input.method,
+      }),
+    );
+
+    return NextResponse.json(
+      { success: false, error: "This request is temporarily unavailable." },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   if (error || !data || typeof data !== "object") {
-    console.error("public_token_rate_limit_check_failed", createRateLimitTelemetry({
-      routeCategory: input.routeCategory,
-      method: input.method,
-      statusClass: "5xx",
-      networkIdentifier: networkKey,
-      userAgent: input.request.headers.get("user-agent"),
-      outcome: "error",
-    }));
+    console.error(
+      "public_token_rate_limit_check_failed",
+      createRateLimitFailureDiagnostic({
+        error,
+        source: error ? "rpc_error_response" : "invalid_rpc_result",
+        routeCategory: input.routeCategory,
+        method: input.method,
+      }),
+    );
 
     return NextResponse.json(
       { success: false, error: "This request is temporarily unavailable." },
