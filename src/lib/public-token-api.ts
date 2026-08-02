@@ -27,6 +27,9 @@ export function createPublicTokenFailure(
 ) {
   return {
     status: kind === "unavailable" ? 404 : 500,
+    headers: {
+      "Cache-Control": "no-store",
+    },
     body: {
       success: false,
       error:
@@ -35,6 +38,36 @@ export function createPublicTokenFailure(
           : PUBLIC_REQUEST_FAILED_MESSAGE,
     },
   };
+}
+
+type PublicTokenSupabaseFailure = {
+  operation: string;
+  routeCategory: string;
+  method: "GET" | "POST";
+  error: unknown;
+  status: number;
+};
+
+export function logPublicTokenSupabaseFailure({
+  operation,
+  routeCategory,
+  method,
+  error,
+  status,
+}: PublicTokenSupabaseFailure) {
+  const errorRecord = record(error);
+  const code =
+    typeof errorRecord.code === "string"
+      ? errorRecord.code
+      : null;
+
+  console.error("public_token_supabase_failure", {
+    operation,
+    routeCategory,
+    method,
+    supabaseErrorCode: code,
+    statusCategory: `${Math.floor(status / 100)}xx`,
+  });
 }
 
 function record(value: unknown) {

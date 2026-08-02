@@ -7,6 +7,7 @@ import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import {
   createPublicTokenFailure,
   isPublicTokenBodyTooLarge,
+  logPublicTokenSupabaseFailure,
   minimizeChangeOrderPayload,
 } from "@/lib/public-token-api";
 import { enforcePublicTokenRateLimit } from "@/lib/public-token-rate-limit";
@@ -48,7 +49,10 @@ export async function GET(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status });
+    return NextResponse.json(failure.body, {
+      status: failure.status,
+      headers: failure.headers,
+    });
   }
 
   const supabase =
@@ -64,7 +68,17 @@ export async function GET(
 
   if (error) {
     const failure = createPublicTokenFailure("unexpected");
-    return NextResponse.json(failure.body, { status: failure.status });
+    logPublicTokenSupabaseFailure({
+      operation: "get_change_order_by_token",
+      routeCategory: "change_order",
+      method: "GET",
+      error,
+      status: failure.status,
+    });
+    return NextResponse.json(failure.body, {
+      status: failure.status,
+      headers: failure.headers,
+    });
   }
 
   if (!data || (
@@ -74,7 +88,10 @@ export async function GET(
       ("superseded" in data && data.superseded === true))
   )) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status });
+    return NextResponse.json(failure.body, {
+      status: failure.status,
+      headers: failure.headers,
+    });
   }
 
   return NextResponse.json({
@@ -101,7 +118,10 @@ export async function POST(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status });
+    return NextResponse.json(failure.body, {
+      status: failure.status,
+      headers: failure.headers,
+    });
   }
 
   if (isPublicTokenBodyTooLarge(request.headers.get("content-length"))) {
@@ -219,7 +239,17 @@ export async function POST(
 
   if (error) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status });
+    logPublicTokenSupabaseFailure({
+      operation: "submit_change_order_response_v2",
+      routeCategory: "change_order",
+      method: "POST",
+      error,
+      status: failure.status,
+    });
+    return NextResponse.json(failure.body, {
+      status: failure.status,
+      headers: failure.headers,
+    });
   }
 
   if (

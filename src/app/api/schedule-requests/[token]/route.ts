@@ -4,6 +4,7 @@ import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import {
   createPublicTokenFailure,
   isPublicTokenBodyTooLarge,
+  logPublicTokenSupabaseFailure,
   minimizeScheduleRequestPayload,
 } from "@/lib/public-token-api";
 import { enforcePublicTokenRateLimit } from "@/lib/public-token-rate-limit";
@@ -46,7 +47,7 @@ export async function GET(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status });
+    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   const supabase = createAdminServerClient();
@@ -60,7 +61,14 @@ export async function GET(
 
   if (error) {
     const failure = createPublicTokenFailure("unexpected");
-    return NextResponse.json(failure.body, { status: failure.status });
+    logPublicTokenSupabaseFailure({
+      operation: "get_schedule_request_by_token",
+      routeCategory: "schedule_request",
+      method: "GET",
+      error,
+      status: failure.status,
+    });
+    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (!data || (
@@ -70,7 +78,7 @@ export async function GET(
     data.expired === true
   )) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status });
+    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   return NextResponse.json({
@@ -96,7 +104,7 @@ export async function POST(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status });
+    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (isPublicTokenBodyTooLarge(request.headers.get("content-length"))) {
@@ -191,7 +199,16 @@ export async function POST(
     const failure = createPublicTokenFailure(
       scheduleRequestError ? "unexpected" : "unavailable",
     );
-    return NextResponse.json(failure.body, { status: failure.status });
+    if (scheduleRequestError) {
+      logPublicTokenSupabaseFailure({
+        operation: "get_schedule_request_by_token",
+        routeCategory: "schedule_request",
+        method: "POST",
+        error: scheduleRequestError,
+        status: failure.status,
+      });
+    }
+    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (
@@ -232,7 +249,14 @@ export async function POST(
 
   if (error) {
     const failure = createPublicTokenFailure("unexpected");
-    return NextResponse.json(failure.body, { status: failure.status });
+    logPublicTokenSupabaseFailure({
+      operation: "submit_schedule_request_by_token",
+      routeCategory: "schedule_request",
+      method: "POST",
+      error,
+      status: failure.status,
+    });
+    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (

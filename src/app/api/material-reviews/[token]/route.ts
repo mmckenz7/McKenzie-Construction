@@ -7,6 +7,7 @@ import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import {
   createPublicTokenFailure,
   isPublicTokenBodyTooLarge,
+  logPublicTokenSupabaseFailure,
   minimizeMaterialReviewPayload,
 } from "@/lib/public-token-api";
 import { enforcePublicTokenRateLimit } from "@/lib/public-token-rate-limit";
@@ -64,7 +65,7 @@ export async function GET(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status });
+    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   const supabase =
@@ -80,7 +81,14 @@ export async function GET(
 
   if (error) {
     const failure = createPublicTokenFailure("unexpected");
-    return NextResponse.json(failure.body, { status: failure.status });
+    logPublicTokenSupabaseFailure({
+      operation: "get_material_review_by_token",
+      routeCategory: "material_review",
+      method: "GET",
+      error,
+      status: failure.status,
+    });
+    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (!data || (
@@ -90,7 +98,7 @@ export async function GET(
     data.expired === true
   )) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status });
+    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   return NextResponse.json({
@@ -116,7 +124,7 @@ export async function POST(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status });
+    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (isPublicTokenBodyTooLarge(request.headers.get("content-length"))) {
@@ -249,7 +257,16 @@ export async function POST(
 
   if (reviewError || !review) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status });
+    if (reviewError) {
+      logPublicTokenSupabaseFailure({
+        operation: "select_subcontractor_material_review",
+        routeCategory: "material_review",
+        method: "POST",
+        error: reviewError,
+        status: failure.status,
+      });
+    }
+    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (
@@ -362,6 +379,15 @@ export async function POST(
     .maybeSingle();
 
   if (updateError || !updatedReview) {
+    if (updateError) {
+      logPublicTokenSupabaseFailure({
+        operation: "update_subcontractor_material_review",
+        routeCategory: "material_review",
+        method: "POST",
+        error: updateError,
+        status: 500,
+      });
+    }
     return NextResponse.json(
       {
         success: false,
@@ -372,6 +398,7 @@ export async function POST(
       },
       {
         status: updateError ? 500 : 409,
+        ...(updateError ? { headers: { "Cache-Control": "no-store" } } : {}),
       },
     );
   }
@@ -385,6 +412,13 @@ export async function POST(
       .eq("review_id", review.id);
 
   if (deleteError) {
+    logPublicTokenSupabaseFailure({
+      operation: "delete_subcontractor_material_issues",
+      routeCategory: "material_review",
+      method: "POST",
+      error: deleteError,
+      status: 500,
+    });
     return NextResponse.json(
       {
         success: false,
@@ -392,6 +426,7 @@ export async function POST(
       },
       {
         status: 500,
+        headers: { "Cache-Control": "no-store" },
       },
     );
   }
@@ -432,6 +467,13 @@ export async function POST(
         .insert(rows);
 
     if (issueError) {
+      logPublicTokenSupabaseFailure({
+        operation: "insert_subcontractor_material_issues",
+        routeCategory: "material_review",
+        method: "POST",
+        error: issueError,
+        status: 500,
+      });
       return NextResponse.json(
         {
           success: false,
@@ -439,6 +481,7 @@ export async function POST(
         },
         {
           status: 500,
+          headers: { "Cache-Control": "no-store" },
         },
       );
     }

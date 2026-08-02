@@ -7,6 +7,7 @@ import {
   PUBLIC_REQUEST_FAILED_MESSAGE,
   createPublicTokenFailure,
   isPublicTokenBodyTooLarge,
+  logPublicTokenSupabaseFailure,
   minimizeChangeOrderPayload,
   minimizeMaterialReviewPayload,
   minimizeScheduleRequestPayload,
@@ -52,9 +53,79 @@ test("unexpected RPC errors never expose database internals", () => {
   const failure = createPublicTokenFailure("unexpected");
 
   assert.equal(failure.status, 500);
+  assert.deepEqual(failure.headers, { "Cache-Control": "no-store" });
   assert.equal(failure.body.error, PUBLIC_REQUEST_FAILED_MESSAGE);
   assert.equal(JSON.stringify(failure).includes(secretError.message), false);
   assert.equal(JSON.stringify(failure).includes(secretError.details), false);
+});
+
+test("Supabase failure logs contain only sanitized operational metadata", () => {
+  const calls = [];
+  const originalError = console.error;
+  console.error = (...args) => calls.push(args);
+
+  try {
+    logPublicTokenSupabaseFailure({
+      operation: "get_change_order_by_token",
+      routeCategory: "change_order",
+      method: "GET",
+      status: 500,
+      error: {
+        code: "23514",
+        message: "customer@example.com secret-token",
+        details: "authorization=service-role-key",
+        body: { customerName: "Private Customer" },
+        ip: "203.0.113.10",
+      },
+      token: "secret-token",
+      credential: "service-role-key",
+    });
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], [
+    "public_token_supabase_failure",
+    {
+      operation: "get_change_order_by_token",
+      routeCategory: "change_order",
+      method: "GET",
+      supabaseErrorCode: "23514",
+      statusCategory: "5xx",
+    },
+  ]);
+
+  const serialized = JSON.stringify(calls);
+  for (const sensitiveValue of [
+    "secret-token",
+    "service-role-key",
+    "203.0.113.10",
+    "Private Customer",
+    "customer@example.com",
+  ]) {
+    assert.equal(serialized.includes(sensitiveValue), false);
+  }
+});
+
+test("all public-token failure responses use the centralized no-store headers", () => {
+  for (const source of routes) {
+    const failureCount = source.match(/const failure = createPublicTokenFailure/g)?.length ?? 0;
+    const headerCount = source.match(/headers: failure\.headers/g)?.length ?? 0;
+
+    assert.ok(failureCount > 0);
+    assert.equal(headerCount, failureCount);
+  }
+
+  const materialRoute = routes[2];
+  const directServerErrors = materialRoute.match(
+    /status: 500,\s*headers: \{ "Cache-Control": "no-store" \}/g,
+  ) ?? [];
+  assert.equal(directServerErrors.length, 2);
+  assert.match(
+    materialRoute,
+    /status: updateError \? 500 : 409,[\s\S]*?updateError \? \{ headers: \{ "Cache-Control": "no-store" \} \} : \{\}/,
+  );
 });
 
 test("public response minimizers remove tokens, internal IDs, and unrelated metadata", () => {
