@@ -1,3 +1,5 @@
+import { NextResponse } from "next/server.js";
+
 export const PUBLIC_LINK_UNAVAILABLE_MESSAGE =
   "This link is invalid or no longer available.";
 
@@ -5,6 +7,19 @@ export const PUBLIC_REQUEST_FAILED_MESSAGE =
   "The request could not be completed.";
 
 export const PUBLIC_TOKEN_MAX_BODY_BYTES = 32_768;
+
+export function publicTokenJson(
+  body: unknown,
+  init: ResponseInit = {},
+) {
+  const headers = new Headers(init.headers);
+  headers.set("Cache-Control", "no-store");
+
+  return NextResponse.json(body, {
+    ...init,
+    headers,
+  });
+}
 
 export function isPublicTokenBodyTooLarge(
   contentLength: string | null,

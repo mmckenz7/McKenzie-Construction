@@ -1,6 +1,5 @@
 import {
   NextRequest,
-  NextResponse,
 } from "next/server";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -9,6 +8,7 @@ import {
   isPublicTokenBodyTooLarge,
   logPublicTokenSupabaseFailure,
   minimizeVendorRequestPayload,
+  publicTokenJson,
 } from "@/lib/public-token-api";
 import { enforcePublicTokenRateLimit } from "@/lib/public-token-rate-limit";
 
@@ -16,6 +16,22 @@ type RouteContext = {
   params: Promise<{
     token: string;
   }>;
+};
+
+type VendorSubmitBody = {
+  responseStatus?: unknown;
+  responderName?: unknown;
+  responderEmail?: unknown;
+  responderPhone?: unknown;
+  quotedCost?: unknown;
+  earliestStartDate?: unknown;
+  expectedDeliveryDate?: unknown;
+  durationDays?: unknown;
+  leadTimeDays?: unknown;
+  quoteExpirationDate?: unknown;
+  notes?: unknown;
+  exclusions?: unknown;
+  attachmentUrls?: unknown;
 };
 
 function isUuid(value: string) {
@@ -67,7 +83,7 @@ export async function GET(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   const supabase =
@@ -91,15 +107,15 @@ export async function GET(
       error,
       status: failure.status,
     });
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (!data || (typeof data === "object" && "unavailable" in data)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
-  return NextResponse.json({
+  return publicTokenJson({
     success: true,
     request: minimizeVendorRequestPayload(data),
   });
@@ -123,29 +139,23 @@ export async function POST(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (isPublicTokenBodyTooLarge(request.headers.get("content-length"))) {
-    return NextResponse.json({ success: false, error: "Invalid response." }, { status: 413 });
+    return publicTokenJson({ success: false, error: "Invalid response." }, { status: 413 });
   }
 
-  const body =
-    (await request.json()) as {
-      responseStatus?: unknown;
-      responderName?: unknown;
-      responderEmail?: unknown;
-      responderPhone?: unknown;
-      quotedCost?: unknown;
-      earliestStartDate?: unknown;
-      expectedDeliveryDate?: unknown;
-      durationDays?: unknown;
-      leadTimeDays?: unknown;
-      quoteExpirationDate?: unknown;
-      notes?: unknown;
-      exclusions?: unknown;
-      attachmentUrls?: unknown;
-    };
+  let body: VendorSubmitBody;
+
+  try {
+    body = (await request.json()) as VendorSubmitBody;
+  } catch {
+    return publicTokenJson(
+      { success: false, error: "Invalid response." },
+      { status: 400 },
+    );
+  }
 
   const responderName =
     cleanText(body.responderName);
@@ -156,7 +166,7 @@ export async function POST(
     );
 
   if (!responderName) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error:
@@ -175,7 +185,7 @@ export async function POST(
       "declined",
     ].includes(responseStatus)
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error:
@@ -212,7 +222,7 @@ export async function POST(
     attachmentUrls.length > 10 ||
     attachmentUrls.some((value) => value.length > 2_048)
   ) {
-    return NextResponse.json({ success: false, error: "Invalid response." }, { status: 400 });
+    return publicTokenJson({ success: false, error: "Invalid response." }, { status: 400 });
   }
 
   const forwardedFor =
@@ -314,10 +324,10 @@ export async function POST(
       error,
       status: failure.status,
     });
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
-  return NextResponse.json({
+  return publicTokenJson({
     success: true,
     response: data && typeof data === "object" ? {
       responseStatus:

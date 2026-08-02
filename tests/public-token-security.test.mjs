@@ -12,6 +12,7 @@ import {
   minimizeMaterialReviewPayload,
   minimizeScheduleRequestPayload,
   minimizeVendorRequestPayload,
+  publicTokenJson,
 } from "../src/lib/public-token-api.ts";
 
 const migration = readFileSync(
@@ -108,23 +109,39 @@ test("Supabase failure logs contain only sanitized operational metadata", () => 
   }
 });
 
-test("all public-token failure responses use the centralized no-store headers", () => {
-  for (const source of routes) {
-    const failureCount = source.match(/const failure = createPublicTokenFailure/g)?.length ?? 0;
-    const headerCount = source.match(/headers: failure\.headers/g)?.length ?? 0;
+test("public-token JSON responses preserve status and headers while enforcing no-store", async () => {
+  for (const status of [200, 400, 404, 409, 410, 413, 429, 500, 503]) {
+    const body = { success: status === 200, status };
+    const response = publicTokenJson(body, {
+      status,
+      headers: {
+        "Cache-Control": "public, max-age=60",
+        "Retry-After": "17",
+        "X-Test-Header": "preserved",
+      },
+    });
 
-    assert.ok(failureCount > 0);
-    assert.equal(headerCount, failureCount);
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.equal(response.headers.get("Retry-After"), "17");
+    assert.equal(response.headers.get("X-Test-Header"), "preserved");
+    assert.deepEqual(await response.json(), body);
   }
+});
 
-  const materialRoute = routes[2];
-  const directServerErrors = materialRoute.match(
-    /status: 500,\s*headers: \{ "Cache-Control": "no-store" \}/g,
-  ) ?? [];
-  assert.equal(directServerErrors.length, 2);
+test("all explicit public-token route JSON responses use the no-store helper", () => {
+  for (const source of routes) {
+    assert.match(source, /publicTokenJson/);
+    assert.doesNotMatch(source, /NextResponse\.json/);
+  }
+});
+
+test("vendor invalid JSON uses the existing generic 400 response", () => {
+  const vendorRoute = routes[1];
+
   assert.match(
-    materialRoute,
-    /status: updateError \? 500 : 409,[\s\S]*?updateError \? \{ headers: \{ "Cache-Control": "no-store" \} \} : \{\}/,
+    vendorRoute,
+    /try \{[\s\S]*?await request\.json\(\)[\s\S]*?\} catch \{[\s\S]*?publicTokenJson\([\s\S]*?error: "Invalid response\."[\s\S]*?status: 400/,
   );
 });
 

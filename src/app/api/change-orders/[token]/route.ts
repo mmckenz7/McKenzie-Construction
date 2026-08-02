@@ -1,6 +1,5 @@
 import {
   NextRequest,
-  NextResponse,
 } from "next/server";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -9,6 +8,7 @@ import {
   isPublicTokenBodyTooLarge,
   logPublicTokenSupabaseFailure,
   minimizeChangeOrderPayload,
+  publicTokenJson,
 } from "@/lib/public-token-api";
 import { enforcePublicTokenRateLimit } from "@/lib/public-token-rate-limit";
 
@@ -49,7 +49,7 @@ export async function GET(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, {
+    return publicTokenJson(failure.body, {
       status: failure.status,
       headers: failure.headers,
     });
@@ -75,7 +75,7 @@ export async function GET(
       error,
       status: failure.status,
     });
-    return NextResponse.json(failure.body, {
+    return publicTokenJson(failure.body, {
       status: failure.status,
       headers: failure.headers,
     });
@@ -88,13 +88,13 @@ export async function GET(
       ("superseded" in data && data.superseded === true))
   )) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, {
+    return publicTokenJson(failure.body, {
       status: failure.status,
       headers: failure.headers,
     });
   }
 
-  return NextResponse.json({
+  return publicTokenJson({
     success: true,
     changeOrder: minimizeChangeOrderPayload(data),
   });
@@ -118,14 +118,14 @@ export async function POST(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, {
+    return publicTokenJson(failure.body, {
       status: failure.status,
       headers: failure.headers,
     });
   }
 
   if (isPublicTokenBodyTooLarge(request.headers.get("content-length"))) {
-    return NextResponse.json(
+    return publicTokenJson(
       { success: false, error: "Invalid response submission." },
       { status: 413 },
     );
@@ -137,7 +137,7 @@ export async function POST(
     body =
       (await request.json()) as SubmitResponseBody;
   } catch {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error:
@@ -153,7 +153,7 @@ export async function POST(
     body.response !== "approved" &&
     body.response !== "declined"
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error:
@@ -169,7 +169,7 @@ export async function POST(
     body.customerName?.trim() ?? "";
 
   if (!customerName) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error:
@@ -182,7 +182,7 @@ export async function POST(
   }
 
   if (customerName.length > 160 || (body.notes?.length ?? 0) > 4_000) {
-    return NextResponse.json(
+    return publicTokenJson(
       { success: false, error: "Invalid response submission." },
       { status: 400 },
     );
@@ -191,7 +191,7 @@ export async function POST(
   if (
     body.acknowledgedTerms !== true
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error:
@@ -246,7 +246,7 @@ export async function POST(
       error,
       status: failure.status,
     });
-    return NextResponse.json(failure.body, {
+    return publicTokenJson(failure.body, {
       status: failure.status,
       headers: failure.headers,
     });
@@ -258,7 +258,7 @@ export async function POST(
     "already_submitted" in data &&
     data.already_submitted === true
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         alreadySubmitted: true,
@@ -274,7 +274,7 @@ export async function POST(
     );
   }
 
-  return NextResponse.json({
+  return publicTokenJson({
     success: true,
     result: data && typeof data === "object" ? {
       status: "status" in data ? data.status : null,

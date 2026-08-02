@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import {
@@ -6,6 +6,7 @@ import {
   isPublicTokenBodyTooLarge,
   logPublicTokenSupabaseFailure,
   minimizeScheduleRequestPayload,
+  publicTokenJson,
 } from "@/lib/public-token-api";
 import { enforcePublicTokenRateLimit } from "@/lib/public-token-rate-limit";
 
@@ -47,7 +48,7 @@ export async function GET(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   const supabase = createAdminServerClient();
@@ -68,7 +69,7 @@ export async function GET(
       error,
       status: failure.status,
     });
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (!data || (
@@ -78,10 +79,10 @@ export async function GET(
     data.expired === true
   )) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
-  return NextResponse.json({
+  return publicTokenJson({
     success: true,
     request: minimizeScheduleRequestPayload(data),
   });
@@ -104,11 +105,11 @@ export async function POST(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (isPublicTokenBodyTooLarge(request.headers.get("content-length"))) {
-    return NextResponse.json({ success: false, error: "Invalid form submission." }, { status: 413 });
+    return publicTokenJson({ success: false, error: "Invalid form submission." }, { status: 413 });
   }
 
   let body: SubmitBody;
@@ -116,7 +117,7 @@ export async function POST(
   try {
     body = (await request.json()) as SubmitBody;
   } catch {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error: "Invalid form submission.",
@@ -131,7 +132,7 @@ export async function POST(
     body.language !== "en" &&
     body.language !== "es"
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error: "Please select a language.",
@@ -146,7 +147,7 @@ export async function POST(
     !body.earliestDemoStart ||
     !body.earliestConstructionStart
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error: "Both start dates are required.",
@@ -168,7 +169,7 @@ export async function POST(
     body.totalDurationDays > 730 ||
     (body.notes?.length ?? 0) > 4_000
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error: "Both durations are required.",
@@ -208,7 +209,7 @@ export async function POST(
         status: failure.status,
       });
     }
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (
@@ -217,7 +218,7 @@ export async function POST(
     ("submitted_at" in scheduleRequest &&
       Boolean(scheduleRequest.submitted_at))
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         alreadySubmitted: true,
@@ -256,7 +257,7 @@ export async function POST(
       error,
       status: failure.status,
     });
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (
@@ -270,7 +271,7 @@ export async function POST(
       "already_submitted" in data &&
       data.already_submitted === true
     ) {
-      return NextResponse.json(
+      return publicTokenJson(
         {
           success: false,
           alreadySubmitted: true,
@@ -280,7 +281,7 @@ export async function POST(
       );
     }
 
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error: "The schedule response could not be submitted.",
@@ -291,7 +292,7 @@ export async function POST(
     );
   }
 
-  return NextResponse.json({
+  return publicTokenJson({
     success: true,
   });
 }

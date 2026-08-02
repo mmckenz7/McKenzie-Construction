@@ -1,6 +1,5 @@
 import {
   NextRequest,
-  NextResponse,
 } from "next/server";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -9,6 +8,7 @@ import {
   isPublicTokenBodyTooLarge,
   logPublicTokenSupabaseFailure,
   minimizeMaterialReviewPayload,
+  publicTokenJson,
 } from "@/lib/public-token-api";
 import { enforcePublicTokenRateLimit } from "@/lib/public-token-rate-limit";
 
@@ -65,7 +65,7 @@ export async function GET(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   const supabase =
@@ -88,7 +88,7 @@ export async function GET(
       error,
       status: failure.status,
     });
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (!data || (
@@ -98,10 +98,10 @@ export async function GET(
     data.expired === true
   )) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
-  return NextResponse.json({
+  return publicTokenJson({
     success: true,
     review: minimizeMaterialReviewPayload(data),
   });
@@ -124,11 +124,11 @@ export async function POST(
 
   if (!isUuid(token)) {
     const failure = createPublicTokenFailure("unavailable");
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (isPublicTokenBodyTooLarge(request.headers.get("content-length"))) {
-    return NextResponse.json({ success: false, error: "Invalid form submission." }, { status: 413 });
+    return publicTokenJson({ success: false, error: "Invalid form submission." }, { status: 413 });
   }
 
   let body: SubmitBody;
@@ -137,7 +137,7 @@ export async function POST(
     body =
       (await request.json()) as SubmitBody;
   } catch {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error: "Invalid form submission.",
@@ -152,7 +152,7 @@ export async function POST(
     body.language !== "en" &&
     body.language !== "es"
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error: "Please select a language.",
@@ -168,7 +168,7 @@ export async function POST(
     body.reviewResult !==
       "issues_reported"
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error:
@@ -201,7 +201,7 @@ export async function POST(
           issue.reportedQuantity > 1_000_000)),
     )
   ) {
-    return NextResponse.json({ success: false, error: "Invalid form submission." }, { status: 400 });
+    return publicTokenJson({ success: false, error: "Invalid form submission." }, { status: 400 });
   }
 
   if (
@@ -209,7 +209,7 @@ export async function POST(
       "issues_reported" &&
     issues.length === 0
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error:
@@ -228,7 +228,7 @@ export async function POST(
         issue.issueType,
       )
     ) {
-      return NextResponse.json(
+      return publicTokenJson(
         {
           success: false,
           error:
@@ -266,13 +266,13 @@ export async function POST(
         status: failure.status,
       });
     }
-    return NextResponse.json(failure.body, { status: failure.status, headers: failure.headers });
+    return publicTokenJson(failure.body, { status: failure.status, headers: failure.headers });
   }
 
   if (
     review.status === "cancelled"
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error:
@@ -302,7 +302,7 @@ export async function POST(
       .eq("id", review.id)
       .neq("status", "submitted");
 
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error:
@@ -318,7 +318,7 @@ export async function POST(
     review.status === "submitted" ||
     review.submitted_at
   ) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         alreadySubmitted: true,
@@ -332,7 +332,7 @@ export async function POST(
   }
 
   if (review.reviewed_at) {
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         alreadySubmitted: true,
@@ -388,7 +388,7 @@ export async function POST(
         status: 500,
       });
     }
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         alreadySubmitted: !updateError,
@@ -419,7 +419,7 @@ export async function POST(
       error: deleteError,
       status: 500,
     });
-    return NextResponse.json(
+    return publicTokenJson(
       {
         success: false,
         error: "The request could not be completed.",
@@ -474,7 +474,7 @@ export async function POST(
         error: issueError,
         status: 500,
       });
-      return NextResponse.json(
+      return publicTokenJson(
         {
           success: false,
           error: "The request could not be completed.",
@@ -487,7 +487,7 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({
+  return publicTokenJson({
     success: true,
   });
 }
