@@ -40,11 +40,18 @@ const navigationItems = [
     label: "Customers",
     href: "/sales/customers",
   },
+  {
+    label: "Estimates",
+    href: "/sales/estimates",
+  },
+  {
+    label: "Projects",
+    href: "/operations/projects",
+  },
 ];
 
 const futureItems = [
   "Appointments",
-  "Estimates",
   "Proposals",
   "Follow-Ups",
 ];

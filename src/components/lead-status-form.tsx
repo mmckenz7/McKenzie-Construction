@@ -58,15 +58,23 @@ const consultationStatuses = [
   },
   {
     value: "pending",
-    label: "Pending Confirmation",
+    label: "Requested",
+  },
+  {
+    value: "pending_customer_confirmation",
+    label: "Pending Customer Confirmation",
   },
   {
     value: "confirmed",
     label: "Consultation Confirmed",
   },
   {
-    value: "declined",
-    label: "Declined or Canceled",
+    value: "reschedule_requested",
+    label: "Reschedule Requested",
+  },
+  {
+    value: "canceled",
+    label: "Cancelled",
   },
   {
     value: "completed",
@@ -571,6 +579,7 @@ export default function LeadStatusForm({
           },
           body: JSON.stringify({
             appointmentAt,
+            customerConfirmed: consultationStatus === "pending_customer_confirmation",
           }),
         },
       );
@@ -581,6 +590,7 @@ export default function LeadStatusForm({
           error?: string;
           appointmentAt?: string;
           emailDraftCreated?: boolean;
+          consultationStatus?: string;
         };
 
       if (!response.ok || !result.success) {
@@ -593,9 +603,7 @@ export default function LeadStatusForm({
       setStatus(
         "consultation_scheduled",
       );
-      setConsultationStatus(
-        "confirmed",
-      );
+      setConsultationStatus(result.consultationStatus ?? "confirmed");
 
       const confirmedDate =
         result.appointmentAt ??
@@ -608,7 +616,9 @@ export default function LeadStatusForm({
       );
 
       setConfirmationMessage(
-        result.emailDraftCreated
+        result.consultationStatus === "pending_customer_confirmation"
+          ? "Consultation proposed and pending customer confirmation."
+          : result.emailDraftCreated
           ? "Consultation confirmed. The site-visit task and confirmation email draft were created."
           : "Consultation confirmed and the site-visit task was created.",
       );
@@ -1085,7 +1095,7 @@ export default function LeadStatusForm({
                 : consultationStatus ===
                     "confirmed"
                   ? "Update Confirmation"
-                  : "Confirm Consultation"}
+                  : consultationStatus === "pending_customer_confirmation" ? "Record Customer Confirmation" : "Propose Consultation"}
             </button>
 
             <button
@@ -1324,6 +1334,7 @@ export default function LeadStatusForm({
                     }
                     className="w-full rounded-lg border border-violet-300 bg-white px-3 py-2 text-sm text-slate-950"
                   />
+                  <span className="mt-1 block text-xs text-violet-700">The callback action becomes available after a requested date and time is selected.</span>
                 </label>
               </div>
 

@@ -37,6 +37,8 @@ type CompanySettings = {
   manual_task_due_mode: string;
   manual_task_due_offset: number;
   end_of_business_time: string;
+  consultation_start_time: string;
+  consultation_end_time: string;
 };
 
 type TaskTypeManagerProps = {
@@ -620,6 +622,8 @@ export default function TaskTypeManager({
             manualTaskDueOffset: 1,
             endOfBusinessTime:
               settings.end_of_business_time,
+            consultationStartTime: settings.consultation_start_time,
+            consultationEndTime: settings.consultation_end_time,
           }),
         },
       );
@@ -728,6 +732,8 @@ export default function TaskTypeManager({
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950"
                 />
               </label>
+              <label className="block"><span className="mb-2 block text-sm font-bold text-slate-950">Consultation Hours Start</span><input type="time" value={settings.consultation_start_time.slice(0, 5)} onChange={(event) => setSettings((current) => current ? { ...current, consultation_start_time: `${event.target.value}:00` } : current)} disabled={isSavingSettings} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" /></label>
+              <label className="block"><span className="mb-2 block text-sm font-bold text-slate-950">Consultation Hours End</span><input type="time" value={settings.consultation_end_time.slice(0, 5)} onChange={(event) => setSettings((current) => current ? { ...current, consultation_end_time: `${event.target.value}:00` } : current)} disabled={isSavingSettings} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" /></label>
             </div>
 
             <button

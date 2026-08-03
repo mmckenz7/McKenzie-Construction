@@ -1130,6 +1130,13 @@ export default async function ProjectsPage({
         projectId={projectId}
       />
 
+      <section className="border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="text-xs font-bold uppercase tracking-[.15em] text-blue-700">Project Setup</p><h2 className="mt-2 text-xl font-bold">Internal Team, Subcontractors & Vendors</h2><p className="mt-2 text-sm text-slate-600">Assign internal responsibility and connect external trades or vendors to schedule, bid, and material workflows.</p></div>
+          <Link href={`/operations/projects/${projectId}/team`} className="shrink-0 bg-blue-950 px-5 py-3 text-center text-sm font-bold text-white">Manage Project Team</Link>
+        </div>
+      </section>
+
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

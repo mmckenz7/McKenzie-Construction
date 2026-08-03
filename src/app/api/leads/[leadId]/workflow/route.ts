@@ -3,6 +3,8 @@ import {
   getAuthenticatedApiUser,
 } from "@/lib/api-auth";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import { isConsultationDateTimeAllowed } from "@/lib/consultation-hours";
+import { companyEmailSignature } from "@/lib/crm/company-signature";
 
 type RouteContext = {
   params: Promise<{
@@ -511,6 +513,23 @@ export async function POST(
         appointmentAt,
       );
 
+      const { data: consultationSettings, error: consultationSettingsError } = await supabase
+        .from("company_settings")
+        .select("company_name, consultation_start_time, consultation_end_time")
+        .limit(1)
+        .maybeSingle();
+
+      if (consultationSettingsError || !consultationSettings) {
+        return Response.json({ error: "Company consultation hours could not be loaded." }, { status: 500 });
+      }
+
+      if (!isConsultationDateTimeAllowed(appointmentAt, {
+        start: consultationSettings.consultation_start_time ?? "08:00",
+        end: consultationSettings.consultation_end_time ?? "17:00",
+      })) {
+        return Response.json({ error: "Choose a consultation time in 30-minute increments within company consultation hours." }, { status: 400 });
+      }
+
       if (
         !appointmentAt ||
         Number.isNaN(
@@ -538,7 +557,7 @@ export async function POST(
             lead_status:
               "consultation_scheduled",
             consultation_status:
-              "confirmed",
+              "reschedule_requested",
             follow_up_at: appointmentIso,
           })
           .eq("id", leadId);
@@ -614,9 +633,7 @@ Please reply to this email or call us if this updated time no longer works.
 
 Thank you,
 
-Michael McKenzie
-McKenzie Construction
-865-263-3811`,
+${companyEmailSignature(consultationSettings.company_name)}`,
               status: "draft",
               metadata: {
                 created_by:
@@ -743,6 +760,16 @@ McKenzie Construction
       let emailDraftCreated = false;
 
       if (lead.email) {
+        const { data: consultationSettings, error: consultationSettingsError } = await supabase
+          .from("company_settings")
+          .select("company_name")
+          .limit(1)
+          .maybeSingle();
+
+        if (consultationSettingsError || !consultationSettings) {
+          return Response.json({ error: "Company settings could not be loaded." }, { status: 500 });
+        }
+
         const { error: draftError } =
           await supabase
             .from("email_drafts")
@@ -765,9 +792,7 @@ ${
 
 Thank you,
 
-Michael McKenzie
-McKenzie Construction
-865-263-3811`,
+${companyEmailSignature(consultationSettings.company_name)}`,
               status: "draft",
               metadata: {
                 created_by:

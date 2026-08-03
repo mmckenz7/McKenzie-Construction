@@ -13,6 +13,7 @@ import {
   type CompanyAssignmentSettings,
 } from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import { reconcileProjectNextActions } from "@/lib/projects/reconcile-next-actions";
 
 const allowedProjectStatuses = new Set([
   "planning",
@@ -968,6 +969,35 @@ export async function PATCH(
         status: 500,
       },
     );
+  }
+
+  try {
+    const [partiesResult, phaseCount, changeCount] = await Promise.all([
+      supabase.from("project_parties").select("party_type, workflow_permissions").eq("project_id", projectId).eq("is_active", true),
+      supabase.from("project_material_phases").select("id", { count: "exact", head: true }).eq("project_id", projectId),
+      supabase.from("project_change_orders").select("id", { count: "exact", head: true }).eq("project_id", projectId).not("status", "in", '("approved","rejected","canceled")'),
+    ]);
+    await reconcileProjectNextActions(supabase, {
+      id: projectId,
+      customerId: updatedProject.customer_id,
+      projectName: updatedProject.project_name,
+      status: updatedProject.status,
+      projectType: updatedProject.project_type,
+      description: updatedProject.description,
+      propertyAddress: updatedProject.property_address,
+      projectManagerId: updatedProject.project_manager_id,
+      estimatedValue: updatedProject.estimated_value,
+      contractValue: updatedProject.contract_value,
+      startDate: updatedProject.start_date,
+      targetCompletionDate: updatedProject.target_completion_date,
+      externalPartyCount: partiesResult.data?.length ?? 0,
+      subcontractorScheduleEligible: Boolean(partiesResult.data?.some((party) => party.party_type === "subcontractor" && party.workflow_permissions?.includes("schedule"))),
+      vendorBidEligible: Boolean(partiesResult.data?.some((party) => party.party_type === "vendor" && party.workflow_permissions?.includes("bid"))),
+      materialPhaseCount: phaseCount.count ?? 0,
+      hasOpenChangeOrder: (changeCount.count ?? 0) > 0,
+    });
+  } catch (error) {
+    console.error("Unable to reconcile project next actions after update:", error);
   }
 
   return NextResponse.json({

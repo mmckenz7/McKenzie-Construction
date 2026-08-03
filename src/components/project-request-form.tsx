@@ -1,10 +1,13 @@
+import { consultationTimeOptions, type ConsultationHours } from "@/lib/consultation-hours";
+
 const inputClass =
   "min-h-14 w-full border border-zinc-300 bg-white px-4 text-base text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950";
 
 const labelClass =
   "mb-2 block text-xs font-black uppercase tracking-[0.14em] text-zinc-950";
 
-export function ProjectRequestForm() {
+export function ProjectRequestForm({ consultationHours }: { consultationHours?: Partial<ConsultationHours> }) {
+  const timeOptions = consultationTimeOptions(consultationHours);
   return (
     <form
       action="/api/leads"
@@ -166,11 +169,14 @@ export function ProjectRequestForm() {
 
           <label>
             <span className={labelClass}>Preferred Time</span>
-            <input
-              type="time"
+            <select
               name="requestedTime"
+              defaultValue=""
               className={inputClass}
-            />
+            >
+              <option value="">No preference</option>
+              {timeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
           </label>
 
           <label>
@@ -184,11 +190,14 @@ export function ProjectRequestForm() {
 
           <label>
             <span className={labelClass}>Alternate Time</span>
-            <input
-              type="time"
+            <select
               name="alternateTime"
+              defaultValue=""
               className={inputClass}
-            />
+            >
+              <option value="">No alternate time</option>
+              {timeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
           </label>
         </div>
       </fieldset>

@@ -9,6 +9,7 @@ import {
   type CompanyAssignmentSettings,
 } from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import { reconcileProjectNextActions } from "@/lib/projects/reconcile-next-actions";
 
 const allowedProjectStatuses = new Set([
   "planning",
@@ -996,12 +997,37 @@ export async function POST(
       }
     }
 
+    let nextActionsCreated = 0;
+    try {
+      const reconciliation = await reconcileProjectNextActions(supabase, {
+        id: String(newProject.id),
+        customerId,
+        projectName: newProject.project_name,
+        status: newProject.status,
+        projectType: newProject.project_type,
+        description: newProject.description,
+        propertyAddress: newProject.property_address,
+        projectManagerId: newProject.project_manager_id,
+        estimatedValue: newProject.estimated_value,
+        contractValue: newProject.contract_value,
+        startDate: newProject.start_date,
+        targetCompletionDate: newProject.target_completion_date,
+        externalPartyCount: 0,
+        materialPhaseCount: 0,
+        hasOpenChangeOrder: false,
+      });
+      nextActionsCreated = reconciliation.created;
+    } catch (error) {
+      console.error("Unable to generate project next actions:", error);
+    }
+
     return Response.json(
       {
         success: true,
         project:
           newProject,
         projectManagerId,
+        nextActionsCreated,
       },
       {
         status: 201,

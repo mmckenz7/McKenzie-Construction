@@ -22,7 +22,7 @@ export default function ThankYouPage() {
           </h1>
 
           <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300">
-            Your project request has been submitted. Michael will review the
+            Your project request has been submitted. Our team will review the
             details and contact you to discuss the project and confirm any
             requested consultation time.
           </p>

@@ -35,16 +35,10 @@ const managementNavigationItems = [
     label: "Team",
     href: "/admin/team",
   },
-  {
-    label: "Task Settings",
-    href: "/admin/settings/tasks",
-  },
+  { label: "Settings", href: "/admin/settings" },
 ];
 
-const futureNavigationItems = [
-  "Projects",
-  "Estimates",
-];
+const futureNavigationItems: string[] = [];
 
 function getRequestedPath(
   pathname: string | null,

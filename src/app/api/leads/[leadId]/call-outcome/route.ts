@@ -9,6 +9,7 @@ import {
   type TaskAssignmentStrategy,
 } from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import { followUpDraft } from "@/lib/crm/follow-up";
 
 type RouteContext = {
   params: Promise<{
@@ -901,11 +902,7 @@ export async function POST(
       companyTaskId: string;
     } | null = null;
 
-    if (
-      outcome === "no_answer" ||
-      outcome ===
-        "left_voicemail"
-    ) {
+    if (lead.email) {
       const reviewDueAt =
         getTaskDueAt(
           reviewTaskRule,
@@ -974,29 +971,7 @@ export async function POST(
         );
       }
 
-      const emailSubject =
-        "Following up on your McKenzie Construction estimate";
-
-      const openingSentence =
-        outcome ===
-        "left_voicemail"
-          ? "I just tried to reach you by phone and left a voicemail."
-          : "I just tried to reach you by phone but was unable to connect.";
-
-      const emailBody = `Hi ${lead.name ?? "there"},
-
-${openingSentence} I wanted to follow up regarding the estimate for your ${
-        lead.project_type ??
-        "project"
-      }.
-
-Please let me know whether you have any questions, would like to discuss changes, or are ready to move forward. You can reply to this email or call me at 865-263-3811.
-
-Thank you,
-
-Michael McKenzie
-McKenzie Construction
-865-263-3811`;
+      const draftContent = followUpDraft(outcome, lead.name, lead.project_type);
 
       const {
         data: emailDraft,
@@ -1006,17 +981,13 @@ McKenzie Construction
         .insert({
           lead_id:
             leadId,
-          template_key:
-            outcome ===
-            "left_voicemail"
-              ? "estimate_follow_up_voicemail"
-              : "estimate_follow_up_no_answer",
+          template_key: draftContent.templateKey,
           to_email:
             lead.email,
           subject:
-            emailSubject,
+            draftContent.subject,
           body:
-            emailBody,
+            draftContent.body,
           status:
             "draft",
           metadata: {

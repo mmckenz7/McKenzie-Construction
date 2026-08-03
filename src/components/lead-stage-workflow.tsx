@@ -222,6 +222,7 @@ export default function LeadStageWorkflow({
       success?: boolean;
       error?: string;
       appointmentAt?: string;
+      consultationStatus?: string;
       estimateDueAt?: string;
       followUpAt?: string;
       emailDraftCreated?: boolean;
@@ -448,6 +449,7 @@ export default function LeadStageWorkflow({
           },
           body: JSON.stringify({
             appointmentAt,
+            customerConfirmed: consultationStatus === "pending_customer_confirmation",
           }),
         },
       );
@@ -458,12 +460,12 @@ export default function LeadStageWorkflow({
       setStatus(
         "consultation_scheduled",
       );
-      setConsultationStatus(
-        "confirmed",
-      );
+      setConsultationStatus(result.consultationStatus ?? "confirmed");
 
       setMessage(
-        result.emailDraftCreated
+        result.consultationStatus === "pending_customer_confirmation"
+          ? "Consultation proposed. It remains pending until the customer confirms."
+          : result.emailDraftCreated
           ? "Consultation confirmed. The visit task and email draft were created."
           : "Consultation confirmed. The visit task was created.",
       );
@@ -761,7 +763,7 @@ export default function LeadStageWorkflow({
           </h3>
 
           <p className="mt-2 text-sm leading-6 text-slate-700">
-            Confirm the consultation date and create the site-visit task.
+            Propose a consultation time. Create the site-visit task only after the customer confirms.
           </p>
 
           <form
@@ -937,7 +939,7 @@ export default function LeadStageWorkflow({
               {activeAction ===
               "confirm_consultation"
                 ? "Confirming..."
-                : "Confirm Consultation"}
+                : consultationStatus === "pending_customer_confirmation" ? "Record Customer Confirmation" : "Propose Consultation"}
             </button>
           </form>
         </section>
@@ -1159,6 +1161,7 @@ export default function LeadStageWorkflow({
                 disabled={isBusy}
                 className="w-full rounded-lg border border-violet-300 bg-white px-3 py-2 text-sm text-slate-950"
               />
+              <span className="mt-1 block text-xs text-violet-700">The callback action becomes available after a requested date and time is selected.</span>
             </label>
           </div>
 

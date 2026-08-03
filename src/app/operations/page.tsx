@@ -2,14 +2,6 @@ import Link from "next/link";
 
 const cards = [
   {
-    title: "Change Orders",
-    value: "Scope and approvals",
-    description:
-      "Track added work, customer approvals, revenue, profit, and schedule impact across every project.",
-    href: "/operations/change-orders",
-    button: "Open Change Orders",
-  },
-  {
     title: "Inbox",
     value: "Installer activity",
     description:

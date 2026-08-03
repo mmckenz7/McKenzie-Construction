@@ -8,12 +8,6 @@ const cards = [
     href: "/admin/team",
   },
   {
-    title: "Task Settings",
-    description:
-      "Configure task types, defaults, and company workflow settings.",
-    href: "/admin/settings/tasks",
-  },
-  {
     title: "Suppliers",
     description:
       "Manage suppliers, locations, pricing sources, and purchasing relationships.",

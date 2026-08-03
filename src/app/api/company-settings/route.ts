@@ -24,6 +24,8 @@ type UpdateCompanySettingsBody = {
   manualTaskDueMode?: unknown;
   manualTaskDueOffset?: unknown;
   endOfBusinessTime?: unknown;
+  consultationStartTime?: unknown;
+  consultationEndTime?: unknown;
 };
 
 type AssignmentField =
@@ -55,6 +57,8 @@ const settingsSelect = `
   manual_task_due_mode,
   manual_task_due_offset,
   end_of_business_time
+  ,consultation_start_time
+  ,consultation_end_time
 `;
 
 function optionalId(value: unknown) {
@@ -476,6 +480,16 @@ export async function PATCH(request: Request) {
     );
   }
 
+  const consultationStartTime = body.consultationStartTime === undefined
+    ? existingSettings.consultation_start_time
+    : parseBusinessTime(body.consultationStartTime);
+  const consultationEndTime = body.consultationEndTime === undefined
+    ? existingSettings.consultation_end_time
+    : parseBusinessTime(body.consultationEndTime);
+  if (!consultationStartTime || !consultationEndTime || consultationStartTime >= consultationEndTime) {
+    return NextResponse.json({ success: false, error: "Consultation hours must have a valid opening time before the closing time." }, { status: 400 });
+  }
+
   if (
     requireResponsiblePerson &&
     !defaultLeadOwnerId
@@ -574,6 +588,8 @@ export async function PATCH(request: Request) {
         manualTaskDueOffset,
       end_of_business_time:
         endOfBusinessTime,
+      consultation_start_time: consultationStartTime,
+      consultation_end_time: consultationEndTime,
       updated_at: new Date().toISOString(),
     })
     .eq("id", existingSettings.id)

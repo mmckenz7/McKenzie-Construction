@@ -1,6 +1,20 @@
 import { ProjectRequestForm } from "@/components/project-request-form";
+import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
-export default function ContactPage() {
+export const dynamic = "force-dynamic";
+
+export default async function ContactPage() {
+  const supabase = createAdminServerClient();
+  const { data: settings } = await supabase
+    .from("company_settings")
+    .select("consultation_start_time, consultation_end_time, end_of_business_time")
+    .limit(1)
+    .maybeSingle();
+
+  const consultationHours = {
+    start: settings?.consultation_start_time ?? "08:00",
+    end: settings?.consultation_end_time ?? settings?.end_of_business_time ?? "17:00",
+  };
   return (
     <main className="bg-white text-zinc-950">
       <section className="border-b border-zinc-200 bg-zinc-950 text-white">
@@ -28,7 +42,7 @@ export default function ContactPage() {
 
       <section className="bg-white">
         <div className="mx-auto max-w-5xl px-6 py-12 lg:px-8 lg:py-16">
-          <ProjectRequestForm />
+          <ProjectRequestForm consultationHours={consultationHours} />
         </div>
       </section>
 

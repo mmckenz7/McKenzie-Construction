@@ -39,6 +39,8 @@ type CompanySettings = {
   manual_task_due_mode: string;
   manual_task_due_offset: number;
   end_of_business_time: string;
+  consultation_start_time: string;
+  consultation_end_time: string;
 };
 
 export default async function TaskSettingsPage() {
@@ -114,6 +116,8 @@ export default async function TaskSettingsPage() {
           manual_task_due_mode,
           manual_task_due_offset,
           end_of_business_time
+          ,consultation_start_time
+          ,consultation_end_time
         `,
       )
       .limit(1)

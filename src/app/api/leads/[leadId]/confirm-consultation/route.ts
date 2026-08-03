@@ -9,6 +9,8 @@ import {
   type TaskAssignmentStrategy,
 } from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import { isConsultationDateTimeAllowed } from "@/lib/consultation-hours";
+import { companyEmailSignature } from "@/lib/crm/company-signature";
 
 type RouteContext = {
   params: Promise<{
@@ -18,6 +20,7 @@ type RouteContext = {
 
 type RequestBody = {
   appointmentAt?: unknown;
+  customerConfirmed?: unknown;
 };
 
 type LeadRecord = {
@@ -135,6 +138,7 @@ export async function POST(
 
     const appointmentDate =
       new Date(appointmentAt);
+    const customerConfirmed = body.customerConfirmed === true;
 
     if (
       !appointmentAt ||
@@ -184,6 +188,9 @@ export async function POST(
         .select(
           `
             automatically_assign_new_leads,
+            company_name,
+            consultation_start_time,
+            consultation_end_time,
             automatically_assign_new_tasks,
             automatically_assign_converted_projects,
             allow_unassigned_leads,
@@ -259,6 +266,13 @@ export async function POST(
       );
     }
 
+    if (!isConsultationDateTimeAllowed(appointmentAt, {
+      start: settingsResult.data.consultation_start_time ?? "08:00",
+      end: settingsResult.data.consultation_end_time ?? "17:00",
+    })) {
+      return Response.json({ error: "Choose a consultation time in 30-minute increments within company consultation hours." }, { status: 400 });
+    }
+
     if (taskTypeResult.error) {
       console.error(
         "Unable to load complete-consultation task type:",
@@ -314,6 +328,33 @@ export async function POST(
           status: 400,
         },
       );
+    }
+
+    if (!customerConfirmed) {
+      const now = new Date().toISOString();
+      const appointmentIso = appointmentDate.toISOString();
+      const { error: proposalError } = await supabase.from("leads").update({
+        lead_status: "consultation_scheduled",
+        consultation_status: "pending_customer_confirmation",
+        follow_up_at: appointmentIso,
+      }).eq("id", leadId);
+      if (proposalError) return Response.json({ error: proposalError.message }, { status: 500 });
+      const { error: activityError } = await supabase.from("lead_activities").insert({
+        lead_id: leadId,
+        activity_type: "consultation_proposed",
+        channel: "consultation",
+        direction: "outbound",
+        summary: "Consultation pending customer confirmation",
+        details: formattedAppointment,
+        occurred_at: now,
+        metadata: {
+          previous_consultation_status: lead.consultation_status,
+          appointment_at: appointmentIso,
+          changed_by_auth_user_id: user.id,
+        },
+      });
+      if (activityError) console.error("Unable to log consultation proposal:", activityError);
+      return Response.json({ success: true, appointmentAt: appointmentIso, consultationStatus: "pending_customer_confirmation", emailDraftCreated: false, taskCreated: false });
     }
 
     const assignmentStrategy =
@@ -683,9 +724,7 @@ Please reply to this email or call us if anything changes before the appointment
 
 Thank you,
 
-Michael McKenzie
-McKenzie Construction
-865-263-3811`;
+${companyEmailSignature(settingsResult.data.company_name)}`;
 
     const {
       data: emailDraft,
@@ -705,6 +744,7 @@ McKenzie Construction
             "confirm_consultation_workflow",
           appointment_at:
             appointmentIso,
+          changed_by_auth_user_id: user.id,
         },
       })
       .select("id")
@@ -820,6 +860,7 @@ McKenzie Construction
       success: true,
       appointmentAt:
         appointmentIso,
+      consultationStatus: "confirmed",
       assignedToId,
       emailDraftCreated:
         Boolean(emailDraft),

@@ -757,12 +757,6 @@ export default async function AdminPage({
             Team
           </Link>
 
-          <Link
-            href="/admin/settings/tasks"
-            className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
-          >
-            Task Settings
-          </Link>
         </div>
 
         <header className="rounded-2xl bg-slate-950 px-6 py-7 text-white shadow-sm sm:px-8">
