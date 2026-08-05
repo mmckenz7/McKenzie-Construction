@@ -29,6 +29,7 @@ type VendorRequestRecord = {
   requestStatus: string;
   requestedScope: string | null;
   dueAt: string | null;
+  expiresAt: string | null;
   sentAt: string | null;
   openedAt: string | null;
   submittedAt: string | null;
@@ -37,6 +38,7 @@ type VendorRequestRecord = {
   publicPath: string;
 
   response: {
+    id: string;
     responseStatus: string;
     responderName: string;
     quotedCost: number | null;
@@ -47,8 +49,16 @@ type VendorRequestRecord = {
     quoteExpirationDate: string | null;
     notes: string | null;
     exclusions: string | null;
+    acceptance: {
+      id: string;
+      responseId: string;
+      acceptedAt: string;
+    } | null;
   } | null;
 };
+
+const ACCEPTANCE_CONFIRMATION =
+  "Accepting records this vendor response as the selected quote. It does not change customer price, estimated cost, schedule impact, line items, approval status, or billing.";
 
 function formatCurrency(
   value: number | null,
@@ -109,6 +119,21 @@ export default function VendorRequestsPage({
     changeOrderNumber,
     setChangeOrderNumber,
   ] = useState(0);
+
+  const [
+    changeOrderStatus,
+    setChangeOrderStatus,
+  ] = useState("");
+
+  const [
+    supersededByChangeOrderId,
+    setSupersededByChangeOrderId,
+  ] = useState<string | null>(null);
+
+  const [
+    canAcceptVendorResponse,
+    setCanAcceptVendorResponse,
+  ] = useState(false);
 
   const [
     loading,
@@ -194,9 +219,16 @@ export default function VendorRequestsPage({
             changeOrder?: {
               changeOrderNumber: number;
               title: string;
+              status: string;
+              supersededByChangeOrderId:
+                | string
+                | null;
             };
 
             requests?: VendorRequestRecord[];
+            capabilities?: {
+              canAcceptVendorResponse?: boolean;
+            };
           };
 
         if (
@@ -221,6 +253,23 @@ export default function VendorRequestsPage({
         setChangeOrderNumber(
           result.changeOrder
             ?.changeOrderNumber ?? 0,
+        );
+
+        setChangeOrderStatus(
+          result.changeOrder?.status ??
+            "",
+        );
+
+        setSupersededByChangeOrderId(
+          result.changeOrder
+            ?.supersededByChangeOrderId ??
+            null,
+        );
+
+        setCanAcceptVendorResponse(
+          result.capabilities
+            ?.canAcceptVendorResponse ===
+            true,
         );
       } catch (loadError) {
         setError(
@@ -399,6 +448,72 @@ export default function VendorRequestsPage({
     );
   }
 
+  async function acceptResponse(
+    requestRecord: VendorRequestRecord,
+  ) {
+    if (
+      !requestRecord.response ||
+      !window.confirm(
+        ACCEPTANCE_CONFIRMATION,
+      )
+    ) {
+      return;
+    }
+
+    setActionId(
+      `accept:${requestRecord.id}`,
+    );
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `/api/projects/${route.projectId}/change-orders/${route.changeOrderId}/vendor-requests/${requestRecord.id}/responses/${requestRecord.response.id}/accept`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({}),
+        },
+      );
+
+      const result =
+        (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          revisionRequired?: boolean;
+        };
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        throw new Error(
+          result.revisionRequired
+            ? "A draft revision is required before accepting this vendor response."
+            : result.error ??
+                "Could not accept the vendor response.",
+        );
+      }
+
+      setNotice(
+        "Vendor response accepted. No cost, schedule, line-item, approval, or billing values were changed.",
+      );
+      await loadRequests();
+    } catch (acceptError) {
+      setError(
+        acceptError instanceof Error
+          ? acceptError.message
+          : "Could not accept the vendor response.",
+      );
+    } finally {
+      setActionId("");
+    }
+  }
+
   if (featuresLoading) {
     return (
       <main className="mx-auto max-w-7xl px-5 py-8">
@@ -443,6 +558,14 @@ export default function VendorRequestsPage({
       <p className="mt-2 text-slate-600">
         {changeOrderTitle}
       </p>
+
+      {!loading &&
+        (changeOrderStatus !== "draft" ||
+          supersededByChangeOrderId) && (
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          A draft revision is required before a vendor response can be accepted.
+        </div>
+      )}
 
       {notice && (
         <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
@@ -814,6 +937,66 @@ export default function VendorRequestsPage({
                           </p>
                         </div>
                       )}
+
+                      {requestRecord.response
+                        .acceptance ? (
+                        <div className="mt-5 border-t border-emerald-200 pt-4">
+                          <p className="font-bold text-emerald-950">
+                            Accepted
+                          </p>
+                          <p className="mt-1 text-sm text-emerald-800">
+                            {formatDate(
+                              requestRecord
+                                .response
+                                .acceptance
+                                .acceptedAt,
+                            )}
+                          </p>
+                        </div>
+                      ) : canAcceptVendorResponse &&
+                        requestRecord.requestStatus ===
+                          "submitted" &&
+                        requestRecord.response
+                          .responseStatus ===
+                          "submitted" &&
+                        changeOrderStatus ===
+                          "draft" &&
+                        !supersededByChangeOrderId &&
+                        (!requestRecord.expiresAt ||
+                          Date.parse(
+                            requestRecord.expiresAt,
+                          ) >= Date.now()) &&
+                        (!requestRecord.response
+                          .quoteExpirationDate ||
+                          requestRecord.response
+                            .quoteExpirationDate >=
+                            new Date()
+                              .toISOString()
+                              .slice(0, 10)) ? (
+                        <div className="mt-5 border-t border-emerald-200 pt-4">
+                          <p className="text-sm text-emerald-900">
+                            {ACCEPTANCE_CONFIRMATION}
+                          </p>
+                          <button
+                            type="button"
+                            disabled={
+                              actionId ===
+                              `accept:${requestRecord.id}`
+                            }
+                            onClick={() =>
+                              void acceptResponse(
+                                requestRecord,
+                              )
+                            }
+                            className="mt-3 rounded-lg bg-emerald-800 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                          >
+                            {actionId ===
+                            `accept:${requestRecord.id}`
+                              ? "Accepting..."
+                              : "Accept vendor response"}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </article>

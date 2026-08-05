@@ -5,9 +5,9 @@ import {
 
 import {
   createUnauthorizedApiResponse,
-  getAuthenticatedApiUser,
+  getAuthenticatedAccess,
 } from "@/lib/api-auth";
-import { checkApiFeature } from "@/lib/features/server";
+import { authorizeChangeOrderProjectRequest } from "@/lib/change-order-access";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -42,13 +42,16 @@ function cleanBoolean(
 
 async function authorize(
   request: NextRequest,
+  projectId: string,
+  changeOrderId: string,
 ) {
-  const authUser =
-    await getAuthenticatedApiUser();
+  const access =
+    await getAuthenticatedAccess();
 
-  if (!authUser) {
+  if (!access) {
     return {
-      authUser: null,
+      access: null,
+      authorization: null,
       response:
         createUnauthorizedApiResponse(
           request,
@@ -56,31 +59,48 @@ async function authorize(
     };
   }
 
-  const featureAccess =
-    await checkApiFeature(
-      request,
-      "change_order_vendor_requests",
-    );
+  const boundary =
+    await authorizeChangeOrderProjectRequest({
+      access,
+      projectId,
+      changeOrderId,
+    });
 
-  if (!featureAccess.enabled) {
+  if (
+    boundary.response ||
+    !boundary.authorization
+  ) {
     return {
-      authUser: null,
-      response:
-        NextResponse.json(
-          {
-            success: false,
-            error:
-              "Subcontractor and supplier requests are disabled for this account.",
-          },
-          {
-            status: 403,
-          },
-        ),
+      access: null,
+      authorization: null,
+      response: boundary.response,
+    };
+  }
+
+  if (
+    !boundary.authorization.features
+      .change_order_vendor_requests
+  ) {
+    return {
+      access: null,
+      authorization: null,
+      response: NextResponse.json(
+        {
+          success: false,
+          error:
+            "Subcontractor and supplier requests are disabled for this account.",
+          featureKey:
+            "change_order_vendor_requests",
+        },
+        { status: 403 },
+      ),
     };
   }
 
   return {
-    authUser,
+    access,
+    authorization:
+      boundary.authorization,
     response: null,
   };
 }
@@ -89,13 +109,6 @@ export async function GET(
   request: NextRequest,
   context: RouteContext,
 ) {
-  const authorization =
-    await authorize(request);
-
-  if (authorization.response) {
-    return authorization.response;
-  }
-
   const {
     projectId,
     changeOrderId,
@@ -115,6 +128,17 @@ export async function GET(
         status: 400,
       },
     );
+  }
+
+  const accessResult =
+    await authorize(
+      request,
+      projectId,
+      changeOrderId,
+    );
+
+  if (accessResult.response) {
+    return accessResult.response;
   }
 
   const supabase =
@@ -166,7 +190,14 @@ export async function GET(
     .select(
       `
         *,
-        change_order_vendor_responses (*)
+        change_order_vendor_responses (
+          *,
+          change_order_vendor_response_acceptances (
+            id,
+            response_id,
+            accepted_at
+          )
+        )
       `,
     )
     .eq(
@@ -221,6 +252,19 @@ export async function GET(
 
       const responseRecord =
         responses[0] ?? null;
+
+      const acceptances =
+        responseRecord &&
+        Array.isArray(
+          responseRecord
+            .change_order_vendor_response_acceptances,
+        )
+          ? responseRecord
+              .change_order_vendor_response_acceptances
+          : [];
+
+      const acceptanceRecord =
+        acceptances[0] ?? null;
 
       return {
         id: record.id,
@@ -364,10 +408,33 @@ export async function GET(
               createdAt:
                 responseRecord
                   .created_at,
+
+              acceptance:
+                acceptanceRecord
+                  ? {
+                      id:
+                        acceptanceRecord.id,
+                      responseId:
+                        acceptanceRecord
+                          .response_id,
+                      acceptedAt:
+                        acceptanceRecord
+                          .accepted_at,
+                    }
+                  : null,
             }
           : null,
       };
     }),
+
+    capabilities: {
+      canAcceptVendorResponse:
+        accessResult.authorization
+          ?.canViewCosts === true &&
+        accessResult.authorization
+          ?.canApproveChangeOrders ===
+          true,
+    },
   });
 }
 
@@ -375,16 +442,6 @@ export async function POST(
   request: NextRequest,
   context: RouteContext,
 ) {
-  const authorization =
-    await authorize(request);
-
-  if (
-    authorization.response ||
-    !authorization.authUser
-  ) {
-    return authorization.response;
-  }
-
   const {
     projectId,
     changeOrderId,
@@ -404,6 +461,20 @@ export async function POST(
         status: 400,
       },
     );
+  }
+
+  const authorization =
+    await authorize(
+      request,
+      projectId,
+      changeOrderId,
+    );
+
+  if (
+    authorization.response ||
+    !authorization.access
+  ) {
+    return authorization.response;
   }
 
   const body =
@@ -491,7 +562,7 @@ export async function POST(
       .select("id")
       .eq(
         "auth_user_id",
-        authorization.authUser.id,
+        authorization.access.user.id,
       )
       .single(),
   ]);
@@ -666,13 +737,6 @@ export async function PATCH(
   request: NextRequest,
   context: RouteContext,
 ) {
-  const authorization =
-    await authorize(request);
-
-  if (authorization.response) {
-    return authorization.response;
-  }
-
   const {
     projectId,
     changeOrderId,
@@ -706,6 +770,17 @@ export async function PATCH(
         status: 400,
       },
     );
+  }
+
+  const authorization =
+    await authorize(
+      request,
+      projectId,
+      changeOrderId,
+    );
+
+  if (authorization.response) {
+    return authorization.response;
   }
 
   if (

@@ -218,6 +218,8 @@ export async function authorizeChangeOrderProjectRequest(
 
   return {
     authorization: {
+      authUserId:
+        options.access.user.id,
       features,
       canViewCosts,
       canApproveChangeOrders,
