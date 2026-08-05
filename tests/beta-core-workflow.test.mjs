@@ -81,14 +81,17 @@ test("customer confirmation is distinct and records actor attribution", async ()
 });
 
 test("project parties support assignment workflows and Mission Control honest empty states", async () => {
-  const [migration, route, mission] = await Promise.all([
+  const [migration, route, mission, missionDashboard] = await Promise.all([
     readFile(new URL("../supabase/migrations/20260803000000_beta_core_workflow_settings.sql", import.meta.url), "utf8"),
     readFile(new URL("../src/app/api/projects/[projectId]/parties/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/app/all-work/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/mission-control-dashboard.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(migration, /project_parties/); assert.match(migration, /workflow_permissions/);
   assert.match(route, /schedule.*bid.*material.*vendor/);
-  assert.match(mission, /No urgent or due-today tasks/);
+  assert.match(mission, /MissionControlDashboard/);
+  assert.match(missionDashboard, /No urgent customer follow-ups/);
+  assert.match(missionDashboard, /No overdue or due-today work/);
 });
 
 test("Task Settings is nested behind management access", async () => {
@@ -113,4 +116,51 @@ test("Change Orders are only exposed from project context", async () => {
   assert.doesNotMatch(operationsLayout, /label: "Change Orders"/);
   assert.doesNotMatch(operationsPage, /title: "Change Orders"/);
   assert.match(proxy, /operations\/change-orders/);
+});
+
+test("schedule request API routes use one consistent dynamic segment", async () => {
+  const reviewRoute = new URL(
+    "../src/app/api/schedule-requests/[token]/review/route.ts",
+    import.meta.url,
+  );
+  const publicRoute = new URL(
+    "../src/app/api/schedule-requests/[token]/route.ts",
+    import.meta.url,
+  );
+  const legacyReviewRoute = new URL(
+    "../src/app/api/schedule-requests/[requestId]/review/route.ts",
+    import.meta.url,
+  );
+
+  await readFile(reviewRoute, "utf8");
+  await readFile(publicRoute, "utf8");
+  await assert.rejects(() => readFile(legacyReviewRoute, "utf8"));
+});
+
+test("role permission defaults seed the authoritative workspace baseline idempotently", async () => {
+  const migration = await readFile(new URL("../supabase/migrations/20260803020000_beta_role_permission_defaults.sql", import.meta.url), "utf8");
+  const expected = {
+    owner: { portal: "admin", access: { admin: true, sales: true, operations: true, subcontractor: false }, permissions: { view_costs: true, edit_prices: true, view_profit: true, assign_crews: true, manage_users: true, send_proposals: true, manage_suppliers: true, manage_permissions: true, approve_change_orders: true, manage_company_settings: true } },
+    administrator: { portal: "admin", access: { admin: true, sales: true, operations: true, subcontractor: false }, permissions: { view_costs: true, edit_prices: true, view_profit: false, assign_crews: true, manage_users: true, send_proposals: true, manage_suppliers: true, manage_permissions: false, approve_change_orders: true, manage_company_settings: true } },
+    salesperson: { portal: "sales", access: { admin: false, sales: true, operations: false, subcontractor: false }, permissions: { view_costs: false, edit_prices: false, view_profit: false, assign_crews: false, manage_users: false, send_proposals: true, manage_suppliers: false, manage_permissions: false, approve_change_orders: false, manage_company_settings: false } },
+    estimator: { portal: "sales", access: { admin: false, sales: true, operations: true, subcontractor: false }, permissions: { view_costs: true, edit_prices: true, view_profit: true, assign_crews: false, manage_users: false, send_proposals: true, manage_suppliers: false, manage_permissions: false, approve_change_orders: false, manage_company_settings: false } },
+    project_manager: { portal: "operations", access: { admin: false, sales: false, operations: true, subcontractor: false }, permissions: { view_costs: true, edit_prices: false, view_profit: false, assign_crews: true, manage_users: false, send_proposals: false, manage_suppliers: false, manage_permissions: false, approve_change_orders: true, manage_company_settings: false } },
+    field_employee: { portal: "operations", access: { admin: false, sales: false, operations: true, subcontractor: false }, permissions: { view_costs: false, edit_prices: false, view_profit: false, assign_crews: false, manage_users: false, send_proposals: false, manage_suppliers: false, manage_permissions: false, approve_change_orders: false, manage_company_settings: false } },
+    bookkeeper: { portal: "admin", access: { admin: true, sales: false, operations: true, subcontractor: false }, permissions: { view_costs: true, edit_prices: false, view_profit: true, assign_crews: false, manage_users: false, send_proposals: false, manage_suppliers: false, manage_permissions: false, approve_change_orders: false, manage_company_settings: false } },
+    subcontractor: { portal: "subcontractor", access: { admin: false, sales: false, operations: false, subcontractor: true }, permissions: { view_costs: false, edit_prices: false, view_profit: false, assign_crews: false, message_office: true, send_proposals: false, manage_suppliers: false, upload_job_photos: true, manage_permissions: false, view_assigned_jobs: true, submit_availability: true, view_material_lists: true, approve_change_orders: false, report_material_issues: true, manage_company_settings: false } },
+  };
+  assert.equal(Object.keys(expected).length, 8);
+  assert.match(migration, /on conflict \(role\) do nothing/);
+  for (const [role, row] of Object.entries(expected)) {
+    assert.match(migration, new RegExp(`'${role}'`));
+    assert.match(migration, new RegExp(`'${row.portal}'`));
+    assert.match(migration, new RegExp(`\\"admin\\":${row.access.admin}`));
+    assert.match(migration, new RegExp(`\\"operations\\":${row.access.operations}`));
+    for (const [permission, value] of Object.entries(row.permissions)) {
+      assert.match(migration, new RegExp(`\\"${permission}\\":${value}`));
+    }
+  }
+  assert.match(migration, /'estimator'[\s\S]*'sales'[\s\S]*operations/);
+  assert.match(migration, /'field_employee'[\s\S]*'operations'/);
+  assert.match(migration, /'subcontractor'[\s\S]*'subcontractor'/);
 });

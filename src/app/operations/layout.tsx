@@ -135,6 +135,13 @@ export default async function OperationsLayout({
               aria-label="Operations navigation"
               className="flex flex-wrap items-center gap-2"
             >
+              <Link
+                href="/all-work"
+                className="flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-bold text-blue-50 outline-none transition hover:bg-blue-900 focus-visible:bg-blue-900 focus-visible:ring-2 focus-visible:ring-blue-300"
+              >
+                Mission Control
+              </Link>
+
               {navigationItems.map((item) => (
                 <Link
                   key={item.href}

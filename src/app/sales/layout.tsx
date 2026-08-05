@@ -117,6 +117,13 @@ export default async function SalesLayout({
               aria-label="Sales navigation"
               className="flex flex-wrap items-center gap-2"
             >
+              <Link
+                href="/all-work"
+                className="flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-bold text-emerald-50 outline-none transition hover:bg-emerald-900 focus-visible:bg-emerald-900 focus-visible:ring-2 focus-visible:ring-emerald-300"
+              >
+                Mission Control
+              </Link>
+
               {navigationItems.map((item) => (
                 <Link
                   key={item.href}

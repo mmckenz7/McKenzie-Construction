@@ -179,6 +179,13 @@ export default async function AdminLayout({
               aria-label="Admin navigation"
               className="flex flex-wrap items-center gap-2"
             >
+              <Link
+                href="/all-work"
+                className="flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-bold text-slate-200 outline-none transition hover:bg-slate-800 hover:text-white focus-visible:bg-slate-800 focus-visible:text-white focus-visible:ring-2 focus-visible:ring-amber-400"
+              >
+                Mission Control
+              </Link>
+
               {navigationItems.map(
                 (item) => (
                   <Link

@@ -11,7 +11,7 @@ import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
   params: Promise<{
-    requestId: string;
+    token: string;
   }>;
 };
 
@@ -34,10 +34,10 @@ export async function PATCH(
     );
   }
 
-  const { requestId } =
+  const { token } =
     await context.params;
 
-  if (!isUuid(requestId)) {
+  if (!isUuid(token)) {
     return NextResponse.json(
       {
         success: false,
@@ -58,7 +58,7 @@ export async function PATCH(
       "mark_schedule_request_reviewed",
       {
         requested_schedule_request_id:
-          requestId,
+          token,
         requested_auth_user_id:
           authUser.id,
       },

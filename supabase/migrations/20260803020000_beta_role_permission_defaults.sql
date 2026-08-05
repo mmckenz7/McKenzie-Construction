@@ -1,0 +1,59 @@
+-- Establish the authoritative role access baseline in every environment.
+-- Existing rows are preserved so environment-specific customizations are not
+-- overwritten by a repeat migration or a later deployment.
+insert into public.role_permission_defaults (
+  role,
+  default_portal,
+  portal_access,
+  permissions
+)
+values
+  (
+    'owner',
+    'admin',
+    '{"admin":true,"sales":true,"operations":true,"subcontractor":false}'::jsonb,
+    '{"view_costs":true,"edit_prices":true,"view_profit":true,"assign_crews":true,"manage_users":true,"send_proposals":true,"manage_suppliers":true,"manage_permissions":true,"approve_change_orders":true,"manage_company_settings":true}'::jsonb
+  ),
+  (
+    'administrator',
+    'admin',
+    '{"admin":true,"sales":true,"operations":true,"subcontractor":false}'::jsonb,
+    '{"view_costs":true,"edit_prices":true,"view_profit":false,"assign_crews":true,"manage_users":true,"send_proposals":true,"manage_suppliers":true,"manage_permissions":false,"approve_change_orders":true,"manage_company_settings":true}'::jsonb
+  ),
+  (
+    'salesperson',
+    'sales',
+    '{"admin":false,"sales":true,"operations":false,"subcontractor":false}'::jsonb,
+    '{"view_costs":false,"edit_prices":false,"view_profit":false,"assign_crews":false,"manage_users":false,"send_proposals":true,"manage_suppliers":false,"manage_permissions":false,"approve_change_orders":false,"manage_company_settings":false}'::jsonb
+  ),
+  (
+    'estimator',
+    'sales',
+    '{"admin":false,"sales":true,"operations":true,"subcontractor":false}'::jsonb,
+    '{"view_costs":true,"edit_prices":true,"view_profit":true,"assign_crews":false,"manage_users":false,"send_proposals":true,"manage_suppliers":false,"manage_permissions":false,"approve_change_orders":false,"manage_company_settings":false}'::jsonb
+  ),
+  (
+    'project_manager',
+    'operations',
+    '{"admin":false,"sales":false,"operations":true,"subcontractor":false}'::jsonb,
+    '{"view_costs":true,"edit_prices":false,"view_profit":false,"assign_crews":true,"manage_users":false,"send_proposals":false,"manage_suppliers":false,"manage_permissions":false,"approve_change_orders":true,"manage_company_settings":false}'::jsonb
+  ),
+  (
+    'field_employee',
+    'operations',
+    '{"admin":false,"sales":false,"operations":true,"subcontractor":false}'::jsonb,
+    '{"view_costs":false,"edit_prices":false,"view_profit":false,"assign_crews":false,"manage_users":false,"send_proposals":false,"manage_suppliers":false,"manage_permissions":false,"approve_change_orders":false,"manage_company_settings":false}'::jsonb
+  ),
+  (
+    'bookkeeper',
+    'admin',
+    '{"admin":true,"sales":false,"operations":true,"subcontractor":false}'::jsonb,
+    '{"view_costs":true,"edit_prices":false,"view_profit":true,"assign_crews":false,"manage_users":false,"send_proposals":false,"manage_suppliers":false,"manage_permissions":false,"approve_change_orders":false,"manage_company_settings":false}'::jsonb
+  ),
+  (
+    'subcontractor',
+    'subcontractor',
+    '{"admin":false,"sales":false,"operations":false,"subcontractor":true}'::jsonb,
+    '{"view_costs":false,"edit_prices":false,"view_profit":false,"assign_crews":false,"manage_users":false,"message_office":true,"send_proposals":false,"manage_suppliers":false,"upload_job_photos":true,"manage_permissions":false,"view_assigned_jobs":true,"submit_availability":true,"view_material_lists":true,"approve_change_orders":false,"report_material_issues":true,"manage_company_settings":false}'::jsonb
+  )
+on conflict (role) do nothing;
