@@ -1,4 +1,5 @@
 export type FeatureKey =
+  | "estimates"
   | "change_orders"
   | "change_order_line_items"
   | "change_order_customer_approval"
@@ -21,6 +22,7 @@ export type FeatureMap =
   >;
 
 export const DEFAULT_FEATURE_MAP: FeatureMap = {
+  estimates: true,
   change_orders: true,
   change_order_line_items: true,
   change_order_customer_approval: true,

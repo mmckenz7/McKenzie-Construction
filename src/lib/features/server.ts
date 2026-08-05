@@ -99,6 +99,9 @@ function normalizeFeatureMap(
     >;
 
   return {
+    estimates:
+      record.estimates !== false,
+
     change_orders:
       record.change_orders !== false,
 
