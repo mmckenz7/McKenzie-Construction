@@ -9,9 +9,12 @@ import {
 
 import {
   createUnauthorizedApiResponse,
-  getAuthenticatedApiUser,
+  getAuthenticatedAccess,
 } from "@/lib/api-auth";
-import { checkApiFeature } from "@/lib/features/server";
+import {
+  authorizeChangeOrderProjectRequest,
+  CHANGE_ORDER_APPROVAL_FORBIDDEN_BODY,
+} from "@/lib/change-order-access";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -35,32 +38,10 @@ export async function PATCH(
   request: NextRequest,
   context: RouteContext,
 ) {
-  const featureAccess =
-    await checkApiFeature(
-      request,
-      "change_order_customer_approval",
-    );
+  const access =
+    await getAuthenticatedAccess();
 
-  if (!featureAccess.enabled) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "This feature is disabled for the current account.",
-        featureKey:
-          "change_order_customer_approval",
-      },
-      {
-        status: 403,
-      },
-    );
-  }
-
-
-  const authUser =
-    await getAuthenticatedApiUser();
-
-  if (!authUser) {
+  if (!access) {
     return createUnauthorizedApiResponse(
       request,
     );
@@ -84,6 +65,44 @@ export async function PATCH(
       {
         status: 400,
       },
+    );
+  }
+
+  const authorization =
+    await authorizeChangeOrderProjectRequest({
+      access,
+      projectId,
+      changeOrderId,
+    });
+
+  if (authorization.response) {
+    return authorization.response;
+  }
+
+  if (
+    !authorization.authorization
+      .features
+      .change_order_customer_approval
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "This feature is disabled for the current account.",
+        featureKey:
+          "change_order_customer_approval",
+      },
+      { status: 403 },
+    );
+  }
+
+  if (
+    !authorization.authorization
+      .canApproveChangeOrders
+  ) {
+    return NextResponse.json(
+      CHANGE_ORDER_APPROVAL_FORBIDDEN_BODY,
+      { status: 403 },
     );
   }
 

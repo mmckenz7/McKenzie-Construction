@@ -5,8 +5,15 @@ import {
 
 import {
   createUnauthorizedApiResponse,
-  getAuthenticatedApiUser,
+  getAuthenticatedAccess,
 } from "@/lib/api-auth";
+import {
+  authorizeChangeOrderProjectRequest,
+} from "@/lib/change-order-access";
+import {
+  filterChangeOrderFinancialFields,
+  isCustomerDecisionStatus,
+} from "@/lib/change-order-access-policy";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -57,10 +64,10 @@ export async function PATCH(
   request: NextRequest,
   context: RouteContext,
 ) {
-  const authUser =
-    await getAuthenticatedApiUser();
+  const access =
+    await getAuthenticatedAccess();
 
-  if (!authUser) {
+  if (!access) {
     return createUnauthorizedApiResponse(
       request,
     );
@@ -85,6 +92,17 @@ export async function PATCH(
         status: 400,
       },
     );
+  }
+
+  const authorization =
+    await authorizeChangeOrderProjectRequest({
+      access,
+      projectId,
+      changeOrderId,
+    });
+
+  if (authorization.response) {
+    return authorization.response;
   }
 
   let body: UpdateChangeOrderBody;
@@ -117,6 +135,56 @@ export async function PATCH(
       {
         status: 400,
       },
+    );
+  }
+
+  if (
+    isCustomerDecisionStatus(
+      body.status,
+    )
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Customer approval and decline must be submitted through the customer response workflow.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const approvalRelatedEdit =
+    body.status ===
+      "pending_customer" ||
+    "approvedByName" in body;
+
+  if (
+    approvalRelatedEdit &&
+    !authorization.authorization
+      .canApproveChangeOrders
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "You do not have permission to approve change orders.",
+      },
+      { status: 403 },
+    );
+  }
+
+  if (
+    "costAmount" in body &&
+    !authorization.authorization
+      .canViewCosts
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "You do not have permission to edit change-order costs.",
+      },
+      { status: 403 },
     );
   }
 
@@ -285,21 +353,6 @@ export async function PATCH(
   if (body.status) {
     update.status = body.status;
 
-    if (body.status === "approved") {
-      update.approved_at =
-        new Date().toISOString();
-
-      update.declined_at = null;
-      update.cancelled_at = null;
-    }
-
-    if (body.status === "declined") {
-      update.declined_at =
-        new Date().toISOString();
-
-      update.approved_at = null;
-    }
-
     if (
       body.status === "completed"
     ) {
@@ -348,6 +401,11 @@ export async function PATCH(
 
   return NextResponse.json({
     success: true,
-    changeOrder: data,
+    changeOrder:
+      filterChangeOrderFinancialFields(
+        data,
+        authorization.authorization
+          .canViewCosts,
+      ),
   });
 }

@@ -5,8 +5,12 @@ import {
 
 import {
   createUnauthorizedApiResponse,
-  getAuthenticatedApiUser,
+  getAuthenticatedAccess,
 } from "@/lib/api-auth";
+import {
+  authorizeChangeOrderProjectRequest,
+} from "@/lib/change-order-access";
+import { filterChangeOrderFinancialFields } from "@/lib/change-order-access-policy";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -187,10 +191,10 @@ export async function GET(
   request: NextRequest,
   context: RouteContext,
 ) {
-  const authUser =
-    await getAuthenticatedApiUser();
+  const access =
+    await getAuthenticatedAccess();
 
-  if (!authUser) {
+  if (!access) {
     return createUnauthorizedApiResponse(
       request,
     );
@@ -209,6 +213,16 @@ export async function GET(
         status: 400,
       },
     );
+  }
+
+  const authorization =
+    await authorizeChangeOrderProjectRequest({
+      access,
+      projectId,
+    });
+
+  if (authorization.response) {
+    return authorization.response;
   }
 
   const supabase =
@@ -270,8 +284,12 @@ export async function GET(
   const changeOrders = (
     changeOrdersResult.data ?? []
   ).map((record) =>
-    normalizeChangeOrder(
-      record as Record<string, unknown>,
+    filterChangeOrderFinancialFields(
+      normalizeChangeOrder(
+        record as Record<string, unknown>,
+      ),
+      authorization.authorization
+        .canViewCosts,
     ),
   );
 
@@ -335,10 +353,10 @@ export async function POST(
   request: NextRequest,
   context: RouteContext,
 ) {
-  const authUser =
-    await getAuthenticatedApiUser();
+  const access =
+    await getAuthenticatedAccess();
 
-  if (!authUser) {
+  if (!access) {
     return createUnauthorizedApiResponse(
       request,
     );
@@ -357,6 +375,16 @@ export async function POST(
         status: 400,
       },
     );
+  }
+
+  const authorization =
+    await authorizeChangeOrderProjectRequest({
+      access,
+      projectId,
+    });
+
+  if (authorization.response) {
+    return authorization.response;
   }
 
   let body: CreateChangeOrderBody;
@@ -406,6 +434,37 @@ export async function POST(
       : null;
 
   if (
+    costAmount !== null &&
+    !authorization.authorization
+      .canViewCosts
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "You do not have permission to edit change-order costs.",
+      },
+      { status: 403 },
+    );
+  }
+
+  if (
+    body.status ===
+      "pending_customer" &&
+    !authorization.authorization
+      .canApproveChangeOrders
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "You do not have permission to approve change orders.",
+      },
+      { status: 403 },
+    );
+  }
+
+  if (
     amount < 0 ||
     (costAmount !== null &&
       costAmount < 0)
@@ -439,7 +498,7 @@ export async function POST(
       "get_effective_user_access",
       {
         requested_auth_user_id:
-          authUser.id,
+          access.user.id,
       },
     );
 
@@ -498,8 +557,12 @@ export async function POST(
   return NextResponse.json({
     success: true,
     changeOrder:
-      normalizeChangeOrder(
-        data as Record<string, unknown>,
+      filterChangeOrderFinancialFields(
+        normalizeChangeOrder(
+          data as Record<string, unknown>,
+        ),
+        authorization.authorization
+          .canViewCosts,
       ),
   });
 }

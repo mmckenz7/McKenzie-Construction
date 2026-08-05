@@ -76,7 +76,7 @@ type ChangeOrder = {
   reason: string | null;
   status: ChangeOrderStatus;
   amount: number;
-  costAmount: number | null;
+  costAmount?: number | null;
   scheduleImpactDays: number;
   customerNotes: string | null;
   internalNotes: string | null;
@@ -400,25 +400,34 @@ export default function ChangeOrdersPage() {
     void loadChangeOrders();
   }, [params.projectId]);
 
-  const totalProfit = useMemo(
-    () =>
-      changeOrders
-        .filter((item) =>
-          [
-            "approved",
-            "in_progress",
-            "completed",
-          ].includes(item.status),
-        )
-        .reduce(
-          (total, item) =>
-            total +
-            (item.amount -
-              (item.costAmount ?? 0)),
-          0,
-        ),
-    [changeOrders],
-  );
+  const totalProfit = useMemo(() => {
+    const includedChangeOrders =
+      changeOrders.filter((item) =>
+        [
+          "approved",
+          "in_progress",
+          "completed",
+        ].includes(item.status),
+      );
+
+    if (
+      includedChangeOrders.some(
+        (item) =>
+          item.costAmount ===
+          undefined,
+      )
+    ) {
+      return null;
+    }
+
+    return includedChangeOrders.reduce(
+      (total, item) =>
+        total +
+        (item.amount -
+          (item.costAmount ?? 0)),
+      0,
+    );
+  }, [changeOrders]);
 
   async function createChangeOrder(
     event: FormEvent<HTMLFormElement>,
@@ -1146,12 +1155,14 @@ export default function ChangeOrdersPage() {
           )}
         />
 
-        <Stat
-          label="Estimated Profit"
-          value={formatCurrency(
-            totalProfit,
-          )}
-        />
+        {totalProfit !== null && (
+          <Stat
+            label="Estimated Profit"
+            value={formatCurrency(
+              totalProfit,
+            )}
+          />
+        )}
 
         <Stat
           label="Schedule Impact"
@@ -1364,9 +1375,12 @@ export default function ChangeOrdersPage() {
           {changeOrders.map(
             (changeOrder) => {
               const profit =
-                changeOrder.amount -
-                (changeOrder.costAmount ??
-                  0);
+                changeOrder.costAmount ===
+                undefined
+                  ? null
+                  : changeOrder.amount -
+                    (changeOrder.costAmount ??
+                      0);
 
               return (
                 <article
@@ -1506,24 +1520,29 @@ export default function ChangeOrdersPage() {
                       )}
                     />
 
-                    <Info
-                      label="Estimated Cost"
-                      value={
-                        changeOrder.costAmount ===
-                        null
-                          ? "—"
-                          : formatCurrency(
-                              changeOrder.costAmount,
-                            )
-                      }
-                    />
+                    {changeOrder.costAmount !==
+                      undefined && (
+                      <Info
+                        label="Estimated Cost"
+                        value={
+                          changeOrder.costAmount ===
+                          null
+                            ? "—"
+                            : formatCurrency(
+                                changeOrder.costAmount,
+                              )
+                        }
+                      />
+                    )}
 
-                    <Info
-                      label="Estimated Profit"
-                      value={formatCurrency(
-                        profit,
-                      )}
-                    />
+                    {profit !== null && (
+                      <Info
+                        label="Estimated Profit"
+                        value={formatCurrency(
+                          profit,
+                        )}
+                      />
+                    )}
 
                     <Info
                       label="Schedule Impact"
