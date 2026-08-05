@@ -159,26 +159,58 @@ begin
 
   for expected in
     select * from (values
+      ('estimates','estimates_lead_id_fkey','leads',array['lead_id']::text[],array['id']::text[],'a','n','s',false,false,true),
+      ('estimates','estimates_customer_id_fkey','customers',array['customer_id']::text[],array['id']::text[],'a','n','s',false,false,true),
+      ('estimates','estimates_project_id_fkey','projects',array['project_id']::text[],array['id']::text[],'a','n','s',false,false,true),
+      ('estimates','estimates_selected_option_id_fkey','estimate_options',array['selected_option_id']::text[],array['id']::text[],'a','n','s',false,false,true),
+      ('estimate_line_items','estimate_line_items_estimate_id_fkey','estimates',array['estimate_id']::text[],array['id']::text[],'a','c','s',false,false,true),
+      ('estimate_line_items','estimate_line_items_estimate_option_id_fkey','estimate_options',array['estimate_option_id']::text[],array['id']::text[],'a','c','s',false,false,true),
+      ('estimate_line_items','estimate_line_items_material_catalog_id_fkey','material_catalog',array['material_catalog_id']::text[],array['id']::text[],'a','n','s',false,false,true),
+      ('estimate_line_items','estimate_line_items_labor_catalog_id_fkey','labor_catalog',array['labor_catalog_id']::text[],array['id']::text[],'a','n','s',false,false,true),
+      ('estimate_options','estimate_options_estimate_id_fkey','estimates',array['estimate_id']::text[],array['id']::text[],'a','c','s',false,false,true),
+      ('estimate_material_price_snapshots','estimate_material_price_snapshots_estimate_id_fkey','estimates',array['estimate_id']::text[],array['id']::text[],'a','c','s',false,false,true),
+      ('estimate_material_price_snapshots','estimate_material_price_snapshots_estimate_line_item_id_fkey','estimate_line_items',array['estimate_line_item_id']::text[],array['id']::text[],'a','c','s',false,false,true),
+      ('estimate_material_price_snapshots','estimate_material_price_snapshots_estimate_option_id_fkey','estimate_options',array['estimate_option_id']::text[],array['id']::text[],'a','c','s',false,false,true),
+      ('estimate_material_price_snapshots','estimate_material_price_snapshots_material_catalog_id_fkey','material_catalog',array['material_catalog_id']::text[],array['id']::text[],'a','n','s',false,false,true),
+      ('estimate_material_price_snapshots','estimate_material_price_snapshots_supplier_id_fkey','suppliers',array['supplier_id']::text[],array['id']::text[],'a','n','s',false,false,true),
+      ('estimate_material_price_snapshots','estimate_material_price_snapshots_supplier_location_id_fkey','supplier_locations',array['supplier_location_id']::text[],array['id']::text[],'a','n','s',false,false,true)
+    ) as foreign_keys(source_table,constraint_name,target_table,source_columns,target_columns,update_action,delete_action,match_type,is_deferrable,is_deferred,is_validated)
+  loop
+    if not exists (
+      select 1
+      from pg_constraint pc
+      where pc.conname = expected.constraint_name
+        and pc.contype = 'f'
+        and pc.conrelid = to_regclass('public.' || expected.source_table)
+        and pc.confrelid = to_regclass('public.' || expected.target_table)
+        and (
+          select array_agg(a.attname::text order by key.position)
+          from unnest(pc.conkey) with ordinality as key(attnum, position)
+          join pg_attribute a on a.attrelid = pc.conrelid and a.attnum = key.attnum
+        ) = expected.source_columns
+        and (
+          select array_agg(a.attname::text order by key.position)
+          from unnest(pc.confkey) with ordinality as key(attnum, position)
+          join pg_attribute a on a.attrelid = pc.confrelid and a.attnum = key.attnum
+        ) = expected.target_columns
+        and pc.confupdtype::text = expected.update_action
+        and pc.confdeltype::text = expected.delete_action
+        and pc.confmatchtype::text = expected.match_type
+        and pc.condeferrable = expected.is_deferrable
+        and pc.condeferred = expected.is_deferred
+        and pc.convalidated = expected.is_validated
+    ) then
+      raise exception 'Audited foreign key public.%.% differs from required catalog contract.', expected.source_table, expected.constraint_name;
+    end if;
+  end loop;
+
+  for expected in
+    select * from (values
       ('estimates','estimates_pkey','PRIMARY KEY (id)'),
       ('estimate_line_items','estimate_line_items_pkey','PRIMARY KEY (id)'),
       ('estimate_options','estimate_options_pkey','PRIMARY KEY (id)'),
       ('estimate_material_price_snapshots','estimate_material_price_snapshots_pkey','PRIMARY KEY (id)'),
       ('material_catalog','material_catalog_pkey','PRIMARY KEY (id)'),
-      ('estimates','estimates_lead_id_fkey','FOREIGN KEY (lead_id) REFERENCES public.leads(id) ON DELETE SET NULL'),
-      ('estimates','estimates_customer_id_fkey','FOREIGN KEY (customer_id) REFERENCES public.customers(id) ON DELETE SET NULL'),
-      ('estimates','estimates_project_id_fkey','FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE SET NULL'),
-      ('estimates','estimates_selected_option_id_fkey','FOREIGN KEY (selected_option_id) REFERENCES public.estimate_options(id) ON DELETE SET NULL'),
-      ('estimate_line_items','estimate_line_items_estimate_id_fkey','FOREIGN KEY (estimate_id) REFERENCES public.estimates(id) ON DELETE CASCADE'),
-      ('estimate_line_items','estimate_line_items_estimate_option_id_fkey','FOREIGN KEY (estimate_option_id) REFERENCES public.estimate_options(id) ON DELETE CASCADE'),
-      ('estimate_line_items','estimate_line_items_material_catalog_id_fkey','FOREIGN KEY (material_catalog_id) REFERENCES public.material_catalog(id) ON DELETE SET NULL'),
-      ('estimate_line_items','estimate_line_items_labor_catalog_id_fkey','FOREIGN KEY (labor_catalog_id) REFERENCES public.labor_catalog(id) ON DELETE SET NULL'),
-      ('estimate_options','estimate_options_estimate_id_fkey','FOREIGN KEY (estimate_id) REFERENCES public.estimates(id) ON DELETE CASCADE'),
-      ('estimate_material_price_snapshots','estimate_material_price_snapshots_estimate_id_fkey','FOREIGN KEY (estimate_id) REFERENCES public.estimates(id) ON DELETE CASCADE'),
-      ('estimate_material_price_snapshots','estimate_material_price_snapshots_estimate_line_item_id_fkey','FOREIGN KEY (estimate_line_item_id) REFERENCES public.estimate_line_items(id) ON DELETE CASCADE'),
-      ('estimate_material_price_snapshots','estimate_material_price_snapshots_estimate_option_id_fkey','FOREIGN KEY (estimate_option_id) REFERENCES public.estimate_options(id) ON DELETE CASCADE'),
-      ('estimate_material_price_snapshots','estimate_material_price_snapshots_material_catalog_id_fkey','FOREIGN KEY (material_catalog_id) REFERENCES public.material_catalog(id) ON DELETE SET NULL'),
-      ('estimate_material_price_snapshots','estimate_material_price_snapshots_supplier_id_fkey','FOREIGN KEY (supplier_id) REFERENCES public.suppliers(id) ON DELETE SET NULL'),
-      ('estimate_material_price_snapshots','estimate_material_price_snapshots_supplier_location_id_fkey','FOREIGN KEY (supplier_location_id) REFERENCES public.supplier_locations(id) ON DELETE SET NULL'),
       ('estimates','estimates_status_check','CHECK ((status = ANY (ARRAY[''draft''::text, ''reviewing''::text, ''sent''::text, ''viewed''::text, ''accepted''::text, ''declined''::text, ''expired''::text, ''converted''::text, ''void''::text])))'),
       ('estimates','estimates_price_confidence_check','CHECK ((price_confidence = ANY (ARRAY[''preliminary''::text, ''budget''::text, ''high''::text, ''firm''::text])))'),
       ('estimates','estimates_subtotal_cost_nonnegative','CHECK ((subtotal_cost >= (0)::numeric))'),

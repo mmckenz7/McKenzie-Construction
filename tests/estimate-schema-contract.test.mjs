@@ -43,7 +43,6 @@ test("migration fails closed against the full audited estimate contract before D
   ]) assert.ok(assertions.includes(marker), `missing assertion marker ${marker}`);
   assert.match(assertions, /regexp_replace\(actual_definition,'\\s\+',' ','g'\)[\s\S]*?regexp_replace\(expected\.constraint_definition,'\\s\+',' ','g'\)/);
   assert.match(assertions, /estimates_status_check[\s\S]*?'draft'[\s\S]*?'void'/);
-  assert.match(assertions, /FOREIGN KEY \(estimate_line_item_id\)[\s\S]*?ON DELETE CASCADE/);
   assert.match(assertions, /raise exception/);
   assert.match(assertions, /Audited default for public\.%\.% differs from required contract/);
   assert.match(assertions, /t\.tgfoid = 'public\.set_updated_at\(\)'::regprocedure/);
@@ -56,6 +55,44 @@ test("migration fails closed against the full audited estimate contract before D
     assertions,
     /select pg_get_functiondef\('public\.set_updated_at\(\)'::regprocedure\)[\s\S]*?regexp_replace\(btrim\(actual_definition\), '\\s\+', ' ', 'g'\)[\s\S]*?regexp_replace\(btrim\(expected_set_updated_at_definition\), '\\s\+', ' ', 'g'\)[\s\S]*?raise exception 'Complete definition for audited public\.set_updated_at\(\) differs from required contract\.'/,
   );
+});
+
+test("preexisting foreign keys use stable ordered catalog assertions", () => {
+  const assertionEnd = migration.indexOf("create table public.estimate_sections");
+  const assertions = migration.slice(0, assertionEnd);
+  const foreignKeyStart = assertions.indexOf(") as foreign_keys(");
+  const foreignKeyEnd = assertions.indexOf("for expected in", foreignKeyStart + 1);
+  const foreignKeyAssertions = assertions.slice(foreignKeyStart, foreignKeyEnd);
+
+  assert.ok(foreignKeyStart > 0);
+  assert.ok(foreignKeyEnd > foreignKeyStart);
+  assert.match(foreignKeyAssertions, /pc\.contype = 'f'/);
+  assert.match(foreignKeyAssertions, /pc\.conrelid = to_regclass\('public\.' \|\| expected\.source_table\)/);
+  assert.match(foreignKeyAssertions, /pc\.confrelid = to_regclass\('public\.' \|\| expected\.target_table\)/);
+  assert.match(foreignKeyAssertions, /unnest\(pc\.conkey\) with ordinality as key\(attnum, position\)/);
+  assert.match(foreignKeyAssertions, /select array_agg\(a\.attname::text order by key\.position\)[\s\S]*?unnest\(pc\.conkey\)[\s\S]*?a\.attrelid = pc\.conrelid/);
+  assert.match(foreignKeyAssertions, /unnest\(pc\.confkey\) with ordinality as key\(attnum, position\)/);
+  assert.match(foreignKeyAssertions, /select array_agg\(a\.attname::text order by key\.position\)[\s\S]*?unnest\(pc\.confkey\)[\s\S]*?a\.attrelid = pc\.confrelid/);
+  assert.match(foreignKeyAssertions, /pc\.confupdtype::text = expected\.update_action/);
+  assert.match(foreignKeyAssertions, /pc\.confdeltype::text = expected\.delete_action/);
+  assert.match(foreignKeyAssertions, /pc\.confmatchtype::text = expected\.match_type/);
+  assert.match(foreignKeyAssertions, /pc\.condeferrable = expected\.is_deferrable/);
+  assert.match(foreignKeyAssertions, /pc\.condeferred = expected\.is_deferred/);
+  assert.match(foreignKeyAssertions, /pc\.convalidated = expected\.is_validated/);
+  assert.doesNotMatch(foreignKeyAssertions, /pg_get_constraintdef|REFERENCES public\./i);
+
+  for (const action of ["'a','n','s'", "'a','c','s'"]) {
+    assert.ok(assertions.includes(action), `missing audited FK action tuple ${action}`);
+  }
+
+  const exactDefinitionLoop = assertions.slice(foreignKeyEnd);
+  assert.match(exactDefinitionLoop, /estimates_status_check[\s\S]*?pg_get_constraintdef/);
+  assert.match(exactDefinitionLoop, /estimate_line_items_waste_range[\s\S]*?pg_get_constraintdef/);
+  assert.match(exactDefinitionLoop, /material_catalog_waste_percent_range[\s\S]*?pg_get_constraintdef/);
+  assert.doesNotMatch(exactDefinitionLoop, /FOREIGN KEY .* REFERENCES public\./i);
+
+  assert.match(assertions, /select pg_get_functiondef\('public\.set_updated_at\(\)'::regprocedure\)/);
+  assert.match(assertions, /expected_set_updated_at_definition/);
 });
 
 test("estimate sections are ordered, constrained, updated, and server-only", () => {
