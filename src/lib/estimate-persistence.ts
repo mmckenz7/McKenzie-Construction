@@ -12,7 +12,9 @@ import type {
 
 export const STRUCTURED_ESTIMATE_ITEM_SELECT = `
   id,
+  section_id,
   item_type,
+  internal_description,
   customer_description,
   quantity_text:quantity::text,
   unit,
@@ -25,7 +27,8 @@ export const STRUCTURED_ESTIMATE_ITEM_SELECT = `
   item_markup_percent_text:item_markup_percent::text,
   taxable,
   is_included,
-  fixed_customer_price_text:fixed_customer_price::text
+  fixed_customer_price_text:fixed_customer_price::text,
+  sort_order
 `;
 
 export const STRUCTURED_ESTIMATE_SELECT = `
