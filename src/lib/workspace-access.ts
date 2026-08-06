@@ -1,4 +1,5 @@
-import { createAuthenticatedServerClient } from "@/lib/supabase/server";
+import { getAuthenticatedApiUser } from "@/lib/api-auth";
+import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export type WorkspaceName =
   | "sales"
@@ -22,12 +23,8 @@ export type EffectiveWorkspaceAccess = {
 };
 
 export async function getWorkspaceAccess() {
-  const supabase =
-    await createAuthenticatedServerClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user =
+    await getAuthenticatedApiUser();
 
   if (!user) {
     return {
@@ -35,6 +32,9 @@ export async function getWorkspaceAccess() {
       access: null,
     };
   }
+
+  const supabase =
+    createAdminServerClient();
 
   const { data, error } = await supabase.rpc(
     "get_effective_user_access",
