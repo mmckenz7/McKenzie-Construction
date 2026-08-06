@@ -2,17 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   createUnauthorizedApiResponse,
-  getAuthenticatedApiUser,
 } from "@/lib/api-auth";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import { createAuthenticatedServerClient } from "@/lib/supabase/server";
 
 export async function GET(
   request: NextRequest,
 ) {
-  const authUser =
-    await getAuthenticatedApiUser();
+  const authenticatedSupabase =
+    await createAuthenticatedServerClient();
 
-  if (!authUser) {
+  const {
+    data: { user: authUser },
+    error: authError,
+  } = await authenticatedSupabase.auth.getUser();
+
+  if (authError || !authUser) {
     return createUnauthorizedApiResponse(
       request,
     );
@@ -20,6 +25,44 @@ export async function GET(
 
   const supabase =
     createAdminServerClient();
+
+  const {
+    data: teamMember,
+    error: teamMemberError,
+  } = await supabase
+    .from("team_members")
+    .select("id, status, roles")
+    .eq("auth_user_id", authUser.id)
+    .maybeSingle();
+
+  const roles = Array.isArray(
+    teamMember?.roles,
+  )
+    ? teamMember.roles.filter(
+        (role): role is string =>
+          typeof role === "string" &&
+          role.trim().length > 0,
+      )
+    : [];
+
+  if (
+    teamMemberError ||
+    !teamMember ||
+    teamMember.status !== "active" ||
+    roles.length === 0
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Your login is valid, but it is not linked to an active employee role.",
+        needsProfile: true,
+      },
+      {
+        status: 403,
+      },
+    );
+  }
 
   const {
     data,

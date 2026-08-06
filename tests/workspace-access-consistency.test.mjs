@@ -34,7 +34,7 @@ test("layouts and portal resolve workspace access through the same trusted bound
 
   assert.match(
     portalAccessSource,
-    /getAuthenticatedApiUser/,
+    /createAuthenticatedServerClient/,
   );
   assert.match(
     portalAccessSource,
@@ -47,5 +47,32 @@ test("layouts and portal resolve workspace access through the same trusted bound
   assert.match(
     portalAccessSource,
     /get_effective_user_access/,
+  );
+});
+
+test("portal access distinguishes a missing employee role from a missing login", async () => {
+  const accessRouteSource = await readFile(
+    new URL(
+      "../src/app/api/me/access/route.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(
+    accessRouteSource,
+    /authenticatedSupabase\.auth\.getUser/,
+  );
+  assert.match(
+    accessRouteSource,
+    /not linked to an active employee role/,
+  );
+  assert.match(
+    accessRouteSource,
+    /status: 403/,
+  );
+  assert.match(
+    accessRouteSource,
+    /needsProfile: true/,
   );
 });
