@@ -309,6 +309,14 @@ test("permission-safe projections preserve customer price while omitting restric
   assert.equal("grossProfitCents" in costsOnly, false);
   assert.equal("itemMarkupCents" in costsOnly.items[0], false);
 
+  const profitOnly = projectEstimateCalculation(calculation, {
+    canViewCosts: false,
+    canViewProfit: true,
+  });
+  assert.equal(profitOnly.grossProfitCents, calculation.grossProfitCents.toString());
+  assert.equal("itemMarkupCents" in profitOnly.items[0], false);
+  assert.equal("itemMarkupTotalCents" in profitOnly, false);
+
   const full = projectEstimateCalculation(calculation, {
     canViewCosts: true,
     canViewProfit: true,

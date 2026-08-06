@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimate-access";
+import { loadBuilderState, MutationStateChangedError } from "@/lib/estimate-mutations";
 import {
   buildEstimateCalculationPersistence,
   calculatePersistedEstimate,
@@ -44,17 +45,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const auth = await authorizeEstimateRequest(request, estimateId);
   if (auth.response) return auth.response;
   try {
-    const loaded = await loadStructuredEstimate(createAdminServerClient(), estimateId);
-    if (!loaded.estimate || loaded.estimate.calculation_policy_version !== "structured-estimate-v1") {
+    const builderState = await loadBuilderState(createAdminServerClient(), estimateId, auth.authorization!);
+    if (!builderState) {
       return NextResponse.json(ESTIMATE_NOT_FOUND_BODY, { status: 404 });
     }
-    const calculation = calculatePersistedEstimate(loaded.estimate, loaded.items);
-    return NextResponse.json({
-      success: true,
-      estimate: projectPersistedEstimate(loaded.estimate, calculation, auth.authorization!),
-      sections: loaded.sections,
-    });
-  } catch {
+    return NextResponse.json({ success: true, ...builderState });
+  } catch (error) {
+    if (error instanceof MutationStateChangedError) {
+      return NextResponse.json({ success: false, error: "The estimate changed while it was being loaded.", code: "stale_calculation_revision" }, { status: 409 });
+    }
     return NextResponse.json({ success: false, error: "Estimate could not be loaded." }, { status: 500 });
   }
 }

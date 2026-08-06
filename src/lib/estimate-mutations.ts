@@ -66,6 +66,10 @@ export type MutationState = {
   sections: Array<Record<string, unknown>>;
 };
 
+export type EstimateBuilderPermissions = EstimateProjectionPermissions & {
+  canEditPrices: boolean;
+};
+
 export type MutationResultCode =
   | "ok"
   | "not_found"
@@ -408,35 +412,155 @@ export async function loadMutationState(supabase: SupabaseClient, estimateId: st
   };
 }
 
-export function projectMutationState(
+export function projectBuilderState(
   state: MutationState,
   calculation: InternalEstimateCalculation,
-  permissions: EstimateProjectionPermissions,
-  nextRevision: number,
+  permissions: EstimateBuilderPermissions,
 ) {
-  const estimateRecord = { ...state.estimate, calculation_revision: nextRevision };
-  const estimate = projectPersistedEstimate(estimateRecord, calculation, permissions);
+  const estimate = projectPersistedEstimate(state.estimate, calculation, permissions);
   const projectedById = new Map(estimate.calculation.items.map((item) => [item.id, item]));
-  return {
-    estimate,
-    sections: [...state.sections].sort((left, right) =>
-      Number(left.sort_order) - Number(right.sort_order) || String(left.id).localeCompare(String(right.id))
-    ).map((section) => ({
-      id: section.id,
-      name: section.name,
-      customerDescription: section.customer_description ?? null,
-      internalNotes: section.internal_notes ?? null,
-      sortOrder: section.sort_order,
-    })),
-    items: [...state.items].sort((left, right) =>
-      left.sortOrder - right.sortOrder || left.id.localeCompare(right.id)
-    ).map((item) => ({
-      ...projectedById.get(item.id),
+  const sections = [...state.sections].sort((left, right) =>
+    Number(left.sort_order) - Number(right.sort_order) || String(left.id).localeCompare(String(right.id))
+  ).map((section) => Object.freeze({
+    id: String(section.id),
+    name: String(section.name),
+    customerDescription: typeof section.customer_description === "string" ? section.customer_description : null,
+    internalNotes: typeof section.internal_notes === "string" ? section.internal_notes : null,
+    sortOrder: Number(section.sort_order),
+  }));
+  const sectionOrder = new Map(sections.map((section, index) => [section.id, index]));
+  const items = [...state.items].sort((left, right) =>
+    (sectionOrder.get(left.sectionId) ?? Number.MAX_SAFE_INTEGER) - (sectionOrder.get(right.sectionId) ?? Number.MAX_SAFE_INTEGER)
+      || left.sortOrder - right.sortOrder || left.id.localeCompare(right.id)
+  ).map((item) => {
+    const calculated = projectedById.get(item.id);
+    if (!calculated) throw new TypeError(`Missing projected calculation for ${item.id}.`);
+    return Object.freeze({
+      ...calculated,
+      id: item.id,
       sectionId: item.sectionId,
+      itemType: item.itemType,
+      customerDescription: item.customerDescription,
       internalDescription: item.internalDescription,
+      quantity: item.quantity,
+      unit: item.unit,
+      taxable: item.taxable,
+      included: item.included,
       sortOrder: item.sortOrder,
-    })),
-  };
+      ...(permissions.canViewCosts ? {
+        materialUnitCost: item.materialUnitCost,
+        laborUnitCost: item.laborUnitCost,
+        subcontractorUnitCost: item.subcontractorUnitCost,
+        equipmentUnitCost: item.equipmentUnitCost,
+        otherDirectUnitCost: item.otherDirectUnitCost,
+        materialWastePercent: item.materialWastePercent,
+      } : {}),
+      ...(item.itemType === "standard" && permissions.canViewCosts && permissions.canViewProfit
+        ? { itemMarkupPercent: item.itemMarkupPercent }
+        : {}),
+      ...(item.itemType === "allowance" ? { fixedCustomerPrice: item.fixedCustomerPrice } : {}),
+    });
+  });
+  return Object.freeze({
+    calculationRevision: Number(state.estimate.calculation_revision),
+    capabilities: Object.freeze({
+      canEditPrices: permissions.canEditPrices,
+      canViewCosts: permissions.canViewCosts,
+      canViewProfit: permissions.canViewProfit,
+    }),
+    estimate,
+    sections: Object.freeze(sections),
+    items: Object.freeze(items),
+  });
+}
+
+export async function loadBuilderState(
+  supabase: SupabaseClient,
+  estimateId: string,
+  permissions: EstimateBuilderPermissions,
+) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const state = await loadMutationState(supabase, estimateId);
+      if (!state) return null;
+      const { calculation } = calculateMutation(state.estimate, state.items);
+      return projectBuilderState(state, calculation, permissions);
+    } catch (error) {
+      if (!(error instanceof MutationStateChangedError) || attempt === 1) throw error;
+    }
+  }
+  throw new MutationStateChangedError();
+}
+
+export async function loadPostMutationBuilderState(
+  supabase: SupabaseClient,
+  estimateId: string,
+  permissions: EstimateBuilderPermissions,
+  completedRevision: number,
+) {
+  const state = await loadBuilderState(supabase, estimateId, permissions);
+  if (state && state.calculationRevision < completedRevision) throw new MutationStateChangedError();
+  return state;
+}
+
+export type CommittedMutationIdentifierField =
+  | "sectionId"
+  | "deletedSectionId"
+  | "itemId"
+  | "deletedItemId";
+
+export const MUTATION_COMMITTED_RELOAD_REQUIRED = "mutation_committed_state_reload_required" as const;
+
+export function committedMutationReloadRequired<Field extends CommittedMutationIdentifierField>(
+  committedRevision: number,
+  identifierField: Field,
+  identifier: string,
+) {
+  return Object.freeze({
+    success: false as const,
+    error: MUTATION_COMMITTED_RELOAD_REQUIRED,
+    mutationCommitted: true as const,
+    calculationRevision: committedRevision,
+    nextCalculationRevision: committedRevision,
+    reloadRequired: true as const,
+    [identifierField]: identifier,
+    message: "The mutation was committed, but the latest estimate state must be reloaded with GET.",
+  }) as Readonly<{
+    success: false;
+    error: typeof MUTATION_COMMITTED_RELOAD_REQUIRED;
+    mutationCommitted: true;
+    calculationRevision: number;
+    nextCalculationRevision: number;
+    reloadRequired: true;
+    message: string;
+  } & Record<Field, string>>;
+}
+
+export async function completeCommittedMutationState<Field extends CommittedMutationIdentifierField>(
+  supabase: SupabaseClient,
+  estimateId: string,
+  permissions: EstimateBuilderPermissions,
+  committedRevision: number,
+  identifierField: Field,
+  identifier: string,
+) {
+  try {
+    const state = await loadPostMutationBuilderState(supabase, estimateId, permissions, committedRevision);
+    if (!state) {
+      return Object.freeze({
+        ok: false as const,
+        status: 409 as const,
+        body: committedMutationReloadRequired(committedRevision, identifierField, identifier),
+      });
+    }
+    return Object.freeze({ ok: true as const, state });
+  } catch {
+    return Object.freeze({
+      ok: false as const,
+      status: 409 as const,
+      body: committedMutationReloadRequired(committedRevision, identifierField, identifier),
+    });
+  }
 }
 
 export function rpcResult(data: unknown): { result_code: MutationResultCode; next_calculation_revision: number; resource_id: string } {

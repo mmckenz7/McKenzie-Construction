@@ -5,12 +5,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimate-access";
 import {
   assertExactFields,
-  calculateMutation,
+  completeCommittedMutationState,
   expectedRevision,
   loadMutationState,
   MutationStateChangedError,
   parseSectionInput,
-  projectMutationState,
   rpcResult,
   SECTION_CREATE_FIELDS,
   UUID_PATTERN,
@@ -44,7 +43,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (!state) return NextResponse.json(ESTIMATE_NOT_FOUND_BODY, { status: 404 });
     if (state.estimate.status !== "draft") return mutationFailure("non_draft");
     if (state.estimate.calculation_revision !== revision) return mutationFailure("stale_calculation_revision");
-    const { calculation } = calculateMutation(state.estimate, state.items);
     const result = await supabase.rpc("create_structured_estimate_section", {
       requested_estimate_id: estimateId,
       requested_expected_revision: revision,
@@ -57,9 +55,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (result.error) throw new Error(result.error.message);
     const outcome = rpcResult(result.data);
     if (outcome.result_code !== "ok") return mutationFailure(outcome.result_code);
-    state.sections.push({ id: sectionId, name: section.name, customer_description: section.customerDescription, internal_notes: section.internalNotes, sort_order: section.sortOrder });
-    const projection = projectMutationState(state, calculation, auth.authorization!, outcome.next_calculation_revision);
-    return NextResponse.json({ success: true, sectionId, nextCalculationRevision: outcome.next_calculation_revision, ...projection }, { status: 201 });
+    const completion = await completeCommittedMutationState(
+      supabase, estimateId, auth.authorization!, outcome.next_calculation_revision, "sectionId", sectionId,
+    );
+    if (!completion.ok) return NextResponse.json(completion.body, { status: completion.status });
+    const builderState = completion.state;
+    return NextResponse.json({ success: true, sectionId, nextCalculationRevision: builderState.calculationRevision, ...builderState }, { status: 201 });
   } catch (error) {
     if (error instanceof MutationStateChangedError) return mutationFailure("stale_calculation_revision");
     const status = error instanceof TypeError || error instanceof RangeError || error instanceof SyntaxError ? 400 : 500;

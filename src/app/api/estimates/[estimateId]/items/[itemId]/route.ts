@@ -5,12 +5,12 @@ import {
   assertExactFields,
   calculateMutation,
   canonicalItemRpcValue,
+  completeCommittedMutationState,
   expectedRevision,
   ITEM_FIELDS,
   loadMutationState,
   MutationStateChangedError,
   parseCanonicalItem,
-  projectMutationState,
   rpcResult,
   UUID_PATTERN,
 } from "@/lib/estimate-mutations";
@@ -67,8 +67,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (result.error) throw new Error(result.error.message);
     const outcome = rpcResult(result.data);
     if (outcome.result_code !== "ok") return mutationFailure(outcome.result_code);
-    const projection = projectMutationState(state, calculated.calculation, auth.authorization!, outcome.next_calculation_revision);
-    return NextResponse.json({ success: true, itemId, nextCalculationRevision: outcome.next_calculation_revision, ...projection });
+    const completion = await completeCommittedMutationState(
+      supabase, estimateId, auth.authorization!, outcome.next_calculation_revision, "itemId", itemId,
+    );
+    if (!completion.ok) return NextResponse.json(completion.body, { status: completion.status });
+    const builderState = completion.state;
+    return NextResponse.json({ success: true, itemId, nextCalculationRevision: builderState.calculationRevision, ...builderState });
   } catch (error) {
     if (error instanceof MutationStateChangedError) return mutationFailure("stale_calculation_revision");
     const status = error instanceof TypeError || error instanceof RangeError || error instanceof SyntaxError ? 400 : 500;
@@ -93,8 +97,12 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     if (result.error) throw new Error(result.error.message);
     const outcome = rpcResult(result.data);
     if (outcome.result_code !== "ok") return mutationFailure(outcome.result_code);
-    const projection = projectMutationState(state, calculated.calculation, auth.authorization!, outcome.next_calculation_revision);
-    return NextResponse.json({ success: true, deletedItemId: itemId, nextCalculationRevision: outcome.next_calculation_revision, ...projection });
+    const completion = await completeCommittedMutationState(
+      supabase, estimateId, auth.authorization!, outcome.next_calculation_revision, "deletedItemId", itemId,
+    );
+    if (!completion.ok) return NextResponse.json(completion.body, { status: completion.status });
+    const builderState = completion.state;
+    return NextResponse.json({ success: true, deletedItemId: itemId, nextCalculationRevision: builderState.calculationRevision, ...builderState });
   } catch (error) {
     if (error instanceof MutationStateChangedError) return mutationFailure("stale_calculation_revision");
     const status = error instanceof TypeError || error instanceof RangeError || error instanceof SyntaxError ? 400 : 500;

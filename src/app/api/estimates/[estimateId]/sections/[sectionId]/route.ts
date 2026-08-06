@@ -3,12 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimate-access";
 import {
   assertExactFields,
-  calculateMutation,
+  completeCommittedMutationState,
   expectedRevision,
   loadMutationState,
   MutationStateChangedError,
   parseSectionInput,
-  projectMutationState,
   rpcResult,
   SECTION_PATCH_FIELDS,
   UUID_PATTERN,
@@ -58,7 +57,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       internalNotes: typeof current.internal_notes === "string" ? current.internal_notes : null,
       sortOrder: Number(current.sort_order),
     });
-    const { calculation } = calculateMutation(state.estimate, state.items);
     const result = await supabase.rpc("update_structured_estimate_section", {
       requested_estimate_id: estimateId, requested_expected_revision: revision, requested_section_id: sectionId,
       requested_name: section.name, requested_customer_description: section.customerDescription,
@@ -67,9 +65,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (result.error) throw new Error(result.error.message);
     const outcome = rpcResult(result.data);
     if (outcome.result_code !== "ok") return mutationFailure(outcome.result_code);
-    state.sections[index] = { id: sectionId, name: section.name, customer_description: section.customerDescription, internal_notes: section.internalNotes, sort_order: section.sortOrder };
-    const projection = projectMutationState(state, calculation, auth.authorization!, outcome.next_calculation_revision);
-    return NextResponse.json({ success: true, sectionId, nextCalculationRevision: outcome.next_calculation_revision, ...projection });
+    const completion = await completeCommittedMutationState(
+      supabase, estimateId, auth.authorization!, outcome.next_calculation_revision, "sectionId", sectionId,
+    );
+    if (!completion.ok) return NextResponse.json(completion.body, { status: completion.status });
+    const builderState = completion.state;
+    return NextResponse.json({ success: true, sectionId, nextCalculationRevision: builderState.calculationRevision, ...builderState });
   } catch (error) {
     if (error instanceof MutationStateChangedError) return mutationFailure("stale_calculation_revision");
     const status = error instanceof TypeError || error instanceof RangeError || error instanceof SyntaxError ? 400 : 500;
@@ -82,16 +83,18 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const prepared = await prepare(request, context, DELETE_FIELDS);
     if (prepared.response) return prepared.response;
     const { estimateId, sectionId, auth, revision, supabase, state, index } = prepared;
-    const { calculation } = calculateMutation(state.estimate, state.items);
     const result = await supabase.rpc("delete_structured_estimate_section", {
       requested_estimate_id: estimateId, requested_expected_revision: revision, requested_section_id: sectionId,
     });
     if (result.error) throw new Error(result.error.message);
     const outcome = rpcResult(result.data);
     if (outcome.result_code !== "ok") return mutationFailure(outcome.result_code);
-    state.sections.splice(index, 1);
-    const projection = projectMutationState(state, calculation, auth.authorization!, outcome.next_calculation_revision);
-    return NextResponse.json({ success: true, deletedSectionId: sectionId, nextCalculationRevision: outcome.next_calculation_revision, ...projection });
+    const completion = await completeCommittedMutationState(
+      supabase, estimateId, auth.authorization!, outcome.next_calculation_revision, "deletedSectionId", sectionId,
+    );
+    if (!completion.ok) return NextResponse.json(completion.body, { status: completion.status });
+    const builderState = completion.state;
+    return NextResponse.json({ success: true, deletedSectionId: sectionId, nextCalculationRevision: builderState.calculationRevision, ...builderState });
   } catch (error) {
     if (error instanceof MutationStateChangedError) return mutationFailure("stale_calculation_revision");
     const status = error instanceof TypeError || error instanceof RangeError || error instanceof SyntaxError ? 400 : 500;

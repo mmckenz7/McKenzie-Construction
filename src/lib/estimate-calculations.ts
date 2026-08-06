@@ -430,7 +430,7 @@ function projectItem(
           directCostCents: serializeInteger(item.directCostCents),
         }
       : {}),
-    ...(permissions.canViewProfit
+    ...(permissions.canViewCosts && permissions.canViewProfit
       ? { itemMarkupCents: serializeInteger(item.itemMarkupCents) }
       : {}),
   };
@@ -464,7 +464,6 @@ export function projectEstimateCalculation(
       : {}),
     ...(permissions.canViewProfit
       ? {
-          itemMarkupTotalCents: serializeInteger(calculation.itemMarkupTotalCents),
           overheadCents: serializeInteger(calculation.overheadCents),
           preProfitSubtotalCents: serializeInteger(calculation.preProfitSubtotalCents),
           profitMarkupCents: serializeInteger(calculation.profitMarkupCents),
@@ -474,6 +473,9 @@ export function projectEstimateCalculation(
           grossProfitCents: serializeInteger(calculation.grossProfitCents),
           grossMarginPercent: serializeFixed(calculation.grossMarginMilliPercent, 3),
         }
+      : {}),
+    ...(permissions.canViewCosts && permissions.canViewProfit
+      ? { itemMarkupTotalCents: serializeInteger(calculation.itemMarkupTotalCents) }
       : {}),
   };
   return Object.freeze(projection);

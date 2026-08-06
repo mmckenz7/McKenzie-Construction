@@ -44,7 +44,7 @@ test("routes map stable outcomes without partial success", () => {
     assert.match(source, /outcome\.result_code !== "ok"/);
     assert.match(source, /if \(result\.error\) throw new Error/);
     assert.match(source, /nextCalculationRevision/);
-    assert.match(source, /projectMutationState/);
+    assert.match(source, /completeCommittedMutationState/);
   }
   assert.match(sources[1], /section_not_empty/);
   assert.match(sources[2], /status: 201/);
@@ -60,9 +60,22 @@ test("cross-estimate section and item identifiers use the shared 404 body", () =
 
 test("responses are permission-projected and never return RPC or raw rows", () => {
   for (const source of sources) {
-    assert.match(source, /projectMutationState\(state,[\s\S]*auth\.authorization!/);
+    assert.match(source, /completeCommittedMutationState\(/);
+    assert.match(source, /\.\.\.builderState/);
     assert.doesNotMatch(source, /NextResponse\.json\([^\n]*result\.data/);
+    assert.doesNotMatch(source, /state\.(?:items|sections)\.(?:push|splice)[\s\S]*\.\.\.projection/);
   }
+});
+
+test("each successful RPC is executed once and enters the committed reload boundary", () => {
+  assert.equal((all.match(/await supabase\.rpc\(/g) ?? []).length, 6);
+  assert.equal((all.match(/completeCommittedMutationState\(/g) ?? []).length, 6);
+  assert.equal((all.match(/if \(!completion\.ok\) return NextResponse\.json\(completion\.body, \{ status: completion\.status \}\)/g) ?? []).length, 6);
+  assert.doesNotMatch(all, /loadPostMutationBuilderState/);
+  assert.doesNotMatch(all, /mutationCommitted:\s*true/);
+  assert.match(mutationHelper, /mutation_committed_state_reload_required/);
+  assert.match(mutationHelper, /mutationCommitted: true/);
+  assert.match(mutationHelper, /reloadRequired: true/);
 });
 
 test("authoritative state loading uses a revision fence before calculation", () => {

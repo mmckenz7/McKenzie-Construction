@@ -104,7 +104,8 @@ test("GET routes are read-only and collection item failures are structured", () 
     assert.doesNotMatch(source, /\.insert\(|\.update\(|\.delete\(|calculation_revision\s*:/);
   }
   assert.match(collectionGet, /try \{[\s\S]*?Promise\.all[\s\S]*?catch \{[\s\S]*?Estimates could not be loaded\.[\s\S]*?status: 500/);
-  assert.match(detailGet, /calculatePersistedEstimate/);
+  assert.match(detailGet, /loadBuilderState/);
+  assert.match(readFileSync("src/lib/estimate-mutations.ts", "utf8"), /loadBuilderState[\s\S]*?calculateMutation\(state\.estimate, state\.items\)/);
 });
 
 test("POST and PATCH use strict calendar-date validation", () => {

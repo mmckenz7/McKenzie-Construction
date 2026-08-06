@@ -15,7 +15,7 @@ const {
   calculateMutation,
   ITEM_FIELDS,
   parseCanonicalItem,
-  projectMutationState,
+  projectBuilderState,
   verifyCalculationBundleCorrespondence,
 } = await import("../src/lib/estimate-mutations.ts");
 
@@ -108,7 +108,7 @@ test("calculated fields are rejected and projections omit mirrors and permission
   assert.throws(() => assertExactFields({ ...itemBody(), total_price: "1.00" }, ITEM_FIELDS), /unsupported fields/);
   const item = parseCanonicalItem(standardId, itemBody());
   const calculation = calculateMutation(estimate, [item]).calculation;
-  const projected = projectMutationState({ estimate, items: [item], sections: [{ id: sectionId, name: "Base", customer_description: null, internal_notes: null, sort_order: 0 }] }, calculation, { canViewCosts: false, canViewProfit: false }, 8);
+  const projected = projectBuilderState({ estimate, items: [item], sections: [{ id: sectionId, name: "Base", customer_description: null, internal_notes: null, sort_order: 0 }] }, calculation, { canEditPrices: true, canViewCosts: false, canViewProfit: false });
   assert.equal("directCostCents" in projected.estimate.calculation, false);
   assert.equal("grossProfitCents" in projected.estimate.calculation, false);
   for (const forbidden of ["estimated_cost", "estimated_profit", "base_unit_cost", "costs_complete", "metadata"]) {
