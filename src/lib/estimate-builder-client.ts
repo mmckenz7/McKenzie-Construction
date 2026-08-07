@@ -390,3 +390,33 @@ export function formatCents(value: string | null | undefined) {
   const magnitude = negative ? -cents : cents;
   return `${negative ? "-" : ""}$${magnitude / 100n}.${(magnitude % 100n).toString().padStart(2, "0")}`;
 }
+
+export function previewMarkupCents(
+  baseCents: string | null | undefined,
+  percent: string,
+) {
+  if (
+    baseCents === null ||
+    baseCents === undefined ||
+    !/^\d+$/.test(baseCents) ||
+    !DECIMAL_PATTERNS.percent.test(percent)
+  ) {
+    return null;
+  }
+
+  const [whole, fraction = ""] =
+    percent.split(".");
+  const milliPercent =
+    BigInt(whole) * 1_000n +
+    BigInt(
+      (fraction + "000").slice(0, 3),
+    );
+  const numerator =
+    BigInt(baseCents) * milliPercent;
+  const denominator = 100_000n;
+
+  return (
+    (numerator + denominator / 2n) /
+    denominator
+  ).toString();
+}

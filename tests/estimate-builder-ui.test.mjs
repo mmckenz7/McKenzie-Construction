@@ -14,6 +14,7 @@ const {
   formatCents,
   loadEstimateBuilder,
   nullableDecimalInput,
+  previewMarkupCents,
   DECIMAL_PATTERNS,
   runEstimateBuilderMutation,
   retryRequiredBuilderReload,
@@ -170,6 +171,14 @@ test("decimal inputs remain strings and invalid precision fails before submissio
   assert.equal(formatCents("12345"), "$123.45");
 });
 
+test("markup preview uses exact cents and half-up rounding", () => {
+  assert.equal(previewMarkupCents("10000", "15"), "1500");
+  assert.equal(previewMarkupCents("1", "50"), "1");
+  assert.equal(previewMarkupCents("12345", "12.5"), "1543");
+  assert.equal(previewMarkupCents(null, "15"), null);
+  assert.equal(previewMarkupCents("10000", "15.0000"), null);
+});
+
 test("builder component keeps permissions, pending lock, confirmations and API-only writes", () => {
   const source = readFileSync("src/components/estimates/estimate-builder.tsx", "utf8");
   assert.match(source, /pendingRef\.current/);
@@ -181,6 +190,10 @@ test("builder component keeps permissions, pending lock, confirmations and API-o
   assert.match(source, /Edit estimate setup/);
   assert.match(source, /overheadPercent/);
   assert.match(source, /profitMarkupPercent/);
+  assert.match(source, /type="range"/);
+  assert.match(source, /Profit markup percent/);
+  assert.match(source, /previewMarkupCents/);
+  assert.match(source, /formatCents\(previewCents\)/);
   assert.match(source, /taxRatePercent/);
   assert.match(source, /discountAmount/);
   assert.match(source, /method: "PATCH"/);
