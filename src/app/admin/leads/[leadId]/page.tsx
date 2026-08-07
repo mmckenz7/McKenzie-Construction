@@ -267,6 +267,7 @@ export default async function LeadDetailPage({
     leadResult,
     taskResult,
     activityResult,
+    settingsResult,
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -314,6 +315,12 @@ export default async function LeadDetailPage({
       .order("occurred_at", {
         ascending: false,
       }),
+
+    supabase
+      .from("company_settings")
+      .select("consultation_start_time, consultation_end_time")
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   if (leadResult.error || !leadResult.data) {
@@ -501,6 +508,12 @@ export default async function LeadDetailPage({
                 }
                 alternateTime={
                   lead.alternate_time
+                }
+                consultationStartTime={
+                  settingsResult.data?.consultation_start_time ?? "08:00"
+                }
+                consultationEndTime={
+                  settingsResult.data?.consultation_end_time ?? "17:00"
                 }
               />
             </section>

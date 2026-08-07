@@ -4,6 +4,11 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import EmailDraftReview from "@/components/email-draft-review";
+import {
+  consultationTimeFromDateTime,
+  consultationTimeOptions,
+  isConsultationDateTimeAllowed,
+} from "@/lib/consultation-hours";
 
 type LeadStageWorkflowProps = {
   leadId: string;
@@ -14,6 +19,8 @@ type LeadStageWorkflowProps = {
   requestedTime: string | null;
   alternateDate: string | null;
   alternateTime: string | null;
+  consultationStartTime: string;
+  consultationEndTime: string;
 };
 
 type CallOutcome =
@@ -118,6 +125,52 @@ function formatRequestedOption(
   }).format(parsedDate);
 }
 
+function ConsultationDateTimePicker({
+  value,
+  onChange,
+  disabled,
+  start,
+  end,
+  borderClass,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+  start: string;
+  end: string;
+  borderClass: string;
+}) {
+  const date = /^\d{4}-\d{2}-\d{2}/.exec(value)?.[0] ?? "";
+  const time = consultationTimeFromDateTime(value);
+  const options = consultationTimeOptions({ start, end });
+  const fieldClass = `w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-950 ${borderClass}`;
+
+  return <div className="grid gap-3 sm:grid-cols-2">
+    <label className="block">
+      <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-600">Date</span>
+      <input
+        type="date"
+        value={date}
+        onChange={(event) => onChange(event.target.value ? `${event.target.value}T${time}` : "")}
+        disabled={disabled}
+        className={fieldClass}
+      />
+    </label>
+    <label className="block">
+      <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-600">Available time</span>
+      <select
+        value={time}
+        onChange={(event) => onChange(date && event.target.value ? `${date}T${event.target.value}` : date ? `${date}T` : "")}
+        disabled={disabled || !date}
+        className={fieldClass}
+      >
+        <option value="">Select a time</option>
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  </div>;
+}
+
 export default function LeadStageWorkflow({
   leadId,
   currentStatus,
@@ -127,6 +180,8 @@ export default function LeadStageWorkflow({
   requestedTime,
   alternateDate,
   alternateTime,
+  consultationStartTime,
+  consultationEndTime,
 }: LeadStageWorkflowProps) {
   const router = useRouter();
 
@@ -209,6 +264,10 @@ export default function LeadStageWorkflow({
   ] = useState<string | null>(null);
 
   const isBusy = activeAction !== null;
+  const consultationHours = {
+    start: consultationStartTime,
+    end: consultationEndTime,
+  };
 
   function clearMessages() {
     setMessage("");
@@ -890,24 +949,23 @@ export default function LeadStageWorkflow({
 
             {consultationChoice ===
             "custom" ? (
-              <label className="block">
+              <div className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-950">
                   Custom Consultation Date and Time
                 </span>
 
-                <input
-                  type="datetime-local"
+                <ConsultationDateTimePicker
                   value={appointmentAt}
-                  onChange={(event) => {
-                    setAppointmentAt(
-                      event.target.value,
-                    );
+                  onChange={(value) => {
+                    setAppointmentAt(value);
                     clearMessages();
                   }}
                   disabled={isBusy}
-                  className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-950"
+                  start={consultationStartTime}
+                  end={consultationEndTime}
+                  borderClass="border-amber-300"
                 />
-              </label>
+              </div>
             ) : (
               <div className="rounded-lg border border-amber-200 bg-white px-4 py-3">
                 <p className="text-xs font-bold uppercase tracking-widest text-amber-800">
@@ -932,7 +990,7 @@ export default function LeadStageWorkflow({
             <button
               type="submit"
               disabled={
-                isBusy || !appointmentAt
+                isBusy || !isConsultationDateTimeAllowed(appointmentAt, consultationHours)
               }
               className="rounded-lg bg-amber-500 px-5 py-2 text-sm font-bold text-slate-950 disabled:bg-amber-200 disabled:text-slate-500"
             >
@@ -959,24 +1017,23 @@ export default function LeadStageWorkflow({
             Complete the visit, reschedule it, or cancel the consultation.
           </p>
 
-          <label className="mt-5 block">
+          <div className="mt-5 block">
             <span className="mb-2 block text-sm font-bold text-slate-950">
               Consultation Date and Time
             </span>
 
-            <input
-              type="datetime-local"
+            <ConsultationDateTimePicker
               value={appointmentAt}
-              onChange={(event) => {
-                setAppointmentAt(
-                  event.target.value,
-                );
+              onChange={(value) => {
+                setAppointmentAt(value);
                 clearMessages();
               }}
               disabled={isBusy}
-              className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm text-slate-950"
+              start={consultationStartTime}
+              end={consultationEndTime}
+              borderClass="border-emerald-300"
             />
-          </label>
+          </div>
 
           <label className="mt-4 block">
             <span className="mb-2 block text-sm font-bold text-slate-950">
@@ -1017,7 +1074,7 @@ export default function LeadStageWorkflow({
                 )
               }
               disabled={
-                isBusy || !appointmentAt
+                isBusy || !isConsultationDateTimeAllowed(appointmentAt, consultationHours)
               }
               className="rounded-lg border border-emerald-400 bg-white px-5 py-2 text-sm font-bold text-emerald-900 disabled:text-emerald-300"
             >

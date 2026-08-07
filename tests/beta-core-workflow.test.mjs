@@ -16,6 +16,23 @@ test("consultation choices use half-hour increments within configured hours", ()
   assert.equal(isConsultationDateTimeAllowed("2026-08-04T17:30", { start: "09:00", end: "17:00" }), false);
 });
 
+test("lead workflow only offers configured consultation times", async () => {
+  const [workflow, salesLeadPage, adminLeadPage] = await Promise.all([
+    readFile(new URL("../src/components/lead-stage-workflow.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/sales/leads/[leadId]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/admin/leads/[leadId]/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(workflow, /consultationTimeOptions\(\{ start, end \}\)/);
+  assert.match(workflow, /Available time/);
+  assert.equal((workflow.match(/<ConsultationDateTimePicker/g) ?? []).length, 2);
+  assert.equal((workflow.match(/isConsultationDateTimeAllowed\(appointmentAt, consultationHours\)/g) ?? []).length, 2);
+  for (const page of [salesLeadPage, adminLeadPage]) {
+    assert.match(page, /consultation_start_time, consultation_end_time/);
+    assert.match(page, /consultationStartTime=/);
+    assert.match(page, /consultationEndTime=/);
+  }
+});
+
 test("callback applicability is explicit for enabled and disabled outcomes", () => {
   assert.equal(callbackApplies("spoke"), true);
   assert.equal(callbackApplies("callback_requested"), true);
