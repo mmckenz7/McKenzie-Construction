@@ -1,4 +1,6 @@
-export type EstimateCalculationPolicyVersion = "structured-estimate-v1";
+export type EstimateCalculationPolicyVersion =
+  | "structured-estimate-v1"
+  | "structured-estimate-v2-material-tax";
 export type DecimalString = string;
 
 export type EstimateCostComponentsInput = {
@@ -40,6 +42,11 @@ export type EstimateCalculationInput = {
   taxPercent: DecimalString;
 };
 
+export type MaterialTaxEstimateCalculationInput =
+  EstimateCalculationInput & {
+    materialTaxPercent: DecimalString;
+  };
+
 /** Internal fixed-point values. Never serialize this type directly. */
 export type InternalEstimateComponentCosts = {
   materialCostCents: bigint | null;
@@ -60,6 +67,7 @@ export type InternalEstimateItemCalculation = {
   quantityUnits: bigint;
   adjustedMaterialQuantityUnits: bigint;
   componentCosts: InternalEstimateComponentCosts;
+  materialTaxCents: bigint | null;
   directCostCents: bigint | null;
   itemMarkupCents: bigint | null;
   customerPriceCents: bigint | null;
@@ -73,6 +81,7 @@ export type InternalEstimateCalculation = {
   costsComplete: boolean;
   pricesComplete: boolean;
   directCostCents: bigint | null;
+  materialTaxCents: bigint | null;
   itemMarkupTotalCents: bigint | null;
   itemPriceSubtotalCents: bigint | null;
   taxableItemPriceSubtotalCents: bigint | null;
@@ -118,6 +127,7 @@ export type SerializedEstimateItemProjection = {
   readonly costsComplete?: boolean;
   readonly componentCosts?: Readonly<SerializedEstimateComponentCosts>;
   readonly directCostCents?: string | null;
+  readonly materialTaxCents?: string | null;
   readonly itemMarkupCents?: string | null;
 };
 
@@ -135,6 +145,7 @@ export type SerializedEstimateCalculationProjection = {
   readonly costsComplete?: boolean;
   readonly pricesComplete?: boolean;
   readonly directCostCents?: string | null;
+  readonly materialTaxCents?: string | null;
   readonly taxableItemPriceSubtotalCents?: string | null;
   readonly itemMarkupTotalCents?: string | null;
   readonly overheadCents?: string | null;

@@ -2,6 +2,7 @@ import type {
   EstimateCalculationInput,
   EstimateCostComponentsInput,
   EstimateItemInput,
+  MaterialTaxEstimateCalculationInput,
   EstimateProjectionPermissions,
   InternalEstimateCalculation,
   InternalEstimateComponentCosts,
@@ -13,6 +14,8 @@ import type {
 
 export const ESTIMATE_CALCULATION_POLICY_VERSION =
   "structured-estimate-v1" as const;
+export const MATERIAL_TAX_ESTIMATE_CALCULATION_POLICY_VERSION =
+  "structured-estimate-v2-material-tax" as const;
 
 const QUANTITY_SCALE = 10_000n;
 const PERCENT_SCALE = 1_000n;
@@ -162,7 +165,10 @@ function calculateComponents(
   });
 }
 
-function calculateItem(item: EstimateItemInput): InternalEstimateItemCalculation {
+function calculateItem(
+  item: EstimateItemInput,
+  materialTaxPercent: bigint,
+): InternalEstimateItemCalculation {
   if (!item.id.trim()) throw new TypeError("Estimate item id is required.");
   if (!item.unit.trim()) throw new TypeError(`${item.id}.unit is required.`);
 
@@ -177,7 +183,24 @@ function calculateItem(item: EstimateItemInput): InternalEstimateItemCalculation
     PERCENT_DENOMINATOR,
   );
   const componentCosts = calculateComponents(item, quantity, adjustedMaterialQuantity);
-  const directCostCents = sumKnownComponents(componentCosts);
+  const preTaxDirectCostCents =
+    sumKnownComponents(componentCosts);
+  const materialTaxCents =
+    materialTaxPercent === 0n
+      ? 0n
+      : componentCosts.materialCostCents === null
+        ? null
+        : multiplyRatioRounded(
+            componentCosts.materialCostCents,
+            materialTaxPercent,
+            PERCENT_DENOMINATOR,
+          );
+  const directCostCents =
+    preTaxDirectCostCents === null ||
+    materialTaxCents === null
+      ? null
+      : preTaxDirectCostCents +
+        materialTaxCents;
   const costsComplete = directCostCents !== null;
 
   let itemMarkupCents: bigint | null;
@@ -209,6 +232,7 @@ function calculateItem(item: EstimateItemInput): InternalEstimateItemCalculation
     quantityUnits: quantity,
     adjustedMaterialQuantityUnits: adjustedMaterialQuantity,
     componentCosts,
+    materialTaxCents,
     directCostCents,
     itemMarkupCents,
     customerPriceCents,
@@ -220,8 +244,10 @@ function sum(values: readonly bigint[]) {
   return values.reduce((total, value) => total + value, 0n);
 }
 
-export function calculateEstimate(
+function calculateEstimateInternal(
   input: EstimateCalculationInput,
+  policyVersion: InternalEstimateCalculation["policyVersion"],
+  materialTaxPercent: bigint,
 ): Readonly<InternalEstimateCalculation> {
   if (input.items.length > MAX_ESTIMATE_ITEMS) {
     throw new RangeError(`An estimate supports at most ${MAX_ESTIMATE_ITEMS} items.`);
@@ -237,7 +263,14 @@ export function calculateEstimate(
   requireMaximum(profitMarkupPercent, MAX_MARKUP_PERCENT_UNITS, "profitMarkupPercent");
   requireMaximum(taxPercent, MAX_WASTE_OR_TAX_PERCENT_UNITS, "taxPercent");
   const requestedDiscountCents = parseMoney(input.discountAmount, "discountAmount");
-  const items = Object.freeze(input.items.map(calculateItem));
+  const items = Object.freeze(
+    input.items.map((item) =>
+      calculateItem(
+        item,
+        materialTaxPercent,
+      ),
+    ),
+  );
   const includedItems = items.filter((item) => item.included);
   const costsComplete = includedItems.every((item) => item.costsComplete);
   const pricesComplete = includedItems.every(
@@ -246,6 +279,15 @@ export function calculateEstimate(
 
   const knownDirectCost = costsComplete
     ? sum(includedItems.map((item) => item.directCostCents ?? 0n))
+    : null;
+  const materialTaxCents = includedItems.every(
+    (item) => item.materialTaxCents !== null,
+  )
+    ? sum(
+        includedItems.map(
+          (item) => item.materialTaxCents ?? 0n,
+        ),
+      )
     : null;
   const knownItemMarkup = costsComplete
     ? sum(includedItems.map((item) => item.itemMarkupCents ?? 0n))
@@ -358,11 +400,12 @@ export function calculateEstimate(
         );
 
   return Object.freeze({
-    policyVersion: ESTIMATE_CALCULATION_POLICY_VERSION,
+    policyVersion,
     items,
     costsComplete,
     pricesComplete,
     directCostCents: knownDirectCost,
+    materialTaxCents,
     itemMarkupTotalCents: knownItemMarkup,
     itemPriceSubtotalCents,
     taxableItemPriceSubtotalCents,
@@ -381,6 +424,45 @@ export function calculateEstimate(
     grossProfitCents,
     grossMarginMilliPercent,
   });
+}
+
+export function calculateEstimate(
+  input: EstimateCalculationInput,
+) {
+  return calculateEstimateInternal(
+    input,
+    ESTIMATE_CALCULATION_POLICY_VERSION,
+    0n,
+  );
+}
+
+export function calculateEstimateWithMaterialTax(
+  input: MaterialTaxEstimateCalculationInput,
+) {
+  const materialTaxPercent = parsePercent(
+    input.materialTaxPercent,
+    "materialTaxPercent",
+  );
+  requireMaximum(
+    materialTaxPercent,
+    MAX_WASTE_OR_TAX_PERCENT_UNITS,
+    "materialTaxPercent",
+  );
+  const customerTaxPercent = parsePercent(
+    input.taxPercent,
+    "taxPercent",
+  );
+  if (customerTaxPercent !== 0n) {
+    throw new RangeError(
+      "Customer sales tax must be zero for the material-tax calculation policy.",
+    );
+  }
+
+  return calculateEstimateInternal(
+    input,
+    MATERIAL_TAX_ESTIMATE_CALCULATION_POLICY_VERSION,
+    materialTaxPercent,
+  );
 }
 
 function serializeInteger(value: bigint | null) {
@@ -428,6 +510,7 @@ function projectItem(
           costsComplete: item.costsComplete,
           componentCosts: serializeComponents(item.componentCosts),
           directCostCents: serializeInteger(item.directCostCents),
+          materialTaxCents: serializeInteger(item.materialTaxCents),
         }
       : {}),
     ...(permissions.canViewCosts && permissions.canViewProfit
@@ -458,6 +541,7 @@ export function projectEstimateCalculation(
           costsComplete: calculation.costsComplete,
           pricesComplete: calculation.pricesComplete,
           directCostCents: serializeInteger(calculation.directCostCents),
+          materialTaxCents: serializeInteger(calculation.materialTaxCents),
           taxableItemPriceSubtotalCents:
             serializeInteger(calculation.taxableItemPriceSubtotalCents),
         }

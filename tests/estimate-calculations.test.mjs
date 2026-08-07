@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   calculateEstimate,
+  calculateEstimateWithMaterialTax,
   projectEstimateCalculation,
   MAX_ESTIMATE_ITEMS,
 } from "../src/lib/estimate-calculations.ts";
@@ -58,6 +59,18 @@ function estimate(items, overrides = {}) {
   });
 }
 
+function materialTaxEstimate(items, overrides = {}) {
+  return calculateEstimateWithMaterialTax({
+    items,
+    overheadPercent: "0",
+    profitMarkupPercent: "0",
+    discountAmount: "0",
+    taxPercent: "0",
+    materialTaxPercent: "0",
+    ...overrides,
+  });
+}
+
 test("handles an empty estimate with the versioned policy", () => {
   const result = estimate([]);
   assert.equal(result.policyVersion, "structured-estimate-v1");
@@ -92,6 +105,59 @@ test("calculates basic and multi-component direct costs", () => {
   });
   assert.equal(result.directCostCents, 3900n);
   assert.equal(result.customerTotalCents, 3900n);
+});
+
+test("material-tax policy applies municipality tax only to material cost", () => {
+  const result = materialTaxEstimate(
+    [
+      standard({
+        itemMarkupPercent: "10",
+        costs: {
+          ...zeroCosts,
+          materialUnitCost: "100",
+          laborUnitCost: "50",
+        },
+      }),
+    ],
+    { materialTaxPercent: "9.25" },
+  );
+
+  assert.equal(
+    result.policyVersion,
+    "structured-estimate-v2-material-tax",
+  );
+  assert.equal(result.items[0].materialTaxCents, 925n);
+  assert.equal(result.materialTaxCents, 925n);
+  assert.equal(result.directCostCents, 15_925n);
+  assert.equal(result.itemMarkupTotalCents, 1_593n);
+  assert.equal(result.customerTotalCents, 17_518n);
+  assert.equal(result.taxCents, 0n);
+});
+
+test("material-tax policy fails closed for unknown material cost and customer tax", () => {
+  const unknown = materialTaxEstimate(
+    [
+      standard({
+        costs: {
+          ...zeroCosts,
+          materialUnitCost: null,
+        },
+      }),
+    ],
+    { materialTaxPercent: "9.25" },
+  );
+  assert.equal(unknown.items[0].materialTaxCents, null);
+  assert.equal(unknown.materialTaxCents, null);
+  assert.equal(unknown.directCostCents, null);
+
+  assert.throws(
+    () =>
+      materialTaxEstimate([], {
+        materialTaxPercent: "9.25",
+        taxPercent: "1",
+      }),
+    /Customer sales tax must be zero/,
+  );
 });
 
 test("applies waste only to material quantity and material cost", () => {
@@ -305,6 +371,7 @@ test("permission-safe projections preserve customer price while omitting restric
     canViewProfit: false,
   });
   assert.equal(costsOnly.directCostCents, "10000");
+  assert.equal(costsOnly.materialTaxCents, "0");
   assert.equal(costsOnly.items[0].componentCosts.materialCostCents, "10000");
   assert.equal("grossProfitCents" in costsOnly, false);
   assert.equal("itemMarkupCents" in costsOnly.items[0], false);
