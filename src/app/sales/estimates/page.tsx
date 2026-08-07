@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { StartEstimateButton } from "@/components/estimates/start-estimate-button";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,8 @@ export default async function EstimatesPage() {
     {!error && !data?.length ? <section className="mt-6 border border-dashed border-slate-300 bg-white p-8"><h2 className="font-bold">No estimates need action</h2><p className="mt-2 text-sm text-slate-600">An opportunity appears here after a consultation is scheduled. Open a lead to advance its workflow.</p></section> : null}
     <section className="mt-6 divide-y divide-slate-200 border border-slate-200 bg-white">{data?.map((lead) => {
       const estimateId = draftByLead.get(String(lead.id));
-      return <article key={lead.id} className="flex flex-wrap items-center justify-between gap-4 p-4"><span><strong className="block text-slate-950">{lead.name ?? "Unnamed lead"}</strong><span className="text-sm text-slate-600">{lead.project_type ?? "Project type not confirmed"}</span></span><span className="flex items-center gap-3"><span className="text-sm font-semibold text-emerald-800">{lead.lead_status.replaceAll("_", " ")}</span>{estimateId ? <Link href={`/sales/estimates/${estimateId}`} className="rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">Open builder</Link> : <Link href={`/sales/leads/${lead.id}`} className="text-sm font-semibold text-slate-700 hover:underline">Open lead</Link>}</span></article>;
+      const leadName = lead.name ?? "Unnamed lead";
+      return <article key={lead.id} className="flex flex-wrap items-center justify-between gap-4 p-4"><span><strong className="block text-slate-950">{leadName}</strong><span className="text-sm text-slate-600">{lead.project_type ?? "Project type not confirmed"}</span></span><span className="flex items-center gap-3"><span className="text-sm font-semibold text-emerald-800">{lead.lead_status.replaceAll("_", " ")}</span>{estimateId ? <Link href={`/sales/estimates/${estimateId}`} className="rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">Open builder</Link> : <><Link href={`/sales/leads/${lead.id}`} className="text-sm font-semibold text-slate-700 hover:underline">Open lead</Link><StartEstimateButton leadId={String(lead.id)} leadName={leadName} /></>}</span></article>;
     })}</section>
   </main>;
 }

@@ -178,7 +178,24 @@ test("builder component keeps permissions, pending lock, confirmations and API-o
   assert.match(source, /"materialUnitCost" in item/);
   assert.match(source, /"itemMarkupCents" in item/);
   assert.match(source, /buildItemMutationBody/);
+  assert.match(source, /Edit estimate setup/);
+  assert.match(source, /overheadPercent/);
+  assert.match(source, /profitMarkupPercent/);
+  assert.match(source, /taxRatePercent/);
+  assert.match(source, /discountAmount/);
+  assert.match(source, /method: "PATCH"/);
   assert.doesNotMatch(source, /supabase|calculateEstimate|Math\.round|parseFloat/);
+});
+
+test("estimate queue can create a draft and route directly to its builder", () => {
+  const page = readFileSync("src/app/sales/estimates/page.tsx", "utf8");
+  const button = readFileSync("src/components/estimates/start-estimate-button.tsx", "utf8");
+  assert.match(page, /StartEstimateButton/);
+  assert.match(button, /fetch\("\/api\/estimates"/);
+  assert.match(button, /method: "POST"/);
+  assert.match(button, /leadId/);
+  assert.match(button, /router\.push\(`\/sales\/estimates\/\$\{encodeURIComponent\(estimateId\)\}`\)/);
+  assert.doesNotMatch(button, /supabase|service.role|calculateEstimate/i);
 });
 
 test("strict envelope validation rejects malformed permissions, estimates, revisions and collections", () => {

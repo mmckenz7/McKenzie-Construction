@@ -224,9 +224,10 @@ test("committed mutation completion handles null and unexpected reload failures 
   }
 });
 
-test("all six mutation operation contracts preserve their committed resource identifier", async () => {
+test("all seven mutation operation contracts preserve their committed resource identifier", async () => {
   const permissions = { canEditPrices: true, canViewCosts: false, canViewProfit: false };
   const operations = [
+    ["estimate setup update", "estimateId", estimateId],
     ["section create", "sectionId", firstSectionId],
     ["section update", "sectionId", secondSectionId],
     ["section delete", "deletedSectionId", firstSectionId],
@@ -270,7 +271,10 @@ test("all seven routes use the same authoritative builder-state envelope", () =>
   ];
   const sources = routePaths.map((path) => readFileSync(path, "utf8"));
   assert.equal((sources[0].match(/loadBuilderState\(/g) ?? []).length, 1);
+  assert.equal((sources[0].match(/completeCommittedMutationState\(/g) ?? []).length, 1);
   assert.equal((sources.slice(1).join("\n").match(/completeCommittedMutationState\(/g) ?? []).length, 6);
+  assert.match(sources[0], /nextCalculationRevision: completion\.state\.calculationRevision/);
+  assert.match(sources[0], /\.\.\.completion\.state/);
   assert.equal((sources.slice(1).join("\n").match(/nextCalculationRevision: builderState\.calculationRevision/g) ?? []).length, 6);
   assert.equal((sources.slice(1).join("\n").match(/\.\.\.builderState/g) ?? []).length, 6);
   assert.doesNotMatch(sources.slice(1).join("\n"), /projectMutationState|nextCalculationRevision: outcome/);

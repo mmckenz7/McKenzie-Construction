@@ -84,17 +84,21 @@ test("patch is draft-only, revision guarded, and recalculated server-side", () =
   assert.match(detail, /loaded\.estimate\.status !== "draft"/);
   assert.match(detail, /expectedCalculationRevision is required/);
   assert.match(detail, /stale_calculation_revision/);
-  assert.match(detail, /calculatePersistedEstimate\(calculationRecord, loaded\.items\)/);
+  assert.match(detail, /loadMutationState\(supabase, estimateId\)/);
+  assert.match(detail, /calculateMutation\(calculationRecord, loaded\.items\)/);
   assert.match(detail, /calculation_revision: expectedRevision \+ 1/);
   assert.match(detail, /\.eq\("calculation_revision", expectedRevision\)/);
-  assert.match(detail, /B2b must make every such[\s\S]*?mutation increment calculation_revision transactionally/);
-  assert.match(detail, /Header PATCH[\s\S]*?future structured-item writers must share this concurrency token/);
+  assert.match(detail, /completeCommittedMutationState\(/);
+  assert.match(detail, /nextCalculationRevision: completion\.state\.calculationRevision/);
+  assert.match(detail, /\.\.\.completion\.state/);
 });
 
 test("cost and profit capabilities are independently server projected", () => {
   assert.match(access, /canViewCosts: hasEstimatePermission\(effectiveAccess, "view_costs"\)/);
   assert.match(access, /canViewProfit: hasEstimatePermission\(effectiveAccess, "view_profit"\)/);
-  for (const route of [collection, detail]) assert.match(route, /projectPersistedEstimate/);
+  assert.match(collection, /projectPersistedEstimate/);
+  assert.match(detail, /loadBuilderState/);
+  assert.match(detail, /completeCommittedMutationState/);
 });
 
 test("GET routes are read-only and collection item failures are structured", () => {

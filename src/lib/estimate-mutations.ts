@@ -504,6 +504,7 @@ export async function loadPostMutationBuilderState(
 }
 
 export type CommittedMutationIdentifierField =
+  | "estimateId"
   | "sectionId"
   | "deletedSectionId"
   | "itemId"

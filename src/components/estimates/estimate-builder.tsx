@@ -5,8 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import {
   buildItemMutationBody,
   canMutateEstimate,
+  DECIMAL_PATTERNS,
   formatCents,
   loadEstimateBuilder,
+  requiredDecimalInput,
   retryRequiredBuilderReload,
   runEstimateBuilderMutation,
     type BuilderMutation,
@@ -17,6 +19,14 @@ import {
 } from "@/lib/estimate-builder-client";
 
 type SectionDraft = { id: string | null; name: string; customerDescription: string; internalNotes: string; sortOrder: string };
+type EstimateSetupDraft = {
+  title: string;
+  validUntil: string;
+  overheadPercent: string;
+  profitMarkupPercent: string;
+  taxRatePercent: string;
+  discountAmount: string;
+};
 type ItemDraft = EstimateItemDraft & {
   id: string | null; itemType: "standard" | "allowance"; sectionId: string;
   customerDescription: string; internalDescription: string; quantity: string; unit: string;
@@ -50,6 +60,21 @@ function itemDraft(item: EstimateBuilderItem | undefined, sectionId: string, ite
   };
 }
 
+function setupValue(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function estimateSetupDraft(state: EstimateBuilderEnvelope): EstimateSetupDraft {
+  return {
+    title: setupValue(state.estimate.title),
+    validUntil: setupValue(state.estimate.validUntil),
+    overheadPercent: setupValue(state.estimate.overheadPercent),
+    profitMarkupPercent: setupValue(state.estimate.profitMarkupPercent),
+    taxRatePercent: setupValue(state.estimate.taxRatePercent),
+    discountAmount: setupValue(state.estimate.discountAmount),
+  };
+}
+
 function nonnegativeInteger(value: string, label: string) {
   if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) throw new TypeError(`${label} must be a nonnegative whole number.`);
   return Number(value);
@@ -72,6 +97,7 @@ export function EstimateBuilder({ estimateId }: { estimateId: string }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [reloadRequirement, setReloadRequirement] = useState<BuilderReloadRequirement | null>(null);
+  const [setupForm, setSetupForm] = useState<EstimateSetupDraft | null>(null);
   const [sectionForm, setSectionForm] = useState<SectionDraft | null>(null);
   const [itemForm, setItemForm] = useState<ItemDraft | null>(null);
 
@@ -138,6 +164,27 @@ export function EstimateBuilder({ estimateId }: { estimateId: string }) {
     } catch (formError) { setError(formError instanceof Error ? formError.message : "Item is invalid."); }
   }
 
+  async function submitSetup(event: FormEvent) {
+    event.preventDefault(); if (!setupForm || !canMutate) return;
+    try {
+      const title = setupForm.title.trim();
+      if (!title) throw new TypeError("Estimate title is required.");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(setupForm.validUntil)) {
+        throw new TypeError("Valid until must be a calendar date.");
+      }
+      const body = {
+        title,
+        validUntil: setupForm.validUntil,
+        overheadPercent: requiredDecimalInput(setupForm.overheadPercent, DECIMAL_PATTERNS.percent, "Overhead percent"),
+        profitMarkupPercent: requiredDecimalInput(setupForm.profitMarkupPercent, DECIMAL_PATTERNS.percent, "Profit markup percent"),
+        taxRatePercent: requiredDecimalInput(setupForm.taxRatePercent, DECIMAL_PATTERNS.percent, "Tax rate percent"),
+        discountAmount: requiredDecimalInput(setupForm.discountAmount, DECIMAL_PATTERNS.money, "Discount amount"),
+      };
+      const success = await mutate({ path: `/api/estimates/${estimateId}`, method: "PATCH", body });
+      if (success) setSetupForm(null);
+    } catch (formError) { setError(formError instanceof Error ? formError.message : "Estimate setup is invalid."); }
+  }
+
   async function remove(kind: "section" | "item", id: string) {
     if (!canMutate) return;
     if (!window.confirm(`Delete this ${kind}? This cannot be undone.`)) return;
@@ -156,7 +203,9 @@ export function EstimateBuilder({ estimateId }: { estimateId: string }) {
 
     {reloadRequirement ? <div role="alert" className="border border-amber-300 bg-amber-50 p-5 text-amber-950"><p className="font-bold">Editing is disabled until the latest estimate is loaded.</p><p className="mt-1 text-sm">The displayed state may be out of date. Revision {reloadRequirement.minimumAcceptableRevision} or newer is required. Retrying reload performs a read only and will not repeat your previous change.</p><button disabled={pending} className={`mt-3 ${primary}`} onClick={() => void retryReload()}>{pending ? "Reloading…" : "Retry reload"}</button></div> : null}
 
-    {canMutate ? <div className="flex flex-wrap gap-3"><button disabled={controlsDisabled} className={primary} onClick={() => setSectionForm(sectionDraft(undefined, state.sections.length ? Math.max(...state.sections.map((section) => section.sortOrder)) + 10 : 0))}>Add section</button>{pending ? <span className="self-center text-sm font-semibold text-slate-600">Saving…</span> : null}</div> : !reloadRequirement ? <p className="border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{state.estimate.status !== "draft" ? `This estimate is ${humanizeStatus(state.estimate.status)} and can no longer be edited.` : "You can review this estimate, but you do not have permission to change pricing or structure."}</p> : null}
+    {canMutate ? <div className="flex flex-wrap gap-3"><button disabled={controlsDisabled} className={primary} onClick={() => setSectionForm(sectionDraft(undefined, state.sections.length ? Math.max(...state.sections.map((section) => section.sortOrder)) + 10 : 0))}>Add section</button>{state.capabilities.canViewProfit ? <button disabled={controlsDisabled} className={secondary} onClick={() => setSetupForm(estimateSetupDraft(state))}>Edit estimate setup</button> : null}{pending ? <span className="self-center text-sm font-semibold text-slate-600">Saving…</span> : null}</div> : !reloadRequirement ? <p className="border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{state.estimate.status !== "draft" ? `This estimate is ${humanizeStatus(state.estimate.status)} and can no longer be edited.` : "You can review this estimate, but you do not have permission to change pricing or structure."}</p> : null}
+
+    {setupForm ? <form onSubmit={submitSetup} className="rounded-xl border border-violet-300 bg-violet-50/40 p-5"><h2 className="font-bold">Estimate setup</h2><p className="mt-1 text-sm text-slate-600">These percentages apply only to this job and recalculate the estimate when saved.</p><div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3"><Field label="Estimate title"><input autoFocus className={input} value={setupForm.title} onChange={(event) => setSetupForm({ ...setupForm, title: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Valid until"><input type="date" className={input} value={setupForm.validUntil} onChange={(event) => setSetupForm({ ...setupForm, validUntil: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Overhead percent"><input inputMode="decimal" className={input} value={setupForm.overheadPercent} onChange={(event) => setSetupForm({ ...setupForm, overheadPercent: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Profit markup percent"><input inputMode="decimal" className={input} value={setupForm.profitMarkupPercent} onChange={(event) => setSetupForm({ ...setupForm, profitMarkupPercent: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Tax rate percent"><input inputMode="decimal" className={input} value={setupForm.taxRatePercent} onChange={(event) => setSetupForm({ ...setupForm, taxRatePercent: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Discount amount"><input inputMode="decimal" className={input} value={setupForm.discountAmount} onChange={(event) => setSetupForm({ ...setupForm, discountAmount: event.target.value })} disabled={controlsDisabled} /></Field></div><div className="mt-4 flex gap-3"><button className={primary} disabled={controlsDisabled}>{pending ? "Saving…" : "Save setup"}</button><button type="button" className={secondary} disabled={pending} onClick={() => setSetupForm(null)}>Cancel</button></div></form> : null}
 
     {sectionForm ? <form onSubmit={submitSection} className="rounded-xl border border-emerald-300 bg-emerald-50/40 p-5"><h2 className="font-bold">{sectionForm.id ? "Edit section" : "New section"}</h2><div className="mt-4 grid gap-4 md:grid-cols-2"><Field label="Section name"><input autoFocus className={input} value={sectionForm.name} onChange={(event) => setSectionForm({ ...sectionForm, name: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Position"><input inputMode="numeric" className={input} value={sectionForm.sortOrder} onChange={(event) => setSectionForm({ ...sectionForm, sortOrder: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Customer description"><textarea className={input} value={sectionForm.customerDescription} onChange={(event) => setSectionForm({ ...sectionForm, customerDescription: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Internal notes"><textarea className={input} value={sectionForm.internalNotes} onChange={(event) => setSectionForm({ ...sectionForm, internalNotes: event.target.value })} disabled={controlsDisabled} /></Field></div><div className="mt-4 flex gap-3"><button className={primary} disabled={controlsDisabled}>Save section</button><button type="button" className={secondary} disabled={pending} onClick={() => setSectionForm(null)}>Cancel</button></div></form> : null}
 

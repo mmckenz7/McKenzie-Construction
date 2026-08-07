@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimate-access";
-import { loadBuilderState, MutationStateChangedError } from "@/lib/estimate-mutations";
+import {
+  calculateMutation,
+  completeCommittedMutationState,
+  loadBuilderState,
+  loadMutationState,
+  MutationStateChangedError,
+} from "@/lib/estimate-mutations";
 import {
   buildEstimateCalculationPersistence,
-  calculatePersistedEstimate,
   optionalIsoCalendarDate,
   postgresNumericToDecimalString,
-  projectPersistedEstimate,
-  STRUCTURED_ESTIMATE_ITEM_SELECT,
-  STRUCTURED_ESTIMATE_SELECT,
 } from "@/lib/estimate-persistence";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
@@ -24,19 +26,6 @@ type RouteContext = { params: Promise<{ estimateId: string }> };
 
 function text(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-async function loadStructuredEstimate(
-  supabase: ReturnType<typeof createAdminServerClient>,
-  estimateId: string,
-) {
-  const [estimate, items, sections] = await Promise.all([
-    supabase.from("estimates").select(STRUCTURED_ESTIMATE_SELECT).eq("id", estimateId).maybeSingle(),
-    supabase.from("estimate_line_items").select(STRUCTURED_ESTIMATE_ITEM_SELECT).eq("estimate_id", estimateId).order("sort_order").order("id"),
-    supabase.from("estimate_sections").select("id, name, customer_description, sort_order").eq("estimate_id", estimateId).order("sort_order").order("id"),
-  ]);
-  if (estimate.error || items.error || sections.error) throw new Error("Estimate could not be loaded.");
-  return { estimate: estimate.data, items: items.data ?? [], sections: sections.data ?? [] };
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
@@ -77,8 +66,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const supabase = createAdminServerClient();
-    const loaded = await loadStructuredEstimate(supabase, estimateId);
-    if (!loaded.estimate || loaded.estimate.calculation_policy_version !== "structured-estimate-v1") {
+    const loaded = await loadMutationState(supabase, estimateId);
+    if (!loaded || loaded.estimate.calculation_policy_version !== "structured-estimate-v1") {
       return NextResponse.json(ESTIMATE_NOT_FOUND_BODY, { status: 404 });
     }
     if (loaded.estimate.status !== "draft") {
@@ -89,10 +78,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: "The estimate was updated by another request.", code: "stale_calculation_revision" }, { status: 409 });
     }
 
-    // B2a has no section or item mutation routes. B2b must make every such
-    // mutation increment calculation_revision transactionally. Header PATCH
-    // and all future structured-item writers must share this concurrency token;
-    // strengthen this boundary before any other writer can mutate those items.
     const calculationRecord = {
       ...loaded.estimate,
       overhead_percent_text: body.overheadPercent === undefined
@@ -108,7 +93,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         ? loaded.estimate.discount_value_text
         : postgresNumericToDecimalString(body.discountAmount, "discountAmount"),
     };
-    const calculation = calculatePersistedEstimate(calculationRecord, loaded.items);
+    const { calculation } = calculateMutation(calculationRecord, loaded.items);
     const updates: Record<string, unknown> = {
       ...(body.title !== undefined ? { title: text(body.title) } : {}),
       ...(body.description !== undefined ? { description: text(body.description) } : {}),
@@ -130,11 +115,29 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const updated = await supabase.from("estimates").update(updates)
       .eq("id", estimateId).eq("status", "draft")
       .eq("calculation_revision", expectedRevision)
-      .select(STRUCTURED_ESTIMATE_SELECT).maybeSingle();
+      .select("id").maybeSingle();
     if (updated.error) throw new Error(updated.error.message);
     if (!updated.data) return NextResponse.json({ success: false, error: "The estimate was updated by another request.", code: "stale_calculation_revision" }, { status: 409 });
-    return NextResponse.json({ success: true, estimate: projectPersistedEstimate(updated.data, calculation, auth.authorization!), sections: loaded.sections });
+    const committedRevision = expectedRevision + 1;
+    const completion = await completeCommittedMutationState(
+      supabase,
+      estimateId,
+      auth.authorization!,
+      committedRevision,
+      "estimateId",
+      estimateId,
+    );
+    if (!completion.ok) return NextResponse.json(completion.body, { status: completion.status });
+    return NextResponse.json({
+      success: true,
+      estimateId,
+      nextCalculationRevision: completion.state.calculationRevision,
+      ...completion.state,
+    });
   } catch (error) {
+    if (error instanceof MutationStateChangedError) {
+      return NextResponse.json({ success: false, error: "The estimate changed before the setup update could be saved.", code: "stale_calculation_revision" }, { status: 409 });
+    }
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Estimate update failed." }, { status: error instanceof TypeError || error instanceof RangeError ? 400 : 500 });
   }
 }
