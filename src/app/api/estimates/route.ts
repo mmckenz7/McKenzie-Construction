@@ -5,6 +5,7 @@ import { calculateEstimate, ESTIMATE_CALCULATION_POLICY_VERSION } from "@/lib/es
 import {
   buildEstimateCalculationPersistence,
   calculatePersistedEstimate,
+  defaultEstimateValidUntil,
   isStructuredLeadDraftUniqueViolation,
   optionalIsoCalendarDate,
   projectPersistedEstimate,
@@ -129,7 +130,9 @@ export async function POST(request: NextRequest) {
     const payload = {
       lead_id: leadId, customer_id: customerId, project_id: projectId, title,
       description: optionalText(body.description), property_address: optionalText(body.propertyAddress),
-      valid_until: optionalIsoCalendarDate(body.validUntil), status: "draft",
+      valid_until: body.validUntil === undefined || body.validUntil === null || body.validUntil === ""
+        ? defaultEstimateValidUntil()
+        : optionalIsoCalendarDate(body.validUntil), status: "draft",
       overhead_percent: overheadPercent, profit_markup_percent: profitMarkupPercent,
       tax_rate_percent: taxRatePercent, discount_type: "fixed_amount", discount_value: discountAmount,
       scope_notes: optionalText(body.scopeNotes), exclusions: optionalText(body.exclusions),

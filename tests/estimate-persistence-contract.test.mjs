@@ -16,6 +16,7 @@ const { calculateEstimate } = await import("../src/lib/estimate-calculations.ts"
 const {
   buildEstimateCalculationPersistence,
   centsToPostgresNumeric,
+  defaultEstimateValidUntil,
   isStructuredLeadDraftUniqueViolation,
   legacySentinelToNullable,
   milliPercentToPostgresNumeric,
@@ -44,6 +45,17 @@ test("calendar dates are validated without locale-dependent parsing", () => {
   assert.throws(() => optionalIsoCalendarDate("2026-13-01"), /real calendar date/);
   assert.throws(() => optionalIsoCalendarDate("2026-2-01"), /YYYY-MM-DD/);
   assert.throws(() => optionalIsoCalendarDate("0000-01-01"), /real calendar date/);
+});
+
+test("new estimates default to 30 company-calendar days", () => {
+  assert.equal(
+    defaultEstimateValidUntil(new Date("2026-08-07T01:30:00.000Z")),
+    "2026-09-05",
+  );
+  assert.equal(
+    defaultEstimateValidUntil(new Date("2026-12-20T17:00:00.000Z")),
+    "2027-01-19",
+  );
 });
 
 test("draft race recovery recognizes only the intended unique index", () => {

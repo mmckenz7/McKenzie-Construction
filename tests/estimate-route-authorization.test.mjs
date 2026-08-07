@@ -109,7 +109,8 @@ test("GET routes are read-only and collection item failures are structured", () 
 });
 
 test("POST and PATCH use strict calendar-date validation", () => {
-  assert.match(collection, /valid_until: optionalIsoCalendarDate\(body\.validUntil\)/);
+  assert.match(collection, /defaultEstimateValidUntil\(\)/);
+  assert.match(collection, /optionalIsoCalendarDate\(body\.validUntil\)/);
   assert.match(detail, /valid_until: optionalIsoCalendarDate\(body\.validUntil\)/);
   assert.doesNotMatch(collection, /new Date|Date\.parse/);
   assert.doesNotMatch(detail, /new Date|Date\.parse/);

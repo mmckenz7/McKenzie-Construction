@@ -70,6 +70,36 @@ export function optionalIsoCalendarDate(
   return value;
 }
 
+export function defaultEstimateValidUntil(
+  now: Date = new Date(),
+  validityDays = 30,
+): string {
+  if (Number.isNaN(now.getTime())) {
+    throw new TypeError("now must be a valid date.");
+  }
+
+  if (!Number.isSafeInteger(validityDays) || validityDays < 0) {
+    throw new TypeError("validityDays must be a nonnegative whole number.");
+  }
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((candidate) => candidate.type === type)?.value;
+  const year = +(part("year") ?? "");
+  const month = +(part("month") ?? "");
+  const day = +(part("day") ?? "");
+  const validUntil = new Date(
+    Date.UTC(year, month - 1, day + validityDays),
+  );
+
+  return validUntil.toISOString().slice(0, 10);
+}
+
 export function isStructuredLeadDraftUniqueViolation(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const record = error as Record<string, unknown>;
