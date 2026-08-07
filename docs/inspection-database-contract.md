@@ -128,4 +128,11 @@ Use both layers, with the database as the authority:
 3. Task completion should not be blocked automatically unless the business rule explicitly applies dependencies to completion; the current dependency names describe “before start.”
 4. Inspection schedule/result mutations should refresh dependency state transactionally in the database, but only after current function and trigger bodies are captured and reviewed.
 
-No task-blocking change or foreign key is included in this repair.
+The unapplied migration
+`20260807000000_inspection_task_dependency_fk.sql` adds a composite foreign key
+from `(task_id, project_id)` to `tasks(id, project_id)`. It first rejects any
+existing orphaned or cross-project references and uses restrictive update and
+delete behavior so dependencies must be removed explicitly. This migration has
+not been applied to Staging or Production.
+
+No task-transition blocking change is included in this repair.
