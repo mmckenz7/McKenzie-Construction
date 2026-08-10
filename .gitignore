@@ -1,5 +1,6 @@
 node_modules
 .next
+.next-sandbox
 *.tsbuildinfo
 out
 .env
@@ -8,3 +9,6 @@ out
 npm-debug.log*
 .DS_Store
 supabase/.temp/
+.local-sandbox/
+.vercel
+.env*

@@ -11,7 +11,7 @@ export default async function MissionControlPage() {
   const endToday = new Date(now);
   endToday.setHours(23, 59, 59, 999);
 
-  const [tasksResult, projectsResult, leadsResult, changesResult, activityResult] =
+  const [tasksResult, projectsResult, leadsResult, changesResult, activityResult, inboxResult] =
     await Promise.all([
       supabase
         .from("tasks")
@@ -40,6 +40,14 @@ export default async function MissionControlPage() {
         .from("lead_activities")
         .select("id,lead_id,summary,occurred_at")
         .order("occurred_at", { ascending: false })
+        .limit(8),
+      supabase
+        .from("communication_threads")
+        .select("id,subject,department,lead_id,unread_count,last_message_at")
+        .neq("status", "archived")
+        .or("lead_id.not.is.null,customer_id.not.is.null")
+        .order("unread_count", { ascending: false })
+        .order("last_message_at", { ascending: false })
         .limit(8),
     ]);
 
@@ -82,6 +90,7 @@ export default async function MissionControlPage() {
     leadsResult,
     changesResult,
     activityResult,
+    inboxResult,
   ].filter((result) => result.error).length;
 
   return (
@@ -95,6 +104,7 @@ export default async function MissionControlPage() {
       estimates={estimates}
       changes={changesResult.data ?? []}
       activities={activityResult.data ?? []}
+      inboxThreads={inboxResult.data ?? []}
       errorCount={errors}
     />
   );

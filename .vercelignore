@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.next-sandbox/
+.local-sandbox/
+.vercel/
+.git/
+.env
+.env.*
+*.log
+*.tsbuildinfo

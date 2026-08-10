@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import LeadAssignmentControl from "@/components/lead-assignment-control";
+import { CommunicationReplyComposer } from "@/components/communication-reply-composer";
 import LeadNotesForm from "@/components/lead-notes-form";
 import LeadStageWorkflow from "@/components/lead-stage-workflow";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -268,6 +269,7 @@ export default async function LeadDetailPage({
     taskResult,
     activityResult,
     settingsResult,
+    communicationThreadResult,
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -319,6 +321,15 @@ export default async function LeadDetailPage({
     supabase
       .from("company_settings")
       .select("consultation_start_time, consultation_end_time")
+      .limit(1)
+      .maybeSingle(),
+
+    supabase
+      .from("communication_threads")
+      .select("id,subject")
+      .eq("lead_id", leadId)
+      .neq("status", "archived")
+      .order("last_message_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
   ]);
@@ -516,6 +527,20 @@ export default async function LeadDetailPage({
                   settingsResult.data?.consultation_end_time ?? "17:00"
                 }
               />
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-widest text-amber-700">Customer Communication</p>
+              <h2 className="mt-1 text-xl font-bold text-slate-950">Email {displayValue(lead.name)}</h2>
+              <p className="mt-2 text-sm text-slate-600">Send a reply from the lead record. It will also appear in the matched Mission Control conversation.</p>
+              <div className="mt-5">
+                <CommunicationReplyComposer
+                  recipient={lead.email}
+                  threadId={communicationThreadResult.data?.id ?? null}
+                  leadId={String(lead.id)}
+                  initialSubject={communicationThreadResult.data?.subject ?? `Regarding your ${lead.project_type?.trim() || "project"}`}
+                />
+              </div>
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

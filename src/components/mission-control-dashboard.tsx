@@ -1,7 +1,5 @@
 import Link from "next/link";
 
-import { WorkspaceSwitcher } from "@/components/workspace-switcher";
-
 type Task = {
   id: string;
   title: string;
@@ -47,6 +45,15 @@ type Activity = {
   occurred_at: string;
 };
 
+type InboxThread = {
+  id: string;
+  subject: string | null;
+  department: string;
+  lead_id: string | null;
+  unread_count: number;
+  last_message_at: string;
+};
+
 type DashboardProps = {
   urgentFollowUps: Task[];
   overdueTasks: Task[];
@@ -57,6 +64,7 @@ type DashboardProps = {
   estimates: Lead[];
   changes: ChangeOrder[];
   activities: Activity[];
+  inboxThreads: InboxThread[];
   errorCount: number;
 };
 
@@ -73,13 +81,19 @@ export function MissionControlDashboard({
   estimates,
   changes,
   activities,
+  inboxThreads,
   errorCount,
 }: DashboardProps) {
+  const unreadMessages = inboxThreads.reduce(
+    (total, thread) => total + thread.unread_count,
+    0,
+  );
+
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#f4f4f2] text-slate-950">
       <header className="border-b border-slate-800 bg-[#171b1e] text-white">
         <div className="mx-auto max-w-[1440px] px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-white/10 bg-white/[.06] text-amber-400">
                 <Icon name="mark" />
@@ -93,9 +107,6 @@ export function MissionControlDashboard({
                 </h1>
               </div>
             </div>
-            <div className="max-w-full shrink-0">
-              <WorkspaceSwitcher />
-            </div>
           </div>
 
           <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
@@ -106,6 +117,7 @@ export function MissionControlDashboard({
               <QuickLink href="/operations/projects" icon="project">Projects</QuickLink>
               <QuickLink href="/sales/estimates" icon="estimate">Estimates</QuickLink>
               <QuickLink href="/operations/tasks" icon="task">Active work</QuickLink>
+              <QuickLink href="/sales/communications" icon="mail">Inbox</QuickLink>
             </nav>
           </div>
         </div>
@@ -121,7 +133,8 @@ export function MissionControlDashboard({
           </div>
         ) : null}
 
-        <section aria-label="Operational summary" className="grid grid-cols-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04)] lg:grid-cols-4">
+        <section aria-label="Operational summary" className="grid grid-cols-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04)] lg:grid-cols-5">
+          <Metric label="Unread replies" value={unreadMessages} tone="warning" />
           <Metric label="Urgent follow-ups" value={urgentFollowUps.length} tone="urgent" />
           <Metric label="Overdue work" value={overdueTasks.length} tone="urgent" />
           <Metric label="Due today" value={dueTodayTasks.length} />
@@ -144,6 +157,12 @@ export function MissionControlDashboard({
           </div>
 
           <aside className="grid min-w-0 content-start gap-5">
+            <Panel title="Customer inbox" eyebrow="Microsoft 365" href="/sales/communications" count={unreadMessages} icon="mail">
+              {inboxThreads.length ? inboxThreads.slice(0, 6).map((thread) => (
+                <OperationalRow key={thread.id} href={`/sales/communications/${thread.id}`} title={thread.subject ?? "(No subject)"} detail={`${humanize(thread.department)} · ${formatDateTime(thread.last_message_at)}`} badge={thread.unread_count ? `${thread.unread_count} new` : "Read"} tone={thread.unread_count ? "warning" : "neutral"} />
+              )) : <EmptyState icon="mail" title="Inbox is clear" detail="Microsoft 365 customer replies will appear here after synchronization." />}
+            </Panel>
+
             <Panel title="Project blockers" eyebrow="Requires assignment" href="/operations/projects" count={projectBlockers.length} icon="blocker">
               {projectBlockers.length ? projectBlockers.slice(0, 7).map((project) => (
                 <OperationalRow key={project.id} href={`/operations/projects/${project.id}`} title={project.project_name} detail="Project manager required" badge={humanize(project.status)} tone="warning" />
@@ -219,7 +238,7 @@ function formatDate(value: string) { return new Intl.DateTimeFormat("en-US", { m
 function formatDateTime(value: string) { return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value)); }
 function formatDue(value: string) { const date = new Date(value); return `${date < new Date() ? "Overdue" : "Due"} ${formatDateTime(value)}`; }
 
-type IconName = "activity" | "alert" | "arrow" | "blocker" | "calendar" | "check" | "clock" | "customer" | "estimate" | "mark" | "project" | "task";
+type IconName = "activity" | "alert" | "arrow" | "blocker" | "calendar" | "check" | "clock" | "customer" | "estimate" | "mail" | "mark" | "project" | "task";
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, React.ReactNode> = {
     activity: <><path d="M3 12h3l2-5 3 10 2-5h4" /><path d="M19 12h2" /></>,
@@ -231,6 +250,7 @@ function Icon({ name }: { name: IconName }) {
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     customer: <><circle cx="9" cy="8" r="3" /><path d="M3 20c0-4 2-6 6-6s6 2 6 6M16 7h5M18.5 4.5v5" /></>,
     estimate: <><path d="M6 2h9l4 4v16H6z" /><path d="M14 2v5h5M9 12h6M9 16h6" /></>,
+    mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></>,
     mark: <><path d="M4 19V8l8-5 8 5v11" /><path d="M8 21v-8h8v8M2 21h20" /></>,
     project: <><path d="M3 21h18M5 21V8l7-4 7 4v13" /><path d="M9 21v-6h6v6" /></>,
     task: <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="m8 9 1.5 1.5L12 8M14 9h3M8 15h9" /></>,

@@ -8,6 +8,7 @@ import {
   type CompanyAssignmentSettings,
   type TaskAssignmentStrategy,
 } from "@/lib/crm/assignment";
+import { enqueueApprovedEmail } from "@/lib/communications/outbox";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -722,11 +723,29 @@ export async function PATCH(
         );
       }
 
+      let deliveryQueue:
+        | Awaited<ReturnType<typeof enqueueApprovedEmail>>
+        | { queued: false; reason: "queue_error" };
+      try {
+        deliveryQueue = await enqueueApprovedEmail(supabase, {
+          id: draftId,
+          leadId,
+          toEmail: String(approvedDraft.to_email),
+          ccEmail: typeof approvedDraft.cc_email === "string" ? approvedDraft.cc_email : null,
+          subject: String(approvedDraft.subject),
+          body: String(approvedDraft.body),
+        });
+      } catch (queueError) {
+        console.error("Unable to queue approved email for provider delivery:", queueError);
+        deliveryQueue = { queued: false, reason: "queue_error" };
+      }
+
       return Response.json({
         success: true,
         action,
         draft:
           approvedDraft,
+        deliveryQueue,
       });
     }
 
