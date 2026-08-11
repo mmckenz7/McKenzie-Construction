@@ -42,6 +42,15 @@ if (!owner) {
   owner = data.user;
 }
 
+const { data: companyRows, error: companyRowsError } = await supabase
+  .from("company_settings")
+  .select("id")
+  .limit(2);
+if (companyRowsError || !companyRows || companyRows.length !== 1) {
+  throw new Error("company_settings: local sandbox requires exactly one company row.");
+}
+const companyId = companyRows[0].id;
+
 const teamMemberId = "10000000-0000-4000-8000-000000000001";
 await upsert("team_members", [{
   id: teamMemberId,
@@ -61,6 +70,7 @@ await upsert("team_members", [{
 await upsert("app_users", [{
   id: "11000000-0000-4000-8000-000000000001",
   auth_user_id: owner.id,
+  company_id: companyId,
   team_member_id: teamMemberId,
   display_name: "Michael McKenzie",
   email: ownerEmail,
@@ -172,9 +182,7 @@ const tasks = Array.from({ length: 18 }, (_, index) => {
 });
 await upsert("tasks", tasks, { onConflict: "id" });
 
-const { data: settings, error: settingsError } = await supabase.from("company_settings").select("id").limit(1).maybeSingle();
-if (settingsError) throw new Error(`company_settings: ${settingsError.message}`);
-if (settings) {
+{
   const { error } = await supabase.from("company_settings").update({
     company_name: "McKenzie Construction — Local Sandbox",
     company_email: ownerEmail,
@@ -182,7 +190,7 @@ if (settings) {
     default_lead_owner_id: teamMemberId,
     default_estimator_id: teamMemberId,
     default_project_manager_id: teamMemberId,
-  }).eq("id", settings.id);
+  }).eq("id", companyId);
   if (error) throw new Error(`company_settings: ${error.message}`);
 }
 
