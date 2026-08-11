@@ -25,12 +25,32 @@ export const MATERIAL_CATALOG_FORBIDDEN_BODY = {
   error: "Internal workspace access is required.",
 };
 
+export type MaterialCatalogReadCapability =
+  | "search_products"
+  | "view_supplier_comparisons";
+
 export type MaterialCatalogAuthorization = Readonly<{
   authUserId: string;
   appUserId: string;
   companyId: string;
   capabilities: CatalogCapabilities;
 }>;
+
+export type MaterialCatalogAuthorizationDecision =
+  | Readonly<{
+      state: "authorized";
+      authorization: MaterialCatalogAuthorization;
+    }>
+  | Readonly<{
+      state:
+        | "unauthorized"
+        | "access_unavailable"
+        | "feature_unavailable"
+        | "feature_disabled"
+        | "forbidden"
+        | "tenant_scope_unavailable";
+      authorization: null;
+    }>;
 
 function noStore(response: NextResponse) {
   response.headers.set("Cache-Control", "no-store");
@@ -42,14 +62,14 @@ function isUuid(value: unknown): value is string {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-export async function authorizeMaterialCatalogRequest(
-  request: NextRequest | Request,
-) {
+export async function getMaterialCatalogAuthorizationDecision(
+  requiredCapability: MaterialCatalogReadCapability = "search_products",
+): Promise<MaterialCatalogAuthorizationDecision> {
   const authenticated = await getAuthenticatedAccess();
   if (!authenticated) {
     return {
       authorization: null,
-      response: noStore(createUnauthorizedApiResponse(request)),
+      state: "unauthorized",
     };
   }
 
@@ -60,21 +80,21 @@ export async function authorizeMaterialCatalogRequest(
   if (error) {
     return {
       authorization: null,
-      response: noStore(NextResponse.json(
-        { success: false, error: "User access could not be verified." },
-        { status: 500 },
-      )),
+      state: "access_unavailable",
     };
   }
 
   const effectiveAccess = data as EffectiveWorkspaceAccess | null;
-  if (!effectiveAccess || !isUuid(effectiveAccess.company_id)) {
+  if (
+    !effectiveAccess ||
+    !isUuid(effectiveAccess.user_id) ||
+    !isUuid(effectiveAccess.company_id) ||
+    !isUuid(effectiveAccess.auth_user_id) ||
+    effectiveAccess.auth_user_id !== authenticated.user.id
+  ) {
     return {
       authorization: null,
-      response: noStore(NextResponse.json(
-        { success: false, error: "Company access could not be verified." },
-        { status: 500 },
-      )),
+      state: "access_unavailable",
     };
   }
 
@@ -87,10 +107,7 @@ export async function authorizeMaterialCatalogRequest(
   } catch {
     return {
       authorization: null,
-      response: noStore(NextResponse.json(
-        { success: false, error: "Feature access could not be verified." },
-        { status: 500 },
-      )),
+      state: "feature_unavailable",
     };
   }
 
@@ -103,28 +120,109 @@ export async function authorizeMaterialCatalogRequest(
   if (!capabilities.featureEnabled) {
     return {
       authorization: null,
-      response: noStore(
-        NextResponse.json(MATERIAL_CATALOG_DISABLED_BODY, { status: 403 }),
-      ),
+      state: "feature_disabled",
     };
   }
 
   if (!capabilities.canSearchProducts) {
     return {
       authorization: null,
-      response: noStore(
-        NextResponse.json(MATERIAL_CATALOG_FORBIDDEN_BODY, { status: 403 }),
-      ),
+      state: "forbidden",
+    };
+  }
+
+  if (
+    requiredCapability === "view_supplier_comparisons" &&
+    !capabilities.canViewSupplierComparisons
+  ) {
+    return {
+      authorization: null,
+      state: "forbidden",
+    };
+  }
+
+  const companyResult = await supabase
+    .from("company_settings")
+    .select("id")
+    .limit(2);
+  const companyRows = companyResult.data ?? [];
+
+  if (
+    companyResult.error ||
+    companyRows.length !== 1 ||
+    !isUuid(companyRows[0]?.id) ||
+    companyRows[0].id !== effectiveAccess.company_id
+  ) {
+    return {
+      authorization: null,
+      state: "tenant_scope_unavailable",
     };
   }
 
   return {
+    state: "authorized",
     authorization: Object.freeze({
       authUserId: authenticated.user.id,
-      appUserId: String(effectiveAccess.user_id),
+      appUserId: effectiveAccess.user_id,
       companyId: effectiveAccess.company_id,
       capabilities,
     }),
-    response: null,
   };
+}
+
+export async function authorizeMaterialCatalogRequest(
+  request: NextRequest | Request,
+) {
+  const decision = await getMaterialCatalogAuthorizationDecision();
+
+  switch (decision.state) {
+    case "authorized":
+      return {
+        authorization: decision.authorization,
+        response: null,
+      };
+    case "unauthorized":
+      return {
+        authorization: null,
+        response: noStore(createUnauthorizedApiResponse(request)),
+      };
+    case "access_unavailable":
+      return {
+        authorization: null,
+        response: noStore(NextResponse.json(
+          { success: false, error: "User access could not be verified." },
+          { status: 500 },
+        )),
+      };
+    case "feature_unavailable":
+      return {
+        authorization: null,
+        response: noStore(NextResponse.json(
+          { success: false, error: "Feature access could not be verified." },
+          { status: 500 },
+        )),
+      };
+    case "feature_disabled":
+      return {
+        authorization: null,
+        response: noStore(
+          NextResponse.json(MATERIAL_CATALOG_DISABLED_BODY, { status: 403 }),
+        ),
+      };
+    case "forbidden":
+      return {
+        authorization: null,
+        response: noStore(
+          NextResponse.json(MATERIAL_CATALOG_FORBIDDEN_BODY, { status: 403 }),
+        ),
+      };
+    case "tenant_scope_unavailable":
+      return {
+        authorization: null,
+        response: noStore(NextResponse.json(
+          { success: false, error: "Catalog company scope could not be verified." },
+          { status: 503 },
+        )),
+      };
+  }
 }

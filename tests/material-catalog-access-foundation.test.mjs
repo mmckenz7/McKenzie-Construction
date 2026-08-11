@@ -38,7 +38,7 @@ test("access foundation consumes the Core company scope without owning it", () =
   assert.doesNotMatch(migration, /insert into public\.company_settings/i);
 });
 
-test("effective access and reporting compatibility are audited as Core-owned", () => {
+test("Core-owned effective access is combined with a runtime singleton scope check", () => {
   assert.match(migration, /access_definition not like[\s\S]*?quote_literal\('company_id'\)[\s\S]*?user_record\.company_id/);
   assert.match(migration, /prosecdef[\s\S]*?pg_get_userbyid\(proowner\) = 'postgres'[\s\S]*?search_path=pg_catalog, public/);
   assert.match(migration, /has_function_privilege\([\s\S]*?'service_role'[\s\S]*?'public\.get_effective_user_access\(uuid\)'/);
@@ -54,7 +54,19 @@ test("effective access and reporting compatibility are audited as Core-owned", (
   assert.match(catalogAccess, /get_effective_user_access/);
   assert.match(catalogAccess, /isUuid\(effectiveAccess\.company_id\)/);
   assert.match(catalogAccess, /companyId: effectiveAccess\.company_id/);
-  assert.doesNotMatch(catalogAccess, /loadSingletonCompanyId|from\("company_settings"\)/);
+  assert.match(
+    catalogAccess,
+    /from\("company_settings"\)[\s\S]*?select\("id"\)[\s\S]*?limit\(2\)/,
+  );
+  assert.match(catalogAccess, /companyRows\.length !== 1/);
+  assert.match(
+    catalogAccess,
+    /companyRows\[0\]\.id !== effectiveAccess\.company_id/,
+  );
+  assert.doesNotMatch(
+    catalogAccess,
+    /getFeatureScopeFromRequest|x-feature-scope|get\("companyId"\)|get\("company_id"\)/,
+  );
 });
 
 test("three catalog controls default off and children require their parent", () => {
