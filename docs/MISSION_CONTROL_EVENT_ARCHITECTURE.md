@@ -1,7 +1,7 @@
 # Mission Control Intelligence: Event Architecture
 
-**Status:** architecture approved; additive proposal and communication foundations implemented locally, with dashboard changes still deferred  
-**Repository baseline:** `beta/estimating-core` at `33369b5`  
+**Status:** architecture approved; additive proposal and communication foundations implemented locally, with dashboard changes still deferred
+**Repository baseline:** `beta/estimating-core` at `33369b5`
 **Design date:** 2026-08-10
 
 ## Executive recommendation

@@ -1,9 +1,9 @@
 # AI Estimator Architecture Proposal
 
-Status: architecture proposal only  
-Repository: `mmckenz7/McKenzie-Construction`  
-Branch audited: `beta/estimating-core`  
-Audit date: 2026-08-10  
+Status: architecture proposal only
+Repository: `mmckenz7/McKenzie-Construction`
+Branch audited: `beta/estimating-core`
+Audit date: 2026-08-10
 Implementation status: no schema migration or production-code change proposed here has been applied
 
 ## Executive recommendation

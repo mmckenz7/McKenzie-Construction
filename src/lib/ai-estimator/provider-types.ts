@@ -131,4 +131,3 @@ export interface AiEstimatorExtractionProvider {
     signal: AbortSignal,
   ): Promise<AiEstimatorUntrustedExtractionResponse>;
 }
-

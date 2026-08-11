@@ -20,4 +20,3 @@ Rules:
 - Never make structural, code-compliance, or engineering determinations.
 - Never issue an estimate, order material, create a project, or authorize work.
 `.trim();
-
