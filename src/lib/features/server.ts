@@ -102,6 +102,9 @@ function normalizeFeatureMap(
     estimates:
       record.estimates !== false,
 
+    ai_estimator:
+      record.ai_estimator === true,
+
     change_orders:
       record.change_orders !== false,
 
