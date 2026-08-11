@@ -1,8 +1,11 @@
 # AI Estimator Schema and Threat Model
 
 Status: pre-migration design contract
+
 Parent proposal: `docs/AI_ESTIMATOR_ARCHITECTURE.md`
+
 Branch: `beta/estimating-core`
+
 Date: 2026-08-10
 
 ## Scope
