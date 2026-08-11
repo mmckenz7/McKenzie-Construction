@@ -63,9 +63,26 @@ work.
 
 - Obtain an attorney-reviewed construction contract template; do not generate
   legal terms from estimate notes.
-- Select and configure an electronic-signature provider.
+- Configure DocuSign as the selected electronic-signature provider. The local
+  adapter uses a company-approved DocuSign server template, JWT OAuth with a
+  dedicated integration user, account-base-URI discovery, and an internal
+  contract-preparation ID stored as a hidden envelope custom field.
 - Validate provider webhook signatures and make signed-event handling
   idempotent before enabling preconstruction release.
 - Apply the two additive migrations to the intended environment only after
   explicit approval, then run issue, view, accept, contract preparation,
   decline, expiry, and revocation paths end to end.
+
+## DocuSign activation boundary
+
+The DocuSign adapter remains inert unless `DOCUSIGN_ENABLED=true` and all
+required server-only configuration is present. Creating a contract preparation
+does not call DocuSign. A later, separately authorized send route must verify
+that legal terms are approved, the recipient is complete, and no envelope is
+already attached before it may create an envelope.
+
+DocuSign Connect notifications must be verified with the configured HMAC secret
+before any lifecycle update. Envelope events must be deduplicated and matched
+to both the stored envelope ID and hidden contract-preparation ID. A completed
+envelope may mark the contract signed, but project creation and preconstruction
+release remain a separate internal approval step.

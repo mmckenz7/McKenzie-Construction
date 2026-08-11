@@ -8,6 +8,7 @@ export default async function SettingsPage() {
   const items = [
     ["Company Branding", "Set the logo and colors used by the shared platform shell.", "/admin/settings/branding"],
     ["Estimate Presentation", "Set the default detail level and how OH&P appears to customers.", "/admin/settings/estimates"],
+    ["Legal Documents", "Upload and manage company contracts, warranties, terms, and legal document versions.", "/admin/settings/legal-documents"],
     ["Email & Phone", "Connect delivery providers and control approved communication automation.", "/admin/settings/communications"],
     ["Workflow & Task Settings", "Task types, assignment defaults, due-date rules, and business hours.", "/admin/settings/tasks"],
     ["Feature Settings", "Company and workspace feature availability.", "/admin/settings/features"],
