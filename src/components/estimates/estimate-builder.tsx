@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 
+import { ContractPreparationCard } from "@/components/estimates/contract-preparation";
+import { EstimateProposalCard } from "@/components/estimates/estimate-proposal-card";
+
 import {
   addPreviewCents,
   buildItemMutationBody,
@@ -362,6 +365,8 @@ export function EstimateBuilder({ estimateId }: { estimateId: string }) {
       </details>
       <div className="mt-4 flex justify-end"><Link href={`/sales/estimates/${estimateId}/preview`} className={secondary}>Open printable customer preview</Link></div>
     </section> : null}
+    <EstimateProposalCard estimateId={estimateId} estimateStatus={String(state.estimate.status)} />
+    <ContractPreparationCard estimateId={estimateId} estimateStatus={String(state.estimate.status)} />
   </div>;
 }
 

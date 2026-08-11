@@ -233,3 +233,60 @@ export function minimizeScheduleRequestPayload(
     },
   };
 }
+
+export function minimizeEstimateProposalPayload(value: unknown) {
+  const source = record(value);
+  const snapshot = record(source.snapshot);
+  const document = record(snapshot.document);
+  const presentation = record(document.presentation);
+  const company = record(snapshot.company);
+  const rows = Array.isArray(presentation.rows)
+    ? presentation.rows.map((value) => {
+        const row = record(value);
+        return {
+          id: row.id,
+          kind: row.kind,
+          description: row.description,
+          quantity: row.quantity,
+          unit: row.unit,
+          totalCents: row.totalCents,
+        };
+      })
+    : [];
+
+  return {
+    status: source.status,
+    expiresAt: source.expires_at,
+    openedAt: source.opened_at,
+    respondedAt: source.responded_at,
+    response: source.response,
+    responseName: source.response_name,
+    responseNotes: source.response_notes,
+    acknowledgedNonbinding: source.acknowledged_nonbinding,
+    customerName: snapshot.customerName,
+    document: {
+      title: document.title,
+      description: document.description,
+      propertyAddress: document.propertyAddress,
+      validUntil: document.validUntil,
+      scopeNotes: document.scopeNotes,
+      exclusions: document.exclusions,
+      customerNotes: document.customerNotes,
+      presentation: {
+        detailLevel: presentation.detailLevel,
+        totalCents: presentation.totalCents,
+        rows,
+      },
+    },
+    company: {
+      publicName: company.publicName,
+      legalName: company.legalName,
+      logoUrl: company.logoUrl,
+      primaryColor: company.primaryColor,
+      accentColor: company.accentColor,
+      phone: company.phone,
+      email: company.email,
+      websiteUrl: company.websiteUrl,
+    },
+  };
+}

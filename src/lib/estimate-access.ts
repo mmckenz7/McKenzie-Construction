@@ -32,6 +32,7 @@ export type EstimateAuthorization = {
   canEditPrices: boolean;
   canViewCosts: boolean;
   canViewProfit: boolean;
+  canSendProposals: boolean;
 };
 
 export function hasEstimatePermission(
@@ -124,6 +125,7 @@ export async function authorizeEstimateRequest(
       canEditPrices: hasEstimatePermission(effectiveAccess, "edit_prices"),
       canViewCosts: hasEstimatePermission(effectiveAccess, "view_costs"),
       canViewProfit: hasEstimatePermission(effectiveAccess, "view_profit"),
+      canSendProposals: hasEstimatePermission(effectiveAccess, "send_proposals"),
     },
     estimate,
     response: null,

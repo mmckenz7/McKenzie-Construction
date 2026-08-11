@@ -46,11 +46,18 @@ presentation rows. Raw costs, supplier detail, item markup, OH&P percentages,
 gross profit, margin, and internal notes are not part of this type.
 
 The authenticated printable preview at
-`/sales/estimates/[estimateId]/preview` uses that projection. It is an internal
-review and print/save-PDF workflow; it is not yet a public proposal link and it
-does not send email. A future public proposal workflow must snapshot the final
-document, issue a revocable public token, and preserve the same no-cost-leak
-boundary.
+`/sales/estimates/[estimateId]/preview` uses that projection for internal
+review and print/save-PDF. The public proposal workflow freezes the same
+projection in `estimate_proposals`, issues a revocable UUID token, and exposes
+only an explicitly minimized payload at `/estimate/[token]`. An issued link can
+prepare one reviewable lead email draft with the public URL. Repeated requests
+reuse the same draft, and creating either the link or draft does not send email
+automatically.
+
+Customer acceptance is explicitly a nonbinding intent to proceed. The public
+response changes the estimate lifecycle to `accepted` but never creates a
+project or authorizes work. A separate contract-preparation and electronic
+signature lifecycle remains required before preconstruction release.
 
 The preview API repeats the Sales-workspace authorization check and returns a
 `no-store` response. The printable route is not a security boundary by itself;

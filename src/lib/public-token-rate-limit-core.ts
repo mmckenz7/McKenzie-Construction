@@ -1,6 +1,7 @@
 export type PublicTokenRouteCategory =
   | "change_order"
   | "change_order_vendor"
+  | "estimate_proposal"
   | "material_review"
   | "schedule_request";
 
