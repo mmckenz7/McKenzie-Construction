@@ -1,6 +1,9 @@
 export type FeatureKey =
   | "estimates"
   | "ai_estimator"
+  | "material_catalog"
+  | "material_catalog_price_publication"
+  | "material_catalog_estimate_pricing"
   | "change_orders"
   | "change_order_line_items"
   | "change_order_customer_approval"
@@ -25,6 +28,9 @@ export type FeatureMap =
 export const DEFAULT_FEATURE_MAP: FeatureMap = {
   estimates: true,
   ai_estimator: false,
+  material_catalog: false,
+  material_catalog_price_publication: false,
+  material_catalog_estimate_pricing: false,
   change_orders: true,
   change_order_line_items: true,
   change_order_customer_approval: true,

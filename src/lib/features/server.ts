@@ -98,12 +98,26 @@ function normalizeFeatureMap(
       unknown
     >;
 
+  const materialCatalog =
+    record.material_catalog === true;
+
   return {
     estimates:
       record.estimates !== false,
 
     ai_estimator:
       record.ai_estimator === true,
+
+    material_catalog:
+      materialCatalog,
+
+    material_catalog_price_publication:
+      materialCatalog &&
+      record.material_catalog_price_publication === true,
+
+    material_catalog_estimate_pricing:
+      materialCatalog &&
+      record.material_catalog_estimate_pricing === true,
 
     change_orders:
       record.change_orders !== false,

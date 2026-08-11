@@ -10,6 +10,7 @@ export type WorkspaceName =
 export type EffectiveWorkspaceAccess = {
   user_id: string;
   auth_user_id: string;
+  company_id: string;
   display_name: string | null;
   email: string | null;
   phone: string | null;
