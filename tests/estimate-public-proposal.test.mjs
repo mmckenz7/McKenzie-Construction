@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const migration = readFileSync("supabase/migrations/20260810060000_estimate_public_proposals.sql", "utf8");
+const expiryReviewMigration = readFileSync("supabase/migrations/20260810070000_estimate_expiry_pricing_review.sql", "utf8");
+const leadActivityMigration = readFileSync("supabase/migrations/20260810071000_lead_activity_state_for_pricing_review.sql", "utf8");
 const internalRoute = readFileSync("src/app/api/estimates/[estimateId]/proposal/route.ts", "utf8");
 const publicRoute = readFileSync("src/app/api/estimate-proposals/[token]/route.ts", "utf8");
 const publicPage = readFileSync("src/app/estimate/[token]/page.tsx", "utf8");
@@ -71,4 +73,27 @@ test("customer estimate responses create safe lead activity without authorizing 
   assert.match(migration, /'estimate_accepted'/);
   assert.match(migration, /'estimate_declined'/);
   assert.match(migration, /'work_authorized', false/);
+});
+
+test("expiration creates an active pricing-review checkpoint instead of ending the lead", () => {
+  assert.match(leadActivityMigration, /add column if not exists is_active boolean not null default true/);
+  assert.match(leadActivityMigration, /Estimate expiration does not deactivate a lead/);
+  assert.match(expiryReviewMigration, /set status = 'reviewing'/);
+  assert.match(expiryReviewMigration, /'estimate_pricing_review'/);
+  assert.match(expiryReviewMigration, /lead_record\.is_active is true/);
+  assert.match(expiryReviewMigration, /lead_record\.lead_status is distinct from 'lost'/);
+  assert.doesNotMatch(expiryReviewMigration, /set\s+lead_status\s*=\s*'lost'/i);
+  assert.doesNotMatch(expiryReviewMigration, /set\s+is_active\s*=\s*false/i);
+  assert.match(expiryReviewMigration, /proposal_record\.status not in \('issued', 'viewed', 'expired'\)/);
+  assert.match(expiryReviewMigration, /status in \('sent', 'viewed', 'reviewing', 'expired'\)/);
+  assert.match(proposalCard, /Review pricing and edit/);
+  assert.match(proposalCard, /the lead remains active/i);
+});
+
+test("reissuing an estimate completes its pricing-review task", () => {
+  assert.match(expiryReviewMigration, /complete_estimate_pricing_review_on_reissue/);
+  assert.match(expiryReviewMigration, /new\.status = 'issued'/);
+  assert.match(expiryReviewMigration, /old\.status in \('expired', 'revoked'\)/);
+  assert.match(expiryReviewMigration, /status = 'completed'/);
+  assert.match(expiryReviewMigration, /revoke all on function public\.complete_estimate_pricing_review_on_reissue\(\)/);
 });

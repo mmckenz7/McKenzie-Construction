@@ -300,6 +300,9 @@ test("estimate queue can create a draft and route directly to its builder", () =
   assert.match(button, /leadId/);
   assert.match(button, /router\.push\(`\/sales\/estimates\/\$\{encodeURIComponent\(estimateId\)\}`\)/);
   assert.doesNotMatch(button, /supabase|service.role|calculateEstimate/i);
+  assert.match(page, /\["draft", "reviewing", "sent", "viewed"\]/);
+  assert.match(page, /pricing review/);
+  assert.match(page, /Review pricing/);
 });
 
 test("strict envelope validation rejects malformed permissions, estimates, revisions and collections", () => {
