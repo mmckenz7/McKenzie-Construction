@@ -25,12 +25,12 @@ test("project records use one detail workspace with the cost ledger", () => {
   assert.doesNotMatch(projectCollection, /href=\{`\/admin\/projects\//);
 });
 
-test("won estimate identity and accepted price flow into customer and project", () => {
+test("won estimate identity follows the customer but remains nonbinding before contract", () => {
   assert.match(conversionApi, /\.from\("estimates"\)[\s\S]*customer_id: newCustomer\.id/);
-  assert.match(projectApi, /\.in\("status", \["accepted", "converted"\]\)/);
-  assert.match(projectApi, /project_id: newProject\.id/);
-  assert.match(projectApi, /status: "converted"/);
-  assert.match(projectApi, /resolvedContractValue/);
+  assert.doesNotMatch(projectApi, /\.in\("status", \["accepted", "converted"\]\)/);
+  assert.doesNotMatch(projectApi, /status: "converted"/);
+  assert.doesNotMatch(projectApi, /resolvedContractValue/);
+  assert.match(projectApi, /contract_value:\s*contractValueResult\.value/);
 });
 
 test("project partner form retains its element across the awaited request", () => {

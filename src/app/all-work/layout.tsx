@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { InternalPlatformShell } from "@/components/internal-platform-shell";
 import { createAuthenticatedServerClient } from "@/lib/supabase/server";
 import {
   countInternalWorkspaces,
@@ -60,5 +61,12 @@ export default async function AllWorkLayout({
     redirect("/portal");
   }
 
-  return children;
+  return <InternalPlatformShell
+    workspaceName="Mission Control"
+    homeHref="/all-work"
+    portalAccess={workspaceResult.access?.portal_access ?? {}}
+    permissions={workspaceResult.access?.permissions ?? {}}
+    userName={workspaceResult.access?.display_name || user.email || "Team member"}
+    userEmail={user.email || ""}
+  >{children}</InternalPlatformShell>;
 }

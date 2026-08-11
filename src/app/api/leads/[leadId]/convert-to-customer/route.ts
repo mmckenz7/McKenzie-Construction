@@ -198,6 +198,24 @@ export async function POST(
     }
 
     if (existingCustomer) {
+      const { error: existingEstimateLinkError } = await supabase
+        .from("estimates")
+        .update({ customer_id: existingCustomer.id })
+        .eq("lead_id", leadId)
+        .is("customer_id", null);
+
+      if (existingEstimateLinkError) {
+        console.error(
+          "Unable to link existing lead estimates to the customer:",
+          existingEstimateLinkError,
+        );
+
+        return Response.json(
+          { error: "The customer exists, but its estimates could not be linked." },
+          { status: 500 },
+        );
+      }
+
       if (
         lead.lead_status !==
         "won"
@@ -353,6 +371,22 @@ export async function POST(
         {
           status: 500,
         },
+      );
+    }
+
+    const { error: estimateLinkError } = await supabase
+      .from("estimates")
+      .update({ customer_id: newCustomer.id })
+      .eq("lead_id", leadId)
+      .is("customer_id", null);
+
+    if (estimateLinkError) {
+      console.error("Unable to link lead estimates to the new customer:", estimateLinkError);
+      await supabase.from("customers").delete().eq("id", newCustomer.id);
+
+      return Response.json(
+        { error: "The customer could not be connected to the existing estimate." },
+        { status: 500 },
       );
     }
 

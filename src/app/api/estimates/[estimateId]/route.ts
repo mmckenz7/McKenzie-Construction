@@ -14,12 +14,15 @@ import {
   postgresNumericToDecimalString,
 } from "@/lib/estimate-persistence";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import { ESTIMATE_PRESENTATION_VERSION } from "@/lib/estimate-presentation";
+import { resolveEstimateMaterialTax } from "@/lib/estimate-material-tax";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PATCH_FIELDS = new Set([
   "title", "description", "propertyAddress", "validUntil", "overheadPercent",
   "profitMarkupPercent", "taxRatePercent", "discountAmount", "scopeNotes",
   "exclusions", "internalNotes", "customerNotes", "expectedCalculationRevision",
+  "presentationDetailLevel", "presentationOhpMode", "presentationLumpSumLabel",
 ]);
 
 type RouteContext = { params: Promise<{ estimateId: string }> };
@@ -78,6 +81,28 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: "The estimate was updated by another request.", code: "stale_calculation_revision" }, { status: 409 });
     }
 
+    const changingPresentation = body.presentationDetailLevel !== undefined
+      || body.presentationOhpMode !== undefined || body.presentationLumpSumLabel !== undefined;
+    if (changingPresentation && !("presentation_detail_level" in loaded.estimate)) {
+      return NextResponse.json({ success: false, code: "presentation_schema_unavailable", error: "Apply the estimate presentation migration before saving customer presentation settings." }, { status: 503 });
+    }
+    const presentationDetailLevel = body.presentationDetailLevel ?? loaded.estimate.presentation_detail_level;
+    if (changingPresentation && !["lump_sum", "section_summary", "itemized"].includes(String(presentationDetailLevel))) {
+      return NextResponse.json({ success: false, error: "Choose a supported customer detail level." }, { status: 400 });
+    }
+    const requestedOhpMode = body.presentationOhpMode ?? loaded.estimate.presentation_ohp_mode;
+    if (changingPresentation && !["distributed", "separate_line_item"].includes(String(requestedOhpMode))) {
+      return NextResponse.json({ success: false, error: "Choose a supported OH&P presentation." }, { status: 400 });
+    }
+    const presentationLumpSumLabel = body.presentationLumpSumLabel ?? loaded.estimate.presentation_lump_sum_label;
+    if (changingPresentation && (typeof presentationLumpSumLabel !== "string" || !presentationLumpSumLabel.trim() || presentationLumpSumLabel.trim().length > 240)) {
+      return NextResponse.json({ success: false, error: "The lump-sum description must be 1 to 240 characters." }, { status: 400 });
+    }
+
+    const requestedPropertyAddress = body.propertyAddress === undefined
+      ? text(loaded.estimate.property_address)
+      : text(body.propertyAddress);
+    const municipalityTax = await resolveEstimateMaterialTax(supabase, requestedPropertyAddress);
     const calculationRecord = {
       ...loaded.estimate,
       overhead_percent_text: body.overheadPercent === undefined
@@ -86,9 +111,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       profit_markup_percent_text: body.profitMarkupPercent === undefined
         ? loaded.estimate.profit_markup_percent_text
         : postgresNumericToDecimalString(body.profitMarkupPercent, "profitMarkupPercent"),
-      tax_rate_percent_text: body.taxRatePercent === undefined
+      tax_rate_percent_text: municipalityTax?.ratePercent ?? (body.taxRatePercent === undefined
         ? loaded.estimate.tax_rate_percent_text
-        : postgresNumericToDecimalString(body.taxRatePercent, "taxRatePercent"),
+        : postgresNumericToDecimalString(body.taxRatePercent, "taxRatePercent")),
       discount_value_text: body.discountAmount === undefined
         ? loaded.estimate.discount_value_text
         : postgresNumericToDecimalString(body.discountAmount, "discountAmount"),
@@ -103,9 +128,21 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       ...(body.exclusions !== undefined ? { exclusions: text(body.exclusions) } : {}),
       ...(body.internalNotes !== undefined ? { internal_notes: text(body.internalNotes) } : {}),
       ...(body.customerNotes !== undefined ? { customer_notes: text(body.customerNotes) } : {}),
+      ...(changingPresentation ? {
+        presentation_version: ESTIMATE_PRESENTATION_VERSION,
+        presentation_detail_level: presentationDetailLevel,
+        presentation_ohp_mode: presentationDetailLevel === "lump_sum" ? "distributed" : requestedOhpMode,
+        presentation_lump_sum_label: (presentationLumpSumLabel as string).trim(),
+      } : {}),
       overhead_percent: calculationRecord.overhead_percent_text,
       profit_markup_percent: calculationRecord.profit_markup_percent_text,
       tax_rate_percent: calculationRecord.tax_rate_percent_text,
+      material_tax_municipality: municipalityTax?.municipality ?? null,
+      material_tax_county: municipalityTax?.county ?? null,
+      material_tax_state_code: municipalityTax?.stateCode ?? null,
+      material_tax_rate_id: municipalityTax?.rateId ?? null,
+      material_tax_source_url: municipalityTax?.sourceUrl ?? null,
+      material_tax_verified_at: municipalityTax?.verifiedAt ?? null,
       discount_value: calculationRecord.discount_value_text,
       ...buildEstimateCalculationPersistence(calculation),
       calculation_revision: expectedRevision + 1,

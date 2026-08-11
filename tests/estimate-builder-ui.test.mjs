@@ -3,23 +3,42 @@ import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import test from "node:test";
 
+const builderSource = readFileSync("src/components/estimates/estimate-builder.tsx", "utf8");
+
+test("estimate details expose the fields used by the printable customer estimate", () => {
+  for (const field of ["description", "propertyAddress", "scopeNotes", "exclusions", "customerNotes"]) {
+    assert.match(builderSource, new RegExp(`setupForm\\.${field}`));
+  }
+  assert.match(builderSource, /Scope of work/);
+  assert.match(builderSource, /Customer notes/);
+});
+
 registerHooks({ resolve(specifier, context, nextResolve) {
   if (specifier.startsWith("./") && !specifier.match(/\.[a-z]+$/i)) return nextResolve(`${specifier}.ts`, context);
   return nextResolve(specifier, context);
 } });
 
 const {
+  addPreviewCents,
   buildItemMutationBody,
   canMutateEstimate,
   formatCents,
+  formatDecimalDollars,
   loadEstimateBuilder,
+  moneyInputToCents,
   nullableDecimalInput,
   previewMarkupCents,
+  previewMarkupPercent,
+  previewCostLineCents,
+  previewEstimateRawCostCents,
+  centsToMoneyInput,
   DECIMAL_PATTERNS,
   runEstimateBuilderMutation,
   retryRequiredBuilderReload,
   satisfiesRevisionRequirement,
   isBuilderEnvelope,
+  estimateItemCostEntries,
+  estimateItemPrimaryCostEntry,
 } = await import("../src/lib/estimate-builder-client.ts");
 
 const estimateId = "11111111-1111-4111-8111-111111111111";
@@ -27,7 +46,7 @@ const state = {
   success: true,
   calculationRevision: 4,
   capabilities: { canEditPrices: true, canViewCosts: true, canViewProfit: true },
-  estimate: { id: estimateId, title: "Kitchen", status: "draft", calculationPolicyVersion: "structured-estimate-v1", calculationRevision: 4, calculation: {
+  estimate: { id: estimateId, title: "Kitchen", status: "draft", calculationPolicyVersion: "structured-estimate-v1", calculationRevision: 4, presentation: { schemaAvailable: true, version: "estimate-presentation-v1", detailLevel: "lump_sum", ohpPresentationMode: "distributed", lumpSumLabel: "Kitchen work described in this estimate" }, calculation: {
     policyVersion: "structured-estimate-v1", items: [], itemPriceSubtotalCents: "12345",
     preDiscountCustomerSubtotalCents: "12345", discountCents: "0", postDiscountSubtotalCents: "12345",
     taxableSubtotalCents: "0", taxCents: "0", customerTotalCents: "12345",
@@ -133,31 +152,35 @@ test("failed recovery preserves state and distinguishes committed from stale", a
 function draft(overrides = {}) {
   return {
     itemType: "standard", sectionId: state.sections[0].id, customerDescription: "Framing", internalDescription: "",
-    quantity: "0", unit: "ea", materialUnitCost: "", laborUnitCost: "0", subcontractorUnitCost: "1.2500",
-    equipmentUnitCost: "0", otherDirectUnitCost: "0", materialWastePercent: "0", itemMarkupPercent: "0",
-    fixedCustomerPrice: "", taxable: true, included: true, sortOrder: "0", showCosts: true, showMarkup: true,
+    quantity: "0", unit: "ea", costCategory: "subcontractor", unitCost: "1.2500",
+    fixedCustomerPrice: "", taxable: true, included: true, sortOrder: "0",
     ...overrides,
   };
 }
 
-test("standard payload preserves blank cost, explicit zero, zero quantity and zero markup", () => {
+test("standard payload completes every optional cost bucket", () => {
   const body = buildItemMutationBody(draft(), true);
-  assert.equal(body.materialUnitCost, null);
+  assert.equal(body.materialUnitCost, "0");
   assert.equal(body.laborUnitCost, "0");
+  assert.equal(body.subcontractorUnitCost, "1.2500");
+  assert.equal(body.equipmentUnitCost, "0");
+  assert.equal(body.otherDirectUnitCost, "0");
   assert.equal(body.quantity, "0");
   assert.equal(body.itemMarkupPercent, "0");
   assert.equal("customerPriceCents" in body, false);
 });
 
-test("hidden financial inputs are omitted from standard PATCH payloads", () => {
-  const body = buildItemMutationBody(draft({ showCosts: false, showMarkup: false }), false);
-  for (const field of ["materialUnitCost", "laborUnitCost", "materialWastePercent", "itemMarkupPercent", "fixedCustomerPrice"]) {
-    assert.equal(field in body, false);
-  }
+test("each category line maps its quantity and unit cost to one canonical bucket", () => {
+  const materialOnly = buildItemMutationBody(draft({ costCategory: "material", unitCost: "344" }), false);
+  assert.deepEqual([materialOnly.materialUnitCost, materialOnly.laborUnitCost, materialOnly.subcontractorUnitCost], ["344", "0", "0"]);
+  const labor = buildItemMutationBody(draft({ costCategory: "labor", quantity: "120", unit: "hr", unitCost: "65" }), false);
+  assert.deepEqual([labor.materialUnitCost, labor.laborUnitCost, labor.subcontractorUnitCost], ["0", "65", "0"]);
+  assert.equal(labor.quantity, "120");
+  assert.equal(labor.unit, "hr");
 });
 
 test("allowance payload is discriminated and preserves explicit zero customer price", () => {
-  const body = buildItemMutationBody(draft({ itemType: "allowance", fixedCustomerPrice: "0", showCosts: false, showMarkup: false }), true);
+  const body = buildItemMutationBody(draft({ itemType: "allowance", fixedCustomerPrice: "0" }), true);
   assert.equal(body.fixedCustomerPrice, "0");
   assert.equal(body.materialWastePercent, "0");
   for (const field of ["materialUnitCost", "laborUnitCost", "itemMarkupPercent"]) assert.equal(field in body, false);
@@ -169,6 +192,16 @@ test("decimal inputs remain strings and invalid precision fails before submissio
   assert.throws(() => buildItemMutationBody(draft({ quantity: "1.00000" }), true), /valid nonnegative decimal/);
   assert.equal(formatCents("0"), "$0.00");
   assert.equal(formatCents("12345"), "$123.45");
+  assert.equal(formatDecimalDollars("20000"), "$20,000.00");
+  assert.equal(formatDecimalDollars("1.2500"), "$1.25");
+});
+
+test("existing single and multiple category costs are summarized without requiring every value", () => {
+  const base = { itemType: "standard", materialUnitCost: null, laborUnitCost: null, subcontractorUnitCost: null, equipmentUnitCost: null, otherDirectUnitCost: null };
+  assert.deepEqual(estimateItemCostEntries({ ...base, materialUnitCost: "344" }), [{ category: "material", unitCost: "344" }]);
+  assert.deepEqual(estimateItemCostEntries({ ...base, materialUnitCost: "10", laborUnitCost: "20" }), [{ category: "material", unitCost: "10" }, { category: "labor", unitCost: "20" }]);
+  assert.deepEqual(estimateItemPrimaryCostEntry({ ...base, laborUnitCost: "75" }), { category: "labor", unitCost: "75" });
+  assert.deepEqual(estimateItemPrimaryCostEntry({ ...base, materialUnitCost: "10", laborUnitCost: "20" }), { category: "mixed", unitCost: "" });
 });
 
 test("markup preview uses exact cents and half-up rounding", () => {
@@ -179,25 +212,83 @@ test("markup preview uses exact cents and half-up rounding", () => {
   assert.equal(previewMarkupCents("10000", "15.0000"), null);
 });
 
+test("bottom-line pricing previews exact OH&P dollars and customer price", () => {
+  const ohp = previewMarkupCents("10000", "20");
+  assert.equal(ohp, "2000");
+  assert.equal(addPreviewCents("10000", ohp), "12000");
+  assert.equal(addPreviewCents("100", null), null);
+});
+
+test("exact OH&P dollars convert to a synchronized savable percentage", () => {
+  assert.equal(moneyInputToCents("1000"), "100000");
+  assert.equal(centsToMoneyInput("100000"), "1000.00");
+  assert.equal(previewMarkupPercent("89900", "1000"), "111.235");
+  assert.equal(previewMarkupCents("89900", "111.235"), "100000");
+  assert.equal(previewMarkupPercent("0", "1000"), null);
+});
+
+test("raw cost preview treats blank categories as zero and reacts before save", () => {
+  const materialOnly = { ...draft({ quantity: "2", costCategory: "material", unitCost: "344" }), id: null };
+  assert.equal(previewEstimateRawCostCents([], materialOnly), "68800");
+  const labor = { ...draft({ quantity: "2", unit: "hr", costCategory: "labor", unitCost: "75" }), id: null };
+  assert.equal(previewEstimateRawCostCents([], labor), "15000");
+});
+
+test("canonical raw cost preview treats missing cost buckets as zero", () => {
+  assert.equal(previewCostLineCents({
+    itemType: "standard", quantity: "2", included: true, materialUnitCost: "344",
+  }), "68800");
+});
+
+test("editing a line replaces its prior preview instead of double counting", () => {
+  const existing = {
+    id: "item-1", itemType: "standard", quantity: "1", included: true,
+    materialUnitCost: "100", laborUnitCost: null, subcontractorUnitCost: null,
+    equipmentUnitCost: null, otherDirectUnitCost: null, materialWastePercent: "0",
+  };
+  const edit = { ...draft({ quantity: "1", costCategory: "material", unitCost: "150" }), id: "item-1" };
+  assert.equal(previewEstimateRawCostCents([existing], edit), "15000");
+});
+
 test("builder component keeps permissions, pending lock, confirmations and API-only writes", () => {
   const source = readFileSync("src/components/estimates/estimate-builder.tsx", "utf8");
   assert.match(source, /pendingRef\.current/);
   assert.match(source, /window\.confirm/);
   assert.match(source, /canMutateEstimate/);
-  assert.match(source, /"materialUnitCost" in item/);
-  assert.match(source, /"itemMarkupCents" in item/);
+  assert.match(source, /InlineItemRow/);
+  assert.match(source, /OH&P markup/);
+  assert.match(source, /exact dollars/);
   assert.match(source, /buildItemMutationBody/);
-  assert.match(source, /Edit estimate setup/);
+  assert.match(source, /Edit estimate details/);
   assert.match(source, /overheadPercent/);
   assert.match(source, /profitMarkupPercent/);
   assert.match(source, /type="range"/);
-  assert.match(source, /Profit markup percent/);
+  assert.match(source, /PercentageSlider label="OH&P markup"/);
+  assert.match(source, /exact percent/);
+  assert.match(source, /Bottom-line pricing/);
+  assert.match(source, /Raw costs/);
+  assert.match(source, /Customer price/);
+  assert.match(source, /enter the exact OH&amp;P dollars you want/);
   assert.match(source, /previewMarkupCents/);
-  assert.match(source, /formatCents\(previewCents\)/);
+  assert.match(source, /previewEstimateRawCostCents/);
+  assert.match(source, /centsToMoneyInput\(ohpPreview\)/);
   assert.match(source, /taxRatePercent/);
   assert.match(source, /discountAmount/);
   assert.match(source, /method: "PATCH"/);
   assert.doesNotMatch(source, /supabase|calculateEstimate|Math\.round|parseFloat/);
+});
+
+test("line-item entry uses separate category lines with independent quantity and rate", () => {
+  const source = readFileSync("src/components/estimates/estimate-builder.tsx", "utf8");
+  assert.match(source, /Add line item/);
+  for (const field of ["Category", "Line item heading", "Description", "Quantity", "Unit", "Unit cost"]) assert.match(source, new RegExp(field));
+  assert.doesNotMatch(source, /Line-item markup percent/);
+  assert.match(source, /Edit any row directly/);
+  assert.match(source, /Save &amp; add another/);
+  assert.match(source, /estimate-sheet-header/);
+  assert.doesNotMatch(source, /onEdit=/);
+  assert.match(source, /Pricing saved\. The customer preview below has been updated/);
+  assert.match(source, /Preview customer estimate/);
 });
 
 test("estimate queue can create a draft and route directly to its builder", () => {
@@ -230,7 +321,8 @@ test("strict envelope validation rejects malformed permissions, estimates, revis
 
 test("builder envelope requires consistent structured calculation policies", () => {
   assert.equal(isBuilderEnvelope(state), true);
-  const { calculationPolicyVersion: _missing, ...estimateWithoutPolicy } = state.estimate;
+  const estimateWithoutPolicy = { ...state.estimate };
+  Reflect.deleteProperty(estimateWithoutPolicy, "calculationPolicyVersion");
   const invalid = [
     { ...state, estimate: estimateWithoutPolicy },
     { ...state, estimate: { ...state.estimate, calculationPolicyVersion: "legacy" } },

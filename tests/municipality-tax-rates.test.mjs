@@ -2,9 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  parseMunicipalityFromAddress,
   resolveMunicipalityMaterialTaxRate,
   snapshotMunicipalityMaterialTaxRate,
 } from "../src/lib/municipality-tax-rates.ts";
+
+test("extracts municipality and state from a complete job address", () => {
+  assert.deepEqual(
+    parseMunicipalityFromAddress("128 River Bend Way, Knoxville, TN 37922"),
+    { municipality: "Knoxville", stateCode: "TN" },
+  );
+  assert.equal(parseMunicipalityFromAddress("128 River Bend Way"), null);
+});
 
 function rate(overrides = {}) {
   return {

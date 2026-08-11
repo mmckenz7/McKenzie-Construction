@@ -1,5 +1,5 @@
 import {
-  calculateEstimate,
+  calculateEstimateWithMaterialTax,
   ESTIMATE_CALCULATION_POLICY_VERSION,
   projectEstimateCalculation,
 } from "./estimate-calculations";
@@ -9,6 +9,7 @@ import type {
   EstimateProjectionPermissions,
   InternalEstimateCalculation,
 } from "./estimate-types";
+import { DEFAULT_ESTIMATE_PRESENTATION, ESTIMATE_PRESENTATION_VERSION } from "./estimate-presentation";
 
 export const STRUCTURED_ESTIMATE_ITEM_SELECT = `
   id,
@@ -203,7 +204,14 @@ export function calculatePersistedEstimate(
     taxPercent: postgresNumericToDecimalString(estimate.tax_rate_percent_text, "tax_rate_percent"),
     discountAmount: postgresNumericToDecimalString(estimate.discount_value_text, "discount_value"),
   };
-  return calculateEstimate(input);
+  return calculateEstimateWithMaterialTax({
+    ...input,
+    taxPercent: "0",
+    materialTaxPercent: postgresNumericToDecimalString(
+      estimate.tax_rate_percent_text,
+      "material_tax_percent",
+    ),
+  });
 }
 
 function moneyOrZero(value: bigint | null) {
@@ -220,7 +228,11 @@ export function buildEstimateCalculationPersistence(
     subtotal_price: moneyOrZero(calculation.itemPriceSubtotalCents),
     contingency_amount: "0.00",
     discount_amount: moneyOrZero(calculation.discountCents),
-    tax_amount: moneyOrZero(calculation.taxCents),
+    tax_amount: moneyOrZero(
+      calculation.policyVersion === "structured-estimate-v2-material-tax"
+        ? calculation.materialTaxCents
+        : calculation.taxCents,
+    ),
     total_price: moneyOrZero(calculation.customerTotalCents),
     estimated_profit: moneyOrZero(calculation.grossProfitCents),
     estimated_margin: milliPercentToPostgresNumeric(calculation.grossMarginMilliPercent),
@@ -244,6 +256,13 @@ export function projectPersistedEstimate(
   permissions: EstimateProjectionPermissions,
 ) {
   const projection = projectEstimateCalculation(calculation, permissions);
+  const presentationSchemaAvailable = "presentation_detail_level" in estimate;
+  const detailLevel = estimate.presentation_detail_level === "section_summary" || estimate.presentation_detail_level === "itemized"
+    ? estimate.presentation_detail_level
+    : "lump_sum";
+  const ohpPresentationMode = detailLevel === "lump_sum"
+    ? "distributed"
+    : estimate.presentation_ohp_mode === "separate_line_item" ? "separate_line_item" : "distributed";
   return Object.freeze({
     id: String(estimate.id ?? ""),
     leadId: estimate.lead_id ?? null,
@@ -260,9 +279,25 @@ export function projectPersistedEstimate(
     internalNotes: estimate.internal_notes ?? null,
     customerNotes: estimate.customer_notes ?? null,
     taxRatePercent: estimate.tax_rate_percent_text,
+    materialTax: Object.freeze({
+      municipality: estimate.material_tax_municipality ?? null,
+      county: estimate.material_tax_county ?? null,
+      stateCode: estimate.material_tax_state_code ?? null,
+      sourceUrl: estimate.material_tax_source_url ?? null,
+      verifiedAt: estimate.material_tax_verified_at ?? null,
+    }),
     discountAmount: estimate.discount_value_text,
-    calculationPolicyVersion: estimate.calculation_policy_version,
+    calculationPolicyVersion: calculation.policyVersion,
     calculationRevision: estimate.calculation_revision,
+    presentation: Object.freeze({
+      schemaAvailable: presentationSchemaAvailable,
+      version: ESTIMATE_PRESENTATION_VERSION,
+      detailLevel,
+      ohpPresentationMode,
+      lumpSumLabel: typeof estimate.presentation_lump_sum_label === "string" && estimate.presentation_lump_sum_label.trim()
+        ? estimate.presentation_lump_sum_label.trim()
+        : DEFAULT_ESTIMATE_PRESENTATION.lumpSumLabel,
+    }),
     ...(permissions.canViewProfit
       ? {
           overheadPercent: estimate.overhead_percent_text,

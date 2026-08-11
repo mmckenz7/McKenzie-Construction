@@ -4,9 +4,8 @@ import {
 } from "next/server";
 
 import {
-  createUnauthorizedApiResponse,
-  getAuthenticatedApiUser,
-} from "@/lib/api-auth";
+  authorizeFinancialsRequest,
+} from "@/lib/financial-access";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 const allowedViews = new Set([
@@ -632,13 +631,13 @@ function calculateProjectCostTotals(
 export async function GET(
   request: NextRequest,
 ) {
-  const user =
-    await getAuthenticatedApiUser();
-
-  if (!user) {
-    return createUnauthorizedApiResponse(
+  const authorization =
+    await authorizeFinancialsRequest(
       request,
     );
+
+  if (authorization.response) {
+    return authorization.response;
   }
 
   const searchParams =

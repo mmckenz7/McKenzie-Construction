@@ -876,7 +876,7 @@ export default async function ProjectsPage({
                           >
                             <td className="px-5 py-4">
                               <Link
-                                href={`/admin/projects/${encodeURIComponent(
+                                href={`/operations/projects/${encodeURIComponent(
                                   project.id,
                                 )}`}
                                 className="block"
@@ -959,7 +959,7 @@ export default async function ProjectsPage({
 
                             <td className="px-5 py-4 text-right">
                               <Link
-                                href={`/admin/projects/${encodeURIComponent(
+                                href={`/operations/projects/${encodeURIComponent(
                                   project.id,
                                 )}`}
                                 aria-label={`Open ${project.project_name}`}
@@ -994,7 +994,7 @@ export default async function ProjectsPage({
                     return (
                       <Link
                         key={project.id}
-                        href={`/admin/projects/${encodeURIComponent(
+                        href={`/operations/projects/${encodeURIComponent(
                           project.id,
                         )}`}
                         className="block p-5 transition hover:bg-slate-50"

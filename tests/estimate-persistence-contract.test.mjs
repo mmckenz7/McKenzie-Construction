@@ -123,6 +123,8 @@ test("all four permission projections are immutable and JSON safe", () => {
 
 test("client-calculated fields are never persistence inputs", () => {
   assert.doesNotMatch(persistenceSource, /input\.(?:total|tax|profit|margin|subtotal|directCost)/);
-  assert.match(persistenceSource, /calculateEstimate\(input\)/);
+  assert.match(persistenceSource, /calculateEstimateWithMaterialTax\(\{/);
+  assert.match(persistenceSource, /taxPercent:\s*"0"/);
+  assert.match(persistenceSource, /materialTaxPercent:\s*postgresNumericToDecimalString/);
   assert.match(persistenceSource, /calculation_policy_version !== ESTIMATE_CALCULATION_POLICY_VERSION/);
 });

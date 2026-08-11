@@ -36,6 +36,43 @@ export type EstimateBuilderItem = {
   itemMarkupCents?: string | null;
 };
 
+export const ESTIMATE_COST_CATEGORIES = Object.freeze([
+  "material",
+  "labor",
+  "subcontractor",
+  "equipment",
+  "other",
+] as const);
+
+export type EstimateCostCategory = typeof ESTIMATE_COST_CATEGORIES[number];
+
+export const COST_FIELD_BY_CATEGORY: Record<EstimateCostCategory, keyof Pick<EstimateBuilderItem,
+  "materialUnitCost" | "laborUnitCost" | "subcontractorUnitCost" | "equipmentUnitCost" | "otherDirectUnitCost"
+>> = {
+  material: "materialUnitCost",
+  labor: "laborUnitCost",
+  subcontractor: "subcontractorUnitCost",
+  equipment: "equipmentUnitCost",
+  other: "otherDirectUnitCost",
+};
+
+export function estimateItemCostEntries(item?: EstimateBuilderItem) {
+  if (!item || item.itemType !== "standard") return [];
+  return ESTIMATE_COST_CATEGORIES.flatMap((category) => {
+    const unitCost = item[COST_FIELD_BY_CATEGORY[category]];
+    return typeof unitCost === "string" && !/^0(?:\.0+)?$/.test(unitCost)
+      ? [{ category, unitCost }]
+      : [];
+  });
+}
+
+export function estimateItemPrimaryCostEntry(item?: EstimateBuilderItem) {
+  const entries = estimateItemCostEntries(item);
+  if (entries.length === 0) return { category: "material" as const, unitCost: "0" };
+  if (entries.length === 1) return entries[0];
+  return { category: "mixed" as const, unitCost: "" };
+}
+
 export type EstimateBuilderState = {
   calculationRevision: number;
   capabilities: EstimateBuilderCapabilities;
@@ -43,9 +80,16 @@ export type EstimateBuilderState = {
     id: string;
     title: unknown;
     status: unknown;
-    calculationPolicyVersion: "structured-estimate-v1";
+    calculationPolicyVersion: "structured-estimate-v1" | "structured-estimate-v2-material-tax";
     calculationRevision: unknown;
     calculation: Record<string, unknown> & { customerTotalCents?: string | null };
+    presentation: {
+      schemaAvailable: boolean;
+      version: "estimate-presentation-v1";
+      detailLevel: "lump_sum" | "section_summary" | "itemized";
+      ohpPresentationMode: "distributed" | "separate_line_item";
+      lumpSumLabel: string;
+    };
     [key: string]: unknown;
   };
   sections: readonly EstimateBuilderSection[];
@@ -149,9 +193,16 @@ export function isBuilderEnvelope(value: unknown): value is EstimateBuilderEnvel
     || typeof capabilities.canViewProfit !== "boolean") return false;
   const estimate = record.estimate as Record<string, unknown>;
   if (typeof estimate.id !== "string" || !estimate.id || typeof estimate.status !== "string" || !estimate.status
-    || estimate.calculationPolicyVersion !== "structured-estimate-v1"
+    || !["structured-estimate-v1", "structured-estimate-v2-material-tax"].includes(String(estimate.calculationPolicyVersion))
     || estimate.calculationRevision !== record.calculationRevision
-    || !estimate.calculation || typeof estimate.calculation !== "object" || Array.isArray(estimate.calculation)) return false;
+    || !estimate.calculation || typeof estimate.calculation !== "object" || Array.isArray(estimate.calculation)
+    || !estimate.presentation || typeof estimate.presentation !== "object" || Array.isArray(estimate.presentation)) return false;
+  const presentation = estimate.presentation as Record<string, unknown>;
+  if (typeof presentation.schemaAvailable !== "boolean"
+    || presentation.version !== "estimate-presentation-v1"
+    || !["lump_sum", "section_summary", "itemized"].includes(String(presentation.detailLevel))
+    || !["distributed", "separate_line_item"].includes(String(presentation.ohpPresentationMode))
+    || typeof presentation.lumpSumLabel !== "string" || !presentation.lumpSumLabel.trim()) return false;
   if (record.nextCalculationRevision !== undefined && record.nextCalculationRevision !== record.calculationRevision) return false;
   const calculation = estimate.calculation as Record<string, unknown>;
   if (calculation.policyVersion !== estimate.calculationPolicyVersion || !Array.isArray(calculation.items)) return false;
@@ -231,19 +282,12 @@ export type EstimateItemDraft = {
   internalDescription: string;
   quantity: string;
   unit: string;
-  materialUnitCost: string;
-  laborUnitCost: string;
-  subcontractorUnitCost: string;
-  equipmentUnitCost: string;
-  otherDirectUnitCost: string;
-  materialWastePercent: string;
-  itemMarkupPercent: string;
+  costCategory: EstimateCostCategory | "mixed";
+  unitCost: string;
   fixedCustomerPrice: string;
   taxable: boolean;
   included: boolean;
   sortOrder: string;
-  showCosts: boolean;
-  showMarkup: boolean;
 };
 
 export function nonnegativeSortOrder(value: string) {
@@ -273,17 +317,11 @@ export function buildItemMutationBody(draft: EstimateItemDraft, creating: boolea
     if (creating) body.materialWastePercent = "0";
     return body;
   }
-  if (draft.showCosts || creating) {
-    body.materialUnitCost = nullableDecimalInput(draft.materialUnitCost, DECIMAL_PATTERNS.unitCost, "Material unit cost");
-    body.laborUnitCost = nullableDecimalInput(draft.laborUnitCost, DECIMAL_PATTERNS.unitCost, "Labor unit cost");
-    body.subcontractorUnitCost = nullableDecimalInput(draft.subcontractorUnitCost, DECIMAL_PATTERNS.unitCost, "Subcontractor unit cost");
-    body.equipmentUnitCost = nullableDecimalInput(draft.equipmentUnitCost, DECIMAL_PATTERNS.unitCost, "Equipment unit cost");
-    body.otherDirectUnitCost = nullableDecimalInput(draft.otherDirectUnitCost, DECIMAL_PATTERNS.unitCost, "Other direct unit cost");
-    body.materialWastePercent = requiredDecimalInput(draft.materialWastePercent, DECIMAL_PATTERNS.percent, "Material waste");
-  }
-  if (draft.showMarkup || creating) {
-    body.itemMarkupPercent = requiredDecimalInput(draft.itemMarkupPercent, DECIMAL_PATTERNS.percent, "Item markup");
-  }
+  if (draft.costCategory === "mixed") throw new TypeError("Split this older mixed-cost row into separate category lines before saving.");
+  const unitCost = requiredDecimalInput(draft.unitCost, DECIMAL_PATTERNS.unitCost, "Unit cost");
+  for (const category of ESTIMATE_COST_CATEGORIES) body[COST_FIELD_BY_CATEGORY[category]] = category === draft.costCategory ? unitCost : "0";
+  body.materialWastePercent = "0";
+  body.itemMarkupPercent = "0";
   return body;
 }
 
@@ -391,6 +429,14 @@ export function formatCents(value: string | null | undefined) {
   return `${negative ? "-" : ""}$${magnitude / 100n}.${(magnitude % 100n).toString().padStart(2, "0")}`;
 }
 
+export function formatDecimalDollars(value: string | null | undefined) {
+  if (value === null || value === undefined || !/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/.test(value)) return "—";
+  const [whole, suppliedFraction = ""] = value.split(".");
+  let fraction = suppliedFraction.padEnd(2, "0");
+  while (fraction.length > 2 && fraction.endsWith("0")) fraction = fraction.slice(0, -1);
+  return `$${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
+}
+
 export function previewMarkupCents(
   baseCents: string | null | undefined,
   percent: string,
@@ -419,4 +465,105 @@ export function previewMarkupCents(
     (numerator + denominator / 2n) /
     denominator
   ).toString();
+}
+
+export function moneyInputToCents(value: string) {
+  const normalized = value.trim();
+  if (!DECIMAL_PATTERNS.money.test(normalized)) return null;
+  const [whole, fraction = ""] = normalized.split(".");
+  return (BigInt(whole) * 100n + BigInt((fraction + "00").slice(0, 2))).toString();
+}
+
+export function centsToMoneyInput(value: string | null) {
+  if (value === null || !/^\d+$/.test(value)) return "";
+  const cents = BigInt(value);
+  return `${cents / 100n}.${String(cents % 100n).padStart(2, "0")}`;
+}
+
+export function previewMarkupPercent(baseCents: string | null, markupDollars: string) {
+  const markupCents = moneyInputToCents(markupDollars);
+  if (baseCents === null || !/^\d+$/.test(baseCents) || markupCents === null) return null;
+  const base = BigInt(baseCents);
+  const markup = BigInt(markupCents);
+  if (base === 0n) return markup === 0n ? "0" : null;
+  const numerator = markup * 100_000n;
+  const thousandths = (numerator + base / 2n) / base;
+  if (thousandths > 1_000_000n) return null;
+  const whole = thousandths / 1_000n;
+  const fraction = String(thousandths % 1_000n).padStart(3, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : String(whole);
+}
+
+export function addPreviewCents(...values: readonly (string | null)[]) {
+  if (values.some((value) => value === null || !/^\d+$/.test(value))) return null;
+  return values.reduce((sum, value) => sum + BigInt(value as string), 0n).toString();
+}
+
+type PreviewCostLine = Readonly<{
+  id?: string | null;
+  itemType: "standard" | "allowance";
+  quantity: string;
+  included: boolean;
+  materialUnitCost?: string | null;
+  laborUnitCost?: string | null;
+  subcontractorUnitCost?: string | null;
+  equipmentUnitCost?: string | null;
+  otherDirectUnitCost?: string | null;
+  materialWastePercent?: string | null;
+}>;
+
+function previewDecimalUnits(value: string | null | undefined, places: number) {
+  const normalized = value?.trim() || "0";
+  if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(normalized)) return null;
+  const [whole, fraction = ""] = normalized.split(".");
+  if (fraction.length > places) return null;
+  return BigInt(whole) * 10n ** BigInt(places)
+    + BigInt((fraction + "0".repeat(places)).slice(0, places));
+}
+
+function previewRoundRatio(numerator: bigint, denominator: bigint) {
+  const quotient = numerator / denominator;
+  return numerator % denominator * 2n >= denominator ? quotient + 1n : quotient;
+}
+
+export function previewCostLineCents(line: PreviewCostLine) {
+  if (!line.included) return "0";
+  const quantity = previewDecimalUnits(line.quantity, 4);
+  const waste = previewDecimalUnits(line.materialWastePercent, 3);
+  if (quantity === null || waste === null || waste > 100_000n) return null;
+  const adjustedMaterialQuantity = previewRoundRatio(quantity * (100_000n + waste), 100_000n);
+  let total = 0n;
+  for (const [field, componentQuantity] of [
+    ["materialUnitCost", adjustedMaterialQuantity],
+    ["laborUnitCost", quantity],
+    ["subcontractorUnitCost", quantity],
+    ["equipmentUnitCost", quantity],
+    ["otherDirectUnitCost", quantity],
+  ] as const) {
+    const unitCost = previewDecimalUnits(line[field], 4);
+    if (unitCost === null) return null;
+    total += previewRoundRatio(componentQuantity * unitCost, 1_000_000n);
+  }
+  return total.toString();
+}
+
+export function previewEstimateRawCostCents(
+  items: readonly EstimateBuilderItem[],
+  draft: (EstimateItemDraft & { id?: string | null }) | null = null,
+) {
+  if (draft?.costCategory === "mixed") return null;
+  const retained = draft?.id ? items.filter((item) => item.id !== draft.id) : items;
+  const draftLine: PreviewCostLine | null = draft ? {
+    ...draft,
+    materialUnitCost: draft.costCategory === "material" ? draft.unitCost : "0",
+    laborUnitCost: draft.costCategory === "labor" ? draft.unitCost : "0",
+    subcontractorUnitCost: draft.costCategory === "subcontractor" ? draft.unitCost : "0",
+    equipmentUnitCost: draft.costCategory === "equipment" ? draft.unitCost : "0",
+    otherDirectUnitCost: draft.costCategory === "other" ? draft.unitCost : "0",
+  } : null;
+  const lines: PreviewCostLine[] = [...retained, ...(draftLine ? [draftLine] : [])];
+  const costs = lines.map(previewCostLineCents);
+  return costs.some((cost) => cost === null)
+    ? null
+    : costs.reduce((sum, cost) => sum + BigInt(cost as string), 0n).toString();
 }

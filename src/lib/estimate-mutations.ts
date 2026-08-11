@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { calculateEstimate } from "./estimate-calculations";
+import { calculateEstimate, calculateEstimateWithMaterialTax } from "./estimate-calculations";
 import {
   buildEstimateCalculationPersistence,
   centsToPostgresNumeric,
@@ -357,11 +357,12 @@ export function calculateMutation(
   estimate: Record<string, unknown>,
   items: readonly CanonicalEstimateItem[],
 ) {
-  const calculation = calculateEstimate({
+  const calculation = calculateEstimateWithMaterialTax({
     items: items.map(canonicalToCalculationInput),
     overheadPercent: postgresNumericToDecimalString(estimate.overhead_percent_text, "overheadPercent"),
     profitMarkupPercent: postgresNumericToDecimalString(estimate.profit_markup_percent_text, "profitMarkupPercent"),
-    taxPercent: postgresNumericToDecimalString(estimate.tax_rate_percent_text, "taxRatePercent"),
+    taxPercent: "0",
+    materialTaxPercent: postgresNumericToDecimalString(estimate.tax_rate_percent_text, "materialTaxPercent"),
     discountAmount: postgresNumericToDecimalString(estimate.discount_value_text, "discountAmount"),
   });
   const itemCalculations = buildItemCalculationBundle(items, calculation);

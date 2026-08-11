@@ -17,6 +17,16 @@ export type MunicipalityTaxLookup = Readonly<{
   asOf: string;
 }>;
 
+export function parseMunicipalityFromAddress(address: string | null | undefined) {
+  if (!address?.trim()) return null;
+  const parts = address.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const stateMatch = parts.at(-1)?.match(/^([A-Za-z]{2})(?:\s+\d{5}(?:-\d{4})?)?$/);
+  const municipality = parts.at(-2)?.trim();
+  if (!stateMatch || !municipality) return null;
+  return Object.freeze({ municipality, stateCode: stateMatch[1].toUpperCase() });
+}
+
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const RATE = /^(?:0|[1-9]\d?)(?:\.\d{1,3})?$|^100(?:\.0{1,3})?$/;
 

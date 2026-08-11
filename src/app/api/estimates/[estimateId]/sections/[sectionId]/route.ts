@@ -82,7 +82,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const prepared = await prepare(request, context, DELETE_FIELDS);
     if (prepared.response) return prepared.response;
-    const { estimateId, sectionId, auth, revision, supabase, state, index } = prepared;
+    const { estimateId, sectionId, auth, revision, supabase } = prepared;
     const result = await supabase.rpc("delete_structured_estimate_section", {
       requested_estimate_id: estimateId, requested_expected_revision: revision, requested_section_id: sectionId,
     });

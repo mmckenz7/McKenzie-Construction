@@ -7,11 +7,11 @@ type Supplier = { id: string; name: string };
 export function ProjectPartyManager({ projectId, initialParties, suppliers }: { projectId: string; initialParties: Party[]; suppliers: Supplier[] }) {
   const [parties, setParties] = useState(initialParties), [message, setMessage] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setMessage(""); const form = new FormData(event.currentTarget);
+    event.preventDefault(); setMessage(""); const formElement = event.currentTarget; const form = new FormData(formElement);
     const supplierId = String(form.get("supplierId") ?? ""); const supplier = suppliers.find((item) => item.id === supplierId);
     const response = await fetch(`/api/projects/${projectId}/parties`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ partyType: form.get("partyType"), supplierId, name: supplier?.name ?? form.get("name"), tradeRole: form.get("tradeRole"), contactName: form.get("contactName"), contactEmail: form.get("contactEmail"), contactPhone: form.get("contactPhone"), workflows: form.getAll("workflows") }) });
     const result = await response.json(); if (!response.ok) { setMessage(result.error ?? "Unable to add project partner."); return; }
-    setParties((current) => [...current, result.party]); event.currentTarget.reset(); setMessage("Project partner added.");
+    setParties((current) => [...current, result.party]); formElement.reset(); setMessage("Project partner added.");
   }
   return <div className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]">
     <form onSubmit={submit} className="border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-lg font-bold">Add subcontractor or vendor</h2><p className="mt-1 text-sm text-slate-600">External partners are kept separate from internal employees.</p>

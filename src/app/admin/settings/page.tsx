@@ -6,6 +6,9 @@ export default async function SettingsPage() {
   const access = await getAuthenticatedAccess();
   if (!access || !hasManagementAccess(access.teamMember.roles)) redirect("/admin");
   const items = [
+    ["Company Branding", "Set the logo and colors used by the shared platform shell.", "/admin/settings/branding"],
+    ["Estimate Presentation", "Set the default detail level and how OH&P appears to customers.", "/admin/settings/estimates"],
+    ["Email & Phone", "Connect delivery providers and control approved communication automation.", "/admin/settings/communications"],
     ["Workflow & Task Settings", "Task types, assignment defaults, due-date rules, and business hours.", "/admin/settings/tasks"],
     ["Feature Settings", "Company and workspace feature availability.", "/admin/settings/features"],
     ["Procurement Settings", "Material pricing and procurement defaults.", "/admin/settings/procurement"],

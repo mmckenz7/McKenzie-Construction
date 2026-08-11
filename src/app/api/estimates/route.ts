@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authorizeEstimateRequest } from "@/lib/estimate-access";
-import { calculateEstimate, ESTIMATE_CALCULATION_POLICY_VERSION } from "@/lib/estimate-calculations";
+import { calculateEstimateWithMaterialTax, ESTIMATE_CALCULATION_POLICY_VERSION } from "@/lib/estimate-calculations";
 import {
   buildEstimateCalculationPersistence,
   calculatePersistedEstimate,
@@ -13,6 +13,8 @@ import {
   STRUCTURED_ESTIMATE_SELECT,
 } from "@/lib/estimate-persistence";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import { ESTIMATE_PRESENTATION_VERSION } from "@/lib/estimate-presentation";
+import { resolveEstimateMaterialTax } from "@/lib/estimate-material-tax";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STATUSES = new Set(["draft", "reviewing", "sent", "viewed", "accepted", "declined", "expired", "converted", "void"]);
@@ -124,12 +126,29 @@ export async function POST(request: NextRequest) {
 
     const overheadPercent = decimal(body.overheadPercent, "0", "overheadPercent");
     const profitMarkupPercent = decimal(body.profitMarkupPercent, "0", "profitMarkupPercent");
-    const taxRatePercent = decimal(body.taxRatePercent, "0", "taxRatePercent");
+    const propertyAddress = optionalText(body.propertyAddress);
+    const municipalityTax = await resolveEstimateMaterialTax(supabase, propertyAddress);
+    const taxRatePercent = municipalityTax?.ratePercent ?? decimal(body.taxRatePercent, "0", "taxRatePercent");
     const discountAmount = decimal(body.discountAmount, "0", "discountAmount");
-    const calculation = calculateEstimate({ items: [], overheadPercent, profitMarkupPercent, taxPercent: taxRatePercent, discountAmount });
+    const calculation = calculateEstimateWithMaterialTax({
+      items: [], overheadPercent, profitMarkupPercent, taxPercent: "0",
+      materialTaxPercent: taxRatePercent, discountAmount,
+    });
+    const companySettings = await supabase.from("company_settings").select("*").limit(1).maybeSingle();
+    if (companySettings.error) throw new Error("Company estimate defaults could not be loaded.");
+    const presentationDefaults = companySettings.data && "default_estimate_detail_level" in companySettings.data
+      ? {
+          presentation_version: ESTIMATE_PRESENTATION_VERSION,
+          presentation_detail_level: companySettings.data.default_estimate_detail_level,
+          presentation_ohp_mode: companySettings.data.default_estimate_detail_level === "lump_sum"
+            ? "distributed"
+            : companySettings.data.default_estimate_ohp_mode,
+          presentation_lump_sum_label: companySettings.data.default_estimate_lump_sum_label,
+        }
+      : {};
     const payload = {
       lead_id: leadId, customer_id: customerId, project_id: projectId, title,
-      description: optionalText(body.description), property_address: optionalText(body.propertyAddress),
+      description: optionalText(body.description), property_address: propertyAddress,
       valid_until: body.validUntil === undefined || body.validUntil === null || body.validUntil === ""
         ? defaultEstimateValidUntil()
         : optionalIsoCalendarDate(body.validUntil), status: "draft",
@@ -139,9 +158,16 @@ export async function POST(request: NextRequest) {
       internal_notes: optionalText(body.internalNotes), customer_notes: optionalText(body.customerNotes),
       calculation_policy_version: ESTIMATE_CALCULATION_POLICY_VERSION,
       calculation_revision: 0, created_by_auth_user_id: auth.authorization!.authUserId,
+      material_tax_municipality: municipalityTax?.municipality ?? null,
+      material_tax_county: municipalityTax?.county ?? null,
+      material_tax_state_code: municipalityTax?.stateCode ?? null,
+      material_tax_rate_id: municipalityTax?.rateId ?? null,
+      material_tax_source_url: municipalityTax?.sourceUrl ?? null,
+      material_tax_verified_at: municipalityTax?.verifiedAt ?? null,
+      ...presentationDefaults,
       ...buildEstimateCalculationPersistence(calculation),
     };
-    const inserted = await supabase.from("estimates").insert(payload).select(STRUCTURED_ESTIMATE_SELECT).single();
+    const inserted = await supabase.from("estimates").insert(payload as never).select(STRUCTURED_ESTIMATE_SELECT).single();
     if (inserted.error) {
       if (leadId && isStructuredLeadDraftUniqueViolation(inserted.error)) {
         const winning = await loadStructuredLeadDraft(supabase, leadId);
