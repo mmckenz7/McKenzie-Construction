@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
@@ -12,7 +12,7 @@ const MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 const DOCUMENT_TYPES = new Set(["construction_contract", "change_order_terms", "warranty", "privacy", "subcontractor_agreement", "other"]);
-const SELECT = "id,company_id,document_type,title,version_label,source_kind,original_file_name,mime_type,file_size_bytes,status,legal_review_status,is_default,notes,reviewed_at,created_at,updated_at";
+const SELECT = "id,company_id,document_type,title,version_label,source_kind,original_file_name,mime_type,file_size_bytes,content_sha256,status,legal_review_status,is_default,notes,reviewed_at,created_at,updated_at";
 
 async function authorize(request: Request) {
   const access = await getAuthenticatedAccess();
@@ -82,7 +82,9 @@ export async function POST(request: Request) {
   const supabase = createAdminServerClient();
   const documentId = randomUUID();
   const path = `${id}/${documentId}/${safeFileName(file.name)}`;
-  const uploaded = await supabase.storage.from(BUCKET).upload(path, await file.arrayBuffer(), {
+  const fileBytes = Buffer.from(await file.arrayBuffer());
+  const contentSha256 = createHash("sha256").update(fileBytes).digest("hex");
+  const uploaded = await supabase.storage.from(BUCKET).upload(path, fileBytes, {
     contentType: file.type,
     upsert: false,
   });
@@ -100,6 +102,7 @@ export async function POST(request: Request) {
     original_file_name: file.name.slice(0, 240),
     mime_type: file.type,
     file_size_bytes: file.size,
+    content_sha256: contentSha256,
     status: "draft",
     legal_review_status: "not_reviewed",
     is_default: false,
