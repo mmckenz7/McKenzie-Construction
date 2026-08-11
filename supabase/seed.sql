@@ -1,0 +1,2 @@
+-- Intentionally empty. Realistic beta fixtures are loaded after auth is running by
+-- scripts/local-sandbox-seed.mjs, which refuses every non-local Supabase URL.
