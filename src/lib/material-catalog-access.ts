@@ -7,7 +7,9 @@ import {
   getAuthenticatedAccess,
 } from "@/lib/api-auth";
 import {
+  canPerformCatalogAction,
   deriveCatalogCapabilities,
+  type CatalogCapability,
   type CatalogCapabilities,
 } from "@/lib/material-catalog-access-policy";
 import { getServerFeatureMap } from "@/lib/features/server";
@@ -168,6 +170,17 @@ export async function getMaterialCatalogAuthorizationDecision(
       capabilities,
     }),
   };
+}
+
+export async function getMaterialCatalogMutationAuthorizationDecision(
+  requiredCapability: Exclude<CatalogCapability, MaterialCatalogReadCapability>,
+): Promise<MaterialCatalogAuthorizationDecision> {
+  const decision = await getMaterialCatalogAuthorizationDecision("search_products");
+  if (decision.state !== "authorized") return decision;
+  if (!canPerformCatalogAction(decision.authorization.capabilities, requiredCapability)) {
+    return { authorization: null, state: "forbidden" };
+  }
+  return decision;
 }
 
 export async function authorizeMaterialCatalogRequest(
