@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const migrationPath =
-  "supabase/migrations/20260810140000_material_catalog_access_foundation.sql";
+  "supabase/migrations/20260810150000_material_catalog_access_foundation.sql";
 const migration = readFileSync(migrationPath, "utf8");
 const workspaceAccess = readFileSync("src/lib/workspace-access.ts", "utf8");
 const featureTypes = readFileSync("src/lib/features/types.ts", "utf8");
