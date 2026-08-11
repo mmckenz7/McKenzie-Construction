@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { logout } from "@/app/login/actions";
+
 type PortalName =
   | "sales"
   | "operations"
@@ -37,6 +39,8 @@ export default function PortalRouterPage() {
   const [message, setMessage] = useState(
     "Opening your workspace...",
   );
+  const [canSignOut, setCanSignOut] =
+    useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -64,6 +68,10 @@ export default function PortalRouterPage() {
             return;
           }
 
+          setCanSignOut(
+            response.status === 403 &&
+              result.needsProfile === true,
+          );
           setMessage(
             result.error ??
               "We could not determine which workspace to open.",
@@ -172,6 +180,24 @@ export default function PortalRouterPage() {
         >
           {message}
         </p>
+
+        {canSignOut ? (
+          <form action={logout}>
+            <button
+              type="submit"
+              style={{
+                marginTop: "24px",
+                border: 0,
+                borderRadius: "8px",
+                padding: "12px 20px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Sign out
+            </button>
+          </form>
+        ) : null}
       </div>
     </main>
   );

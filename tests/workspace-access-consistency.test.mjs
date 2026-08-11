@@ -18,6 +18,14 @@ const portalAccessSource = await readFile(
   "utf8",
 );
 
+const portalPageSource = await readFile(
+  new URL(
+    "../src/app/portal/page.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+
 test("layouts and portal resolve workspace access through the same trusted boundary", () => {
   assert.match(
     workspaceAccessSource,
@@ -74,5 +82,24 @@ test("portal access distinguishes a missing employee role from a missing login",
   assert.match(
     accessRouteSource,
     /needsProfile: true/,
+  );
+});
+
+test("portal lets a valid unlinked login explicitly sign out", () => {
+  assert.match(
+    portalPageSource,
+    /import \{ logout \} from "@\/app\/login\/actions"/,
+  );
+  assert.match(
+    portalPageSource,
+    /response\.status === 403 &&[\s\S]*result\.needsProfile === true/,
+  );
+  assert.match(
+    portalPageSource,
+    /<form action=\{logout\}>[\s\S]*Sign out[\s\S]*<\/form>/,
+  );
+  assert.doesNotMatch(
+    portalPageSource,
+    /void logout\(|await logout\(/,
   );
 });
