@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -13,7 +13,8 @@ const collection = readFileSync("src/app/api/ai-estimator/cases/route.ts", "utf8
 const detail = readFileSync("src/app/api/ai-estimator/cases/[caseId]/route.ts", "utf8");
 const featureTypes = readFileSync("src/lib/features/types.ts", "utf8");
 const featureServer = readFileSync("src/lib/features/server.ts", "utf8");
-const migration = readFileSync("supabase/migrations/20260810120000_ai_estimator_case_intake.sql", "utf8");
+const migrationPath = "supabase/migrations/20260810140000_ai_estimator_case_intake.sql";
+const migration = readFileSync(migrationPath, "utf8");
 
 test("AI Estimator intake is fixed-scope, Sales-only, and default-off", () => {
   assert.match(access, /getAuthenticatedAccess\(\)/);
@@ -98,10 +99,14 @@ test("case reads are tenant-filtered and responses are non-cacheable", () => {
 });
 
 test("intake migration is additive to the AI shadow table only", () => {
+  assert.equal(existsSync("supabase/migrations/20260810120000_ai_estimator_case_intake.sql"), false);
+  assert.equal(existsSync(migrationPath), true);
   assert.match(migration, /alter table public\.ai_estimator_cases/);
   assert.match(migration, /insert into public\.feature_settings/);
-  assert.match(migration, /recording_permission_acknowledged_at timestamptz not null/);
-  assert.match(migration, /recording_permission_acknowledged_by_auth_user_id uuid not null/);
+  assert.match(migration, /add column if not exists recording_permission_acknowledged_at timestamptz/);
+  assert.match(migration, /add column if not exists recording_permission_acknowledged_by_auth_user_id uuid/);
+  assert.match(migration, /alter column recording_permission_acknowledged_at set not null/);
+  assert.match(migration, /alter column recording_permission_acknowledged_by_auth_user_id set not null/);
   assert.doesNotMatch(migration, /alter table public\.(estimates|leads|customers|projects)/);
   assert.doesNotMatch(migration, /\bupdate\s+public\.|\bdelete\s+from\s+public\./i);
   assert.doesNotMatch(migration, /\bgrant\b|\brevoke\b/i);
