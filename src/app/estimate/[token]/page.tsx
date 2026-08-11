@@ -87,6 +87,14 @@ export default function PublicEstimatePage() {
         setProposal(body.proposal);
         setCustomerName(body.proposal.customerName ?? "");
         if (body.proposal.response === "accepted" || body.proposal.response === "declined") setSubmitted(body.proposal.response);
+        if (typeof crypto.randomUUID === "function") {
+          void fetch(`/api/estimate-proposals/${encodeURIComponent(token)}/access`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accessId: crypto.randomUUID() }),
+            keepalive: true,
+          });
+        }
       } catch (loadError) {
         if (active) setError(loadError instanceof Error ? loadError.message : "This estimate is unavailable.");
       } finally {
