@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { NextRequest } from "next/server";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -31,7 +33,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
   if (limited) return limited;
   if (!UUID.test(token)) return unavailable();
 
-  const result = await createAdminServerClient().rpc("get_estimate_proposal_by_token", { requested_token: token });
+  const result = await createAdminServerClient().rpc("get_estimate_proposal_by_token", {
+    requested_token: token,
+    requested_access_id: randomUUID(),
+  });
   if (result.error) {
     const failure = createPublicTokenFailure("unexpected");
     logPublicTokenSupabaseFailure({

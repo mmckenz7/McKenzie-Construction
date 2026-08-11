@@ -48,6 +48,6 @@ test("only an accepted estimate can create a customer-safe contract package", ()
 test("the UI clearly labels acceptance as nonbinding and locks signature work", () => {
   assert.match(card, /nonbinding intent to proceed/);
   assert.match(card, /Work is not authorized/);
-  assert.match(card, /Legal terms required/);
+  assert.match(card, /Legal review required/);
   assert.doesNotMatch(card, /Send contract|Sign contract/);
 });
