@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { buildLegalDocumentSnapshot } from "@/lib/contracts/legal-document-snapshot";
 import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimate-access";
 import { buildEstimateCustomerDocument } from "@/lib/estimate-customer-document";
 import { calculateMutation, loadMutationState, UUID_PATTERN } from "@/lib/estimate-mutations";
@@ -17,6 +18,9 @@ const SELECT = `
   recipient_name,
   recipient_email,
   legal_terms_status,
+  legal_document_id,
+  legal_document_snapshot,
+  legal_document_selected_at,
   signature_provider,
   sent_for_signature_at,
   signed_at,
@@ -31,7 +35,8 @@ function text(value: unknown) {
 
 function schemaUnavailable(error: unknown) {
   const candidate = error as { code?: string; message?: string } | null;
-  return candidate?.code === "42P01" || candidate?.code === "PGRST205"
+  return candidate?.code === "42P01" || candidate?.code === "42703"
+    || candidate?.code === "PGRST204" || candidate?.code === "PGRST205"
     || candidate?.message?.includes("estimate_contract_preparations") === true;
 }
 
@@ -44,6 +49,9 @@ function schemaResponse() {
 }
 
 function projectPackage(record: Record<string, unknown>) {
+  const legalSnapshot = record.legal_document_snapshot && typeof record.legal_document_snapshot === "object"
+    ? record.legal_document_snapshot as Record<string, unknown>
+    : null;
   return {
     id: String(record.id),
     estimateId: String(record.estimate_id),
@@ -54,12 +62,47 @@ function projectPackage(record: Record<string, unknown>) {
     recipientName: String(record.recipient_name),
     recipientEmail: text(record.recipient_email),
     legalTermsStatus: String(record.legal_terms_status),
+    legalDocumentId: text(record.legal_document_id),
+    legalDocumentTitle: text(legalSnapshot?.title),
+    legalDocumentVersion: text(legalSnapshot?.versionLabel),
+    legalDocumentReviewStatus: text(legalSnapshot?.legalReviewStatus),
+    legalDocumentSelectedAt: text(record.legal_document_selected_at),
     signatureProvider: text(record.signature_provider),
     sentForSignatureAt: text(record.sent_for_signature_at),
     signedAt: text(record.signed_at),
     voidedAt: text(record.voided_at),
     createdAt: String(record.created_at),
     updatedAt: String(record.updated_at),
+  };
+}
+
+async function defaultLegalBinding(
+  supabase: ReturnType<typeof createAdminServerClient>,
+  appUserId: string,
+) {
+  const company = await supabase.from("company_settings").select("id").limit(2);
+  if (company.error || company.data?.length !== 1) {
+    throw new TypeError("Exactly one company must be configured before selecting legal terms.");
+  }
+  const document = await supabase.from("company_legal_documents")
+    .select("id,document_type,title,version_label,source_kind,boilerplate_body,content_sha256,legal_review_status")
+    .eq("company_id", company.data[0].id)
+    .eq("document_type", "construction_contract")
+    .eq("status", "active")
+    .eq("is_default", true)
+    .maybeSingle();
+  if (document.error) throw new Error("The default legal document could not be loaded.");
+  if (!document.data) return null;
+  const selectedAt = new Date().toISOString();
+  const snapshot = buildLegalDocumentSnapshot(document.data, selectedAt);
+  const approved = document.data.legal_review_status === "attorney_reviewed";
+  return {
+    status: approved ? "ready_for_signature" : "draft",
+    legal_terms_status: approved ? "approved" : "draft",
+    legal_document_id: document.data.id,
+    legal_document_snapshot: snapshot,
+    legal_document_selected_at: selectedAt,
+    legal_document_selected_by_app_user_id: appUserId,
   };
 }
 
@@ -144,17 +187,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (customerResult.error || leadResult.error) throw new Error("Contract recipient could not be loaded.");
     const recipientName = text(customerResult.data?.customer_name) ?? text(leadResult.data?.name) ?? "Customer";
     const recipientEmail = text(customerResult.data?.email) ?? text(leadResult.data?.email);
+    const legalBinding = await defaultLegalBinding(supabase, checked.auth!.authorization!.appUserId);
 
     const inserted = await supabase.from("estimate_contract_preparations").insert({
       estimate_id: estimateId,
       lead_id: leadId,
       customer_id: customerId,
-      status: "draft",
       snapshot_version: "estimate-contract-preparation-v1",
       customer_document: customerDocument,
       recipient_name: recipientName,
       recipient_email: recipientEmail,
-      legal_terms_status: "not_configured",
+      ...(legalBinding ?? { status: "draft", legal_terms_status: "not_configured" }),
       created_by_app_user_id: checked.auth!.authorization!.appUserId,
       metadata: {
         estimate_status_at_creation: "accepted",
@@ -177,5 +220,61 @@ export async function POST(request: NextRequest, context: RouteContext) {
   } catch (error) {
     const message = error instanceof TypeError ? error.message : "Contract preparation could not be created.";
     return NextResponse.json({ success: false, error: message }, { status: error instanceof TypeError ? 422 : 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  const { estimateId } = await context.params;
+  const checked = await authorize(request, estimateId);
+  if (checked.response) return checked.response;
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json() as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ success: false, error: "Invalid request body." }, { status: 400 });
+  }
+  if (body.action !== "refresh_legal_document") {
+    return NextResponse.json({ success: false, error: "Unsupported contract-preparation action." }, { status: 400 });
+  }
+
+  const supabase = createAdminServerClient();
+  const preparation = await supabase.from("estimate_contract_preparations")
+    .select("id,status,signature_envelope_id").eq("estimate_id", estimateId).maybeSingle();
+  if (preparation.error) {
+    if (schemaUnavailable(preparation.error)) return schemaResponse();
+    return NextResponse.json({ success: false, error: "Contract preparation could not be loaded." }, { status: 500 });
+  }
+  if (!preparation.data) {
+    return NextResponse.json({ success: false, error: "Contract preparation was not found." }, { status: 404 });
+  }
+  if (!["draft", "ready_for_signature"].includes(preparation.data.status) || preparation.data.signature_envelope_id) {
+    return NextResponse.json({ success: false, error: "Legal terms are locked after signature sending begins." }, { status: 409 });
+  }
+
+  try {
+    const legalBinding = await defaultLegalBinding(supabase, checked.auth!.authorization!.appUserId);
+    if (!legalBinding) {
+      return NextResponse.json({ success: false, code: "default_legal_document_missing", error: "Choose a default construction contract in Company Settings first." }, { status: 409 });
+    }
+    const updated = await supabase.from("estimate_contract_preparations")
+      .update(legalBinding)
+      .eq("id", preparation.data.id)
+      .in("status", ["draft", "ready_for_signature"])
+      .is("signature_envelope_id", null)
+      .select(SELECT)
+      .maybeSingle();
+    if (updated.error) {
+      if (schemaUnavailable(updated.error)) return schemaResponse();
+      return NextResponse.json({ success: false, error: "The contract legal document could not be updated." }, { status: 500 });
+    }
+    if (!updated.data) {
+      return NextResponse.json({ success: false, error: "The contract changed before legal terms were updated." }, { status: 409 });
+    }
+    return NextResponse.json({ success: true, contractPreparation: projectPackage(updated.data as Record<string, unknown>) });
+  } catch (error) {
+    return NextResponse.json({
+      success: false,
+      error: error instanceof TypeError ? error.message : "The default legal document could not be selected.",
+    }, { status: error instanceof TypeError ? 409 : 500 });
   }
 }
