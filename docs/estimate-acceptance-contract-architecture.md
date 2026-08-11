@@ -28,6 +28,16 @@ Neither the API nor the interface currently provides a send or sign action.
 That deliberate lock remains until an owner-approved contract template and
 signature provider are configured.
 
+Before signature sending begins, an authorized Sales user may correct the
+recipient name or email. The update is performed through one service-role-only
+database function that locks the preparation, rejects sending or envelope-linked
+records, and appends the acting application user plus before/after recipient
+state to `estimate_contract_preparation_events`. Legal-document and estimate
+snapshots are unchanged. An attorney-reviewed legal snapshot is not considered
+ready for signature until a valid recipient email is also present.
+The preparation card exposes a newest-first, recipient-only projection of the
+20 most recent changes; raw audit metadata remains server-side.
+
 The package records `work_authorized: false` and
 `project_creation_authorized: false` in its creation metadata. These fields are
 defense-in-depth documentation, not substitutes for the application boundary:
@@ -86,3 +96,8 @@ before any lifecycle update. Envelope events must be deduplicated and matched
 to both the stored envelope ID and hidden contract-preparation ID. A completed
 envelope may mark the contract signed, but project creation and preconstruction
 release remain a separate internal approval step.
+
+The provider template and preparation metadata are not the executed legal
+record. A later archival increment must retrieve, hash, and retain the completed
+envelope documents and certificate before any downstream workflow relies on an
+executed-contract artifact.

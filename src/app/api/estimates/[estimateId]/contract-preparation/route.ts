@@ -33,11 +33,25 @@ function text(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function record(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function recipientEmail(value: unknown) {
+  const candidate = text(value)?.toLowerCase() ?? null;
+  return candidate && candidate.length <= 320 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)
+    ? candidate
+    : null;
+}
+
 function schemaUnavailable(error: unknown) {
   const candidate = error as { code?: string; message?: string } | null;
   return candidate?.code === "42P01" || candidate?.code === "42703"
-    || candidate?.code === "PGRST204" || candidate?.code === "PGRST205"
-    || candidate?.message?.includes("estimate_contract_preparations") === true;
+    || candidate?.code === "PGRST202" || candidate?.code === "PGRST204" || candidate?.code === "PGRST205"
+    || candidate?.message?.includes("estimate_contract_preparations") === true
+    || candidate?.message?.includes("update_estimate_contract_recipient") === true;
 }
 
 function schemaResponse() {
@@ -76,9 +90,54 @@ function projectPackage(record: Record<string, unknown>) {
   };
 }
 
+function projectAuditEvent(row: Record<string, unknown>, actorName: string) {
+  const previous = record(row.previous_state);
+  const next = record(row.next_state);
+  return {
+    id: String(row.id),
+    eventType: String(row.event_type),
+    actorName,
+    previousRecipientName: text(previous?.recipientName),
+    previousRecipientEmail: text(previous?.recipientEmail),
+    recipientName: text(next?.recipientName),
+    recipientEmail: text(next?.recipientEmail),
+    createdAt: String(row.created_at),
+  };
+}
+
+async function loadAuditHistory(
+  supabase: ReturnType<typeof createAdminServerClient>,
+  contractPreparationId: string,
+) {
+  const events = await supabase.from("estimate_contract_preparation_events")
+    .select("id,event_type,actor_app_user_id,previous_state,next_state,created_at")
+    .eq("contract_preparation_id", contractPreparationId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (events.error) return { available: false, events: [] };
+  const rows = (events.data ?? []) as Record<string, unknown>[];
+  const actorIds = [...new Set(rows.map((row) => text(row.actor_app_user_id)).filter((id): id is string => Boolean(id)))];
+  const actors = actorIds.length
+    ? await supabase.from("app_users").select("id,display_name,email").in("id", actorIds)
+    : { data: [], error: null };
+  if (actors.error) return { available: false, events: [] };
+  const actorNames = new Map((actors.data ?? []).map((actor) => [
+    String(actor.id),
+    text(actor.display_name) ?? text(actor.email) ?? "Application user",
+  ]));
+  return {
+    available: true,
+    events: rows.map((row) => projectAuditEvent(
+      row,
+      actorNames.get(String(row.actor_app_user_id)) ?? "Application user",
+    )),
+  };
+}
+
 async function defaultLegalBinding(
   supabase: ReturnType<typeof createAdminServerClient>,
   appUserId: string,
+  recipientEmail: string | null,
 ) {
   const company = await supabase.from("company_settings").select("id").limit(2);
   if (company.error || company.data?.length !== 1) {
@@ -97,7 +156,7 @@ async function defaultLegalBinding(
   const snapshot = buildLegalDocumentSnapshot(document.data, selectedAt);
   const approved = document.data.legal_review_status === "attorney_reviewed";
   return {
-    status: approved ? "ready_for_signature" : "draft",
+    status: approved && recipientEmail ? "ready_for_signature" : "draft",
     legal_terms_status: approved ? "approved" : "draft",
     legal_document_id: document.data.id,
     legal_document_snapshot: snapshot,
@@ -135,11 +194,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (schemaUnavailable(result.error)) return schemaResponse();
     return NextResponse.json({ success: false, error: "Contract preparation could not be loaded." }, { status: 500 });
   }
+  const auditHistory = result.data
+    ? await loadAuditHistory(createAdminServerClient(), String(result.data.id))
+    : { available: true, events: [] };
   return NextResponse.json({
     success: true,
     eligible: checked.auth!.estimate?.status === "accepted",
     estimateStatus: String(checked.auth!.estimate?.status ?? ""),
     contractPreparation: result.data ? projectPackage(result.data as Record<string, unknown>) : null,
+    auditHistoryAvailable: auditHistory.available,
+    auditEvents: auditHistory.events,
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -186,8 +250,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     ]);
     if (customerResult.error || leadResult.error) throw new Error("Contract recipient could not be loaded.");
     const recipientName = text(customerResult.data?.customer_name) ?? text(leadResult.data?.name) ?? "Customer";
-    const recipientEmail = text(customerResult.data?.email) ?? text(leadResult.data?.email);
-    const legalBinding = await defaultLegalBinding(supabase, checked.auth!.authorization!.appUserId);
+    const contractRecipientEmail = recipientEmail(customerResult.data?.email)
+      ?? recipientEmail(leadResult.data?.email);
+    const legalBinding = await defaultLegalBinding(
+      supabase,
+      checked.auth!.authorization!.appUserId,
+      contractRecipientEmail,
+    );
 
     const inserted = await supabase.from("estimate_contract_preparations").insert({
       estimate_id: estimateId,
@@ -196,7 +265,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       snapshot_version: "estimate-contract-preparation-v1",
       customer_document: customerDocument,
       recipient_name: recipientName,
-      recipient_email: recipientEmail,
+      recipient_email: contractRecipientEmail,
       ...(legalBinding ?? { status: "draft", legal_terms_status: "not_configured" }),
       created_by_app_user_id: checked.auth!.authorization!.appUserId,
       metadata: {
@@ -233,13 +302,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   } catch {
     return NextResponse.json({ success: false, error: "Invalid request body." }, { status: 400 });
   }
-  if (body.action !== "refresh_legal_document") {
+  if (body.action !== "refresh_legal_document" && body.action !== "update_recipient") {
     return NextResponse.json({ success: false, error: "Unsupported contract-preparation action." }, { status: 400 });
   }
 
   const supabase = createAdminServerClient();
   const preparation = await supabase.from("estimate_contract_preparations")
-    .select("id,status,signature_envelope_id").eq("estimate_id", estimateId).maybeSingle();
+    .select("id,status,recipient_email,signature_send_attempt_id,signature_envelope_id")
+    .eq("estimate_id", estimateId)
+    .maybeSingle();
   if (preparation.error) {
     if (schemaUnavailable(preparation.error)) return schemaResponse();
     return NextResponse.json({ success: false, error: "Contract preparation could not be loaded." }, { status: 500 });
@@ -247,12 +318,57 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (!preparation.data) {
     return NextResponse.json({ success: false, error: "Contract preparation was not found." }, { status: 404 });
   }
-  if (!["draft", "ready_for_signature"].includes(preparation.data.status) || preparation.data.signature_envelope_id) {
-    return NextResponse.json({ success: false, error: "Legal terms are locked after signature sending begins." }, { status: 409 });
+  if (!["draft", "ready_for_signature"].includes(preparation.data.status)
+    || preparation.data.signature_send_attempt_id
+    || preparation.data.signature_envelope_id) {
+    return NextResponse.json({ success: false, error: "Contract preparation is locked after signature sending begins." }, { status: 409 });
+  }
+
+  if (body.action === "update_recipient") {
+    if (Object.keys(body).some((key) => !["action", "recipientName", "recipientEmail"].includes(key))
+      || typeof body.recipientName !== "string"
+      || (body.recipientEmail !== null && typeof body.recipientEmail !== "string")) {
+      return NextResponse.json({ success: false, error: "Invalid recipient details." }, { status: 400 });
+    }
+    const recipientName = body.recipientName.trim();
+    const recipientEmail = typeof body.recipientEmail === "string"
+      ? body.recipientEmail.trim().toLowerCase()
+      : "";
+    if (!recipientName || recipientName.length > 240
+      || (recipientEmail && (recipientEmail.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)))) {
+      return NextResponse.json({ success: false, error: "Enter a valid recipient name and email." }, { status: 400 });
+    }
+    const changed = await supabase.rpc("update_estimate_contract_recipient", {
+      requested_contract_preparation_id: preparation.data.id,
+      requested_app_user_id: checked.auth!.authorization!.appUserId,
+      requested_recipient_name: recipientName,
+      requested_recipient_email: recipientEmail || null,
+    });
+    if (changed.error) {
+      if (schemaUnavailable(changed.error)) return schemaResponse();
+      return NextResponse.json({ success: false, error: "Recipient details could not be updated." }, { status: 409 });
+    }
+    const updated = await supabase.from("estimate_contract_preparations")
+      .select(SELECT).eq("id", preparation.data.id).single();
+    if (updated.error || !updated.data) {
+      return NextResponse.json({ success: false, error: "Updated recipient details could not be loaded." }, { status: 500 });
+    }
+    const auditHistory = await loadAuditHistory(supabase, String(preparation.data.id));
+    return NextResponse.json({
+      success: true,
+      changed: (changed.data as { changed?: unknown } | null)?.changed === true,
+      contractPreparation: projectPackage(updated.data as Record<string, unknown>),
+      auditHistoryAvailable: auditHistory.available,
+      auditEvents: auditHistory.events,
+    });
   }
 
   try {
-    const legalBinding = await defaultLegalBinding(supabase, checked.auth!.authorization!.appUserId);
+    const legalBinding = await defaultLegalBinding(
+      supabase,
+      checked.auth!.authorization!.appUserId,
+      recipientEmail(preparation.data.recipient_email),
+    );
     if (!legalBinding) {
       return NextResponse.json({ success: false, code: "default_legal_document_missing", error: "Choose a default construction contract in Company Settings first." }, { status: 409 });
     }
