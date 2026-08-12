@@ -82,7 +82,7 @@ test("read model exposes exact unit and evidence semantics without ranking", () 
   assert.match(loader, /sellUnit: string/);
   assert.match(loader, /minimumOrderQuantity: string \| null/);
   assert.match(loader, /orderIncrement: string \| null/);
-  assert.match(loader, /price_quantity,price_unit_id,tier_min_quantity,tier_max_quantity/);
+  assert.match(loader, /price_quantity_text:price_quantity::text,price_unit_id,tier_min_quantity_text:tier_min_quantity::text,tier_max_quantity_text:tier_max_quantity::text/);
   assert.match(loader, /Observed .*day/);
   assert.match(loader, /verification_status !== "verified"/);
   assert.match(loader, /rounding_mode !== "exact"/);
@@ -127,7 +127,9 @@ test("filters are bounded allowlists and remain read-only URL state", () => {
 
 test("decimal price evidence preserves the exact database string", () => {
   assert.equal(formatMaterialCatalogMoney("12.3400", "USD"), "USD 12.3400");
+  assert.equal(formatMaterialCatalogMoney(12.34, "USD"), "Not provided");
   assert.equal(formatMaterialCatalogMoney("-0.1000", "USD"), "Not provided");
+  assert.match(loader, /amount_text:amount::text/);
   assert.doesNotMatch(formatter, /Number\(rawAmount\)|parseFloat\(rawAmount\)|parseInt\(rawAmount/);
 });
 
@@ -160,6 +162,10 @@ test("all displayed collections use deterministic code-point ordering", () => {
   assert.match(loader, /productOffers\.sort\(\(left, right\) => compareFields/);
   assert.match(loader, /productDtos[\s\S]*?\.sort\(\(left, right\) => compareFields/);
   assert.doesNotMatch(loader, /localeCompare/);
+  assert.match(loader, /left\.dto\.priceType[\s\S]*left\.id/);
+  assert.match(loader, /left\.dto\.supplierName[\s\S]*left\.id/);
+  assert.match(loader, /left\.dto\.displayName[\s\S]*left\.id/);
+  assert.match(loader, /\.map\(\(entry\) => entry\.dto\)/);
 });
 
 test("caps are truthful and related-row overflow fails closed", () => {

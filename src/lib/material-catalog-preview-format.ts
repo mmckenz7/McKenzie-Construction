@@ -7,9 +7,7 @@ function text(value: unknown) {
 }
 
 function decimal(value: unknown) {
-  return typeof value === "string" || typeof value === "number"
-    ? String(value)
-    : null;
+  return typeof value === "string" ? value : null;
 }
 
 export function formatMaterialCatalogDate(value: unknown) {

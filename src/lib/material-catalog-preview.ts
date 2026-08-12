@@ -98,9 +98,7 @@ function text(value: unknown) {
 }
 
 function decimal(value: unknown) {
-  return typeof value === "string" || typeof value === "number"
-    ? String(value)
-    : null;
+  return typeof value === "string" ? value : null;
 }
 
 function cleanSearch(value: unknown) {
@@ -231,15 +229,15 @@ function findExactConversionPath(
   const edges: ConversionEdge[] = conversions.flatMap((conversion) => {
     const from = text(conversion.from_unit_id);
     const to = text(conversion.to_unit_id);
-    const fromQuantity = decimal(conversion.from_quantity);
-    const toQuantity = decimal(conversion.to_quantity);
+    const fromQuantity = decimal(conversion.from_quantity_text);
+    const toQuantity = decimal(conversion.to_quantity_text);
     const effectiveFrom = Date.parse(text(conversion.effective_from) ?? "");
     const effectiveTo = Date.parse(text(conversion.effective_to) ?? "");
     if (
       !from || !to || !fromQuantity || !toQuantity ||
       conversion.verification_status !== "verified" ||
       conversion.rounding_mode !== "exact" ||
-      conversion.order_increment !== null ||
+      conversion.order_increment_text !== null ||
       !Number.isFinite(effectiveFrom) || generatedAt < effectiveFrom ||
       (Number.isFinite(effectiveTo) && generatedAt > effectiveTo)
     ) return [];
@@ -308,7 +306,7 @@ export async function loadMaterialCatalogPreview(
   // reachable only through offer IDs found inside this authoritative scope.
   const observationRows = requireRows(await supabase
     .from("supplier_offer_observations")
-    .select("id,supplier_product_offer_id,supplier_location_id,observed_at,effective_from,effective_to,expires_at,availability_status,inventory_quantity,inventory_unit_id,lead_time_min,lead_time_max,lead_time_unit,promised_available_date,delivery_cost,delivery_currency_code,confidence,source_type,corrects_observation_id")
+    .select("id,supplier_product_offer_id,supplier_location_id,observed_at,effective_from,effective_to,expires_at,availability_status,inventory_quantity_text:inventory_quantity::text,inventory_unit_id,lead_time_min_text:lead_time_min::text,lead_time_max_text:lead_time_max::text,lead_time_unit,promised_available_date,delivery_cost_text:delivery_cost::text,delivery_currency_code,confidence,source_type,corrects_observation_id")
     .eq("company_id", companyId)
     .order("observed_at", { ascending: false })
     .order("id", { ascending: true })
@@ -340,12 +338,12 @@ export async function loadMaterialCatalogPreview(
   );
   const prices = requireBoundedRows(await supabase
     .from("supplier_offer_observation_prices")
-    .select("observation_id,price_type,amount,currency_code,price_quantity,price_unit_id,tier_min_quantity,tier_max_quantity,tax_included")
+    .select("id,observation_id,price_type,amount_text:amount::text,currency_code,price_quantity_text:price_quantity::text,price_unit_id,tier_min_quantity_text:tier_min_quantity::text,tier_max_quantity_text:tier_max_quantity::text,tax_included")
     .in("observation_id", observationIds)
     .limit(RELATED_ROW_LIMIT + 1), RELATED_ROW_LIMIT);
   const offers = requireBoundedRows(await supabase
     .from("supplier_product_offers")
-    .select("id,supplier_id,supplier_location_id,material_catalog_id,supplier_sku,sell_unit_id,minimum_order_quantity,order_increment,mapping_status,effective_from,effective_to")
+    .select("id,supplier_id,supplier_location_id,material_catalog_id,supplier_sku,sell_unit_id,minimum_order_quantity_text:minimum_order_quantity::text,order_increment_text:order_increment::text,mapping_status,effective_from,effective_to")
     .in("id", offerIds)
     .limit(RELATED_ROW_LIMIT + 1), RELATED_ROW_LIMIT);
   const productIds = unique(offers.map((row) => text(row.material_catalog_id)));
@@ -369,7 +367,7 @@ export async function loadMaterialCatalogPreview(
       : Promise.resolve({ data: [], error: null }),
     productIds.length
       ? supabase.from("product_unit_conversions")
-          .select("product_id,from_unit_id,to_unit_id,from_quantity,to_quantity,order_increment,rounding_mode,effective_from,effective_to,verification_status")
+          .select("product_id,from_unit_id,to_unit_id,from_quantity_text:from_quantity::text,to_quantity_text:to_quantity::text,order_increment_text:order_increment::text,rounding_mode,effective_from,effective_to,verification_status")
           .in("product_id", productIds).limit(RELATED_ROW_LIMIT + 1)
       : Promise.resolve({ data: [], error: null }),
   ]);
@@ -431,7 +429,7 @@ export async function loadMaterialCatalogPreview(
       [left.label, left.value],
       [right.label, right.value],
     ));
-  const offersByProduct = new Map<string, MaterialCatalogPreviewOffer[]>();
+  const offersByProduct = new Map<string, Array<Readonly<{ id: string; dto: MaterialCatalogPreviewOffer }>>>();
 
   for (const offer of offers) {
     const offerId = text(offer.id);
@@ -458,15 +456,17 @@ export async function loadMaterialCatalogPreview(
     const status = observationStatus(observation, generatedAt);
     const productConversions = conversionRows.filter((row) => row.product_id === productId);
     const priceDtos = (pricesByObservation.get(observationId) ?? []).map((price) => {
+      const priceId = text(price.id);
+      if (!priceId) throw new MaterialCatalogPreviewLoadError();
       const priceUnitId = text(price.price_unit_id) ?? "";
       const priceUnit = text(unitById.get(priceUnitId)?.code) ?? "Unit unknown";
-      const tierMin = decimal(price.tier_min_quantity);
-      const tierMax = decimal(price.tier_max_quantity);
+      const tierMin = decimal(price.tier_min_quantity_text);
+      const tierMax = decimal(price.tier_max_quantity_text);
       const tier = tierMin || tierMax
         ? `${tierMin ?? "0"}–${tierMax ?? "No maximum"} ${priceUnit}`
         : `No tier bounds (${priceUnit} basis)`;
-      return Object.freeze({
-        price: `${formatMoney(price.amount, price.currency_code)} per ${decimal(price.price_quantity) ?? "?"} ${priceUnit}`,
+      return Object.freeze({ id: priceId, dto: Object.freeze({
+        price: `${formatMoney(price.amount_text, price.currency_code)} per ${decimal(price.price_quantity_text) ?? "?"} ${priceUnit}`,
         priceType: formatLabel(price.price_type),
         tier,
         tax: price.tax_included === true
@@ -483,17 +483,17 @@ export async function loadMaterialCatalogPreview(
           unitById,
           generatedAt,
         ),
-      });
+      }) });
     }).sort((left, right) => compareFields(
-      [left.priceType, left.price, left.tier, left.tax],
-      [right.priceType, right.price, right.tier, right.tax],
-    ));
+      [left.dto.priceType, left.dto.price, left.dto.tier, left.dto.tax, left.id],
+      [right.dto.priceType, right.dto.price, right.dto.tier, right.dto.tax, right.id],
+    )).map((entry) => entry.dto);
     const inventoryUnit = text(unitById.get(text(observation.inventory_unit_id) ?? "")?.code);
-    const delivery = decimal(observation.delivery_cost)
-      ? formatMoney(observation.delivery_cost, observation.delivery_currency_code)
+    const delivery = decimal(observation.delivery_cost_text)
+      ? formatMoney(observation.delivery_cost_text, observation.delivery_currency_code)
       : "Not provided";
-    const leadMin = decimal(observation.lead_time_min);
-    const leadMax = decimal(observation.lead_time_max);
+    const leadMin = decimal(observation.lead_time_min_text);
+    const leadMax = decimal(observation.lead_time_max_text);
     const leadUnit = formatLabel(observation.lead_time_unit);
     const leadTime = leadMin || leadMax
       ? `${leadMin ?? "?"}–${leadMax ?? "?"} ${leadUnit}`
@@ -505,8 +505,8 @@ export async function loadMaterialCatalogPreview(
       supplierSku: text(offer.supplier_sku) ?? "Not provided",
       mappingStatus: formatLabel(offer.mapping_status),
       sellUnit,
-      minimumOrderQuantity: decimal(offer.minimum_order_quantity),
-      orderIncrement: decimal(offer.order_increment),
+      minimumOrderQuantity: decimal(offer.minimum_order_quantity_text),
+      orderIncrement: decimal(offer.order_increment_text),
       effectiveRange: formatRange(offer.effective_from, offer.effective_to),
       observation: Object.freeze({
         evidenceStatus: status.label,
@@ -516,20 +516,20 @@ export async function loadMaterialCatalogPreview(
         confidence: formatLabel(observation.confidence),
         sourceType: formatLabel(observation.source_type),
         availability: formatLabel(observation.availability_status),
-        inventory: formatQuantity(observation.inventory_quantity, inventoryUnit),
+        inventory: formatQuantity(observation.inventory_quantity_text, inventoryUnit),
         leadTime,
         promisedDate: formatDate(observation.promised_available_date),
         delivery,
         prices: Object.freeze(priceDtos),
       }),
     });
-    offersByProduct.set(productId, [...(offersByProduct.get(productId) ?? []), dto]);
+    offersByProduct.set(productId, [...(offersByProduct.get(productId) ?? []), Object.freeze({ id: offerId, dto })]);
   }
 
   for (const [productId, productOffers] of offersByProduct) {
     offersByProduct.set(productId, productOffers.sort((left, right) => compareFields(
-      [left.supplierName, left.location, left.supplierSku, left.mappingStatus],
-      [right.supplierName, right.location, right.supplierSku, right.mappingStatus],
+      [left.dto.supplierName, left.dto.location, left.dto.supplierSku, left.dto.mappingStatus, left.id],
+      [right.dto.supplierName, right.dto.location, right.dto.supplierSku, right.dto.mappingStatus, right.id],
     )));
   }
 
@@ -537,7 +537,7 @@ export async function loadMaterialCatalogPreview(
   const productDtos = productRows.flatMap((product) => {
     const productId = text(product.id);
     if (!productId) return [];
-    const productOffers = offersByProduct.get(productId) ?? [];
+    const productOffers = (offersByProduct.get(productId) ?? []).map((entry) => entry.dto);
     if (productOffers.length === 0) return [];
     const canonicalName = text(product.canonical_name);
     const productCode = text(product.mckenzie_product_code);
@@ -549,7 +549,7 @@ export async function loadMaterialCatalogPreview(
     const manufacturer = manufacturerById.get(text(product.manufacturer_id) ?? "");
     const category = categoryById.get(text(product.category_id) ?? "");
     const stockingUnit = unitById.get(text(product.stocking_unit_id) ?? "");
-    return [Object.freeze({
+    return [Object.freeze({ id: productId, dto: Object.freeze({
       displayName: canonicalName ?? legacyDescription ?? "Unnamed legacy material",
       productCode,
       identityComplete: Boolean(canonicalName && productCode && product.category_id && product.stocking_unit_id),
@@ -561,11 +561,11 @@ export async function loadMaterialCatalogPreview(
       stockingUnit: text(stockingUnit?.code),
       lifecycleStatus: text(product.lifecycle_status),
       offers: Object.freeze(productOffers),
-    })];
+    }) })];
   }).sort((left, right) => compareFields(
-    [left.displayName, left.productCode ?? "", left.legacySku ?? ""],
-    [right.displayName, right.productCode ?? "", right.legacySku ?? ""],
-  ));
+    [left.dto.displayName, left.dto.productCode ?? "", left.dto.legacySku ?? "", left.id],
+    [right.dto.displayName, right.dto.productCode ?? "", right.dto.legacySku ?? "", right.id],
+  )).map((entry) => entry.dto);
 
   const displayedOffers = productDtos.flatMap((product) => product.offers);
 
