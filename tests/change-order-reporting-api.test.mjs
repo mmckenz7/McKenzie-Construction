@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CHANGE_ORDER_REPORTING_FAILURE_MESSAGE,
   CHANGE_ORDER_REPORTING_FORBIDDEN_MESSAGE,
   createBillingSummaryResponse,
   createReceivablesResponse,
@@ -137,7 +138,15 @@ test("unexpected RPC failures remain HTTP 500", () => {
     status: 500,
     body: {
       success: false,
-      error: "Unexpected database failure",
+      error:
+        CHANGE_ORDER_REPORTING_FAILURE_MESSAGE,
     },
   });
+
+  assert.equal(
+    JSON.stringify(response.body).includes(
+      "Unexpected database failure",
+    ),
+    false,
+  );
 });

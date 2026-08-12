@@ -1,6 +1,9 @@
 export const CHANGE_ORDER_REPORTING_FORBIDDEN_MESSAGE =
   "You do not have permission to view change-order financial reporting.";
 
+export const CHANGE_ORDER_REPORTING_FAILURE_MESSAGE =
+  "Change-order financial reporting could not be loaded.";
+
 type RpcError = {
   code?: string;
   message: string;
@@ -24,7 +27,8 @@ export function getChangeOrderReportingErrorResponse(
     status: 500,
     body: {
       success: false as const,
-      error: error.message,
+      error:
+        CHANGE_ORDER_REPORTING_FAILURE_MESSAGE,
     },
   };
 }
