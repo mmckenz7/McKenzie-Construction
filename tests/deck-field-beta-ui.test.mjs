@@ -4,31 +4,24 @@ import test from "node:test";
 
 const page = readFileSync("src/app/sales/estimates/[estimateId]/page.tsx", "utf8");
 const builder = readFileSync("src/components/estimates/estimate-builder.tsx", "utf8");
-const component = readFileSync("src/components/estimates/deck-field-beta.tsx", "utf8");
-const helper = readFileSync("src/lib/deck-field-beta.ts", "utf8");
+const component = readFileSync("src/components/estimates/guided-deck-site-visit.tsx", "utf8");
 
-test("Deck field beta is query gated and saves only private internal notes", () => {
+test("Deck field beta is replaced by the query-gated guided private visit", () => {
   assert.match(page, /showDeckWorkflow=\{query\.workflow === "deck"\}/);
   assert.match(builder, /showDeckWorkflow = false/);
-  assert.match(builder, /<DeckFieldBeta/);
-  assert.match(builder, /body: \{ internalNotes \}/);
-  assert.doesNotMatch(`${component}\n${helper}`, /scopeNotes|customerNotes|attachment|photo|supabase|rpc\(/i);
-  assert.doesNotMatch(component, /fetch\(|\/api\//);
+  assert.match(builder, /<GuidedDeckSiteVisit estimateId=\{estimateId\}/);
+  assert.doesNotMatch(builder, /<DeckFieldBeta/);
+  assert.doesNotMatch(component, /scopeNotes|customerNotes|internalNotes/);
 });
 
-test("Deck field beta requires preview and repeats its limitations", () => {
-  for (const copy of [
-    "Field beta limitations", "No automatic deck engineering", "Michael must verify every measurement and quantity",
-    "product, store, price, package quantity, tax, and availability", "Preview private field notes",
-    "Private internal-notes preview", "FIELD BETA — Review every entry", "Save unverified field notes privately",
-    "manual sections and cost lines", "set the job price", "customer display", "preview the customer estimate",
-  ]) assert.match(`${component}\n${helper}`, new RegExp(copy, "i"));
-  assert.match(component, /preview \? <div/);
-  assert.match(component, /replaceDeckFieldBlock\(internalNotes, preview\)/);
+test("guided beta repeats limitations and never fabricates automatic results", () => {
+  for (const copy of ["Field beta limitations", "Photos document visible conditions only", "No automatic engineering", "Michael must verify every field fact", "Manual check required", "Automatic image review is unavailable"]) assert.match(component, new RegExp(copy, "i"));
+  assert.doesNotMatch(component, /calculateDeck|materialQuantity|laborHours|AI passed|automatic pass/i);
 });
 
-test("mobile field capture has no fabricated values or calculation path", () => {
-  assert.match(component, /const emptyDraft:[\s\S]*projectCondition: "", length: "", width: ""/);
-  for (const label of ["Overall length", "Overall width", "Height above grade", "Stairs observed", "Railing areas", "Surface and framing condition", "Access and demolition", "Utilities and obstructions", "Other field notes"]) assert.match(component, new RegExp(label, "i"));
-  assert.doesNotMatch(`${component}\n${helper}`, /calculateDeck|materialQuantity|laborHours|Lowe's price:\s*\d/i);
+test("guided beta continues to existing manual estimate work without writing customer scope", () => {
+  assert.match(component, /nine required views/i);
+  assert.match(component, /I confirm this capture/);
+  assert.match(component, /office follow-up/i);
+  assert.doesNotMatch(component, /body:\s*\{\s*(?:scopeNotes|customerNotes|internalNotes)/);
 });

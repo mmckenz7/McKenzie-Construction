@@ -108,6 +108,10 @@ function normalizeFeatureMap(
     ai_estimator:
       record.ai_estimator === true,
 
+    guided_site_visits:
+      record.ai_estimator === true &&
+      record.guided_site_visits === true,
+
     material_catalog:
       materialCatalog,
 
