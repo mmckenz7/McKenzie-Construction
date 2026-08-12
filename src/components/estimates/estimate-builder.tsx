@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { ContractPreparationCard } from "@/components/estimates/contract-preparation";
 import { EstimateProposalCard } from "@/components/estimates/estimate-proposal-card";
+import { FenceEstimateWorkflow } from "@/components/estimates/fence-estimate-workflow";
 
 import {
   addPreviewCents,
@@ -31,6 +32,7 @@ import {
   type EstimateCostCategory,
 } from "@/lib/estimate-builder-client";
 import { buildCustomerPresentation, snapshotEstimatePresentation } from "@/lib/estimate-presentation";
+import { projectFenceEstimateWorkflow } from "@/lib/fence-estimate-workflow";
 
 type SectionDraft = { id: string | null; name: string; customerDescription: string; internalNotes: string; sortOrder: string };
 type EstimateSetupDraft = {
@@ -112,7 +114,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="block text-sm font-semibold text-slate-800"><span>{label}</span>{children}</label>;
 }
 
-export function EstimateBuilder({ estimateId }: { estimateId: string }) {
+export function EstimateBuilder({
+  estimateId,
+  showFenceWorkflow = false,
+}: {
+  estimateId: string;
+  showFenceWorkflow?: boolean;
+}) {
   const [state, setState] = useState<EstimateBuilderEnvelope | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
@@ -200,6 +208,13 @@ export function EstimateBuilder({ estimateId }: { estimateId: string }) {
   }) : null;
   const customerPresentation = presentationSnapshot
     ? buildCustomerPresentation(presentationSnapshot, state.sections, state.items, calculation)
+    : null;
+  const fenceWorkflow = showFenceWorkflow
+    ? projectFenceEstimateWorkflow({
+        estimate: state.estimate,
+        editable: canMutate,
+        fenceDataState: "ready",
+      })
     : null;
 
   async function submitSection(event: FormEvent) {
@@ -312,6 +327,13 @@ export function EstimateBuilder({ estimateId }: { estimateId: string }) {
     {notice ? <div role="status" className="estimate-save-toast fixed right-6 top-24 z-[80] max-w-md border border-emerald-400 bg-emerald-950 p-4 text-sm font-semibold text-emerald-100 shadow-2xl">{notice}</div> : null}
 
     {reloadRequirement ? <div role="alert" className="border border-amber-300 bg-amber-50 p-5 text-amber-950"><p className="font-bold">Editing is disabled until the latest estimate is loaded.</p><p className="mt-1 text-sm">The displayed state may be out of date. Revision {reloadRequirement.minimumAcceptableRevision} or newer is required. Retrying reload performs a read only and will not repeat your previous change.</p><button disabled={pending} className={`mt-3 ${primary}`} onClick={() => void retryReload()}>{pending ? "Reloading…" : "Retry reload"}</button></div> : null}
+
+    {fenceWorkflow ? <FenceEstimateWorkflow
+      workflow={fenceWorkflow}
+      returnHref={`/sales/estimates/${encodeURIComponent(estimateId)}`}
+      estimateId={estimateId}
+      editable={canMutate}
+    /> : null}
 
     {canMutate ? <div className="flex flex-wrap gap-3"><button disabled={controlsDisabled} className={primary} onClick={() => setSectionForm(sectionDraft(undefined, state.sections.length ? Math.max(...state.sections.map((section) => section.sortOrder)) + 10 : 0))}>Add section</button>{state.capabilities.canViewProfit ? <button disabled={controlsDisabled} className={secondary} onClick={() => setSetupForm(estimateSetupDraft(state))}>Edit estimate details</button> : null}{pending ? <span className="self-center text-sm font-semibold text-slate-600">Saving…</span> : null}</div> : !reloadRequirement ? <p className="border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{state.estimate.status !== "draft" ? `This estimate is ${humanizeStatus(state.estimate.status)} and can no longer be edited.` : "You can review this estimate, but you do not have permission to change pricing or structure."}</p> : null}
 

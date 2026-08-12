@@ -182,7 +182,7 @@ designed to fit its named 4-foot or 5-foot gate opening when installed with the
 included hardware.
 
 Every weight-bearing vinyl gate post requires an internal stiffener. Lowe's
-identifies aluminum insert model `73041348` for this gate family. The working
+identifies aluminum insert model `73041348`, item `1143443`, for this gate family. The working
 assembly therefore requires one insert for each of the two gate posts, subject
 to confirmation against the chosen post and current instruction sheet.
 
@@ -227,12 +227,15 @@ Working count rule:
 
 - one post cap per physical post, including gate posts;
 - cap style is a selectable component, not hard-coded into geometry; and
-- adhesive quantity remains unresolved until the adhesive SKU and coverage are
-  verified.
+- Freedom PVC vinyl cement model `73024782`, Lowe's item `747313`, is a sourced
+  candidate for cap attachment. Its listing states that one 4-ounce tube
+  attaches approximately 10 post tops. McKenzie canonical-item approval and
+  job-level package rounding remain unresolved.
 
 Source:
 
 - [Lowe's 5-inch white pyramid cap](https://www.lowes.com/pd/Freedom-5-0-Inches-W-x-5-0-Inches-L-White-Vinyl-fence-Post-cap-Fits-Common-Post-Measurement-5-in-x-5-in/3601816)
+- [Lowe's Freedom PVC vinyl cement](https://www.lowes.com/pd/Freedom-PVC-Fence-Vinyl-Cement-Vinyl-Fence/1000080201)
 
 ## Working component demands
 
@@ -247,10 +250,10 @@ rules are approved:
 | `emblem_post_end_5x5x108_white` | each | Model `73045785` |
 | `emblem_gate_4ft_white` | each | Model `73024873` |
 | `emblem_gate_5ft_white` | each | Model `73024874` |
-| `vinyl_gate_post_insert_5x5` | each | Model `73041348`, pending final compatibility confirmation |
+| `vinyl_gate_post_insert_5x5` | each | Model `73041348`, Lowe's item `1143443`, pending final compatibility confirmation |
 | `vinyl_post_cap_5x5_white_pyramid` | each | Model `73003093` |
 | `gate_latch_compatible` | each | Unresolved SKU |
-| `vinyl_adhesive` | package | Unresolved SKU and coverage |
+| `vinyl_adhesive` | package | Candidate model `73024782`, Lowe's item `747313`, approximately 10 caps per 4-ounce tube; canonical approval unresolved |
 | `post_gravel` | approved volume unit | Unresolved canonical item |
 | `post_concrete` | approved volume/package unit | Unresolved canonical item and yield |
 
