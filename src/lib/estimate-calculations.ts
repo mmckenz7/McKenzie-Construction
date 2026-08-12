@@ -1,5 +1,6 @@
 import type {
   EstimateCalculationInput,
+  EstimateCalculationPolicyVersion,
   EstimateCostComponentsInput,
   EstimateItemInput,
   MaterialTaxEstimateCalculationInput,
@@ -16,6 +17,10 @@ export const ESTIMATE_CALCULATION_POLICY_VERSION =
   "structured-estimate-v1" as const;
 export const MATERIAL_TAX_ESTIMATE_CALCULATION_POLICY_VERSION =
   "structured-estimate-v2-material-tax" as const;
+export const STRUCTURED_ESTIMATE_CALCULATION_POLICY_VERSIONS = Object.freeze([
+  ESTIMATE_CALCULATION_POLICY_VERSION,
+  MATERIAL_TAX_ESTIMATE_CALCULATION_POLICY_VERSION,
+] as const);
 
 const QUANTITY_SCALE = 10_000n;
 const PERCENT_SCALE = 1_000n;
@@ -463,6 +468,27 @@ export function calculateEstimateWithMaterialTax(
     MATERIAL_TAX_ESTIMATE_CALCULATION_POLICY_VERSION,
     materialTaxPercent,
   );
+}
+
+export function calculateEstimateForStoredPolicy(
+  policyVersion: EstimateCalculationPolicyVersion,
+  input: Omit<EstimateCalculationInput, "taxPercent">,
+  storedTaxRatePercent: string,
+) {
+  if (policyVersion === ESTIMATE_CALCULATION_POLICY_VERSION) {
+    return calculateEstimate({
+      ...input,
+      taxPercent: storedTaxRatePercent,
+    });
+  }
+  if (policyVersion === MATERIAL_TAX_ESTIMATE_CALCULATION_POLICY_VERSION) {
+    return calculateEstimateWithMaterialTax({
+      ...input,
+      taxPercent: "0",
+      materialTaxPercent: storedTaxRatePercent,
+    });
+  }
+  throw new TypeError("Unsupported calculation_policy_version.");
 }
 
 function serializeInteger(value: bigint | null) {

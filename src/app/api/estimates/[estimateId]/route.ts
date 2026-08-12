@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimate-access";
+import { STRUCTURED_ESTIMATE_CALCULATION_POLICY_VERSIONS } from "@/lib/estimate-calculations";
 import {
   calculateMutation,
   completeCommittedMutationState,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/estimate-persistence";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import { ESTIMATE_PRESENTATION_VERSION } from "@/lib/estimate-presentation";
+import type { EstimateCalculationPolicyVersion } from "@/lib/estimate-types";
 import { resolveEstimateMaterialTax } from "@/lib/estimate-material-tax";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -70,7 +72,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const supabase = createAdminServerClient();
     const loaded = await loadMutationState(supabase, estimateId);
-    if (!loaded || loaded.estimate.calculation_policy_version !== "structured-estimate-v1") {
+    if (!loaded || !STRUCTURED_ESTIMATE_CALCULATION_POLICY_VERSIONS.includes(
+      loaded.estimate.calculation_policy_version as EstimateCalculationPolicyVersion,
+    )) {
       return NextResponse.json(ESTIMATE_NOT_FOUND_BODY, { status: 404 });
     }
     if (loaded.estimate.status !== "draft") {
@@ -102,7 +106,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const requestedPropertyAddress = body.propertyAddress === undefined
       ? text(loaded.estimate.property_address)
       : text(body.propertyAddress);
-    const municipalityTax = await resolveEstimateMaterialTax(supabase, requestedPropertyAddress);
+    const changingPropertyAddress = body.propertyAddress !== undefined
+      && requestedPropertyAddress !== text(loaded.estimate.property_address);
+    const municipalityTax = changingPropertyAddress
+      ? await resolveEstimateMaterialTax(supabase, requestedPropertyAddress)
+      : null;
     const calculationRecord = {
       ...loaded.estimate,
       overhead_percent_text: body.overheadPercent === undefined
@@ -137,12 +145,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       overhead_percent: calculationRecord.overhead_percent_text,
       profit_markup_percent: calculationRecord.profit_markup_percent_text,
       tax_rate_percent: calculationRecord.tax_rate_percent_text,
-      material_tax_municipality: municipalityTax?.municipality ?? null,
-      material_tax_county: municipalityTax?.county ?? null,
-      material_tax_state_code: municipalityTax?.stateCode ?? null,
-      material_tax_rate_id: municipalityTax?.rateId ?? null,
-      material_tax_source_url: municipalityTax?.sourceUrl ?? null,
-      material_tax_verified_at: municipalityTax?.verifiedAt ?? null,
+      ...(changingPropertyAddress ? {
+        material_tax_municipality: municipalityTax?.municipality ?? null,
+        material_tax_county: municipalityTax?.county ?? null,
+        material_tax_state_code: municipalityTax?.stateCode ?? null,
+        material_tax_rate_id: municipalityTax?.rateId ?? null,
+        material_tax_source_url: municipalityTax?.sourceUrl ?? null,
+        material_tax_verified_at: municipalityTax?.verifiedAt ?? null,
+      } : {}),
       discount_value: calculationRecord.discount_value_text,
       ...buildEstimateCalculationPersistence(calculation),
       calculation_revision: expectedRevision + 1,

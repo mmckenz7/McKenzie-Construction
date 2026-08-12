@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { calculateEstimate, calculateEstimateWithMaterialTax } from "./estimate-calculations";
+import {
+  calculateEstimate,
+  calculateEstimateForStoredPolicy,
+  STRUCTURED_ESTIMATE_CALCULATION_POLICY_VERSIONS,
+} from "./estimate-calculations";
+import type { EstimateCalculationPolicyVersion } from "./estimate-types";
 import {
   buildEstimateCalculationPersistence,
   centsToPostgresNumeric,
@@ -357,14 +362,21 @@ export function calculateMutation(
   estimate: Record<string, unknown>,
   items: readonly CanonicalEstimateItem[],
 ) {
-  const calculation = calculateEstimateWithMaterialTax({
-    items: items.map(canonicalToCalculationInput),
-    overheadPercent: postgresNumericToDecimalString(estimate.overhead_percent_text, "overheadPercent"),
-    profitMarkupPercent: postgresNumericToDecimalString(estimate.profit_markup_percent_text, "profitMarkupPercent"),
-    taxPercent: "0",
-    materialTaxPercent: postgresNumericToDecimalString(estimate.tax_rate_percent_text, "materialTaxPercent"),
-    discountAmount: postgresNumericToDecimalString(estimate.discount_value_text, "discountAmount"),
-  });
+  const policyVersion = estimate.calculation_policy_version;
+  if (policyVersion !== "structured-estimate-v1"
+    && policyVersion !== "structured-estimate-v2-material-tax") {
+    throw new TypeError("Unsupported calculation_policy_version.");
+  }
+  const calculation = calculateEstimateForStoredPolicy(
+    policyVersion as EstimateCalculationPolicyVersion,
+    {
+      items: items.map(canonicalToCalculationInput),
+      overheadPercent: postgresNumericToDecimalString(estimate.overhead_percent_text, "overheadPercent"),
+      profitMarkupPercent: postgresNumericToDecimalString(estimate.profit_markup_percent_text, "profitMarkupPercent"),
+      discountAmount: postgresNumericToDecimalString(estimate.discount_value_text, "discountAmount"),
+    },
+    postgresNumericToDecimalString(estimate.tax_rate_percent_text, "taxRatePercent"),
+  );
   const itemCalculations = buildItemCalculationBundle(items, calculation);
   verifyCalculationBundleCorrespondence(items, itemCalculations);
   return {
@@ -390,7 +402,9 @@ export function canonicalItemRpcValue(item: CanonicalEstimateItem) {
 export async function loadMutationState(supabase: SupabaseClient, estimateId: string): Promise<MutationState | null> {
   const estimate = await supabase.from("estimates").select(STRUCTURED_ESTIMATE_SELECT).eq("id", estimateId).maybeSingle();
   if (estimate.error) throw new Error("Estimate mutation state could not be loaded.");
-  if (!estimate.data || estimate.data.calculation_policy_version !== "structured-estimate-v1") return null;
+  if (!estimate.data || !STRUCTURED_ESTIMATE_CALCULATION_POLICY_VERSIONS.includes(
+    estimate.data.calculation_policy_version as EstimateCalculationPolicyVersion,
+  )) return null;
   const [items, sections] = await Promise.all([
     supabase.from("estimate_line_items").select(STRUCTURED_ESTIMATE_ITEM_SELECT).eq("estimate_id", estimateId).order("sort_order").order("id"),
     supabase.from("estimate_sections").select("id, name, customer_description, internal_notes, sort_order").eq("estimate_id", estimateId).order("sort_order").order("id"),
@@ -400,7 +414,9 @@ export async function loadMutationState(supabase: SupabaseClient, estimateId: st
     .select("status, calculation_policy_version, calculation_revision")
     .eq("id", estimateId).maybeSingle();
   if (fence.error) throw new Error("Estimate mutation state could not be loaded.");
-  if (!fence.data || fence.data.calculation_policy_version !== "structured-estimate-v1") return null;
+  if (!fence.data || !STRUCTURED_ESTIMATE_CALCULATION_POLICY_VERSIONS.includes(
+    fence.data.calculation_policy_version as EstimateCalculationPolicyVersion,
+  )) return null;
   if (fence.data.status !== estimate.data.status
     || fence.data.calculation_policy_version !== estimate.data.calculation_policy_version
     || fence.data.calculation_revision !== estimate.data.calculation_revision) {
@@ -506,6 +522,7 @@ export async function loadPostMutationBuilderState(
 
 export type CommittedMutationIdentifierField =
   | "estimateId"
+  | "applicationId"
   | "sectionId"
   | "deletedSectionId"
   | "itemId"

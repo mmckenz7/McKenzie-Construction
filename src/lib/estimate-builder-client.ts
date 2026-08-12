@@ -83,6 +83,7 @@ export type EstimateBuilderState = {
     calculationPolicyVersion: "structured-estimate-v1" | "structured-estimate-v2-material-tax";
     calculationRevision: unknown;
     calculation: Record<string, unknown> & { customerTotalCents?: string | null };
+    internalNotes: string | null;
     presentation: {
       schemaAvailable: boolean;
       version: "estimate-presentation-v1";
@@ -193,6 +194,7 @@ export function isBuilderEnvelope(value: unknown): value is EstimateBuilderEnvel
     || typeof capabilities.canViewProfit !== "boolean") return false;
   const estimate = record.estimate as Record<string, unknown>;
   if (typeof estimate.id !== "string" || !estimate.id || typeof estimate.status !== "string" || !estimate.status
+    || !(estimate.internalNotes === null || typeof estimate.internalNotes === "string")
     || !["structured-estimate-v1", "structured-estimate-v2-material-tax"].includes(String(estimate.calculationPolicyVersion))
     || estimate.calculationRevision !== record.calculationRevision
     || !estimate.calculation || typeof estimate.calculation !== "object" || Array.isArray(estimate.calculation)

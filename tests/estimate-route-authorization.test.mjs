@@ -9,6 +9,7 @@ const featureTypes = readFileSync("src/lib/features/types.ts", "utf8");
 const featureServer = readFileSync("src/lib/features/server.ts", "utf8");
 const migration = readFileSync("supabase/migrations/20260806010000_estimates_feature_default.sql", "utf8");
 const draftInvariantMigration = readFileSync("supabase/migrations/20260806020000_estimate_draft_invariants.sql", "utf8");
+const policyMigration = readFileSync("supabase/migrations/20260812130000_structured_estimate_policy_v2.sql", "utf8");
 
 test("authorization requires active authentication, Sales access, and fixed-scope feature", () => {
   assert.match(access, /getAuthenticatedAccess\(\)/);
@@ -39,10 +40,11 @@ test("create and patch require edit_prices while reads do not", () => {
 
 test("routes create only structured drafts and reuse an active lead draft", () => {
   assert.match(collection, /status: "draft"/);
-  assert.match(collection, /calculation_policy_version: ESTIMATE_CALCULATION_POLICY_VERSION/);
+  assert.match(collection, /calculateEstimateWithMaterialTax/);
+  assert.match(collection, /\.\.\.buildEstimateCalculationPersistence\(calculation\)/);
   assert.match(collection, /calculation_revision: 0/);
   assert.match(collection, /\.eq\("lead_id", leadId\)\.eq\("status", "draft"\)/);
-  assert.match(collection, /\.eq\("calculation_policy_version", ESTIMATE_CALCULATION_POLICY_VERSION\)/);
+  assert.match(collection, /\.in\("calculation_policy_version", STRUCTURED_ESTIMATE_CALCULATION_POLICY_VERSIONS\)/);
   assert.match(collection, /verifyRelationships/);
   assert.match(collection, /projectCustomer\.source_lead_id !== leadId/);
   assert.match(collection, /linkedCustomerId !== customerId/);
@@ -55,6 +57,9 @@ test("database enforces exactly one structured draft per non-null lead", () => {
   assert.doesNotMatch(draftInvariantMigration, /customer_id|project_id|feature_settings|\bgrant\b|\brevoke\b/i);
   assert.doesNotMatch(draftInvariantMigration, /\bupdate\s+public\.estimates|\bdelete\s+from|\bcalculateEstimate\b|profit_markup_amount\s*:=/i);
   assert.match(draftInvariantMigration, /having count\(\*\) > 1/);
+  assert.match(policyMigration, /drop index public\.estimates_one_structured_draft_per_lead_uidx/);
+  assert.match(policyMigration, /calculation_policy_version in \([\s\S]*?'structured-estimate-v1',[\s\S]*?'structured-estimate-v2-material-tax'/);
+  assert.doesNotMatch(policyMigration, /\bupdate\s+public\.estimates|\bdelete\s+from|\btruncate\b/i);
 });
 
 test("POST recovers only the intended lead-draft unique race", () => {
@@ -64,7 +69,7 @@ test("POST recovers only the intended lead-draft unique race", () => {
   assert.match(collection, /throw new Error\(inserted\.error\.message\)/);
   const loader = collection.match(/async function loadStructuredLeadDraft[\s\S]*?\n\}/)?.[0] ?? "";
   assert.match(loader, /\.eq\("lead_id", leadId\)\.eq\("status", "draft"\)/);
-  assert.match(loader, /\.eq\("calculation_policy_version", ESTIMATE_CALCULATION_POLICY_VERSION\)/);
+  assert.match(loader, /\.in\("calculation_policy_version", STRUCTURED_ESTIMATE_CALCULATION_POLICY_VERSIONS\)/);
   for (const inactive of ["sent", "accepted", "converted", "declined", "expired", "void"]) {
     assert.doesNotMatch(loader, new RegExp(`"${inactive}"`));
   }
@@ -91,6 +96,15 @@ test("patch is draft-only, revision guarded, and recalculated server-side", () =
   assert.match(detail, /completeCommittedMutationState\(/);
   assert.match(detail, /nextCalculationRevision: completion\.state\.calculationRevision/);
   assert.match(detail, /\.\.\.completion\.state/);
+});
+
+test("internal-notes-only patches preserve tax inputs and provenance while address edits refresh them", () => {
+  assert.match(detail, /const changingPropertyAddress = body\.propertyAddress !== undefined\s*&& requestedPropertyAddress !== text\(loaded\.estimate\.property_address\)/);
+  assert.match(detail, /const municipalityTax = changingPropertyAddress\s*\? await resolveEstimateMaterialTax\(supabase, requestedPropertyAddress\)\s*: null/);
+  assert.match(detail, /tax_rate_percent_text: municipalityTax\?\.ratePercent \?\? \(body\.taxRatePercent === undefined\s*\? loaded\.estimate\.tax_rate_percent_text/);
+  assert.match(detail, /\.\.\.\(changingPropertyAddress \? \{[\s\S]*?material_tax_municipality:[\s\S]*?material_tax_verified_at:[\s\S]*?\} : \{\}\)/);
+  assert.match(detail, /body\.internalNotes !== undefined \? \{ internal_notes: text\(body\.internalNotes\) \} : \{\}/);
+  assert.doesNotMatch(detail, /const municipalityTax = await resolveEstimateMaterialTax/);
 });
 
 test("cost and profit capabilities are independently server projected", () => {

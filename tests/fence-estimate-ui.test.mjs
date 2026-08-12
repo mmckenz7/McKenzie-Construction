@@ -8,6 +8,7 @@ const questions = readFileSync("src/components/estimates/fence-context-questions
 const materials = readFileSync("src/components/estimates/fence-material-verification.tsx", "utf8");
 const pricedPreview = readFileSync("src/components/estimates/fence-priced-preview.tsx", "utf8");
 const estimateReview = readFileSync("src/components/estimates/fence-estimate-review.tsx", "utf8");
+const applicationDesign = readFileSync("src/lib/fence-estimate-application.ts", "utf8");
 const questionProjection = readFileSync("src/lib/fence-context-questions.ts", "utf8");
 const builder = readFileSync("src/components/estimates/estimate-builder.tsx", "utf8");
 const page = readFileSync("src/app/sales/estimates/[estimateId]/page.tsx", "utf8");
@@ -161,8 +162,18 @@ test("price confirmation is ephemeral and advances to a non-mutating Step 5 revi
     "Price authority",
     "availability not guaranteed",
     "tax unknown",
+    "Add these materials to the estimate",
+    "Set the job price",
+    "OH&amp;P appears",
+    "choose built in or a separate line",
+    "Add materials — coming next",
   ]) assert.match(estimateReview, new RegExp(copy, "i"));
-  assert.doesNotMatch(estimateReview, /onClick|<button|fetch\(|saveFenceDraft|applyEstimate|mutation\(/i);
+  assert.match(estimateReview, /applicationPlan\.lineCount\} material lines · \$\{applicationPlan\.materialTotalAmount\} Lowe&apos;s cost before tax/);
+  assert.match(estimateReview, /<button type="button" disabled/);
+  assert.match(estimateReview, /buildFenceEstimateApplicationPlan/);
+  assert.doesNotMatch(estimateReview, /previewBinding|Application design token|Markup\/customer-price policy|Reapply behavior/);
+  assert.doesNotMatch(estimateReview, /onClick|fetch\(|saveFenceDraft|applyEstimate|mutation\(/i);
+  assert.doesNotMatch(`${estimateReview}\n${applicationDesign}`, /\/api\/|supabase|rpc\(|fetch\(|estimate_line_items/i);
 });
 
 test("the Fence API requires estimate authorization and an independent optimistic revision", () => {

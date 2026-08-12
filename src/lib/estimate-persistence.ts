@@ -1,10 +1,9 @@
 import {
-  calculateEstimateWithMaterialTax,
-  ESTIMATE_CALCULATION_POLICY_VERSION,
+  calculateEstimateForStoredPolicy,
   projectEstimateCalculation,
 } from "./estimate-calculations";
 import type {
-  EstimateCalculationInput,
+  EstimateCalculationPolicyVersion,
   EstimateItemInput,
   EstimateProjectionPermissions,
   InternalEstimateCalculation,
@@ -194,24 +193,22 @@ export function calculatePersistedEstimate(
   estimate: Record<string, unknown>,
   lineItems: readonly Record<string, unknown>[],
 ) {
-  if (estimate.calculation_policy_version !== ESTIMATE_CALCULATION_POLICY_VERSION) {
+  const policyVersion = estimate.calculation_policy_version;
+  if (policyVersion !== "structured-estimate-v1"
+    && policyVersion !== "structured-estimate-v2-material-tax") {
     throw new TypeError("Unsupported calculation_policy_version.");
   }
-  const input: EstimateCalculationInput = {
+  const input = {
     items: lineItems.map(storedLineItemToCalculationInput),
     overheadPercent: postgresNumericToDecimalString(estimate.overhead_percent_text, "overhead_percent"),
     profitMarkupPercent: postgresNumericToDecimalString(estimate.profit_markup_percent_text, "profit_markup_percent"),
-    taxPercent: postgresNumericToDecimalString(estimate.tax_rate_percent_text, "tax_rate_percent"),
     discountAmount: postgresNumericToDecimalString(estimate.discount_value_text, "discount_value"),
   };
-  return calculateEstimateWithMaterialTax({
-    ...input,
-    taxPercent: "0",
-    materialTaxPercent: postgresNumericToDecimalString(
-      estimate.tax_rate_percent_text,
-      "material_tax_percent",
-    ),
-  });
+  return calculateEstimateForStoredPolicy(
+    policyVersion as EstimateCalculationPolicyVersion,
+    input,
+    postgresNumericToDecimalString(estimate.tax_rate_percent_text, "tax_rate_percent"),
+  );
 }
 
 function moneyOrZero(value: bigint | null) {
@@ -222,6 +219,7 @@ export function buildEstimateCalculationPersistence(
   calculation: InternalEstimateCalculation,
 ) {
   return {
+    calculation_policy_version: calculation.policyVersion,
     costs_complete: calculation.costsComplete,
     prices_complete: calculation.pricesComplete,
     subtotal_cost: moneyOrZero(calculation.directCostCents),

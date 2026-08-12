@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import Link from "next/link";
 
 import { ContractPreparationCard } from "@/components/estimates/contract-preparation";
+import { DeckFieldBeta } from "@/components/estimates/deck-field-beta";
 import { EstimateProposalCard } from "@/components/estimates/estimate-proposal-card";
 import { FenceEstimateWorkflow } from "@/components/estimates/fence-estimate-workflow";
 
@@ -117,9 +118,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function EstimateBuilder({
   estimateId,
   showFenceWorkflow = false,
+  showDeckWorkflow = false,
 }: {
   estimateId: string;
   showFenceWorkflow?: boolean;
+  showDeckWorkflow?: boolean;
 }) {
   const [state, setState] = useState<EstimateBuilderEnvelope | null>(null);
   const [loading, setLoading] = useState(true);
@@ -333,6 +336,12 @@ export function EstimateBuilder({
       returnHref={`/sales/estimates/${encodeURIComponent(estimateId)}`}
       estimateId={estimateId}
       editable={canMutate}
+    /> : null}
+
+    {showDeckWorkflow ? <DeckFieldBeta
+      internalNotes={state.estimate.internalNotes}
+      disabled={controlsDisabled}
+      onSave={(internalNotes) => mutate({ path: `/api/estimates/${estimateId}`, method: "PATCH", body: { internalNotes } })}
     /> : null}
 
     {canMutate ? <div className="flex flex-wrap gap-3"><button disabled={controlsDisabled} className={primary} onClick={() => setSectionForm(sectionDraft(undefined, state.sections.length ? Math.max(...state.sections.map((section) => section.sortOrder)) + 10 : 0))}>Add section</button>{state.capabilities.canViewProfit ? <button disabled={controlsDisabled} className={secondary} onClick={() => setSetupForm(estimateSetupDraft(state))}>Edit estimate details</button> : null}{pending ? <span className="self-center text-sm font-semibold text-slate-600">Saving…</span> : null}</div> : !reloadRequirement ? <p className="border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{state.estimate.status !== "draft" ? `This estimate is ${humanizeStatus(state.estimate.status)} and can no longer be edited.` : "You can review this estimate, but you do not have permission to change pricing or structure."}</p> : null}

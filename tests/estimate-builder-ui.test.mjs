@@ -46,7 +46,7 @@ const state = {
   success: true,
   calculationRevision: 4,
   capabilities: { canEditPrices: true, canViewCosts: true, canViewProfit: true },
-  estimate: { id: estimateId, title: "Kitchen", status: "draft", calculationPolicyVersion: "structured-estimate-v1", calculationRevision: 4, presentation: { schemaAvailable: true, version: "estimate-presentation-v1", detailLevel: "lump_sum", ohpPresentationMode: "distributed", lumpSumLabel: "Kitchen work described in this estimate" }, calculation: {
+  estimate: { id: estimateId, title: "Kitchen", status: "draft", internalNotes: null, calculationPolicyVersion: "structured-estimate-v1", calculationRevision: 4, presentation: { schemaAvailable: true, version: "estimate-presentation-v1", detailLevel: "lump_sum", ohpPresentationMode: "distributed", lumpSumLabel: "Kitchen work described in this estimate" }, calculation: {
     policyVersion: "structured-estimate-v1", items: [], itemPriceSubtotalCents: "12345",
     preDiscountCustomerSubtotalCents: "12345", discountCents: "0", postDiscountSubtotalCents: "12345",
     taxableSubtotalCents: "0", taxCents: "0", customerTotalCents: "12345",

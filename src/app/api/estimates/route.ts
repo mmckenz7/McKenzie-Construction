@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authorizeEstimateRequest } from "@/lib/estimate-access";
-import { calculateEstimateWithMaterialTax, ESTIMATE_CALCULATION_POLICY_VERSION } from "@/lib/estimate-calculations";
+import {
+  calculateEstimateWithMaterialTax,
+  STRUCTURED_ESTIMATE_CALCULATION_POLICY_VERSIONS,
+} from "@/lib/estimate-calculations";
 import {
   buildEstimateCalculationPersistence,
   calculatePersistedEstimate,
@@ -74,7 +77,7 @@ async function loadStructuredLeadDraft(
 ) {
   return supabase.from("estimates").select(STRUCTURED_ESTIMATE_SELECT)
     .eq("lead_id", leadId).eq("status", "draft")
-    .eq("calculation_policy_version", ESTIMATE_CALCULATION_POLICY_VERSION)
+    .in("calculation_policy_version", STRUCTURED_ESTIMATE_CALCULATION_POLICY_VERSIONS)
     .order("created_at", { ascending: true }).limit(1).maybeSingle();
 }
 
@@ -156,7 +159,6 @@ export async function POST(request: NextRequest) {
       tax_rate_percent: taxRatePercent, discount_type: "fixed_amount", discount_value: discountAmount,
       scope_notes: optionalText(body.scopeNotes), exclusions: optionalText(body.exclusions),
       internal_notes: optionalText(body.internalNotes), customer_notes: optionalText(body.customerNotes),
-      calculation_policy_version: ESTIMATE_CALCULATION_POLICY_VERSION,
       calculation_revision: 0, created_by_auth_user_id: auth.authorization!.authUserId,
       material_tax_municipality: municipalityTax?.municipality ?? null,
       material_tax_county: municipalityTax?.county ?? null,
@@ -203,7 +205,7 @@ export async function GET(request: NextRequest) {
 
   const supabase = createAdminServerClient();
   let query = supabase.from("estimates").select(STRUCTURED_ESTIMATE_SELECT)
-    .eq("calculation_policy_version", ESTIMATE_CALCULATION_POLICY_VERSION)
+    .in("calculation_policy_version", STRUCTURED_ESTIMATE_CALCULATION_POLICY_VERSIONS)
     .order("created_at", { ascending: false }).order("id", { ascending: true });
   for (const [column, value] of filters) query = query.eq(column, value);
   if (status) query = query.eq("status", status);

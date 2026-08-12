@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   calculateEstimate,
+  calculateEstimateForStoredPolicy,
   calculateEstimateWithMaterialTax,
   projectEstimateCalculation,
   MAX_ESTIMATE_ITEMS,
@@ -80,6 +81,48 @@ test("handles an empty estimate with the versioned policy", () => {
   assert.equal(result.customerTotalCents, 0n);
   assert.equal(result.grossProfitCents, 0n);
   assert.equal(result.grossMarginMilliPercent, null);
+});
+
+test("stored policy dispatch keeps v1 customer tax separate from v2 material tax", () => {
+  const input = {
+    items: [standard({
+      taxable: true,
+      costs: { ...zeroCosts, materialUnitCost: "100", laborUnitCost: "50" },
+    })],
+    overheadPercent: "10",
+    profitMarkupPercent: "0",
+    discountAmount: "0",
+  };
+  const v1 = calculateEstimateForStoredPolicy("structured-estimate-v1", input, "10");
+  const v2 = calculateEstimateForStoredPolicy("structured-estimate-v2-material-tax", input, "10");
+
+  assert.equal(v1.policyVersion, "structured-estimate-v1");
+  assert.equal(v1.directCostCents, 15_000n);
+  assert.equal(v1.taxCents, 1_650n);
+  assert.equal(v1.customerTotalCents, 18_150n);
+  assert.equal(v2.policyVersion, "structured-estimate-v2-material-tax");
+  assert.equal(v2.materialTaxCents, 1_000n);
+  assert.equal(v2.directCostCents, 16_000n);
+  assert.equal(v2.taxCents, 0n);
+  assert.equal(v2.customerTotalCents, 17_600n);
+});
+
+test("zero-rate v1 and v2 dispatch preserve identical monetary outputs", () => {
+  const input = {
+    items: [standard({ taxable: true, costs: { ...zeroCosts, materialUnitCost: "41.54" } })],
+    overheadPercent: "20",
+    profitMarkupPercent: "0",
+    discountAmount: "0",
+  };
+  const v1 = calculateEstimateForStoredPolicy("structured-estimate-v1", input, "0");
+  const v2 = calculateEstimateForStoredPolicy("structured-estimate-v2-material-tax", input, "0");
+  for (const field of ["directCostCents", "materialTaxCents", "itemPriceSubtotalCents", "overheadCents", "taxCents", "customerTotalCents", "grossProfitCents"]) {
+    assert.equal(v1[field], v2[field], field);
+  }
+  assert.throws(
+    () => calculateEstimateForStoredPolicy("unsupported", input, "0"),
+    /Unsupported calculation_policy_version/,
+  );
 });
 
 test("calculates basic and multi-component direct costs", () => {
