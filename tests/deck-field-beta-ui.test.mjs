@@ -14,8 +14,8 @@ test("Deck field beta is replaced by the query-gated guided private visit", () =
   assert.doesNotMatch(component, /scopeNotes|customerNotes|internalNotes/);
 });
 
-test("guided beta repeats limitations and never fabricates automatic results", () => {
-  for (const copy of ["Field beta limitations", "Photos document visible conditions only", "No automatic engineering", "Michael must verify every field fact", "Manual check required", "Automatic image review is unavailable"]) assert.match(component, new RegExp(copy, "i"));
+test("guided beta repeats limitations and keeps automatic review advisory", () => {
+  for (const copy of ["Field beta limitations", "Photos document visible conditions only", "No automatic engineering", "Michael must verify every field fact", "Your check is required", "only a visibility check"]) assert.match(component, new RegExp(copy, "i"));
   assert.doesNotMatch(component, /calculateDeck|materialQuantity|laborHours|AI passed|automatic pass/i);
 });
 

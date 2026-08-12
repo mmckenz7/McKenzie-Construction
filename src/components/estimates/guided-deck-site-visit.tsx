@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 
 type Requirement = { mode: "photo_only" | "required_measurements" | "conditional"; fields?: string[]; when?: string; otherwise?: string };
 type VisitItem = { id: string; itemKey: string; ordinal: number; title: string; instructions: string; requirement: Requirement; state: "pending" | "confirmed" | "documented_follow_up"; observation: Record<string, unknown>; followUpReasonCode: string | null; followUpNotes: string | null };
-type PhotoAttempt = { id: string; visitItemId: string; retakeOfAttemptId: string | null; ordinal: number; state: "upload_pending" | "quarantined" | "confirmed" | "superseded" | "failed_validation" };
+type UsabilityVerdict = "usable" | "retake_recommended" | "unable_to_assess";
+type UsabilityReview = { id: string; verdict: UsabilityVerdict; issueCodes: string[]; createdAt: string };
+type PhotoAttempt = { id: string; visitItemId: string; retakeOfAttemptId: string | null; ordinal: number; state: "upload_pending" | "quarantined" | "confirmed" | "superseded" | "failed_validation"; usabilityReviews: UsabilityReview[] };
 type Visit = { id: string; revision: number; status: "in_progress" | "completed"; completionOutcome: "all_passed" | "documented_with_office_follow_up" | null; items: VisitItem[]; photoAttempts: PhotoAttempt[] };
 
 const INCLUDE: Record<string, string[]> = {
@@ -40,6 +42,11 @@ const BLOCK_REASONS = [
   ["customer_declined", "Customer denied access"], ["site_condition", "Weather, lighting, or site condition"],
   ["office_verification_required", "Office verification required"],
 ] as const;
+const REVIEW_REASONS: Record<string, string> = {
+  blurry: "The photo looks blurry.", too_dark: "The photo looks too dark.", too_bright: "The photo looks too bright.", glare: "Glare is hiding part of the view.",
+  obstructed: "Something is blocking the view.", wrong_subject: "The requested area may not be in the photo.", incomplete_view: "The full requested area is not visible.",
+  too_distant: "The important details are too far away.", orientation_problem: "The photo orientation makes the view hard to check.", unsupported_media: "This photo format could not be reviewed.",
+};
 const input = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base text-slate-950 outline-none focus:border-amber-700 focus:ring-2 focus:ring-amber-100 disabled:bg-slate-100";
 const primary = "w-full rounded-lg bg-slate-950 px-4 py-3 text-base font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto";
 const secondary = "w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base font-bold text-slate-800 disabled:opacity-50 sm:w-auto";
@@ -57,6 +64,8 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
   const [blockNotes, setBlockNotes] = useState("");
   const [localPhoto, setLocalPhoto] = useState<string | null>(null);
   const [pendingPhoto, setPendingPhoto] = useState<{ id: string; revision: number } | null>(null);
+  const [localReview, setLocalReview] = useState<{ photoId: string; status: "reviewing" } | { photoId: string; status: "complete"; verdict: UsabilityVerdict; issueCodes: string[] } | null>(null);
+  const [humanAccepted, setHumanAccepted] = useState(false);
 
   const loadVisit = useCallback(async (visitId: string) => {
     const response = await fetch(`/api/guided-site-visits/${encodeURIComponent(visitId)}`, { cache: "no-store" });
@@ -89,49 +98,63 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
   const current = visit?.items.find((item) => item.state === "pending") ?? null;
   const attempts = current && visit ? visit.photoAttempts.filter((photo) => photo.visitItemId === current.id) : [];
   const storedPhoto = [...attempts].reverse().find((photo) => photo.state === "confirmed") ?? null;
+  const activePhotoId = pendingPhoto?.id ?? storedPhoto?.id ?? null;
+  const storedReview = latestUsabilityReview(storedPhoto?.usabilityReviews ?? []);
+  const review = localReview?.photoId === activePhotoId ? localReview : storedReview ? { photoId: storedPhoto!.id, status: "complete" as const, verdict: storedReview.verdict, issueCodes: storedReview.issueCodes } : activePhotoId ? { photoId: activePhotoId, status: "complete" as const, verdict: "unable_to_assess" as const, issueCodes: [] } : null;
   const terminalCount = visit?.items.filter((item) => item.state !== "pending").length ?? 0;
   const blockedCount = visit?.items.filter((item) => item.state === "documented_follow_up").length ?? 0;
   const fieldNames = current?.requirement.fields ?? [];
   const requiresFields = current?.requirement.mode === "required_measurements" || current?.requirement.mode === "conditional" && condition === "yes";
-  const reviewPhotoReady = Boolean(pendingPhoto || storedPhoto)
-  const requirementSatisfied = reviewPhotoReady
+  const reviewPhotoReady = Boolean(activePhotoId)
+  const requirementSatisfied = reviewPhotoReady && humanAccepted
     && (current?.requirement.mode !== "conditional" || condition !== "")
     && (!requiresFields || fieldNames.every((field) => measurements[field]?.value.trim() && measurements[field]?.unit.trim()));
 
   async function uploadPhoto(file: File) {
     if (!visit || !current || busy) return;
-    setBusy(true); setError(""); setProgress(0);
+    setBusy(true); setError(""); setProgress(0); setHumanAccepted(false); setLocalReview(null);
     try {
       if (!file.type.startsWith("image/")) throw new Error("Choose a supported image file.");
       const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
       const sha256 = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-      const reserve = await jsonRequest(`/api/guided-site-visits/${visit.id}/items/${current.id}/photos/upload-session`, "POST", { expectedRevision: pendingPhoto?.revision ?? visit.revision, originalFilename: file.name || `deck-capture-${current.ordinal}.jpg`, mimeType: file.type, byteSize: file.size, sha256, retakeOfAttemptId: storedPhoto?.id ?? null });
+      const reserve = await jsonRequest(`/api/guided-site-visits/${visit.id}/items/${current.id}/photos/upload-session`, "POST", { expectedRevision: pendingPhoto?.revision ?? visit.revision, originalFilename: file.name || `deck-capture-${current.ordinal}.jpg`, mimeType: file.type, byteSize: file.size, sha256, retakeOfAttemptId: pendingPhoto?.id ?? storedPhoto?.id ?? null });
       const upload = reserve.upload as { signedUrl?: string; requiredMimeType?: string };
       if (!upload?.signedUrl || typeof reserve.attemptId !== "string" || typeof reserve.nextRevision !== "number") throw new Error("Private upload session was incomplete.");
       await uploadWithProgress(upload.signedUrl, file, setProgress);
       if (localPhoto) URL.revokeObjectURL(localPhoto);
       setLocalPhoto(URL.createObjectURL(file));
-      setPendingPhoto({ id: reserve.attemptId, revision: reserve.nextRevision });
+      const completed = await jsonRequest(`/api/guided-site-visits/${visit.id}/photos/${reserve.attemptId}/complete`, "POST", { expectedRevision: reserve.nextRevision });
+      if (typeof completed.nextRevision !== "number") throw new Error("Photo confirmation response was incomplete.");
+      setPendingPhoto({ id: reserve.attemptId, revision: completed.nextRevision });
+      setLocalReview({ photoId: reserve.attemptId, status: "reviewing" });
+      await reviewPhoto(reserve.attemptId, initialReviewKey(reserve.attemptId));
     } catch (requestError) { try { await loadVisit(visit.id); } catch {} setError(requestError instanceof Error ? requestError.message : "Photo upload failed. Retry this capture."); }
     finally { setBusy(false); setProgress(null); }
+  }
+
+  async function reviewPhoto(photoId: string, idempotencyKey: string) {
+    if (!visit) return;
+    setLocalReview({ photoId, status: "reviewing" }); setError("");
+    try {
+      const result = await jsonRequest(`/api/guided-site-visits/${visit.id}/photos/${photoId}/usability-reviews`, "POST", { idempotencyKey });
+      if (!isUsabilityVerdict(result.verdict) || !Array.isArray(result.issueCodes)) throw new Error("Photo review response was incomplete.");
+      setLocalReview({ photoId, status: "complete", verdict: result.verdict, issueCodes: result.issueCodes.filter((code): code is string => typeof code === "string") });
+    } catch {
+      setLocalReview({ photoId, status: "complete", verdict: "unable_to_assess", issueCodes: [] });
+    }
   }
 
   async function confirmItem() {
     if (!visit || !current || !requirementSatisfied || busy) return;
     setBusy(true); setError("");
     try {
-      let expectedRevision = visit.revision;
-      if (pendingPhoto) {
-        const completed = await jsonRequest(`/api/guided-site-visits/${visit.id}/photos/${pendingPhoto.id}/complete`, "POST", { expectedRevision: pendingPhoto.revision });
-        if (typeof completed.nextRevision !== "number") throw new Error("Photo confirmation response was incomplete.");
-        expectedRevision = completed.nextRevision;
-      }
+      const expectedRevision = pendingPhoto?.revision ?? visit.revision;
       const observation = current.requirement.mode === "photo_only" ? {}
         : current.requirement.mode === "required_measurements" ? { measurements }
         : condition === "yes" ? { conditionStatus: "applies", measurements }
         : { conditionStatus: "not_applicable", ...(current.requirement.otherwise ? { confirmation: current.requirement.otherwise } : {}) };
       await jsonRequest(`/api/guided-site-visits/${visit.id}/items/${current.id}`, "PATCH", { expectedRevision, action: "confirm", observation });
-      setMeasurements({}); setCondition(""); if (localPhoto) URL.revokeObjectURL(localPhoto); setLocalPhoto(null); setPendingPhoto(null); setBlockOpen(false);
+      setMeasurements({}); setCondition(""); if (localPhoto) URL.revokeObjectURL(localPhoto); setLocalPhoto(null); setPendingPhoto(null); setLocalReview(null); setHumanAccepted(false); setBlockOpen(false);
       await loadVisit(visit.id);
     } catch (requestError) { try { await loadVisit(visit.id); } catch {} setError(requestError instanceof Error ? requestError.message : "Capture could not be confirmed."); }
     finally { setBusy(false); }
@@ -142,7 +165,7 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
     setBusy(true); setError("");
     try {
       await jsonRequest(`/api/guided-site-visits/${visit.id}/items/${current.id}`, "PATCH", { expectedRevision: pendingPhoto?.revision ?? visit.revision, action: "document_follow_up", observation: {}, followUpReasonCode: blockReason, followUpNotes: blockNotes.trim() });
-      setBlockReason(""); setBlockNotes(""); setBlockOpen(false); setMeasurements({}); setCondition(""); if (localPhoto) URL.revokeObjectURL(localPhoto); setLocalPhoto(null); setPendingPhoto(null);
+      setBlockReason(""); setBlockNotes(""); setBlockOpen(false); setMeasurements({}); setCondition(""); if (localPhoto) URL.revokeObjectURL(localPhoto); setLocalPhoto(null); setPendingPhoto(null); setLocalReview(null); setHumanAccepted(false);
       await loadVisit(visit.id);
     } catch (requestError) { try { await loadVisit(visit.id); } catch {} setError(requestError instanceof Error ? requestError.message : "Blocked reason could not be saved."); }
     finally { setBusy(false); }
@@ -175,16 +198,26 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
       <div className="mt-4 rounded-lg bg-slate-50 p-4"><p className="text-sm font-bold">Include in the photo</p><ul className="mt-2 space-y-2 text-sm text-slate-700">{(INCLUDE[current.itemKey] ?? []).map((criterion) => <li key={criterion}>✓ {criterion}</li>)}</ul></div>
       {/* Blob previews are local-only and cannot use the Next image optimizer. */}
       {localPhoto ? <img src={localPhoto} alt={`Current ${current.title} capture`} className="mt-4 max-h-96 w-full rounded-lg border border-slate-300 object-contain" /> : null} {/* eslint-disable-line @next/next/no-img-element */}
-      {!reviewPhotoReady ? <label className={`mt-5 block cursor-pointer text-center ${primary}`}><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" className="sr-only" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPhoto(file); event.target.value = ""; }} />{busy ? progress === null ? "Preparing private upload…" : `Uploading ${progress}%…` : "Take or upload photo"}</label> : <ManualConfirmation current={current} condition={condition} setCondition={setCondition} measurements={measurements} setMeasurements={setMeasurements} />}
-      {reviewPhotoReady ? <div role="status" className="mt-4 rounded-lg border border-blue-300 bg-blue-50 p-4 text-sm leading-6 text-blue-950"><strong>Manual check required.</strong> Automatic image review is unavailable in Field Beta. Check that the photo clearly shows every requested item; measurements must come from the field, not the image.</div> : null}
+      {!reviewPhotoReady ? <label className={`mt-5 block cursor-pointer text-center ${primary}`}><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" className="sr-only" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPhoto(file); event.target.value = ""; }} />{busy ? progress === null ? "Preparing private upload…" : `Uploading ${progress}%…` : "Take or upload photo"}</label> : null}
+      {reviewPhotoReady ? <PhotoReviewStatus review={review} busy={busy} onAccept={() => setHumanAccepted(true)} onRetry={() => activePhotoId && void reviewPhoto(activePhotoId, initialReviewKey(activePhotoId))} onRetake={() => setHumanAccepted(false)} uploadPhoto={uploadPhoto} /> : null}
+      {humanAccepted ? <><div role="status" className="mt-4 rounded-lg border border-blue-300 bg-blue-50 p-4 text-sm leading-6 text-blue-950"><strong>Your check is required.</strong> The photo review is only a visibility check. Confirm the requested area yourself; all measurements must come from the field.</div><ManualConfirmation current={current} condition={condition} setCondition={setCondition} measurements={measurements} setMeasurements={setMeasurements} /></> : null}
       {progress !== null ? <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-blue-700" style={{ width: `${progress}%` }} /></div> : null}
       {error ? <ErrorMessage message={error} /> : null}
-      {reviewPhotoReady ? <div className="mt-5 flex flex-col gap-3 sm:flex-row"><button type="button" disabled={!requirementSatisfied || busy} onClick={() => void confirmItem()} className={primary}>I confirm this capture</button><label className={`${secondary} cursor-pointer text-center`}><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" className="sr-only" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPhoto(file); event.target.value = ""; }} />Retake photo</label></div> : null}
+      {humanAccepted ? <div className="mt-5"><button type="button" disabled={!requirementSatisfied || busy} onClick={() => void confirmItem()} className={primary}>I confirm this capture</button></div> : null}
       <button type="button" disabled={busy} onClick={() => setBlockOpen(!blockOpen)} className="mt-4 text-sm font-bold text-amber-900 underline">Cannot capture this</button>
       {blockOpen ? <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4"><p className="font-bold text-amber-950">Document office follow-up</p><p className="mt-1 text-sm text-amber-900">This item will remain blocked. Record why it could not be completed.</p><label className="mt-3 block text-sm font-bold">Reason<select className={input} value={blockReason} onChange={(event) => setBlockReason(event.target.value)}><option value="">Choose reason</option>{BLOCK_REASONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="mt-3 block text-sm font-bold">What the office needs to know<textarea className={`${input} min-h-24`} value={blockNotes} onChange={(event) => setBlockNotes(event.target.value)} /></label><button type="button" disabled={!blockReason || !blockNotes.trim() || busy} onClick={() => void blockItem()} className={`mt-4 ${primary}`}>Save blocked reason</button></div> : null}
     </div>
   </section>;
 }
+
+function PhotoReviewStatus({ review, busy, onAccept, onRetry, onRetake, uploadPhoto }: { review: { status: "reviewing" } | { status: "complete"; verdict: UsabilityVerdict; issueCodes: string[] } | null; busy: boolean; onAccept: () => void; onRetry: () => void; onRetake: () => void; uploadPhoto: (file: File) => Promise<void> }) {
+  if (!review || review.status === "reviewing") return <div role="status" className="mt-4 rounded-lg border border-blue-300 bg-blue-50 p-4 text-blue-950"><p className="font-bold">Reviewing photo…</p><p className="mt-1 text-sm">Checking whether the requested area is clear enough to inspect.</p></div>;
+  if (review.verdict === "usable") return <div role="status" className="mt-4 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-emerald-950"><p className="text-lg font-bold">Good</p><p className="mt-1 text-sm">The requested area appears clear enough to inspect. You still need to verify it.</p><button type="button" disabled={busy} onClick={onAccept} className={`mt-4 ${primary}`}>Use this photo</button></div>;
+  if (review.verdict === "retake_recommended") return <div role="status" className="mt-4 rounded-lg border border-amber-400 bg-amber-50 p-4 text-amber-950"><p className="text-lg font-bold">Retake recommended</p><p className="mt-1 text-sm">{REVIEW_REASONS[review.issueCodes[0]] ?? "The requested area is not clear enough to check."}</p><div className="mt-4 flex flex-col gap-3 sm:flex-row"><PhotoInput label="Retake photo" busy={busy} uploadPhoto={uploadPhoto} primaryAction onChange={onRetake} /><button type="button" disabled={busy} onClick={onAccept} className={secondary}>Use anyway — I checked it</button></div></div>;
+  return <div role="status" className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-4 text-slate-950"><p className="text-lg font-bold">Couldn’t review</p><p className="mt-1 text-sm">{REVIEW_REASONS[review.issueCodes[0]] ?? "The automatic check did not finish. You can retry or inspect the photo yourself."}</p><div className="mt-4 flex flex-col gap-3 sm:flex-row"><button type="button" disabled={busy} onClick={onRetry} className={primary}>Retry review</button><button type="button" disabled={busy} onClick={onAccept} className={secondary}>Review photo myself</button></div></div>;
+}
+
+function PhotoInput({ label, busy, uploadPhoto, primaryAction = false, onChange }: { label: string; busy: boolean; uploadPhoto: (file: File) => Promise<void>; primaryAction?: boolean; onChange?: () => void }) { return <label className={`${primaryAction ? primary : secondary} cursor-pointer text-center`}><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" className="sr-only" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) { onChange?.(); void uploadPhoto(file); } event.target.value = ""; }} />{label}</label>; }
 
 function ManualConfirmation({ current, condition, setCondition, measurements, setMeasurements }: { current: VisitItem; condition: string; setCondition: (value: "yes" | "no" | "") => void; measurements: Record<string, { value: string; unit: string }>; setMeasurements: (value: Record<string, { value: string; unit: string }>) => void }) {
   const conditional = current.requirement.mode === "conditional";
@@ -196,7 +229,11 @@ function VisitSummary({ visit }: { visit: Visit }) { return <ol className="mt-5 
 function BetaWarning() { return <div role="alert" className="border-b-2 border-amber-500 bg-amber-100 p-4 text-sm leading-6 text-amber-950"><strong className="block uppercase tracking-[.14em]">Field beta limitations</strong>Photos document visible conditions only. No automatic engineering, code, load, material, labor, measurement, or pricing decision is made. Michael must verify every field fact.</div>; }
 function ErrorMessage({ message }: { message: string }) { return <p role="alert" className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800">{message} Retry or document why this capture is blocked.</p>; }
 function blockReasonLabel(value: string | null) { return BLOCK_REASONS.find(([key]) => key === value)?.[1] ?? "Office follow-up"; }
+function isUsabilityVerdict(value: unknown): value is UsabilityVerdict { return value === "usable" || value === "retake_recommended" || value === "unable_to_assess"; }
+function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []; }
+function initialReviewKey(photoId: string) { return `guided-photo-usability:${photoId}:initial`; }
+function latestUsabilityReview(reviews: UsabilityReview[]) { return reviews.reduce<UsabilityReview | null>((latest, review) => !latest || review.createdAt > latest.createdAt || review.createdAt === latest.createdAt && review.id > latest.id ? review : latest, null); }
 
 async function jsonRequest(path: string, method: "POST" | "PATCH", body: Record<string, unknown>) { const response = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const result = await response.json() as Record<string, unknown>; if (!response.ok || result.success !== true) throw new Error(typeof result.error === "string" ? result.error : `Request failed (${String(result.resultCode ?? response.status)}). Reload and retry.`); return result; }
 function uploadWithProgress(url: string, file: File, onProgress: (value: number) => void) { return new Promise<void>((resolve, reject) => { const request = new XMLHttpRequest(); const body = new FormData(); body.append("cacheControl", "3600"); body.append("", file); request.open("PUT", url); request.setRequestHeader("x-upsert", "false"); request.upload.onprogress = (event) => { if (event.lengthComputable) onProgress(Math.round(event.loaded / event.total * 100)); }; request.onload = () => request.status >= 200 && request.status < 300 ? resolve() : reject(new Error("Private photo upload failed.")); request.onerror = () => reject(new Error("Network error during private photo upload.")); request.send(body); }); }
-function normalizeVisit(raw: Record<string, unknown>): Visit { const rawItems = raw.items as Record<string, unknown>[] ?? []; const items = rawItems.map((item) => ({ id: String(item.id), itemKey: String(item.itemKey ?? item.item_key), ordinal: Number(item.ordinal), title: String(item.title), instructions: String(item.instructions), requirement: item.requirement as Requirement, state: String(item.state) as VisitItem["state"], observation: item.observation as Record<string, unknown> ?? {}, followUpReasonCode: (item.followUpReasonCode ?? item.follow_up_reason_code ?? null) as string | null, followUpNotes: (item.followUpNotes ?? item.follow_up_notes ?? null) as string | null })); const visitPhotos = (raw.photoAttempts ?? raw.photo_attempts ?? []) as Record<string, unknown>[]; const itemPhotos = rawItems.flatMap((item) => (item.photoAttempts ?? item.photo_attempts ?? []) as Record<string, unknown>[]); const photoAttempts = visitPhotos.length ? visitPhotos : itemPhotos; return { id: String(raw.id), revision: Number(raw.revision), status: String(raw.status) as Visit["status"], completionOutcome: (raw.completionOutcome ?? raw.completion_outcome ?? null) as Visit["completionOutcome"], items, photoAttempts: photoAttempts.map((photo) => ({ id: String(photo.id), visitItemId: String(photo.visitItemId ?? photo.visit_item_id), retakeOfAttemptId: (photo.retakeOfAttemptId ?? photo.retake_of_attempt_id ?? null) as string | null, ordinal: Number(photo.ordinal), state: String(photo.state) as PhotoAttempt["state"] })) }; }
+function normalizeVisit(raw: Record<string, unknown>): Visit { const rawItems = raw.items as Record<string, unknown>[] ?? []; const items = rawItems.map((item) => ({ id: String(item.id), itemKey: String(item.itemKey ?? item.item_key), ordinal: Number(item.ordinal), title: String(item.title), instructions: String(item.instructions), requirement: item.requirement as Requirement, state: String(item.state) as VisitItem["state"], observation: item.observation as Record<string, unknown> ?? {}, followUpReasonCode: (item.followUpReasonCode ?? item.follow_up_reason_code ?? null) as string | null, followUpNotes: (item.followUpNotes ?? item.follow_up_notes ?? null) as string | null })); const visitPhotos = (raw.photoAttempts ?? raw.photo_attempts ?? []) as Record<string, unknown>[]; const itemPhotos = rawItems.flatMap((item) => (item.photoAttempts ?? item.photo_attempts ?? []) as Record<string, unknown>[]); const photoAttempts = visitPhotos.length ? visitPhotos : itemPhotos; return { id: String(raw.id), revision: Number(raw.revision), status: String(raw.status) as Visit["status"], completionOutcome: (raw.completionOutcome ?? raw.completion_outcome ?? null) as Visit["completionOutcome"], items, photoAttempts: photoAttempts.map((photo) => { const reviews = (photo.usabilityReviews ?? photo.usability_reviews ?? []) as Record<string, unknown>[]; return { id: String(photo.id), visitItemId: String(photo.visitItemId ?? photo.visit_item_id), retakeOfAttemptId: (photo.retakeOfAttemptId ?? photo.retake_of_attempt_id ?? null) as string | null, ordinal: Number(photo.ordinal), state: String(photo.state) as PhotoAttempt["state"], usabilityReviews: reviews.flatMap((review) => isUsabilityVerdict(review.verdict) ? [{ id: String(review.id), verdict: review.verdict, issueCodes: stringArray(review.issueCodes ?? review.issue_codes), createdAt: String(review.createdAt ?? review.created_at ?? "") }] : []) }; }) }; }

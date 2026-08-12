@@ -14,14 +14,27 @@ test("Deck workflow is query gated and shows one persisted capture at a time", (
   assert.doesNotMatch(component, /\.map\(\(item\).*Required capture/s);
 });
 
-test("camera upload is private, progress visible, and never invents AI review", () => {
+test("camera upload is private, progress visible, and invokes trusted advisory review", () => {
   assert.match(component, /capture="environment"/);
   assert.match(component, /crypto\.subtle\.digest\("SHA-256"/);
   assert.match(component, /upload-session/);
   assert.match(component, /Uploading \$\{progress\}%/);
-  assert.match(component, /Automatic image review is unavailable in Field Beta/);
+  assert.match(component, /photos\/\$\{photoId\}\/usability-reviews/);
+  assert.match(component, /guided-photo-usability:\$\{photoId\}:initial/);
+  assert.match(component, /reviewPhoto\(activePhotoId, initialReviewKey\(activePhotoId\)\)/);
+  assert.doesNotMatch(component, /crypto\.randomUUID\(\)/);
+  assert.match(component, /Reviewing photo/);
+  assert.match(component, /Good/);
+  assert.match(component, /Retake recommended/);
+  assert.match(component, /Couldn’t review/);
   assert.match(component, /I confirm this capture/);
   assert.doesNotMatch(component, /AI (?:passed|approved)|automatic pass|structurally sound|code compliant/i);
+});
+
+test("resumed visits select the latest review with a stable tie-breaker", () => {
+  assert.match(component, /latestUsabilityReview\(storedPhoto\?\.usabilityReviews/);
+  assert.match(component, /review\.createdAt === latest\.createdAt && review\.id > latest\.id/);
+  assert.doesNotMatch(component, /usabilityReviews\.at\(-1\)/);
 });
 
 test("all nine approved Deck captures and required field measurements are represented", () => {
@@ -36,6 +49,9 @@ test("all nine approved Deck captures and required field measurements are repres
 
 test("retake, retry, block, resume, and final outcomes remain explicit", () => {
   assert.match(component, /Retake photo/);
+  assert.match(component, /Retry review/);
+  assert.match(component, /Use anyway — I checked it/);
+  assert.match(component, /Review photo myself/);
   assert.match(component, /Retry or document why this capture is blocked/);
   assert.match(component, /Cannot capture this/);
   assert.match(component, /followUpReasonCode/);
