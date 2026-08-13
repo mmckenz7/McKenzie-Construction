@@ -102,7 +102,16 @@ test("separates the missing list from per-photo review details", () => {
   assert.match(inbox, /Your photos/);
   assert.match(inbox, /what that picture checked off/);
   assert.match(inbox, /matches\.length.*checked/s);
-  assert.match(inbox, /Open detailed correction tools/);
+  assert.match(inbox, /Next step/);
+  assert.match(inbox, /Finish the guided site checklist/);
+  assert.match(inbox, /Continue guided checklist/);
+  assert.match(inbox, /uploaded photos stay saved/);
+  assert.match(inbox, /may request one targeted photo/);
+  assert.doesNotMatch(inbox, /photos are saved and reviewed/);
+  assert.doesNotMatch(inbox, /do not need to upload the photos again/);
+  assert.match(inbox, /onClick=\{onUseGuided\}/);
+  assert.match(inbox, /Optional: correct photo assignments/);
+  assert.match(inbox, /focus-visible:ring-2 focus-visible:ring-blue-500/);
   assert.match(inbox, /Select the photo or photos that show this item/);
   assert.match(inbox, /Ask AI to check selected photos again/);
   assert.match(inbox, /Attach as verified evidence/);

@@ -1491,12 +1491,34 @@ export function GuidedDeckPhotoInbox({
               : `Confirm ${suggestedConfirmations.length} AI photo matches`}
           </button>
         ) : null}
+        <section className="mt-5 rounded-xl border-2 border-blue-600 bg-blue-50 p-4 text-slate-950">
+          <p className="text-xs font-black uppercase tracking-[.14em] text-blue-700">
+            Next step
+          </p>
+          <h3 className="mt-1 text-xl font-black">
+            Finish the guided site checklist
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-slate-700">
+            Your uploaded photos stay saved. Continue through the unfinished
+            checklist items to enter required field measurements and human
+            confirmations. A checklist item may request one targeted photo when
+            its required evidence is not attached to that item yet.
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onUseGuided}
+            className="mt-4 min-h-12 w-full rounded-lg bg-blue-700 px-4 py-3 text-base font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50"
+          >
+            Continue guided checklist
+          </button>
+        </section>
         <button
           type="button"
           onClick={() => setScreen("correct")}
-          className="mt-3 w-full rounded-lg border border-slate-400 bg-white px-4 py-3 font-bold text-slate-900"
+          className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
         >
-          Open detailed correction tools
+          Optional: correct photo assignments
         </button>
         {error ? (
           <p
