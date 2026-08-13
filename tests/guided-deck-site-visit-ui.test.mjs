@@ -33,6 +33,29 @@ test("camera upload is private, progress visible, and invokes trusted advisory r
   assert.doesNotMatch(component, /AI (?:passed|approved)|automatic pass|structurally sound|code compliant/i);
 });
 
+test("photo selection clearly offers camera and existing-photo library sources", () => {
+  assert.match(component, /<PhotoSourceControls title="Add photo"/);
+  const sources = component.slice(component.indexOf("function PhotoSourceControls"), component.indexOf("function ManualConfirmation"));
+  const cameraControl = sources.slice(sources.indexOf('<input type="file"'), sources.indexOf("Take photo"));
+  const libraryStart = sources.indexOf('<input type="file"', sources.indexOf("Take photo"));
+  const libraryControl = sources.slice(libraryStart, sources.indexOf("Choose existing photo"));
+  assert.match(cameraControl, /capture="environment"/);
+  assert.match(cameraControl, /accept="image\/jpeg,image\/png,image\/webp,image\/heic,image\/heif"/);
+  assert.doesNotMatch(libraryControl, /capture=/);
+  assert.match(libraryControl, /accept="image\/jpeg,image\/png,image\/webp,image\/heic,image\/heif"/);
+  assert.match(sources, /flex-col gap-3 sm:flex-row/);
+});
+
+test("the entire photo-source group is visibly and semantically disabled while busy", () => {
+  const sources = component.slice(component.indexOf("function PhotoSourceControls"), component.indexOf("function ManualConfirmation"));
+  assert.match(sources, /<fieldset disabled=\{busy\} aria-busy=\{busy\}/);
+  assert.match(sources, /busy \? "cursor-not-allowed opacity-50"/);
+  assert.match(sources, /disabled=\{busy\}/g);
+  assert.match(sources, /role="status"/);
+  assert.match(sources, /busyLabel \?\? "Uploading photo…"/);
+  assert.match(sources, /Photo choices are unavailable until this finishes/);
+});
+
 test("resumed visits select the latest review with a stable tie-breaker", () => {
   assert.match(component, /latestUsabilityReview\(storedPhoto\?\.usabilityReviews/);
   assert.match(component, /review\.createdAt === latest\.createdAt && review\.id > latest\.id/);
@@ -67,11 +90,10 @@ test("retake, retry, block, resume, and final outcomes remain explicit", () => {
 test("every completed review state keeps a clear mobile-first retake action", () => {
   const goodState = component.slice(component.indexOf('review.verdict === "usable"'), component.indexOf('review.verdict === "retake_recommended"'));
   const retakeState = component.slice(component.indexOf('review.verdict === "retake_recommended"'), component.indexOf('return <div role="status" className="mt-4 rounded-lg border border-slate-300'));
-  const unableState = component.slice(component.indexOf('return <div role="status" className="mt-4 rounded-lg border border-slate-300'), component.indexOf("function PhotoInput"));
+  const unableState = component.slice(component.indexOf('return <div role="status" className="mt-4 rounded-lg border border-slate-300'), component.indexOf("function PhotoSourceControls"));
   for (const state of [goodState, retakeState, unableState]) {
-    assert.match(state, /PhotoInput label="Retake photo"/);
-    assert.match(state, /onChange={onRetake}/);
-    assert.match(state, /flex-col gap-3 sm:flex-row/);
+    assert.match(state, /PhotoSourceControls title="Retake photo"/);
+    assert.match(state, /onSelect={onRetake}/);
   }
   assert.match(goodState, /Use this photo/);
   assert.match(unableState, /Retry review/);
@@ -86,7 +108,7 @@ test("retake remains visible after human acceptance and clears acceptance before
   const alwaysRenderedReview = component.slice(component.indexOf(reviewStatus), component.indexOf(manualPanel));
   assert.match(alwaysRenderedReview, /onRetake=\{\(\) => setHumanAccepted\(false\)\}/);
   assert.match(alwaysRenderedReview, /reviewPhotoReady \? <PhotoReviewStatus/);
-  assert.match(component, /if \(file\) \{ onChange\?\.\(\); void uploadPhoto\(file\); \}/);
+  assert.match(component, /if \(file\) \{ onSelect\?\.\(\); void uploadPhoto\(file\); \}/);
 });
 
 test("retaking creates a linked replacement and never advances the capture", () => {
@@ -95,7 +117,7 @@ test("retaking creates a linked replacement and never advances the capture", () 
   assert.match(photoCompleteRoute, /confirm_guided_site_visit_photo/);
   assert.match(captureMigration, /if attempt\.retake_of_attempt_id is not null then[\s\S]*set state='superseded'[\s\S]*id=attempt\.retake_of_attempt_id/);
   assert.doesNotMatch(component, /method:\s*"DELETE"/);
-  assert.doesNotMatch(component, /function PhotoInput[\s\S]*confirmItem\(/);
+  assert.doesNotMatch(component, /function PhotoSourceControls[\s\S]*confirmItem\(/);
 });
 
 test("an interrupted private upload is append-only failed before retry reservation", () => {
