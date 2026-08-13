@@ -98,6 +98,7 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
   const current = visit?.items.find((item) => item.state === "pending") ?? null;
   const attempts = current && visit ? visit.photoAttempts.filter((photo) => photo.visitItemId === current.id) : [];
   const storedPhoto = [...attempts].reverse().find((photo) => photo.state === "confirmed") ?? null;
+  const incompletePhoto = [...attempts].reverse().find((photo) => photo.state === "upload_pending") ?? null;
   const activePhotoId = pendingPhoto?.id ?? storedPhoto?.id ?? null;
   const storedReview = latestUsabilityReview(storedPhoto?.usabilityReviews ?? []);
   const review = localReview?.photoId === activePhotoId ? localReview : storedReview ? { photoId: storedPhoto!.id, status: "complete" as const, verdict: storedReview.verdict, issueCodes: storedReview.issueCodes } : activePhotoId ? { photoId: activePhotoId, status: "complete" as const, verdict: "unable_to_assess" as const, issueCodes: [] } : null;
@@ -117,7 +118,13 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
       if (!file.type.startsWith("image/")) throw new Error("Choose a supported image file.");
       const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
       const sha256 = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-      const reserve = await jsonRequest(`/api/guided-site-visits/${visit.id}/items/${current.id}/photos/upload-session`, "POST", { expectedRevision: pendingPhoto?.revision ?? visit.revision, originalFilename: file.name || `deck-capture-${current.ordinal}.jpg`, mimeType: file.type, byteSize: file.size, sha256, retakeOfAttemptId: pendingPhoto?.id ?? storedPhoto?.id ?? null });
+      let expectedRevision = pendingPhoto?.revision ?? visit.revision;
+      if (incompletePhoto) {
+        const abandoned = await jsonRequest(`/api/guided-site-visits/${visit.id}/photos/${incompletePhoto.id}/abandon`, "POST", { expectedRevision });
+        if (typeof abandoned.nextRevision !== "number") throw new Error("Incomplete photo recovery response was invalid.");
+        expectedRevision = abandoned.nextRevision;
+      }
+      const reserve = await jsonRequest(`/api/guided-site-visits/${visit.id}/items/${current.id}/photos/upload-session`, "POST", { expectedRevision, originalFilename: file.name || `deck-capture-${current.ordinal}.jpg`, mimeType: file.type, byteSize: file.size, sha256, retakeOfAttemptId: pendingPhoto?.id ?? storedPhoto?.id ?? null });
       const upload = reserve.upload as { signedUrl?: string; requiredMimeType?: string };
       if (!upload?.signedUrl || typeof reserve.attemptId !== "string" || typeof reserve.nextRevision !== "number") throw new Error("Private upload session was incomplete.");
       await uploadWithProgress(upload.signedUrl, file, setProgress);

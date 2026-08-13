@@ -61,3 +61,10 @@ test("retake, retry, block, resume, and final outcomes remain explicit", () => {
   assert.match(component, /Submit documented visit with follow-up required/);
   assert.match(component, /Incomplete/);
 });
+
+test("an interrupted private upload is append-only failed before retry reservation", () => {
+  assert.match(component, /photo\.state === "upload_pending"/);
+  assert.match(component, /photos\/\$\{incompletePhoto\.id\}\/abandon/);
+  assert.match(component, /expectedRevision = abandoned\.nextRevision/);
+  assert.ok(component.indexOf("/abandon") < component.indexOf("/photos/upload-session"));
+});
