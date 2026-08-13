@@ -88,6 +88,72 @@ test("photo selection clearly offers camera and existing-photo library sources",
   assert.match(sources, /flex-col gap-3 sm:flex-row/);
 });
 
+test("batch capture is the mobile default and preserves guided help", () => {
+  assert.match(component, /useState<"batch" \| "guided">\("batch"\)/);
+  assert.match(component, /Capture photo set/);
+  assert.match(component, /Guided photo help/);
+  assert.match(component, /function BatchPhotoCapture/);
+  assert.match(component, /multiple/);
+  assert.match(component, /MAX_ACTIVE_PHOTOS = 5/);
+  assert.match(component, /MAX_BATCH_BYTES = 60 \* 1024 \* 1024/);
+  assert.match(component, /GUIDED_PHOTO_MIME_TYPES\.has\(file\.type\)/);
+  assert.match(component, /file\.size > GUIDED_PHOTO_MAX_BYTES/);
+  assert.match(component, /Remove photo \$\{index \+ 1\}/);
+  assert.match(component, /Upload \$\{drafts\.length\}/);
+});
+
+test("batch uploads are sequential, durable, and linked to backend provenance", () => {
+  assert.match(
+    component,
+    /for \(let index = 0; index < queued\.length; index \+= 1\)/,
+  );
+  assert.match(component, /captureIntent: "batch"/);
+  assert.match(component, /batchId: opened\.batchId/);
+  assert.match(component, /batchOrdinal: index \+ 1/);
+  assert.match(
+    component,
+    /Uploading photo \$\{progress\.current\} of \$\{progress\.total\}/,
+  );
+  assert.match(
+    component,
+    /Earlier photos are saved; this photo and all unattempted photos remain in the tray for retry/,
+  );
+  assert.match(component, /successfulIds\.add\(draft\.id\)/);
+  assert.match(component, /await reviewPhoto\(/);
+});
+
+test("a failed batch member stops before unattempted members and preserves their tray state", () => {
+  const batchUpload = component.slice(
+    component.indexOf("async function uploadPhotoBatch"),
+    component.indexOf("async function uploadPhoto(file"),
+  );
+  assert.match(batchUpload, /catch \(uploadError\)[\s\S]*?break;/);
+  assert.match(
+    batchUpload,
+    /\.filter\(\(draft\) => !successfulIds\.has\(draft\.id\)\)/,
+  );
+  assert.match(
+    batchUpload,
+    /draft\.status === "uploading"[\s\S]*status: "ready" as const/,
+  );
+  assert.match(batchUpload, /if \(incompletePhoto\)[\s\S]*?\/abandon/);
+});
+
+test("collective review emphasizes missing items and a targeted follow-up", () => {
+  assert.match(component, /Photo set review · Combined photo coverage/);
+  assert.match(component, /Missing or unclear/);
+  assert.match(
+    component,
+    /Take another angle for \{missingCoverage\[0\]\?\.label\}/,
+  );
+  assert.match(component, /Review all photo results/);
+  assert.match(
+    component,
+    /captureMode === "guided" &&[\s\S]*<PhotoReviewStatus/,
+  );
+  assert.match(component, /HEIC\/HEIF needs your manual visibility check/);
+});
+
 test("the entire photo-source group is visibly and semantically disabled while busy", () => {
   const sources = component.slice(
     component.indexOf("function PhotoSourceControls"),

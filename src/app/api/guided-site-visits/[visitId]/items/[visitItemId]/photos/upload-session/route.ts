@@ -22,6 +22,8 @@ const F = new Set([
   "sha256",
   "retakeOfAttemptId",
   "reservationNonce",
+  "batchId",
+  "batchOrdinal",
 ]);
 
 function stableUuid(scope: string) {
@@ -53,11 +55,13 @@ export async function POST(
           : "",
       captureIntent = body.captureIntent,
       sourceDecisionId = body.sourceDecisionId ?? null,
-      retakeOfAttemptId = body.retakeOfAttemptId ?? null;
+      retakeOfAttemptId = body.retakeOfAttemptId ?? null,
+      batchId = body.batchId ?? null,
+      batchOrdinal = body.batchOrdinal ?? null;
     if (
       !idempotencyKey ||
       idempotencyKey.length > 200 ||
-      !(["initial", "complement", "retake"] as unknown[]).includes(
+      !(["initial", "complement", "retake", "batch"] as unknown[]).includes(
         captureIntent,
       ) ||
       (sourceDecisionId !== null &&
@@ -66,6 +70,14 @@ export async function POST(
       (retakeOfAttemptId !== null &&
         (typeof retakeOfAttemptId !== "string" ||
           !UUID.test(retakeOfAttemptId))) ||
+      ((batchId === null) !== (batchOrdinal === null)) ||
+      ((captureIntent === "batch") !== (batchId !== null)) ||
+      (batchId !== null &&
+        (typeof batchId !== "string" || !UUID.test(batchId))) ||
+      (batchOrdinal !== null &&
+        (!Number.isSafeInteger(batchOrdinal) ||
+          (batchOrdinal as number) < 1 ||
+          (batchOrdinal as number) > 5)) ||
       typeof body.reservationNonce !== "string" ||
       !UUID.test(body.reservationNonce) ||
       typeof body.mimeType !== "string" ||
@@ -97,9 +109,7 @@ export async function POST(
         assetId,
         filename,
       );
-    const reserved = await db.rpc(
-      "reserve_guided_site_visit_photo_set_member",
-      {
+    const reservationArguments = {
         requested_auth_user_id: auth.authorization!.authUserId,
         requested_visit_id: visitId,
         requested_item_id: visitItemId,
@@ -115,7 +125,18 @@ export async function POST(
         requested_mime_type: body.mimeType,
         requested_byte_size: body.byteSize,
         requested_sha256: body.sha256,
-      },
+      };
+    const reserved = await db.rpc(
+      batchId === null
+        ? "reserve_guided_site_visit_photo_set_member"
+        : "reserve_guided_site_visit_photo_batch_member",
+      batchId === null
+        ? reservationArguments
+        : {
+            ...reservationArguments,
+            requested_batch_id: batchId,
+            requested_batch_ordinal: batchOrdinal,
+          },
     );
     if (reserved.error)
       return NextResponse.json(
@@ -148,6 +169,7 @@ export async function POST(
             "recovery_limit_reached",
             "reservation_failed",
             "reservation_not_uploadable",
+            "batch_member_conflict",
           ].includes(code)
             ? 409
             : 400,
@@ -190,6 +212,8 @@ export async function POST(
         assetId: row.asset_id,
         nextRevision: row.next_revision,
         idempotentReplay: row.idempotent_replay,
+        batchId,
+        batchOrdinal,
         upload: {
           ...signed.data,
           requiredMimeType: body.mimeType,
