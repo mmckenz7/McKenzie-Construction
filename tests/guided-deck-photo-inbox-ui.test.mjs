@@ -14,6 +14,10 @@ const inboxRoute = readFileSync(
   "src/app/api/guided-site-visits/[visitId]/intake-batches/route.ts",
   "utf8",
 );
+const previewRoute = readFileSync(
+  "src/app/api/guided-site-visits/[visitId]/intake-photos/[attemptId]/preview/route.ts",
+  "utf8",
+);
 
 test("whole-visit Photo Inbox is the default with guided capture as fallback", () => {
   assert.match(visit, /useState<"inbox" \| "guided">\(\s*"inbox"/);
@@ -74,15 +78,36 @@ test("classifies every confirmed photo and keeps AI advisory", () => {
   assert.match(inbox, /reviewFailures \+= 1/);
   assert.match(inbox, /uploaded safely, but the AI review needs to be retried/);
   assert.match(inbox, /The remaining uploads continued/);
-  assert.match(inbox, /Site visit photo summary/);
-  assert.match(
-    inbox,
-    /Check the nine sections below, then confirm the organization once/,
-  );
-  assert.match(inbox, /Confirm AI organization for/);
-  assert.match(inbox, /Optional: review individual photo suggestions/);
-  assert.match(inbox, /AI found/);
+  assert.match(inbox, /Photo review/);
+  assert.match(inbox, /\["accepted", "corrected"\]\.includes/);
   assert.match(inbox, /diagnostic_class !== "classified"/);
+});
+
+test("separates the missing list from per-photo review details", () => {
+  assert.match(inbox, /What are we still missing\?/);
+  assert.match(inbox, /This page only shows missing information/);
+  assert.match(inbox, /photoReviewReady/);
+  assert.match(inbox, /Nothing is being called missing early/);
+  assert.match(inbox, /Missing information/);
+  assert.match(inbox, /Your photos/);
+  assert.match(inbox, /what that picture checked off/);
+  assert.match(inbox, /matches\.length.*checked/s);
+  assert.match(inbox, /Open detailed correction tools/);
+});
+
+test("serves authenticated short-lived private photo previews", () => {
+  assert.match(previewRoute, /authorizeGuidedSiteVisit/);
+  assert.match(
+    previewRoute,
+    /\.eq\("company_id", auth\.authorization!\.companyId\)/,
+  );
+  assert.match(previewRoute, /state !== "confirmed"/);
+  assert.match(previewRoute, /status !== "available"/);
+  assert.match(
+    previewRoute,
+    /createSignedUrl\(asset\.data\.storage_path, 300\)/,
+  );
+  assert.match(previewRoute, /private, no-store/);
 });
 
 test("requires explicit human assignment decisions", () => {

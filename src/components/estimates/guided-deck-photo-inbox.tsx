@@ -85,6 +85,12 @@ export function GuidedDeckPhotoInbox({
   const [reviewNotice, setReviewNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [screen, setScreen] = useState<"upload" | "review" | "correct">(
+    "review",
+  );
+  const [activeReviewItemId, setActiveReviewItemId] = useState<string | null>(
+    null,
+  );
   const [summaryProgress, setSummaryProgress] = useState<{
     current: number;
     total: number;
@@ -140,6 +146,11 @@ export function GuidedDeckPhotoInbox({
       ),
     );
   }, [loadInbox]);
+
+  useEffect(() => {
+    if (!activeReviewItemId && data?.items[0])
+      setActiveReviewItemId(data.items[0].id);
+  }, [activeReviewItemId, data]);
 
   async function addFiles(files: File[]) {
     setError("");
@@ -388,6 +399,7 @@ export function GuidedDeckPhotoInbox({
       });
       await loadInbox().catch(() => undefined);
       await onVisitChanged();
+      if (successes.size > 0) setScreen("review");
       setProgress(null);
       setBusy(false);
     }
@@ -601,11 +613,30 @@ export function GuidedDeckPhotoInbox({
       };
     }),
   );
+  const activeReviewItem =
+    (data?.items ?? []).find((item) => item.id === activeReviewItemId) ??
+    data?.items[0];
+  const activeReviewSummaries = criterionSummaries.filter(
+    (summary) => summary.item.id === activeReviewItem?.id,
+  );
+  const activeReviewIndex = Math.max(
+    0,
+    (data?.items ?? []).findIndex((item) => item.id === activeReviewItem?.id),
+  );
   const suggestedConfirmations = criterionSummaries.flatMap((summary) =>
     summary.verified || !summary.undecided.length ? [] : [summary.undecided[0]],
   );
   const unresolvedCoverage = criterionSummaries.filter(
     (summary) => !summary.verified && summary.undecided.length > 0,
+  );
+  const photoReviewReady =
+    rows.length > 0 &&
+    remainingServerMembers.length === 0 &&
+    drafts.length === 0 &&
+    pendingReviewCount === 0 &&
+    unavailableRows.length === 0;
+  const aiMissing = criterionSummaries.filter(
+    (summary) => !summary.verified && summary.undecided.length === 0,
   );
   const reviewComplete =
     rows.length > 0 &&
@@ -668,123 +699,445 @@ export function GuidedDeckPhotoInbox({
     }
   }
 
-  return (
-    <div className="p-4 sm:p-6">
-      <p className="text-xs font-black uppercase tracking-[.16em] text-amber-700">
-        Whole-visit Photo Inbox
-      </p>
-      <h2 className="mt-1 text-2xl font-black text-slate-950">
-        Choose your jobsite photos once
-      </h2>
-      <p className="mt-2 text-sm leading-6 text-slate-700">
-        Select up to 30 photos. The app privately uploads and proposes where
-        they belong; you make every evidence decision.
-      </p>
-      <label
-        className={`mt-4 block w-full rounded-lg bg-slate-950 px-4 py-3 text-center font-bold text-white ${busy ? "opacity-50" : "cursor-pointer"}`}
-      >
-        <input
-          type="file"
-          multiple
-          accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-          disabled={busy}
-          className="sr-only"
-          onChange={(event) => {
-            const selected = Array.from(event.target.files ?? []);
-            event.target.value = "";
-            void addFiles(selected);
-          }}
-        />
-        Choose photos for the visit
-      </label>
-      {remainingServerMembers.length &&
-      !drafts.some((draft) => draft.batchId) ? (
-        <p
-          role="alert"
-          className="mt-3 rounded-lg border border-amber-500 bg-amber-950 p-3 text-sm font-bold text-amber-100"
-        >
-          Reselect remaining files · {remainingServerMembers.length}{" "}
-          device-local{" "}
-          {remainingServerMembers.length === 1 ? "photo is" : "photos are"}{" "}
-          still needed. Select the same files again; they will be matched
-          securely to the original batch.
+  if (rows.length && screen === "review")
+    return (
+      <div className="p-4 sm:p-6">
+        <p className="text-xs font-black uppercase tracking-[.16em] text-amber-700">
+          Photo review
         </p>
-      ) : null}
-      {selectionNotice ? (
-        <p
-          role="status"
-          className="mt-3 rounded-lg bg-slate-900 p-3 text-sm font-bold text-white"
-        >
-          {selectionNotice}
+        <h2 className="mt-1 text-2xl font-black text-slate-950">
+          What are we still missing?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-700">
+          This page only shows missing information. Open a photo below when you
+          want to see what that picture checked off.
         </p>
-      ) : null}
-      {reviewNotice ? (
-        <p
-          role="status"
-          className="mt-3 rounded-lg border border-amber-500 bg-amber-950 p-3 text-sm font-bold text-amber-100"
-        >
-          {reviewNotice}
-        </p>
-      ) : null}
-      {drafts.length ? (
-        <>
-          <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {drafts.map((draft, index) => (
-              <li
-                key={draft.id}
-                className="overflow-hidden rounded-lg border border-slate-300 bg-white"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={draft.url}
-                  alt={`Visit photo ${index + 1}`}
-                  className="h-28 w-full object-cover"
-                />
-                <div className="p-2 text-xs">
-                  <strong>Photo {index + 1}</strong>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => removeDraft(draft.id)}
-                    className="float-right font-bold text-red-800 underline"
-                  >
-                    Remove
-                  </button>
-                  <p className="mt-1 clear-both text-slate-600">
-                    {draft.status === "failed"
-                      ? "Failed · ready to retry"
-                      : draft.status === "uploading"
-                        ? "Uploading…"
-                        : "Ready"}
-                  </p>
-                </div>
-              </li>
-            ))}
+        <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setScreen("upload")}
+            className="min-h-11 rounded-md px-3 py-2 text-sm font-bold text-slate-700"
+          >
+            Add photos
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-md bg-slate-950 px-3 py-2 text-sm font-bold text-white"
+          >
+            Review results
+          </button>
+        </div>
+
+        {!photoReviewReady ? (
+          <section className="mt-5 rounded-xl border border-amber-400 bg-amber-50 p-4 text-slate-950">
+            <h3 className="text-lg font-black">Review is not finished yet</h3>
+            <p className="mt-1 text-sm">
+              Missing items will appear only after every uploaded photo has a
+              usable review. Nothing is being called missing early.
+            </p>
+            {pendingReviewCount ? (
+              <p className="mt-3 font-bold">
+                {pendingReviewCount}{" "}
+                {pendingReviewCount === 1 ? "photo is" : "photos are"} still
+                being reviewed.
+              </p>
+            ) : null}
+            {remainingServerMembers.length ? (
+              <p className="mt-3 font-bold">
+                {remainingServerMembers.length} selected{" "}
+                {remainingServerMembers.length === 1
+                  ? "photo still needs"
+                  : "photos still need"}{" "}
+                to be uploaded.
+              </p>
+            ) : null}
+            {unavailableRows.length ? (
+              <ul className="mt-3 space-y-2">
+                {unavailableRows.map((row) => (
+                  <li key={row.attempt.id} className="rounded-lg bg-white p-3">
+                    <strong>
+                      {row.member?.original_filename ??
+                        `Photo ${row.attempt.member_ordinal}`}
+                    </strong>
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        row.review?.diagnostic_class === "unsupported_media"
+                      }
+                      onClick={() => void retryClassification(row.attempt.id)}
+                      className="mt-2 block font-bold text-blue-800 underline disabled:opacity-40"
+                    >
+                      Retry AI review
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+        ) : (
+          <section className="mt-5 rounded-xl bg-slate-950 p-4 text-white">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-black">Missing information</h3>
+                <p className="mt-1 text-sm text-slate-300">
+                  These are the only checklist items AI did not find in any
+                  reviewed photo.
+                </p>
+              </div>
+              <span className="rounded-full bg-amber-400 px-3 py-1 text-sm font-black text-slate-950">
+                {aiMissing.length}
+              </span>
+            </div>
+            {aiMissing.length ? (
+              <ul className="mt-4 space-y-2">
+                {aiMissing.map((summary) => (
+                  <li key={`missing:${summary.key}`}>
+                    <details className="group rounded-lg bg-slate-800 p-3">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">
+                        <span>
+                          {summary.item.title}: {summary.criterion.label}
+                        </span>
+                        <span
+                          aria-hidden="true"
+                          className="shrink-0 transition-transform group-open:rotate-180"
+                        >
+                          ▾
+                        </span>
+                      </summary>
+                      <p className="mt-3 border-t border-slate-600 pt-3 text-sm text-slate-200">
+                        Take a clear photo of “{summary.criterion.label}.”
+                        Center it in the picture and include enough of the deck
+                        to show where it is located. Add a wider photo if the
+                        close view loses context.
+                      </p>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 rounded-lg bg-emerald-950 p-3 font-bold text-emerald-200">
+                AI found photo coverage for every checklist item.
+              </p>
+            )}
+          </section>
+        )}
+
+        <section className="mt-5">
+          <h3 className="text-xl font-black text-slate-950">Your photos</h3>
+          <p className="mt-1 text-sm text-slate-700">
+            Open any picture to see only the checklist criteria it matched.
+          </p>
+          <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {rows.map((row) => {
+              const matches = proposalEntries.filter(
+                (entry) =>
+                  entry.attempt.id === row.attempt.id &&
+                  entry.decision?.decision !== "excluded",
+              );
+              return (
+                <li key={`photo-result:${row.attempt.id}`}>
+                  <details className="group overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
+                    <summary className="cursor-pointer list-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/guided-site-visits/${visitId}/intake-photos/${row.attempt.id}/preview`}
+                        alt={
+                          row.member?.original_filename ??
+                          `Jobsite photo ${row.attempt.member_ordinal}`
+                        }
+                        className="h-44 w-full bg-slate-200 object-cover"
+                      />
+                      <span className="flex min-h-12 items-center justify-between gap-3 px-3 py-2 font-bold text-slate-950">
+                        <span className="truncate">
+                          {row.member?.original_filename ??
+                            `Photo ${row.attempt.member_ordinal}`}
+                        </span>
+                        <span className="shrink-0 text-sm text-blue-800">
+                          {row.review?.diagnostic_class === "classified"
+                            ? `${matches.length} checked`
+                            : "Needs review"}{" "}
+                          ▾
+                        </span>
+                      </span>
+                    </summary>
+                    <div className="border-t border-slate-200 p-3 text-sm text-slate-800">
+                      {row.review?.diagnostic_class !== "classified" ? (
+                        <p className="font-bold text-amber-800">
+                          AI could not reliably check this photo.
+                        </p>
+                      ) : matches.length ? (
+                        <ul className="space-y-2">
+                          {matches.map((entry) => {
+                            const item = data?.items.find(
+                              (candidate) =>
+                                candidate.id === entry.proposal.visitItemId,
+                            );
+                            const criterion = (
+                              GUIDED_VISIBLE_FACT_CRITERIA[
+                                item?.itemKey ?? ""
+                              ] ?? []
+                            ).find(
+                              (candidate) =>
+                                candidate.key === entry.proposal.criterionKey,
+                            );
+                            return (
+                              <li
+                                key={`${row.attempt.id}:${entry.proposal.visitItemId}:${entry.proposal.criterionKey}`}
+                                className="rounded-lg bg-slate-100 p-2"
+                              >
+                                <strong>
+                                  {criterion?.label ??
+                                    entry.proposal.criterionKey}
+                                </strong>
+                                <span className="mt-1 block text-xs text-slate-600">
+                                  {item?.title ?? "Deck checklist"} ·{" "}
+                                  {entry.decision ? "Confirmed" : "AI found"}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p>No checklist criteria were found in this photo.</p>
+                      )}
+                    </div>
+                  </details>
+                </li>
+              );
+            })}
           </ul>
+        </section>
+
+        {suggestedConfirmations.length ? (
           <button
             type="button"
             disabled={busy}
-            onClick={() => void uploadInbox()}
-            className="mt-4 w-full rounded-lg bg-amber-500 px-4 py-3 font-black text-slate-950 disabled:opacity-50"
+            onClick={() => void confirmPhotoSummary()}
+            className="mt-5 w-full rounded-lg bg-emerald-500 px-4 py-3 font-black text-slate-950 disabled:opacity-50"
           >
-            {progress
-              ? `${progress.phase === "uploading" ? "Uploading" : "Reviewing"} photo ${progress.current} of ${progress.total} · ${progress.percent}%`
-              : `Upload and review ${drafts.length} ${drafts.length === 1 ? "photo" : "photos"}`}
+            {summaryProgress
+              ? `Confirming ${summaryProgress.current} of ${summaryProgress.total}…`
+              : `Confirm ${suggestedConfirmations.length} AI photo matches`}
           </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => setScreen("correct")}
+          className="mt-3 w-full rounded-lg border border-slate-400 bg-white px-4 py-3 font-bold text-slate-900"
+        >
+          Open detailed correction tools
+        </button>
+        {error ? (
+          <p
+            role="alert"
+            className="mt-4 rounded-lg border border-red-400 bg-red-950 p-3 text-sm font-bold text-red-100"
+          >
+            {error}
+          </p>
+        ) : null}
+      </div>
+    );
+
+  return (
+    <div className="p-4 sm:p-6">
+      <p className="text-xs font-black uppercase tracking-[.16em] text-amber-700">
+        {screen === "correct" && rows.length
+          ? "Detailed photo corrections"
+          : "Photo upload"}
+      </p>
+      <h2 className="mt-1 text-2xl font-black text-slate-950">
+        {screen === "correct" && rows.length
+          ? "Fix an AI photo match"
+          : "Choose your jobsite photos once"}
+      </h2>
+      <p className="mt-2 text-sm leading-6 text-slate-700">
+        {screen === "correct" && rows.length
+          ? "Use this only when a photo was matched to the wrong checklist item."
+          : "Select up to 30 photos. The app uploads them privately, checks them, and then opens a separate review screen."}
+      </p>
+      {rows.length ? (
+        <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setScreen("upload")}
+            className={`min-h-11 rounded-md px-3 py-2 text-sm font-bold ${screen === "upload" ? "bg-slate-950 text-white" : "text-slate-700"}`}
+          >
+            Add photos
+          </button>
+          <button
+            type="button"
+            onClick={() => setScreen("review")}
+            className="min-h-11 rounded-md px-3 py-2 text-sm font-bold text-slate-700"
+          >
+            Review results
+          </button>
+        </div>
+      ) : null}
+      {screen === "upload" || !rows.length ? (
+        <>
+          <label
+            className={`mt-4 block w-full rounded-lg bg-slate-950 px-4 py-3 text-center font-bold text-white ${busy ? "opacity-50" : "cursor-pointer"}`}
+          >
+            <input
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              disabled={busy}
+              className="sr-only"
+              onChange={(event) => {
+                const selected = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                void addFiles(selected);
+              }}
+            />
+            Choose photos for the visit
+          </label>
+          {remainingServerMembers.length &&
+          !drafts.some((draft) => draft.batchId) ? (
+            <p
+              role="alert"
+              className="mt-3 rounded-lg border border-amber-500 bg-amber-950 p-3 text-sm font-bold text-amber-100"
+            >
+              Reselect remaining files · {remainingServerMembers.length}{" "}
+              device-local{" "}
+              {remainingServerMembers.length === 1 ? "photo is" : "photos are"}{" "}
+              still needed. Select the same files again; they will be matched
+              securely to the original batch.
+            </p>
+          ) : null}
+          {selectionNotice ? (
+            <p
+              role="status"
+              className="mt-3 rounded-lg bg-slate-900 p-3 text-sm font-bold text-white"
+            >
+              {selectionNotice}
+            </p>
+          ) : null}
+          {reviewNotice ? (
+            <p
+              role="status"
+              className="mt-3 rounded-lg border border-amber-500 bg-amber-950 p-3 text-sm font-bold text-amber-100"
+            >
+              {reviewNotice}
+            </p>
+          ) : null}
+          {drafts.length ? (
+            <>
+              <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {drafts.map((draft, index) => (
+                  <li
+                    key={draft.id}
+                    className="overflow-hidden rounded-lg border border-slate-300 bg-white"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={draft.url}
+                      alt={`Visit photo ${index + 1}`}
+                      className="h-28 w-full object-cover"
+                    />
+                    <div className="p-2 text-xs">
+                      <strong>Photo {index + 1}</strong>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => removeDraft(draft.id)}
+                        className="float-right font-bold text-red-800 underline"
+                      >
+                        Remove
+                      </button>
+                      <p className="mt-1 clear-both text-slate-600">
+                        {draft.status === "failed"
+                          ? "Failed · ready to retry"
+                          : draft.status === "uploading"
+                            ? "Uploading…"
+                            : "Ready"}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void uploadInbox()}
+                className="mt-4 w-full rounded-lg bg-amber-500 px-4 py-3 font-black text-slate-950 disabled:opacity-50"
+              >
+                {progress
+                  ? `${progress.phase === "uploading" ? "Uploading" : "Reviewing"} photo ${progress.current} of ${progress.total} · ${progress.percent}%`
+                  : `Upload and review ${drafts.length} ${drafts.length === 1 ? "photo" : "photos"}`}
+              </button>
+            </>
+          ) : null}
         </>
       ) : null}
-      {rows.length ? (
+      {rows.length && screen === "correct" ? (
         <section className="mt-5 rounded-xl bg-slate-950 p-4 text-white">
           <h3 className="text-xl font-black">Site visit photo summary</h3>
           <p className="mt-1 text-sm text-slate-300">
             AI reviewed {rows.length} {rows.length === 1 ? "photo" : "photos"}.
-            Check the nine sections below, then confirm the organization once.
+            Review one section at a time. Tap any line for the explanation.
           </p>
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="rounded-lg bg-emerald-950 p-2">
+              <strong className="block text-lg text-emerald-300">
+                {
+                  criterionSummaries.filter(
+                    (summary) =>
+                      summary.verified || summary.undecided.length > 0,
+                  ).length
+                }
+              </strong>
+              Found
+            </div>
+            <div className="rounded-lg bg-amber-950 p-2">
+              <strong className="block text-lg text-amber-200">
+                {pendingReviewCount || unavailableRows.length
+                  ? "—"
+                  : criterionSummaries.filter(
+                      (summary) =>
+                        !summary.verified && !summary.undecided.length,
+                    ).length}
+              </strong>
+              Not found
+            </div>
+            <div className="rounded-lg bg-slate-800 p-2">
+              <strong className="block text-lg text-slate-200">
+                {pendingReviewCount + unavailableRows.length}
+              </strong>
+              Couldn&apos;t review
+            </div>
+          </div>
+          <label
+            className="mt-4 block text-sm font-bold"
+            htmlFor="review-section"
+          >
+            Section {activeReviewIndex + 1} of {data?.items.length ?? 0}
+          </label>
+          <select
+            id="review-section"
+            value={activeReviewItem?.id ?? ""}
+            onChange={(event) => setActiveReviewItemId(event.target.value)}
+            className="mt-1 min-h-12 w-full rounded-lg border border-slate-500 bg-white px-3 text-base font-bold text-slate-950"
+          >
             {(data?.items ?? []).map((item) => {
               const summaries = criterionSummaries.filter(
                 (summary) => summary.item.id === item.id,
               );
+              const found = summaries.filter(
+                (summary) => summary.verified || summary.undecided.length > 0,
+              ).length;
+              return (
+                <option key={item.id} value={item.id}>
+                  {item.ordinal}. {item.title} · {found}/{summaries.length}{" "}
+                  found
+                </option>
+              );
+            })}
+          </select>
+          <div className="mt-4 space-y-3">
+            {(activeReviewItem ? [activeReviewItem] : []).map((item) => {
+              const summaries = activeReviewSummaries;
               const confirmed = summaries.filter(
                 (summary) => summary.verified,
               ).length;
@@ -807,7 +1160,7 @@ export function GuidedDeckPhotoInbox({
                   <ul className="mt-2 space-y-1 text-sm">
                     {summaries.map((summary) => {
                       const photoCount = new Set(
-                        summary.candidates.map(
+                        summary.undecided.map(
                           (candidate) => candidate.attempt.id,
                         ),
                       ).size;
@@ -817,31 +1170,174 @@ export function GuidedDeckPhotoInbox({
                           (candidate) =>
                             candidate.decision?.decision === "excluded",
                         );
+                      const confirmedPhotoFiles = [
+                        ...new Set(
+                          effectiveAssignments
+                            .filter(
+                              (assignment) =>
+                                assignment.visit_item_id === item.id &&
+                                assignment.criterion_key ===
+                                  summary.criterion.key &&
+                                ["accepted", "corrected"].includes(
+                                  assignment.decision,
+                                ),
+                            )
+                            .map((assignment) => {
+                              const row = rows.find(
+                                (candidate) =>
+                                  candidate.attempt.id ===
+                                  assignment.intake_attempt_id,
+                              );
+                              return (
+                                row?.member?.original_filename ??
+                                (row
+                                  ? `Photo ${row.attempt.member_ordinal}`
+                                  : null)
+                              );
+                            })
+                            .filter((filename): filename is string =>
+                              Boolean(filename),
+                            ),
+                        ),
+                      ];
+                      const suggestedPhotoFiles = [
+                        ...new Set(
+                          summary.undecided.map(
+                            (candidate) =>
+                              candidate.member?.original_filename ??
+                              `Photo ${candidate.attempt.member_ordinal}`,
+                          ),
+                        ),
+                      ];
+                      const excludedPhotoFiles = [
+                        ...new Set(
+                          summary.candidates
+                            .filter(
+                              (candidate) =>
+                                candidate.decision?.decision === "excluded",
+                            )
+                            .map(
+                              (candidate) =>
+                                candidate.member?.original_filename ??
+                                `Photo ${candidate.attempt.member_ordinal}`,
+                            ),
+                        ),
+                      ];
+                      const status = summary.verified
+                        ? "Confirmed"
+                        : summary.undecided.length
+                          ? `AI found · ${photoCount} ${photoCount === 1 ? "photo" : "photos"}`
+                          : allExcluded
+                            ? "Excluded"
+                            : pendingReviewCount || unavailableRows.length
+                              ? "Not found yet"
+                              : "Missing";
                       return (
-                        <li
-                          key={summary.key}
-                          className="flex items-start justify-between gap-3 rounded-md bg-slate-800 px-3 py-2"
-                        >
-                          <span>{summary.criterion.label}</span>
-                          <strong
-                            className={
-                              summary.verified
-                                ? "text-emerald-300"
-                                : summary.undecided.length
-                                  ? "text-blue-300"
-                                  : "text-amber-300"
-                            }
-                          >
-                            {summary.verified
-                              ? "Confirmed"
-                              : summary.undecided.length
-                                ? `AI found · ${photoCount} ${photoCount === 1 ? "photo" : "photos"}`
-                                : allExcluded
-                                  ? "Excluded"
-                                  : pendingReviewCount || unavailableRows.length
-                                    ? "Not found yet"
-                                    : "Missing"}
-                          </strong>
+                        <li key={summary.key}>
+                          <details className="group rounded-md bg-slate-800 px-3 py-2">
+                            <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
+                              <span className="flex w-full items-start justify-between gap-3">
+                                <span>{summary.criterion.label}</span>
+                                <strong
+                                  className={
+                                    summary.verified
+                                      ? "text-emerald-300"
+                                      : summary.undecided.length
+                                        ? "text-blue-300"
+                                        : "text-amber-300"
+                                  }
+                                >
+                                  {status}
+                                  <span
+                                    aria-hidden="true"
+                                    className="ml-1 inline-block transition-transform group-open:rotate-180"
+                                  >
+                                    ▾
+                                  </span>
+                                </strong>
+                              </span>
+                            </summary>
+                            <div className="mt-3 border-t border-slate-600 pt-3 text-sm text-slate-200">
+                              {summary.verified ? (
+                                <>
+                                  <p className="font-bold">
+                                    Supporting photo files
+                                  </p>
+                                  <p className="mt-1">
+                                    {confirmedPhotoFiles.join(", ") ||
+                                      "Confirmed photo"}
+                                  </p>
+                                </>
+                              ) : summary.undecided.length ? (
+                                <>
+                                  <p className="font-bold">
+                                    AI matched these photo files
+                                  </p>
+                                  <p className="mt-1">
+                                    {suggestedPhotoFiles.join(", ")}
+                                  </p>
+                                  <p className="mt-2 text-blue-200">
+                                    Confirm the summary below if at least one of
+                                    these photos clearly shows this item.
+                                  </p>
+                                </>
+                              ) : allExcluded ? (
+                                <>
+                                  <p className="font-bold text-amber-200">
+                                    The proposed photos were excluded
+                                  </p>
+                                  <p className="mt-1">
+                                    {excludedPhotoFiles.join(", ")}
+                                  </p>
+                                  <p className="mt-2">
+                                    Take a clear photo of “
+                                    {summary.criterion.label}.” Center that item
+                                    in the photo and include enough of the deck
+                                    to show where it is located.
+                                  </p>
+                                </>
+                              ) : pendingReviewCount ? (
+                                <>
+                                  <p className="font-bold text-blue-200">
+                                    Review still in progress
+                                  </p>
+                                  <p className="mt-1">
+                                    AI has not finished checking every uploaded
+                                    photo, so there is no missing-photo
+                                    conclusion yet.
+                                  </p>
+                                </>
+                              ) : unavailableRows.length ? (
+                                <>
+                                  <p className="font-bold text-amber-200">
+                                    Some photos could not be reviewed
+                                  </p>
+                                  <p className="mt-1">
+                                    Retry the unavailable AI review before
+                                    treating this item as missing.
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="font-bold text-amber-200">
+                                    What is missing
+                                  </p>
+                                  <p className="mt-1">
+                                    No uploaded photo clearly showed “
+                                    {summary.criterion.label}.”
+                                  </p>
+                                  <p className="mt-2">
+                                    Take a clear photo of “
+                                    {summary.criterion.label}.” Center that item
+                                    in the photo and include enough of the deck
+                                    to show where it is located. If a close
+                                    photo loses context, also take one wider
+                                    photo.
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          </details>
                         </li>
                       );
                     })}
@@ -849,6 +1345,30 @@ export function GuidedDeckPhotoInbox({
                 </div>
               );
             })}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={activeReviewIndex === 0}
+              onClick={() => {
+                const previous = data?.items[activeReviewIndex - 1];
+                if (previous) setActiveReviewItemId(previous.id);
+              }}
+              className="min-h-11 rounded-lg border border-slate-500 px-3 py-2 font-bold disabled:opacity-30"
+            >
+              Previous section
+            </button>
+            <button
+              type="button"
+              disabled={activeReviewIndex >= (data?.items.length ?? 1) - 1}
+              onClick={() => {
+                const next = data?.items[activeReviewIndex + 1];
+                if (next) setActiveReviewItemId(next.id);
+              }}
+              className="min-h-11 rounded-lg bg-blue-500 px-3 py-2 font-bold text-white disabled:opacity-30"
+            >
+              Next section
+            </button>
           </div>
           {suggestedConfirmations.length ? (
             <button
@@ -859,19 +1379,20 @@ export function GuidedDeckPhotoInbox({
             >
               {summaryProgress
                 ? `Confirming ${summaryProgress.current} of ${summaryProgress.total}…`
-                : `Confirm AI organization for ${suggestedConfirmations.length} checklist ${suggestedConfirmations.length === 1 ? "item" : "items"}`}
+                : `Approve all ${suggestedConfirmations.length} items marked Found`}
             </button>
           ) : null}
           <p className="mt-2 text-xs text-slate-400">
-            This confirms one supporting photo for each item AI found. You can
-            inspect or correct individual suggestions below when needed.
+            This only confirms which photos support the checklist. It does not
+            approve measurements, pricing, engineering, or construction
+            decisions.
           </p>
           <details className="mt-4 rounded-lg border border-slate-700 bg-slate-900 p-3">
             <summary className="cursor-pointer font-bold">
-              Optional: review individual photo suggestions
+              Something looks wrong in this section?
             </summary>
             <div className="mt-4 space-y-4">
-              {(data?.items ?? []).map((item) => {
+              {(activeReviewItem ? [activeReviewItem] : []).map((item) => {
                 const proposals = rows.flatMap(({ attempt, review, member }) =>
                   review?.diagnostic_class === "classified"
                     ? review.proposals
@@ -1137,7 +1658,9 @@ export function GuidedDeckPhotoInbox({
         onClick={onUseGuided}
         className="mt-5 w-full rounded-lg border border-slate-400 bg-white px-4 py-3 font-bold text-slate-900"
       >
-        Use guided checklist capture instead
+        {screen === "correct" && rows.length
+          ? "Switch to guided retakes"
+          : "Use guided checklist capture instead"}
       </button>
     </div>
   );
