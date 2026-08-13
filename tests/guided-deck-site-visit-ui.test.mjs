@@ -34,6 +34,26 @@ test("Deck workflow is query gated and shows one persisted capture at a time", (
   assert.doesNotMatch(component, /\.map\(\(item\).*Required capture/s);
 });
 
+test("continuing the guided checklist moves the user to the active step", () => {
+  assert.match(
+    component,
+    /function continueGuidedChecklist\(\)[\s\S]*setVisitCaptureMode\("guided"\)/,
+  );
+  assert.match(
+    component,
+    /const guidedVisit = document\.getElementById\("deck-field-visit"\)/,
+  );
+  assert.match(component, /guidedVisit\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(component, /guidedVisit\?\.scrollIntoView\(\{/);
+  assert.match(component, /prefers-reduced-motion: reduce/);
+  assert.match(component, /\? "auto"[\s\S]*: "smooth"/);
+  assert.match(component, /block: "start"/);
+  assert.match(component, /onUseGuided=\{continueGuidedChecklist\}/);
+  assert.match(component, /tabIndex=\{-1\}/);
+  assert.match(component, /aria-label="Guided Deck site checklist"/);
+  assert.match(component, /scroll-mt-24/);
+});
+
 test("camera upload is private, progress visible, and invokes trusted advisory review", () => {
   assert.match(component, /capture="environment"/);
   assert.match(component, /crypto\.subtle\.digest\(\s*"SHA-256"/);

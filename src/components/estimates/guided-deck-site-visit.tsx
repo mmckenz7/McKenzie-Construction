@@ -1415,6 +1415,23 @@ export function GuidedDeckSiteVisit({
     }
   }
 
+  function continueGuidedChecklist() {
+    setVisitCaptureMode("guided");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const guidedVisit = document.getElementById("deck-field-visit");
+        guidedVisit?.focus({ preventScroll: true });
+        guidedVisit?.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+            .matches
+            ? "auto"
+            : "smooth",
+          block: "start",
+        });
+      });
+    });
+  }
+
   if (discoveringVisit && !visit)
     return (
       <section
@@ -1431,7 +1448,7 @@ export function GuidedDeckSiteVisit({
     return (
       <section
         id="deck-field-visit"
-        className="overflow-hidden rounded-xl border-2 border-amber-500 bg-white shadow-sm"
+        className="scroll-mt-24 overflow-hidden rounded-xl border-2 border-amber-500 bg-white shadow-sm"
       >
         <BetaWarning />
         <div className="p-5 sm:p-6">
@@ -1546,7 +1563,7 @@ export function GuidedDeckSiteVisit({
           onVisitChanged={async () => {
             await loadVisit(visit.id);
           }}
-          onUseGuided={() => setVisitCaptureMode("guided")}
+          onUseGuided={continueGuidedChecklist}
         />
       </section>
     );
@@ -1554,7 +1571,9 @@ export function GuidedDeckSiteVisit({
   return (
     <section
       id="deck-field-visit"
-      className="overflow-hidden rounded-xl border-2 border-amber-500 bg-white shadow-sm"
+      tabIndex={-1}
+      aria-label="Guided Deck site checklist"
+      className="scroll-mt-24 overflow-hidden rounded-xl border-2 border-amber-500 bg-white shadow-sm"
     >
       <BetaWarning />
       <div className="border-b border-slate-200 p-4 sm:p-5">
