@@ -5,6 +5,8 @@ import test from "node:test";
 const component = readFileSync("src/components/estimates/guided-deck-site-visit.tsx", "utf8");
 const builder = readFileSync("src/components/estimates/estimate-builder.tsx", "utf8");
 const page = readFileSync("src/app/sales/estimates/[estimateId]/page.tsx", "utf8");
+const photoCompleteRoute = readFileSync("src/app/api/guided-site-visits/[visitId]/photos/[photoId]/complete/route.ts", "utf8");
+const captureMigration = readFileSync("supabase/migrations/20260812150000_guided_deck_site_visit_manual_capture.sql", "utf8");
 
 test("Deck workflow is query gated and shows one persisted capture at a time", () => {
   assert.match(page, /showDeckWorkflow=\{query\.workflow === "deck"\}/);
@@ -60,6 +62,40 @@ test("retake, retry, block, resume, and final outcomes remain explicit", () => {
   assert.match(component, /documented with \$\{blockedCount\} blocked/);
   assert.match(component, /Submit documented visit with follow-up required/);
   assert.match(component, /Incomplete/);
+});
+
+test("every completed review state keeps a clear mobile-first retake action", () => {
+  const goodState = component.slice(component.indexOf('review.verdict === "usable"'), component.indexOf('review.verdict === "retake_recommended"'));
+  const retakeState = component.slice(component.indexOf('review.verdict === "retake_recommended"'), component.indexOf('return <div role="status" className="mt-4 rounded-lg border border-slate-300'));
+  const unableState = component.slice(component.indexOf('return <div role="status" className="mt-4 rounded-lg border border-slate-300'), component.indexOf("function PhotoInput"));
+  for (const state of [goodState, retakeState, unableState]) {
+    assert.match(state, /PhotoInput label="Retake photo"/);
+    assert.match(state, /onChange={onRetake}/);
+    assert.match(state, /flex-col gap-3 sm:flex-row/);
+  }
+  assert.match(goodState, /Use this photo/);
+  assert.match(unableState, /Retry review/);
+  assert.match(unableState, /Review photo myself/);
+});
+
+test("retake remains visible after human acceptance and clears acceptance before upload", () => {
+  const reviewStatus = '{reviewPhotoReady ? <PhotoReviewStatus';
+  const manualPanel = '{humanAccepted ? <>';
+  assert.ok(component.indexOf(reviewStatus) >= 0);
+  assert.ok(component.indexOf(manualPanel) > component.indexOf(reviewStatus));
+  const alwaysRenderedReview = component.slice(component.indexOf(reviewStatus), component.indexOf(manualPanel));
+  assert.match(alwaysRenderedReview, /onRetake=\{\(\) => setHumanAccepted\(false\)\}/);
+  assert.match(alwaysRenderedReview, /reviewPhotoReady \? <PhotoReviewStatus/);
+  assert.match(component, /if \(file\) \{ onChange\?\.\(\); void uploadPhoto\(file\); \}/);
+});
+
+test("retaking creates a linked replacement and never advances the capture", () => {
+  assert.match(component, /retakeOfAttemptId: pendingPhoto\?\.id \?\? storedPhoto\?\.id \?\? null/);
+  assert.match(component, /storedPhoto\?\.id \?\? null/);
+  assert.match(photoCompleteRoute, /confirm_guided_site_visit_photo/);
+  assert.match(captureMigration, /if attempt\.retake_of_attempt_id is not null then[\s\S]*set state='superseded'[\s\S]*id=attempt\.retake_of_attempt_id/);
+  assert.doesNotMatch(component, /method:\s*"DELETE"/);
+  assert.doesNotMatch(component, /function PhotoInput[\s\S]*confirmItem\(/);
 });
 
 test("an interrupted private upload is append-only failed before retry reservation", () => {
