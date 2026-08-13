@@ -73,6 +73,20 @@ export async function POST(
         : undefined;
     if (focusItemId && (!focusItem || !focusCriterion))
       throw new TypeError("Focused checklist item is invalid.");
+    const previousReview = focusItemId
+      ? await db
+          .from("guided_site_visit_intake_classification_reviews")
+          .select("proposals")
+          .eq("intake_attempt_id", attemptId)
+          .eq("visit_id", visitId)
+          .eq("company_id", auth.authorization!.companyId)
+          .eq("diagnostic_class", "classified")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : null;
+    if (previousReview?.error)
+      throw new Error("Earlier photo review could not be loaded.");
     const linked = attempt.data as unknown as {
         asset_id: string;
         ai_estimator_assets: {
@@ -130,13 +144,37 @@ export async function POST(
               }
             : {}),
         });
-        diagnostic =
-          result.usabilityVerdict === "usable"
-            ? "classified"
-            : "retake_recommended";
-        issueCodes = result.issueCodes;
-        proposals =
+        const focusedProposals =
           result.usabilityVerdict === "usable" ? result.proposals : [];
+        if (focusItem && focusCriterion && previousReview?.data) {
+          const prior = Array.isArray(previousReview.data.proposals)
+            ? (previousReview.data.proposals as {
+                visitItemId: string;
+                criterionKey: string;
+              }[])
+            : [];
+          proposals = [
+            ...prior.filter(
+              (proposal) =>
+                proposal.visitItemId !== focusItem.id ||
+                proposal.criterionKey !== focusCriterion.key,
+            ),
+            ...focusedProposals.filter(
+              (proposal) =>
+                proposal.visitItemId === focusItem.id &&
+                proposal.criterionKey === focusCriterion.key,
+            ),
+          ];
+          diagnostic = "classified";
+          issueCodes = [];
+        } else {
+          diagnostic =
+            result.usabilityVerdict === "usable"
+              ? "classified"
+              : "retake_recommended";
+          issueCodes = result.issueCodes;
+          proposals = focusedProposals;
+        }
         requestSha256 = result.requestSha256;
         responseSha256 = result.responseSha256;
       } catch (e) {

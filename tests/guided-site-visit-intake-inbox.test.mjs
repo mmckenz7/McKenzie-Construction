@@ -120,6 +120,21 @@ test("usability gates classification and assignment", () => {
     /diagnostic_class<>'classified' and requested_proposals<>'\[\]'::jsonb/,
   );
 });
+test("focused reviews preserve prior non-target proposals", () => {
+  assert.match(
+    classification,
+    /guided_site_visit_intake_classification_reviews/,
+  );
+  assert.match(classification, /previousReview\.data\.proposals/);
+  assert.match(
+    classification,
+    /proposal\.visitItemId !== focusItem\.id[\s\S]*proposal\.criterionKey !== focusCriterion\.key/,
+  );
+  assert.match(
+    classification,
+    /proposal\.visitItemId === focusItem\.id[\s\S]*proposal\.criterionKey === focusCriterion\.key/,
+  );
+});
 test("forward fix uses PostgreSQL array membership for AI criteria", () => {
   assert.match(
     criterionFix,

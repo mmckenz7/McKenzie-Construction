@@ -92,12 +92,12 @@ test("classifies every confirmed photo and keeps AI advisory", () => {
 });
 
 test("separates the missing list from per-photo review details", () => {
-  assert.match(inbox, /What are we still missing\?/);
+  assert.match(inbox, /What still needs verified photo evidence\?/);
   assert.match(inbox, /This page only shows missing information/);
   assert.match(inbox, /photoReviewReady/);
   assert.match(inbox, /Nothing is being called missing early/);
-  assert.match(inbox, /Missing information/);
-  assert.match(inbox, /Not found in completed reviews/);
+  assert.match(inbox, /Still needs verified evidence/);
+  assert.match(inbox, /Not yet verified in completed reviews/);
   assert.match(inbox, /You can attach a reviewed photo now/);
   assert.match(inbox, /Your photos/);
   assert.match(inbox, /what that picture checked off/);
@@ -109,6 +109,10 @@ test("separates the missing list from per-photo review details", () => {
   assert.match(inbox, /guided-visit-focused-review/);
   assert.match(inbox, /guided-inbox-manual-evidence/);
   assert.match(inbox, /assignmentMatches/);
+  assert.match(inbox, /focus-within:ring-2/);
+  assert.match(inbox, /supersedesEventId: effectiveLeaf\?\.id \?\? null/);
+  assert.match(inbox, /successfulAttemptIds/);
+  assert.match(inbox, /human-verified photo evidence/);
   assert.match(classificationRoute, /focusItemId/);
   assert.match(classificationRoute, /focusCriterionKey/);
   assert.match(classificationRoute, /Focused checklist item is invalid/);

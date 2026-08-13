@@ -594,6 +594,7 @@ export function GuidedDeckPhotoInbox({
     setBusy(true);
     setError("");
     let nextRevision = revision;
+    const successfulAttemptIds = new Set<string>();
     try {
       for (const attemptId of attemptIds) {
         const review = latestReview(data?.reviews ?? [], attemptId);
@@ -601,6 +602,19 @@ export function GuidedDeckPhotoInbox({
           throw new Error(
             "Only a successfully reviewed photo can be attached.",
           );
+        const effectiveLeaf = effectiveAssignments.find(
+          (assignment) =>
+            assignment.intake_attempt_id === attemptId &&
+            assignment.visit_item_id === itemId &&
+            assignment.criterion_key === criterionKey,
+        );
+        if (
+          effectiveLeaf &&
+          ["accepted", "corrected"].includes(effectiveLeaf.decision)
+        ) {
+          successfulAttemptIds.add(attemptId);
+          continue;
+        }
         const result = await requestJson(
           `/api/guided-site-visits/${visitId}/intake-photos/${attemptId}/assignment-events`,
           {
@@ -610,27 +624,37 @@ export function GuidedDeckPhotoInbox({
             visitItemId: itemId,
             criterionKey,
             decision: "corrected",
-            supersedesEventId: null,
+            supersedesEventId: effectiveLeaf?.id ?? null,
           },
         );
         if (typeof result.nextRevision !== "number")
           throw new Error("The photo attachment was incomplete.");
         nextRevision = result.nextRevision;
+        successfulAttemptIds.add(attemptId);
       }
       setRevision(nextRevision);
       setMissingPhotoSelections((current) => ({
         ...current,
-        [summaryKey]: [],
+        [summaryKey]: (current[summaryKey] ?? []).filter(
+          (attemptId) => !successfulAttemptIds.has(attemptId),
+        ),
       }));
+      setReviewNotice(
+        `${successfulAttemptIds.size} ${successfulAttemptIds.size === 1 ? "photo was" : "photos were"} attached as verified evidence.`,
+      );
       await loadInbox();
       await onVisitChanged();
     } catch (cause) {
       setRevision(nextRevision);
+      setMissingPhotoSelections((current) => ({
+        ...current,
+        [summaryKey]: (current[summaryKey] ?? []).filter(
+          (attemptId) => !successfulAttemptIds.has(attemptId),
+        ),
+      }));
       await loadInbox().catch(() => undefined);
       setError(
-        cause instanceof Error
-          ? cause.message
-          : "Selected photos could not be attached.",
+        `${successfulAttemptIds.size ? `${successfulAttemptIds.size} ${successfulAttemptIds.size === 1 ? "photo was" : "photos were"} attached. ` : ""}${cause instanceof Error ? cause.message : "The remaining selected photos could not be attached."}`,
       );
     } finally {
       setBusy(false);
@@ -807,7 +831,7 @@ export function GuidedDeckPhotoInbox({
           Photo review
         </p>
         <h2 className="mt-1 text-2xl font-black text-slate-950">
-          What are we still missing?
+          What still needs verified photo evidence?
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-700">
           This page only shows missing information. Open a photo below when you
@@ -882,12 +906,12 @@ export function GuidedDeckPhotoInbox({
             <div>
               <h3 className="text-xl font-black">
                 {photoReviewReady
-                  ? "Missing information"
-                  : "Not found in completed reviews"}
+                  ? "Still needs verified evidence"
+                  : "Not yet verified in completed reviews"}
               </h3>
               <p className="mt-1 text-sm text-slate-300">
                 {photoReviewReady
-                  ? "These are the only checklist items AI did not find in any reviewed photo."
+                  ? "No reviewed photo is currently verified for these items. An AI suggestion you excluded can also appear here."
                   : "You can attach a reviewed photo now. This list may shrink after the remaining AI review finishes."}
               </p>
             </div>
@@ -941,7 +965,7 @@ export function GuidedDeckPhotoInbox({
                             return (
                               <li key={`${summary.key}:${row.attempt.id}`}>
                                 <label
-                                  className={`block cursor-pointer overflow-hidden rounded-lg border-2 ${selected ? "border-emerald-400 bg-emerald-950" : "border-slate-600 bg-slate-900"}`}
+                                  className={`block cursor-pointer overflow-hidden rounded-lg border-2 focus-within:ring-2 focus-within:ring-amber-300 focus-within:ring-offset-2 focus-within:ring-offset-slate-800 ${selected ? "border-emerald-400 bg-emerald-950" : "border-slate-600 bg-slate-900"}`}
                                 >
                                   <input
                                     type="checkbox"
@@ -1021,7 +1045,7 @@ export function GuidedDeckPhotoInbox({
             </ul>
           ) : (
             <p className="mt-4 rounded-lg bg-emerald-950 p-3 font-bold text-emerald-200">
-              AI found photo coverage for every checklist item.
+              Every checklist item has human-verified photo evidence.
             </p>
           )}
         </section>
