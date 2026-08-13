@@ -65,11 +65,28 @@ test("resumed visits select the latest review with a stable tie-breaker", () => 
 test("all nine approved Deck captures and required field measurements are represented", () => {
   for (const key of ["property_context", "full_deck_yard", "house_ledger", "underside_framing", "supports_footings", "stairs_landings", "guards_railings", "access_demolition", "utilities_obstructions"]) assert.match(component, new RegExp(key));
   for (const field of ["length", "width", "height_from_grade", "joist_spacing", "post_dimensions", "stair_width", "guard_height", "gate_width", "obstruction_clearances"]) assert.match(component, new RegExp(field));
-  assert.match(component, /Enter a field measurement and its unit/);
+  assert.match(component, /Choose unit/);
+  assert.match(component, /const LONG_UNITS = \["ft", "ft \+ in", "in"\]/);
+  assert.doesNotMatch(component, /placeholder="Unit"/);
   assert.match(component, /conditionStatus: "applies"/);
   assert.match(component, /conditionStatus: "not_applicable"/);
-  assert.match(component, /value: event\.target\.value/);
-  assert.match(component, /unit: event\.target\.value/);
+  assert.match(component, /serializeMeasurements/);
+});
+
+test("every measurement has plain-English help and compound visible dimensions are explicit", () => {
+  for (const field of ["length", "width", "height_from_grade", "ledger_length", "joist_spacing", "joist_depth", "beam_depth", "post_dimensions", "support_spacing", "exposed_footing_dimensions", "stair_width", "total_rise", "tread_depth", "representative_riser", "landing_dimensions", "guard_height", "opening", "rail_lengths_by_area", "handrail_height", "narrow_access_width", "gate_width", "clearance", "obstruction_clearances"]) assert.match(component, new RegExp(`${field}: ".+"`));
+  assert.match(component, /horizontal distance between adjacent support or beam lines\. Do not assume this is post spacing/);
+  for (const label of ["Post width", "Post depth", "Visible footing width", "Visible footing length", "Visible footing height or depth"]) assert.match(component, new RegExp(label));
+  assert.match(component, /draft\.components!\.map\(\(part\) => part\.trim\(\)\)\.join\(" × "\)/);
+  assert.match(component, /Do not estimate anything below grade/);
+});
+
+test("self-review repeats photo contents and review failures give actionable guidance", () => {
+  assert.match(component, /Make sure the photo includes/);
+  assert.match(component, /\(INCLUDE\[current\.itemKey\] \?\? \[\]\)\.map/);
+  for (const code of ["blurry", "too_dark", "too_bright", "glare", "obstructed", "wrong_subject", "incomplete_view", "too_distant", "orientation_problem", "unsupported_media", "review_unavailable"]) assert.match(component, new RegExp(`${code}: \\{ reason:`));
+  assert.match(component, /exact photo problem is unknown/);
+  assert.match(component, /Retry the review/);
 });
 
 test("retake, retry, block, resume, and final outcomes remain explicit", () => {
@@ -77,6 +94,8 @@ test("retake, retry, block, resume, and final outcomes remain explicit", () => {
   assert.match(component, /Retry review/);
   assert.match(component, /Use anyway — I checked it/);
   assert.match(component, /Review photo myself/);
+  assert.match(component, /review_unavailable/);
+  assert.match(component, /reviewPhoto\(activePhotoId, initialReviewKey\(activePhotoId\)\)/);
   assert.match(component, /Retry or document why this capture is blocked/);
   assert.match(component, /Cannot capture this/);
   assert.match(component, /followUpReasonCode/);
