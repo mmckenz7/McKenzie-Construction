@@ -1,4 +1,5 @@
 import { MissionControlDashboard } from "@/components/mission-control-dashboard";
+import { getInternalDeckIntakeAccess } from "@/lib/internal-deck-intake-access";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const dynamic = "force-dynamic";
@@ -7,49 +8,58 @@ const openStatuses = ["open", "in_progress"];
 
 export default async function MissionControlPage() {
   const supabase = createAdminServerClient();
+  const intakeAccess = await getInternalDeckIntakeAccess();
   const now = new Date();
   const endToday = new Date(now);
   endToday.setHours(23, 59, 59, 999);
 
-  const [tasksResult, projectsResult, leadsResult, changesResult, activityResult, inboxResult] =
-    await Promise.all([
-      supabase
-        .from("tasks")
-        .select("id,title,priority,due_at,project_id,lead_id,status,metadata")
-        .in("status", openStatuses)
-        .order("due_at", { ascending: true, nullsFirst: false })
-        .limit(40),
-      supabase
-        .from("projects")
-        .select("id,project_name,status,project_manager_id,start_date,target_completion_date,updated_at")
-        .not("status", "in", '("completed","canceled")')
-        .order("updated_at", { ascending: false })
-        .limit(12),
-      supabase
-        .from("leads")
-        .select("id,name,lead_status,consultation_status,follow_up_at,updated_at")
-        .order("updated_at", { ascending: false })
-        .limit(40),
-      supabase
-        .from("project_change_orders")
-        .select("id,project_id,title,status,updated_at")
-        .in("status", ["draft", "pending_approval", "revision_requested"])
-        .order("updated_at", { ascending: false })
-        .limit(12),
-      supabase
-        .from("lead_activities")
-        .select("id,lead_id,summary,occurred_at")
-        .order("occurred_at", { ascending: false })
-        .limit(8),
-      supabase
-        .from("communication_threads")
-        .select("id,subject,department,lead_id,unread_count,last_message_at")
-        .neq("status", "archived")
-        .or("lead_id.not.is.null,customer_id.not.is.null")
-        .order("unread_count", { ascending: false })
-        .order("last_message_at", { ascending: false })
-        .limit(8),
-    ]);
+  const [
+    tasksResult,
+    projectsResult,
+    leadsResult,
+    changesResult,
+    activityResult,
+    inboxResult,
+  ] = await Promise.all([
+    supabase
+      .from("tasks")
+      .select("id,title,priority,due_at,project_id,lead_id,status,metadata")
+      .in("status", openStatuses)
+      .order("due_at", { ascending: true, nullsFirst: false })
+      .limit(40),
+    supabase
+      .from("projects")
+      .select(
+        "id,project_name,status,project_manager_id,start_date,target_completion_date,updated_at",
+      )
+      .not("status", "in", '("completed","canceled")')
+      .order("updated_at", { ascending: false })
+      .limit(12),
+    supabase
+      .from("leads")
+      .select("id,name,lead_status,consultation_status,follow_up_at,updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(40),
+    supabase
+      .from("project_change_orders")
+      .select("id,project_id,title,status,updated_at")
+      .in("status", ["draft", "pending_approval", "revision_requested"])
+      .order("updated_at", { ascending: false })
+      .limit(12),
+    supabase
+      .from("lead_activities")
+      .select("id,lead_id,summary,occurred_at")
+      .order("occurred_at", { ascending: false })
+      .limit(8),
+    supabase
+      .from("communication_threads")
+      .select("id,subject,department,lead_id,unread_count,last_message_at")
+      .neq("status", "archived")
+      .or("lead_id.not.is.null,customer_id.not.is.null")
+      .order("unread_count", { ascending: false })
+      .order("last_message_at", { ascending: false })
+      .limit(8),
+  ]);
 
   const tasks = tasksResult.data ?? [];
   const projects = projectsResult.data ?? [];
@@ -70,7 +80,9 @@ export default async function MissionControlPage() {
         (task.due_at && new Date(task.due_at) < now)),
   );
   const projectTasks = tasks.filter((task) => task.project_id);
-  const projectBlockers = projects.filter((project) => !project.project_manager_id);
+  const projectBlockers = projects.filter(
+    (project) => !project.project_manager_id,
+  );
   const consultations = leads.filter((lead) =>
     [
       "requested",
@@ -106,6 +118,7 @@ export default async function MissionControlPage() {
       activities={activityResult.data ?? []}
       inboxThreads={inboxResult.data ?? []}
       errorCount={errors}
+      canStartOnsiteDeckEstimate={intakeAccess.enabled}
     />
   );
 }

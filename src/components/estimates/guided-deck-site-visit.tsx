@@ -285,7 +285,10 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
   const [blockOpen, setBlockOpen] = useState(false);
   const [blockReason, setBlockReason] = useState("");
   const [blockNotes, setBlockNotes] = useState("");
-  const [localPhoto, setLocalPhoto] = useState<string | null>(null);
+  const [localPhoto, setLocalPhoto] = useState<{
+    photoId: string;
+    url: string;
+  } | null>(null);
   const [pendingPhoto, setPendingPhoto] = useState<{
     id: string;
     revision: number;
@@ -316,8 +319,27 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
   const [factDraft, setFactDraft] = useState<Record<string, VisibleFactStatus>>(
     {},
   );
+  const [factOverrides, setFactOverrides] = useState<
+    Record<string, Record<string, VisibleFactStatus>>
+  >({});
   const [correctingFacts, setCorrectingFacts] = useState(false);
   const [humanAccepted, setHumanAccepted] = useState(false);
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [captureIntent, setCaptureIntent] = useState<
+    | { kind: "initial" }
+    | { kind: "complement"; sourceDecisionId: string; revision: number }
+    | {
+        kind: "retake";
+        photoId: string;
+        sourceDecisionId: string | null;
+        revision: number;
+      }
+    | null
+  >(null);
+  const [reservationNonce, setReservationNonce] = useState(() =>
+    crypto.randomUUID(),
+  );
+  const [discoveringVisit, setDiscoveringVisit] = useState(true);
 
   const loadVisit = useCallback(async (visitId: string) => {
     const response = await fetch(
@@ -354,10 +376,6 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
       };
       if (!response.ok || !body.visitId)
         throw new Error(body.error ?? "Site visit could not be started.");
-      window.sessionStorage.setItem(
-        `guided-deck-visit:${estimateId}`,
-        body.visitId,
-      );
       await loadVisit(body.visitId);
     } catch (requestError) {
       setError(
@@ -371,20 +389,26 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
   }
 
   useEffect(() => {
-    const visitId = window.sessionStorage.getItem(
-      `guided-deck-visit:${estimateId}`,
-    );
-    if (!visitId) return;
-    setBusy(true);
-    void loadVisit(visitId)
-      .catch(() =>
-        window.sessionStorage.removeItem(`guided-deck-visit:${estimateId}`),
-      )
-      .finally(() => setBusy(false));
+    let active = true;
+    setDiscoveringVisit(true);
+    void fetch(`/api/estimates/${encodeURIComponent(estimateId)}/guided-site-visits`, { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json() as { error?: string; activeVisit?: { id?: unknown } | null };
+        if (!response.ok) throw new Error(body.error ?? "Active site visit could not be checked.");
+        const visitId = body.activeVisit?.id;
+        if (active && typeof visitId === "string") await loadVisit(visitId);
+      })
+      .catch((discoveryError) => {
+        if (active) setError(discoveryError instanceof Error ? discoveryError.message : "Active site visit could not be checked.");
+      })
+      .finally(() => {
+        if (active) setDiscoveringVisit(false);
+      });
+    return () => { active = false; };
   }, [estimateId, loadVisit]);
   useEffect(
     () => () => {
-      if (localPhoto) URL.revokeObjectURL(localPhoto);
+      if (localPhoto) URL.revokeObjectURL(localPhoto.url);
     },
     [localPhoto],
   );
@@ -394,8 +418,14 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
     current && visit
       ? visit.photoAttempts.filter((photo) => photo.visitItemId === current.id)
       : [];
+  const activePhotos = attempts
+    .filter((photo) => photo.state === "confirmed")
+    .sort((a, b) => a.ordinal - b.ordinal);
   const storedPhoto =
-    [...attempts].reverse().find((photo) => photo.state === "confirmed") ??
+    activePhotos.find(
+      (photo) => photo.id === (selectedPhotoId ?? pendingPhoto?.id),
+    ) ??
+    activePhotos.at(-1) ??
     null;
   const incompletePhoto =
     [...attempts].reverse().find((photo) => photo.state === "upload_pending") ??
@@ -438,6 +468,63 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
             recommendedNextCapture: storedFactReview.recommendedNextCapture,
           }
         : null;
+  const completedFactReviews = activePhotos.flatMap((photo) => {
+    const facts = latestVisibleFactReview(photo.visibleFactReviews);
+    const usability = latestUsabilityReview(photo.usabilityReviews);
+    return facts && usability?.verdict === "usable"
+      ? [{ photoId: photo.id, review: facts }]
+      : [];
+  });
+  if (
+    visibleFacts?.status === "complete" &&
+    !completedFactReviews.some(
+      (entry) => entry.review.id === visibleFacts.reviewId,
+    )
+  )
+    completedFactReviews.push({
+      photoId: activePhotoId!,
+      review: {
+        id: visibleFacts.reviewId,
+        sourceMode: visibleFacts.sourceMode,
+        criteria: visibleFacts.criteria,
+        recommendedNextCapture: visibleFacts.recommendedNextCapture,
+        createdAt: new Date().toISOString(),
+      },
+    });
+  const declaredFacts =
+    GUIDED_VISIBLE_FACT_CRITERIA[current?.itemKey ?? ""] ?? [];
+  const aggregateCoverage = declaredFacts.map((fact) => {
+    const source = completedFactReviews.find((entry) => {
+      const original = entry.review.criteria.find(
+        (row) => row.criterionKey === fact.key,
+      );
+      return (
+        (factOverrides[entry.review.id]?.[fact.key] ?? original?.status) ===
+        "visible"
+      );
+    });
+    const originalStatus = source?.review.criteria.find(
+      (row) => row.criterionKey === fact.key,
+    )?.status;
+    return {
+      criterionKey: fact.key,
+      label: fact.label,
+      sourceReviewId: source?.review.id ?? null,
+      sourcePhotoId: source?.photoId ?? null,
+      decision: originalStatus === "visible" ? "accepted" : "corrected",
+    };
+  });
+  const missingCoverage = aggregateCoverage.filter(
+    (fact) => !fact.sourceReviewId,
+  );
+  const missingCoverageKeys = new Set(
+    missingCoverage.map((fact) => fact.criterionKey),
+  );
+  const complementaryPhotoSource = completedFactReviews.find(
+    (entry) =>
+      entry.review.recommendedNextCapture &&
+      missingCoverageKeys.has(entry.review.recommendedNextCapture.criterionKey),
+  );
   const terminalCount =
     visit?.items.filter((item) => item.state !== "pending").length ?? 0;
   const blockedCount =
@@ -459,12 +546,6 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
 
   async function uploadPhoto(file: File) {
     if (!visit || !current || busy) return;
-    const retakeEvidence =
-      visibleFacts?.status === "complete" &&
-      visibleFacts.criteria.some((fact) => fact.status !== "visible") &&
-      visibleFacts.recommendedNextCapture
-        ? visibleFacts
-        : null;
     setBusy(true);
     setError("");
     setProgress(0);
@@ -480,7 +561,29 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
       const sha256 = [...new Uint8Array(digest)]
         .map((byte) => byte.toString(16).padStart(2, "0"))
         .join("");
-      let expectedRevision = pendingPhoto?.revision ?? visit.revision;
+      const effectiveCaptureIntent =
+        captureIntent?.kind ?? (activePhotos.length ? "retake" : "initial");
+      const effectiveRetakePhotoId =
+        captureIntent?.kind === "retake"
+          ? captureIntent.photoId
+          : effectiveCaptureIntent === "retake"
+            ? activePhotoId
+            : null;
+      let expectedRevision =
+        captureIntent && "revision" in captureIntent
+          ? captureIntent.revision
+          : (pendingPhoto?.revision ?? visit.revision);
+      let sourceDecisionId =
+        captureIntent && "sourceDecisionId" in captureIntent
+          ? captureIntent.sourceDecisionId
+          : null;
+      const retakeEvidence =
+        captureIntent === null &&
+        visibleFacts?.status === "complete" &&
+        visibleFacts.criteria.some((fact) => fact.status !== "visible") &&
+        visibleFacts.recommendedNextCapture
+          ? visibleFacts
+          : null;
       if (retakeEvidence) {
         const decision = await jsonRequest(
           `/api/guided-site-visits/${visit.id}/photos/${activePhotoId}/visible-fact-reviews/${retakeEvidence.reviewId}/decision`,
@@ -496,8 +599,12 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
             observation: null,
           },
         );
-        if (typeof decision.nextRevision !== "number")
+        if (
+          typeof decision.decisionId !== "string" ||
+          typeof decision.nextRevision !== "number"
+        )
           throw new Error("Retake decision response was invalid.");
+        sourceDecisionId = decision.decisionId;
         expectedRevision = decision.nextRevision;
       }
       if (incompletePhoto) {
@@ -515,13 +622,22 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
         "POST",
         {
           expectedRevision,
+          idempotencyKey: `guided-photo-reservation:${effectiveCaptureIntent}:${captureIntent?.kind === "complement" ? captureIntent.sourceDecisionId : (sourceDecisionId ?? effectiveRetakePhotoId ?? current.id)}:${sha256}:${reservationNonce}`,
+          captureIntent: effectiveCaptureIntent,
+          sourceDecisionId,
           originalFilename: file.name || `deck-capture-${current.ordinal}.jpg`,
           mimeType: file.type,
           byteSize: file.size,
           sha256,
-          retakeOfAttemptId: pendingPhoto?.id ?? storedPhoto?.id ?? null,
+          retakeOfAttemptId: effectiveRetakePhotoId,
+          reservationNonce,
         },
       );
+      if (reserve.alreadyConfirmed === true) {
+        setReservationNonce(crypto.randomUUID());
+        await loadVisit(visit.id);
+        return;
+      }
       const upload = reserve.upload as {
         signedUrl?: string;
         requiredMimeType?: string;
@@ -533,8 +649,7 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
       )
         throw new Error("Private upload session was incomplete.");
       await uploadWithProgress(upload.signedUrl, file, setProgress);
-      if (localPhoto) URL.revokeObjectURL(localPhoto);
-      setLocalPhoto(URL.createObjectURL(file));
+      if (localPhoto) URL.revokeObjectURL(localPhoto.url);
       const completed = await jsonRequest(
         `/api/guided-site-visits/${visit.id}/photos/${reserve.attemptId}/complete`,
         "POST",
@@ -546,12 +661,24 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
         id: reserve.attemptId,
         revision: completed.nextRevision,
       });
+      setLocalPhoto({
+        photoId: reserve.attemptId,
+        url: URL.createObjectURL(file),
+      });
+      setSelectedPhotoId(reserve.attemptId);
+      setReservationNonce(crypto.randomUUID());
+      setCaptureIntent(null);
       setFactReview(null);
       setFactDraft({});
       setCorrectingFacts(false);
       setLocalReview({ photoId: reserve.attemptId, status: "reviewing" });
       await reviewPhoto(reserve.attemptId, initialReviewKey(reserve.attemptId));
     } catch (requestError) {
+      if (
+        requestError instanceof Error &&
+        requestError.message.includes("reservation_failed")
+      )
+        setReservationNonce(crypto.randomUUID());
       try {
         await loadVisit(visit.id);
       } catch {}
@@ -564,6 +691,95 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
       setBusy(false);
       setProgress(null);
     }
+  }
+
+  async function prepareComplement() {
+    if (!visit || !current) return;
+    const source =
+      complementaryPhotoSource ??
+      completedFactReviews.find((entry) =>
+        entry.review.criteria.some(
+          (criterion) =>
+            missingCoverageKeys.has(criterion.criterionKey) &&
+            (factOverrides[entry.review.id]?.[criterion.criterionKey] ??
+              criterion.status) !== "visible",
+        ),
+      );
+    if (!source) return;
+    const missingCriterion = source.review.criteria.find(
+      (criterion) =>
+        missingCoverageKeys.has(criterion.criterionKey) &&
+        (factOverrides[source.review.id]?.[criterion.criterionKey] ??
+          criterion.status) !== "visible",
+    );
+    const effectiveCriteria = source.review.criteria.map((criterion) => ({
+      ...criterion,
+      status:
+        factOverrides[source.review.id]?.[criterion.criterionKey] ??
+        criterion.status,
+    }));
+    const recommendation =
+      source.review.recommendedNextCapture &&
+      missingCoverageKeys.has(source.review.recommendedNextCapture.criterionKey)
+        ? source.review.recommendedNextCapture
+        : missingCriterion
+          ? {
+              criterionKey: missingCriterion.criterionKey,
+              actionCode: "change_angle" as const,
+            }
+          : null;
+    if (!recommendation) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await jsonRequest(
+        `/api/guided-site-visits/${visit.id}/photos/${source.photoId}/visible-fact-reviews/${source.review.id}/decision`,
+        "POST",
+        {
+          itemId: current.id,
+          expectedRevision: pendingPhoto?.revision ?? visit.revision,
+          idempotencyKey: `guided-visible-facts:${source.review.id}:complement`,
+          decision:
+            JSON.stringify(effectiveCriteria) ===
+              JSON.stringify(source.review.criteria) &&
+            recommendation === source.review.recommendedNextCapture
+              ? "accepted"
+              : "corrected",
+          nextAction: "add_complementary_photo",
+          finalCriteria: effectiveCriteria,
+          recommendedNextCapture: recommendation,
+          observation: null,
+        },
+      );
+      if (
+        typeof result.decisionId !== "string" ||
+        typeof result.nextRevision !== "number"
+      )
+        throw new Error("Additional-photo request was incomplete.");
+      setCaptureIntent({
+        kind: "complement",
+        sourceDecisionId: result.decisionId,
+        revision: result.nextRevision,
+      });
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Another photo could not be started.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  function prepareRetake() {
+    if (!activePhotoId || !visit) return;
+    setCaptureIntent({
+      kind: "retake",
+      photoId: activePhotoId,
+      sourceDecisionId: null,
+      revision: pendingPhoto?.revision ?? visit.revision,
+    });
+    setHumanAccepted(false);
   }
 
   async function reviewPhoto(photoId: string, idempotencyKey: string) {
@@ -687,29 +903,21 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
       );
     }
   }
-  function acceptFacts() {
-    if (
-      !visibleFacts ||
-      visibleFacts.status !== "complete" ||
-      visibleFacts.criteria.some((fact) => fact.status !== "visible")
-    )
-      return;
-    setFactDraft(
-      Object.fromEntries(
-        visibleFacts.criteria.map((fact) => [fact.criterionKey, fact.status]),
-      ),
-    );
+  function acceptPhotoSet() {
+    if (missingCoverage.length || !completedFactReviews.length) return;
     setHumanAccepted(true);
     setCorrectingFacts(false);
   }
   function acceptCorrections() {
     const declared = GUIDED_VISIBLE_FACT_CRITERIA[current?.itemKey ?? ""] ?? [];
-    if (
-      !declared.length ||
-      declared.some((fact) => factDraft[fact.key] !== "visible")
-    )
+    if (!declared.length || declared.some((fact) => !factDraft[fact.key]))
       return;
-    setHumanAccepted(true);
+    if (visibleFacts?.status !== "complete") return;
+    setFactOverrides((overrides) => ({
+      ...overrides,
+      [visibleFacts.reviewId]: { ...factDraft },
+    }));
+    setHumanAccepted(false);
     setCorrectingFacts(false);
   }
 
@@ -736,44 +944,34 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
                     ? { confirmation: current.requirement.otherwise }
                     : {}),
                 };
-      if (visibleFacts?.status === "complete") {
-        const finalCriteria = (
-          GUIDED_VISIBLE_FACT_CRITERIA[current.itemKey] ?? []
-        ).map((fact) => ({
-          criterionKey: fact.key,
-          status: factDraft[fact.key] ?? "unclear",
-        }));
-        const original =
-          JSON.stringify(visibleFacts.criteria) ===
-          JSON.stringify(finalCriteria);
-        await jsonRequest(
-          `/api/guided-site-visits/${visit.id}/photos/${activePhotoId}/visible-fact-reviews/${visibleFacts.reviewId}/decision`,
-          "POST",
-          {
-            itemId: current.id,
-            expectedRevision,
-            idempotencyKey: `guided-visible-facts:${visibleFacts.reviewId}:confirm`,
-            decision: original ? "accepted" : "corrected",
-            nextAction: "confirm_item",
-            finalCriteria,
-            recommendedNextCapture: null,
-            observation,
-          },
+      const coverage = aggregateCoverage.map((fact) => ({
+        criterionKey: fact.criterionKey,
+        sourceReviewId: fact.sourceReviewId,
+        decision: fact.decision,
+      }));
+      if (coverage.some((fact) => !fact.sourceReviewId))
+        throw new Error(
+          "Add another photo for every missing checklist item before continuing.",
         );
-      } else
-        await jsonRequest(
-          `/api/guided-site-visits/${visit.id}/items/${current.id}`,
-          "PATCH",
-          { expectedRevision, action: "confirm", observation },
-        );
+      await jsonRequest(
+        `/api/guided-site-visits/${visit.id}/items/${current.id}/photo-set-confirmation`,
+        "POST",
+        {
+          expectedRevision,
+          idempotencyKey: `guided-photo-set:${current.id}:confirm`,
+          coverage,
+          observation,
+        },
+      );
       setMeasurements({});
       setCondition("");
-      if (localPhoto) URL.revokeObjectURL(localPhoto);
+      if (localPhoto) URL.revokeObjectURL(localPhoto.url);
       setLocalPhoto(null);
       setPendingPhoto(null);
       setLocalReview(null);
       setFactReview(null);
       setFactDraft({});
+      setFactOverrides({});
       setCorrectingFacts(false);
       setHumanAccepted(false);
       setBlockOpen(false);
@@ -814,7 +1012,7 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
       setBlockOpen(false);
       setMeasurements({});
       setCondition("");
-      if (localPhoto) URL.revokeObjectURL(localPhoto);
+      if (localPhoto) URL.revokeObjectURL(localPhoto.url);
       setLocalPhoto(null);
       setPendingPhoto(null);
       setLocalReview(null);
@@ -859,6 +1057,13 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
     }
   }
 
+  if (discoveringVisit && !visit)
+    return (
+      <section className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm" aria-live="polite">
+        <p className="text-sm font-bold text-slate-900">Checking for an unfinished site visit…</p>
+      </section>
+    );
+
   if (!visit)
     return (
       <section
@@ -870,9 +1075,7 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
           <p className="text-xs font-bold uppercase tracking-[.16em] text-amber-800">
             Deck guided site visit
           </p>
-          <h2 className="mt-1 text-2xl font-bold">
-            Capture everything in one trip
-          </h2>
+          <h2 className="mt-1 text-2xl font-bold">Start Deck site visit</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Nine required views, shown one at a time. Each photo requires your
             confirmation or a documented office follow-up reason.
@@ -894,7 +1097,7 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
             disabled={!permission || busy}
             className={`mt-5 ${primary}`}
           >
-            {busy ? "Opening visit…" : "Start or resume Deck visit"}
+            {busy ? "Opening visit…" : "Start Deck visit"}
           </button>
         </div>
       </section>
@@ -994,11 +1197,42 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
             ))}
           </ul>
         </div>
+        {activePhotos.length > 0 ? (
+          <div className="mt-4 rounded-lg border border-slate-300 bg-white p-3">
+            <div className="flex items-center justify-between gap-3">
+              <strong className="text-sm">Photos {activePhotos.length}</strong>
+              <span className="text-xs font-bold text-slate-600">
+                {declaredFacts.length - missingCoverage.length} of{" "}
+                {declaredFacts.length} items covered
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {activePhotos.map((photo, index) => (
+                <button
+                  type="button"
+                  key={photo.id}
+                  onClick={() => {
+                    setSelectedPhotoId(photo.id);
+                    setPendingPhoto(null);
+                    setLocalReview(null);
+                    setFactReview(null);
+                    setFactDraft({});
+                    setCorrectingFacts(false);
+                    setHumanAccepted(false);
+                  }}
+                  className={`rounded-full border px-3 py-2 text-xs font-bold ${photo.id === activePhotoId ? "border-blue-700 bg-blue-50 text-blue-950" : "border-slate-300 bg-white text-slate-700"}`}
+                >
+                  Photo {index + 1}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {/* Blob previews are local-only and cannot use the Next image optimizer. */}
-        {localPhoto ? (
+        {localPhoto?.photoId === activePhotoId ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={localPhoto}
+            src={localPhoto.url}
             alt={`Current ${current.title} capture`}
             className="mt-4 max-h-96 w-full rounded-lg border border-slate-300 object-contain"
           />
@@ -1015,7 +1249,8 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
             }
           />
         ) : null}
-        {reviewPhotoReady &&
+        {!captureIntent &&
+        reviewPhotoReady &&
         !visibleFacts &&
         !correctingFacts &&
         !humanAccepted ? (
@@ -1042,25 +1277,123 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
             uploadPhoto={uploadPhoto}
           />
         ) : null}
-        {reviewPhotoReady &&
+        {!captureIntent &&
+        reviewPhotoReady &&
+        visibleFacts?.status === "complete" &&
+        !humanAccepted ? (
+          <div className="mt-4 rounded-lg border border-blue-300 bg-blue-50 p-4">
+            <h3 className="font-bold">Combined photo coverage</h3>
+            {missingCoverage.length ? (
+              <>
+                <p className="mt-1 text-sm text-blue-950">
+                  This photo is useful, but the photo set still needs{" "}
+                  {missingCoverage
+                    .map((fact) => fact.label.toLowerCase())
+                    .join(", ")}
+                  .
+                </p>
+                <button
+                  type="button"
+                  disabled={
+                    busy ||
+                    activePhotos.length >= 5 ||
+                    !completedFactReviews.length
+                  }
+                  onClick={() => void prepareComplement()}
+                  className={`mt-4 ${primary}`}
+                >
+                  Add another view
+                </button>
+                {activePhotos.length >= 5 ? (
+                  <p className="mt-2 text-xs font-semibold text-amber-900">
+                    Five photos is the limit for one checklist step. Replace a
+                    photo or document an office follow-up.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-sm text-emerald-950">
+                  {activePhotos.length}{" "}
+                  {activePhotos.length === 1 ? "photo covers" : "photos cover"}{" "}
+                  every requested item.
+                </p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={acceptPhotoSet}
+                  className={`mt-4 ${primary}`}
+                >
+                  Looks right—continue
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={prepareRetake}
+              className={`mt-3 ${secondary}`}
+            >
+              Replace this photo
+            </button>
+          </div>
+        ) : null}
+        {captureIntent ? (
+          <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
+            <strong>
+              {captureIntent.kind === "complement"
+                ? "Add another view"
+                : "Replace selected photo"}
+            </strong>
+            <p className="mt-1 text-sm text-amber-950">
+              {captureIntent.kind === "complement"
+                ? "The existing photos stay attached to this step."
+                : "The selected photo stays in place until the replacement uploads successfully."}
+            </p>
+            <PhotoSourceControls
+              title={
+                captureIntent.kind === "complement"
+                  ? "Add photo"
+                  : "Replacement photo"
+              }
+              busy={busy}
+              uploadPhoto={uploadPhoto}
+            />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setCaptureIntent(null)}
+              className="mt-3 text-sm font-bold underline"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+        {!captureIntent &&
+        reviewPhotoReady &&
         (visibleFacts || correctingFacts) &&
         !humanAccepted ? (
           <VisibleFactReviewCard
             current={current}
             review={visibleFacts}
-            draft={factDraft}
+            draft={
+              visibleFacts?.status === "complete"
+                ? (factOverrides[visibleFacts.reviewId] ?? factDraft)
+                : factDraft
+            }
             correcting={correctingFacts}
             busy={busy}
-            onAccept={acceptFacts}
+            onAccept={acceptPhotoSet}
             onCorrect={() => {
               if (visibleFacts?.status === "complete") {
                 setFactDraft(
-                  Object.fromEntries(
-                    visibleFacts.criteria.map((fact) => [
-                      fact.criterionKey,
-                      fact.status,
-                    ]),
-                  ),
+                  factOverrides[visibleFacts.reviewId] ??
+                    Object.fromEntries(
+                      visibleFacts.criteria.map((fact) => [
+                        fact.criterionKey,
+                        fact.status,
+                      ]),
+                    ),
                 );
                 setCorrectingFacts(true);
                 setHumanAccepted(false);
@@ -1089,8 +1422,9 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
         ) : null}
         {humanAccepted ? (
           <div className="mt-4 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950">
-            <strong>Photo checklist checked.</strong> Finish the field facts
-            below, or retake the photo if anything changes.
+            <strong>Photo set checked · {activePhotos.length} photos.</strong>{" "}
+            Finish the field facts below, or review the photos if anything
+            changes.
             <PhotoSourceControls
               title="Retake photo"
               busy={busy}
@@ -1411,9 +1745,8 @@ function VisibleFactReviewCard({
     declared.length > 0 &&
     declared.every(
       (fact) =>
-        (correcting
-          ? draft[fact.key]
-          : criteria.find((row) => row.criterionKey === fact.key)?.status) ===
+        (draft[fact.key] ??
+          criteria.find((row) => row.criterionKey === fact.key)?.status) ===
         "visible",
     );
   const recommendation =
@@ -1435,7 +1768,8 @@ function VisibleFactReviewCard({
         {declared.map((fact) => {
           const status = correcting
             ? (draft[fact.key] ?? "unclear")
-            : (criteria.find((row) => row.criterionKey === fact.key)?.status ??
+            : (draft[fact.key] ??
+              criteria.find((row) => row.criterionKey === fact.key)?.status ??
               "unclear");
           return (
             <div key={fact.key} className="p-3">
@@ -1484,15 +1818,16 @@ function VisibleFactReviewCard({
         <>
           <button
             type="button"
-            disabled={!allVisible || busy}
+            disabled={busy || declared.some((fact) => !draft[fact.key])}
             onClick={onAcceptCorrections}
             className={`mt-4 ${primary}`}
           >
-            I checked—all requested items are visible
+            Save this photo checklist
           </button>
           {!allVisible ? (
             <p className="mt-2 text-xs font-semibold text-amber-900">
-              Retake the photo if an item is not visible or unclear.
+              Missing items can be covered by another photo. Keep unclear or not
+              visible when that is the honest result.
             </p>
           ) : null}
         </>
@@ -2145,8 +2480,7 @@ function normalizeVisit(raw: Record<string, unknown>): Visit {
             ? [
                 {
                   id: review.id,
-                  sourceMode:
-                    review.sourceMode === "manual" ? "manual" : "ai",
+                  sourceMode: review.sourceMode === "manual" ? "manual" : "ai",
                   criteria,
                   recommendedNextCapture: normalizeRecommendation(
                     review.recommendedNextCapture ??

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { getInternalDeckIntakeAccess } from "@/lib/internal-deck-intake-access";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const dynamic = "force-dynamic";
@@ -36,34 +37,23 @@ function formatDate(value: string) {
 function formatStatus(value: string) {
   return value
     .split("_")
-    .map(
-      (word) =>
-        word.charAt(0).toUpperCase() +
-        word.slice(1),
-    )
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
 
 function buildAddress(customer: Customer) {
-  const cityStatePostal = [
-    customer.city,
-    customer.state,
-    customer.postal_code,
-  ]
+  const cityStatePostal = [customer.city, customer.state, customer.postal_code]
     .filter(Boolean)
     .join(" ");
 
-  return [
-    customer.address_line_1,
-    customer.address_line_2,
-    cityStatePostal,
-  ]
+  return [customer.address_line_1, customer.address_line_2, cityStatePostal]
     .filter(Boolean)
     .join(", ");
 }
 
 export default async function CustomersPage() {
   const supabase = createAdminServerClient();
+  const intakeAccess = await getInternalDeckIntakeAccess();
 
   const customersResult = await supabase
     .from("customers")
@@ -93,21 +83,18 @@ export default async function CustomersPage() {
       ascending: false,
     });
 
-  const customers =
-    (customersResult.data ?? []) as Customer[];
+  const customers = (customersResult.data ?? []) as Customer[];
 
   const activeCustomers = customers.filter(
     (customer) => customer.status === "active",
   );
 
   const pastCustomers = customers.filter(
-    (customer) =>
-      customer.status === "past_customer",
+    (customer) => customer.status === "past_customer",
   );
 
   const inactiveCustomers = customers.filter(
-    (customer) =>
-      customer.status === "inactive",
+    (customer) => customer.status === "inactive",
   );
 
   return (
@@ -130,22 +117,17 @@ export default async function CustomersPage() {
 
           <div className="mt-2 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
             <div>
-              <h1 className="text-3xl font-bold sm:text-4xl">
-                Customers
-              </h1>
+              <h1 className="text-3xl font-bold sm:text-4xl">Customers</h1>
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-                Customers converted from won leads,
-                including their contact information,
-                project details, and original lead record.
+                Customers converted from won leads, including their contact
+                information, project details, and original lead record.
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="rounded-xl bg-slate-900 px-4 py-3">
-                <p className="text-2xl font-bold">
-                  {activeCustomers.length}
-                </p>
+                <p className="text-2xl font-bold">{activeCustomers.length}</p>
 
                 <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-400">
                   Active
@@ -153,9 +135,7 @@ export default async function CustomersPage() {
               </div>
 
               <div className="rounded-xl bg-slate-900 px-4 py-3">
-                <p className="text-2xl font-bold">
-                  {pastCustomers.length}
-                </p>
+                <p className="text-2xl font-bold">{pastCustomers.length}</p>
 
                 <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-400">
                   Past
@@ -163,9 +143,7 @@ export default async function CustomersPage() {
               </div>
 
               <div className="rounded-xl bg-slate-900 px-4 py-3">
-                <p className="text-2xl font-bold">
-                  {customers.length}
-                </p>
+                <p className="text-2xl font-bold">{customers.length}</p>
 
                 <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-400">
                   Total
@@ -173,13 +151,19 @@ export default async function CustomersPage() {
               </div>
             </div>
           </div>
+          {intakeAccess.enabled ? (
+            <Link
+              href="/sales/intake/deck"
+              className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-amber-400 px-5 text-sm font-bold text-slate-950 sm:w-auto"
+            >
+              New onsite Deck estimate
+            </Link>
+          ) : null}
         </header>
 
         {customersResult.error ? (
           <section className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6">
-            <h2 className="font-bold text-red-800">
-              Unable to load customers
-            </h2>
+            <h2 className="font-bold text-red-800">Unable to load customers</h2>
 
             <p className="mt-2 text-sm text-red-700">
               {customersResult.error.message}
@@ -187,17 +171,15 @@ export default async function CustomersPage() {
           </section>
         ) : null}
 
-        {!customersResult.error &&
-        customers.length === 0 ? (
+        {!customersResult.error && customers.length === 0 ? (
           <section className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
             <h2 className="text-xl font-bold text-slate-950">
               No customers yet
             </h2>
 
             <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-600">
-              Customers will appear here after a lead
-              is marked Won and converted into a
-              customer record.
+              Customers will appear here after a lead is marked Won and
+              converted into a customer record.
             </p>
 
             <Link
@@ -209,13 +191,11 @@ export default async function CustomersPage() {
           </section>
         ) : null}
 
-        {!customersResult.error &&
-        customers.length > 0 ? (
+        {!customersResult.error && customers.length > 0 ? (
           <section className="mt-6">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {customers.map((customer) => {
-                const address =
-                  buildAddress(customer);
+                const address = buildAddress(customer);
 
                 return (
                   <article
@@ -237,9 +217,7 @@ export default async function CustomersPage() {
                       </div>
 
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
-                        {formatStatus(
-                          customer.status,
-                        )}
+                        {formatStatus(customer.status)}
                       </span>
                     </div>
 
@@ -308,9 +286,7 @@ export default async function CustomersPage() {
                         </dt>
 
                         <dd className="mt-1 text-sm font-semibold text-slate-900">
-                          {formatDate(
-                            customer.created_at,
-                          )}
+                          {formatDate(customer.created_at)}
                         </dd>
                       </div>
                     </dl>
@@ -333,9 +309,7 @@ export default async function CustomersPage() {
                         className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
                       >
                         Open Customer
-                        <span aria-hidden="true">
-                          →
-                        </span>
+                        <span aria-hidden="true">→</span>
                       </Link>
 
                       {customer.source_lead_id ? (
@@ -344,9 +318,7 @@ export default async function CustomersPage() {
                           className="inline-flex items-center gap-2 px-1 py-2 text-sm font-bold text-slate-700 transition hover:text-slate-950"
                         >
                           Original Lead
-                          <span aria-hidden="true">
-                            →
-                          </span>
+                          <span aria-hidden="true">→</span>
                         </Link>
                       ) : null}
                     </div>
@@ -357,12 +329,8 @@ export default async function CustomersPage() {
 
             {inactiveCustomers.length > 0 ? (
               <p className="mt-5 text-sm text-slate-500">
-                {inactiveCustomers.length} inactive
-                customer
-                {inactiveCustomers.length === 1
-                  ? ""
-                  : "s"}{" "}
-                included.
+                {inactiveCustomers.length} inactive customer
+                {inactiveCustomers.length === 1 ? "" : "s"} included.
               </p>
             ) : null}
           </section>

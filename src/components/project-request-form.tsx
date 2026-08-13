@@ -1,4 +1,7 @@
-import { consultationTimeOptions, type ConsultationHours } from "@/lib/consultation-hours";
+import {
+  consultationTimeOptions,
+  type ConsultationHours,
+} from "@/lib/consultation-hours";
 
 const inputClass =
   "min-h-14 w-full border border-zinc-300 bg-white px-4 text-base text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950";
@@ -6,7 +9,11 @@ const inputClass =
 const labelClass =
   "mb-2 block text-xs font-black uppercase tracking-[0.14em] text-zinc-950";
 
-export function ProjectRequestForm({ consultationHours }: { consultationHours?: Partial<ConsultationHours> }) {
+export function ProjectRequestForm({
+  consultationHours,
+}: {
+  consultationHours?: Partial<ConsultationHours>;
+}) {
   const timeOptions = consultationTimeOptions(consultationHours);
   return (
     <form
@@ -50,8 +57,9 @@ export function ProjectRequestForm({ consultationHours }: { consultationHours?: 
       </label>
 
       <label className="block">
-        <span className={labelClass}>Email</span>
+        <span className={labelClass}>Email *</span>
         <input
+          required
           type="email"
           name="email"
           autoComplete="email"
@@ -62,9 +70,7 @@ export function ProjectRequestForm({ consultationHours }: { consultationHours?: 
       </label>
 
       <label className="block">
-        <span className={labelClass}>
-          How Would You Prefer We Contact You?
-        </span>
+        <span className={labelClass}>How Would You Prefer We Contact You?</span>
 
         <select
           name="preferredContactMethod"
@@ -101,9 +107,7 @@ export function ProjectRequestForm({ consultationHours }: { consultationHours?: 
           </option>
           <option value="New Deck">New deck</option>
           <option value="Deck Replacement">Deck replacement</option>
-          <option value="Covered Outdoor Living">
-            Covered outdoor living
-          </option>
+          <option value="Covered Outdoor Living">Covered outdoor living</option>
           <option value="Screened Porch">Screened porch</option>
           <option value="Railing or Stairs">Railing or stairs</option>
           <option value="Pergola">Pergola</option>
@@ -116,11 +120,7 @@ export function ProjectRequestForm({ consultationHours }: { consultationHours?: 
 
       <label className="block">
         <span className={labelClass}>Estimated Investment</span>
-        <select
-          name="estimatedBudget"
-          defaultValue=""
-          className={inputClass}
-        >
+        <select name="estimatedBudget" defaultValue="" className={inputClass}>
           <option value="">I would like guidance</option>
           <option value="Under $15,000">Under $15,000</option>
           <option value="$15,000–$30,000">$15,000–$30,000</option>
@@ -132,11 +132,7 @@ export function ProjectRequestForm({ consultationHours }: { consultationHours?: 
 
       <label className="block sm:col-span-2">
         <span className={labelClass}>Desired Timeline</span>
-        <select
-          name="desiredTimeline"
-          defaultValue=""
-          className={inputClass}
-        >
+        <select name="desiredTimeline" defaultValue="" className={inputClass}>
           <option value="">Select a timeframe</option>
           <option value="As soon as possible">As soon as possible</option>
           <option value="Within 1–3 months">Within 1–3 months</option>
@@ -160,43 +156,35 @@ export function ProjectRequestForm({ consultationHours }: { consultationHours?: 
         <div className="grid gap-5 sm:grid-cols-2">
           <label>
             <span className={labelClass}>Preferred Date</span>
-            <input
-              type="date"
-              name="requestedDate"
-              className={inputClass}
-            />
+            <input type="date" name="requestedDate" className={inputClass} />
           </label>
 
           <label>
             <span className={labelClass}>Preferred Time</span>
-            <select
-              name="requestedTime"
-              defaultValue=""
-              className={inputClass}
-            >
+            <select name="requestedTime" defaultValue="" className={inputClass}>
               <option value="">No preference</option>
-              {timeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              {timeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
 
           <label>
             <span className={labelClass}>Alternate Date</span>
-            <input
-              type="date"
-              name="alternateDate"
-              className={inputClass}
-            />
+            <input type="date" name="alternateDate" className={inputClass} />
           </label>
 
           <label>
             <span className={labelClass}>Alternate Time</span>
-            <select
-              name="alternateTime"
-              defaultValue=""
-              className={inputClass}
-            >
+            <select name="alternateTime" defaultValue="" className={inputClass}>
               <option value="">No alternate time</option>
-              {timeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              {timeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
         </div>
