@@ -117,6 +117,8 @@ test("retries unavailable AI review with a fresh append-only key", () => {
 
 test("defers consolidated missing results until terminal and human verified", () => {
   assert.match(inbox, /const reviewComplete =/);
+  assert.match(inbox, /remainingServerMembers\.length === 0/);
+  assert.match(inbox, /drafts\.length === 0/);
   assert.match(inbox, /pendingReviewCount === 0/);
   assert.match(inbox, /unavailableRows\.length === 0/);
   assert.match(inbox, /undecidedProposals\.length === 0/);
@@ -126,4 +128,6 @@ test("defers consolidated missing results until terminal and human verified", ()
     /missing list appears only after every photo review is terminal/,
   );
   assert.match(inbox, /not counted as missing evidence/);
+  assert.match(inbox, /Upload the remaining/);
+  assert.match(inboxRoute, /itemKey: item_key/);
 });

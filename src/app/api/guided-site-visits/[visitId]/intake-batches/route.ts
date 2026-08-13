@@ -149,7 +149,12 @@ export async function GET(
       attempts: attempts.data,
       reviews: reviews.data,
       assignments: assignments.data,
-      items: items.data,
+      items: (items.data ?? []).map(({ id, item_key, ordinal, title }) => ({
+        id,
+        itemKey: item_key,
+        ordinal,
+        title,
+      })),
     },
     { headers: { "Cache-Control": "private, no-store" } },
   );

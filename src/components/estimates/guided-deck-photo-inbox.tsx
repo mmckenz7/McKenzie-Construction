@@ -570,6 +570,8 @@ export function GuidedDeckPhotoInbox({
   );
   const reviewComplete =
     rows.length > 0 &&
+    remainingServerMembers.length === 0 &&
+    drafts.length === 0 &&
     pendingReviewCount === 0 &&
     unavailableRows.length === 0 &&
     undecidedProposals.length === 0 &&
@@ -944,8 +946,9 @@ export function GuidedDeckPhotoInbox({
             </div>
           ) : (
             <p className="mt-4 text-sm font-semibold text-slate-300">
-              The missing list appears only after every photo review is terminal
-              and every proposal has a human decision.
+              {remainingServerMembers.length > 0
+                ? `Upload the remaining ${remainingServerMembers.length} ${remainingServerMembers.length === 1 ? "photo" : "photos"} before the consolidated missing list is calculated.`
+                : "The missing list appears only after every photo review is terminal and every proposal has a human decision."}
             </p>
           )}
         </section>
