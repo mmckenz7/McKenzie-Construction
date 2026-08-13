@@ -85,6 +85,9 @@ export function GuidedDeckPhotoInbox({
   const [reviewNotice, setReviewNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [missingPhotoSelections, setMissingPhotoSelections] = useState<
+    Record<string, string[]>
+  >({});
   const [screen, setScreen] = useState<"upload" | "review" | "correct">(
     "review",
   );
@@ -536,6 +539,104 @@ export function GuidedDeckPhotoInbox({
     }
   }
 
+  function toggleMissingPhoto(summaryKey: string, attemptId: string) {
+    setMissingPhotoSelections((current) => {
+      const selected = new Set(current[summaryKey] ?? []);
+      if (selected.has(attemptId)) selected.delete(attemptId);
+      else selected.add(attemptId);
+      return { ...current, [summaryKey]: [...selected] };
+    });
+  }
+
+  async function recheckMissingPhotos(
+    summaryKey: string,
+    itemId: string,
+    criterionKey: string,
+  ) {
+    const attemptIds = missingPhotoSelections[summaryKey] ?? [];
+    if (busy || !attemptIds.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      for (const attemptId of attemptIds) {
+        await requestJson(
+          `/api/guided-site-visits/${visitId}/intake-photos/${attemptId}/classification-reviews`,
+          {
+            idempotencyKey: `guided-visit-focused-review:${attemptId}:${itemId}:${criterionKey}:${crypto.randomUUID()}`,
+            focusItemId: itemId,
+            focusCriterionKey: criterionKey,
+          },
+        );
+      }
+      setMissingPhotoSelections((current) => ({
+        ...current,
+        [summaryKey]: [],
+      }));
+      await loadInbox();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Selected photos could not be reviewed again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function attachMissingPhotos(
+    summaryKey: string,
+    itemId: string,
+    criterionKey: string,
+  ) {
+    const attemptIds = missingPhotoSelections[summaryKey] ?? [];
+    if (busy || !attemptIds.length) return;
+    setBusy(true);
+    setError("");
+    let nextRevision = revision;
+    try {
+      for (const attemptId of attemptIds) {
+        const review = latestReview(data?.reviews ?? [], attemptId);
+        if (!review || review.diagnostic_class !== "classified")
+          throw new Error(
+            "Only a successfully reviewed photo can be attached.",
+          );
+        const result = await requestJson(
+          `/api/guided-site-visits/${visitId}/intake-photos/${attemptId}/assignment-events`,
+          {
+            expectedRevision: nextRevision,
+            idempotencyKey: `guided-inbox-manual-evidence:${attemptId}:${itemId}:${criterionKey}:${crypto.randomUUID()}`,
+            reviewId: review.id,
+            visitItemId: itemId,
+            criterionKey,
+            decision: "corrected",
+            supersedesEventId: null,
+          },
+        );
+        if (typeof result.nextRevision !== "number")
+          throw new Error("The photo attachment was incomplete.");
+        nextRevision = result.nextRevision;
+      }
+      setRevision(nextRevision);
+      setMissingPhotoSelections((current) => ({
+        ...current,
+        [summaryKey]: [],
+      }));
+      await loadInbox();
+      await onVisitChanged();
+    } catch (cause) {
+      setRevision(nextRevision);
+      await loadInbox().catch(() => undefined);
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Selected photos could not be attached.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const attempts =
     data?.attempts.filter((attempt) => attempt.state === "confirmed") ?? [];
   const rows = attempts.map((attempt) => ({
@@ -775,53 +876,155 @@ export function GuidedDeckPhotoInbox({
               </ul>
             ) : null}
           </section>
-        ) : (
-          <section className="mt-5 rounded-xl bg-slate-950 p-4 text-white">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-xl font-black">Missing information</h3>
-                <p className="mt-1 text-sm text-slate-300">
-                  These are the only checklist items AI did not find in any
-                  reviewed photo.
-                </p>
-              </div>
-              <span className="rounded-full bg-amber-400 px-3 py-1 text-sm font-black text-slate-950">
-                {aiMissing.length}
-              </span>
-            </div>
-            {aiMissing.length ? (
-              <ul className="mt-4 space-y-2">
-                {aiMissing.map((summary) => (
-                  <li key={`missing:${summary.key}`}>
-                    <details className="group rounded-lg bg-slate-800 p-3">
-                      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">
-                        <span>
-                          {summary.item.title}: {summary.criterion.label}
-                        </span>
-                        <span
-                          aria-hidden="true"
-                          className="shrink-0 transition-transform group-open:rotate-180"
-                        >
-                          ▾
-                        </span>
-                      </summary>
-                      <p className="mt-3 border-t border-slate-600 pt-3 text-sm text-slate-200">
-                        Take a clear photo of “{summary.criterion.label}.”
-                        Center it in the picture and include enough of the deck
-                        to show where it is located. Add a wider photo if the
-                        close view loses context.
-                      </p>
-                    </details>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-4 rounded-lg bg-emerald-950 p-3 font-bold text-emerald-200">
-                AI found photo coverage for every checklist item.
+        ) : null}
+        <section className="mt-5 rounded-xl bg-slate-950 p-4 text-white">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-xl font-black">
+                {photoReviewReady
+                  ? "Missing information"
+                  : "Not found in completed reviews"}
+              </h3>
+              <p className="mt-1 text-sm text-slate-300">
+                {photoReviewReady
+                  ? "These are the only checklist items AI did not find in any reviewed photo."
+                  : "You can attach a reviewed photo now. This list may shrink after the remaining AI review finishes."}
               </p>
-            )}
-          </section>
-        )}
+            </div>
+            <span className="rounded-full bg-amber-400 px-3 py-1 text-sm font-black text-slate-950">
+              {aiMissing.length}
+            </span>
+          </div>
+          {aiMissing.length ? (
+            <ul className="mt-4 space-y-2">
+              {aiMissing.map((summary) => (
+                <li key={`missing:${summary.key}`}>
+                  <details className="group rounded-lg bg-slate-800 p-3">
+                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">
+                      <span>
+                        {summary.item.title}: {summary.criterion.label}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className="shrink-0 transition-transform group-open:rotate-180"
+                      >
+                        ▾
+                      </span>
+                    </summary>
+                    <div className="mt-3 border-t border-slate-600 pt-3">
+                      <p className="text-sm font-bold text-white">
+                        Select the photo or photos that show this item
+                      </p>
+                      <p className="mt-1 text-xs text-slate-300">
+                        Then ask AI to check them again, or attach them as
+                        evidence based on your own field verification.
+                      </p>
+                      {summary.criterion.guidance ? (
+                        <p className="mt-3 rounded-lg bg-amber-950 p-3 text-sm leading-6 text-amber-100">
+                          <strong>What this check means: </strong>
+                          {summary.criterion.guidance}
+                        </p>
+                      ) : null}
+                      <ul className="mt-3 grid max-h-80 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
+                        {rows
+                          .filter(
+                            (row) =>
+                              row.review?.diagnostic_class === "classified",
+                          )
+                          .map((row) => {
+                            const selected = (
+                              missingPhotoSelections[summary.key] ?? []
+                            ).includes(row.attempt.id);
+                            const filename =
+                              row.member?.original_filename ??
+                              `Photo ${row.attempt.member_ordinal}`;
+                            return (
+                              <li key={`${summary.key}:${row.attempt.id}`}>
+                                <label
+                                  className={`block cursor-pointer overflow-hidden rounded-lg border-2 ${selected ? "border-emerald-400 bg-emerald-950" : "border-slate-600 bg-slate-900"}`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    disabled={busy}
+                                    onChange={() =>
+                                      toggleMissingPhoto(
+                                        summary.key,
+                                        row.attempt.id,
+                                      )
+                                    }
+                                    className="sr-only"
+                                  />
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={`/api/guided-site-visits/${visitId}/intake-photos/${row.attempt.id}/preview`}
+                                    alt={filename}
+                                    className="h-24 w-full bg-slate-700 object-cover"
+                                  />
+                                  <span className="flex min-h-11 items-center justify-between gap-2 px-2 py-1 text-xs font-bold">
+                                    <span className="truncate">{filename}</span>
+                                    <span>{selected ? "✓" : "Select"}</span>
+                                  </span>
+                                </label>
+                              </li>
+                            );
+                          })}
+                      </ul>
+                      <p className="mt-3 text-sm font-bold text-slate-200">
+                        {(missingPhotoSelections[summary.key] ?? []).length}{" "}
+                        selected
+                      </p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          disabled={
+                            busy ||
+                            !(missingPhotoSelections[summary.key] ?? []).length
+                          }
+                          onClick={() =>
+                            void recheckMissingPhotos(
+                              summary.key,
+                              summary.item.id,
+                              summary.criterion.key,
+                            )
+                          }
+                          className="min-h-11 rounded-lg bg-blue-500 px-3 py-2 font-bold text-white disabled:opacity-40"
+                        >
+                          Ask AI to check selected photos again
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            busy ||
+                            !(missingPhotoSelections[summary.key] ?? []).length
+                          }
+                          onClick={() =>
+                            void attachMissingPhotos(
+                              summary.key,
+                              summary.item.id,
+                              summary.criterion.key,
+                            )
+                          }
+                          className="min-h-11 rounded-lg bg-emerald-400 px-3 py-2 font-black text-slate-950 disabled:opacity-40"
+                        >
+                          Attach as verified evidence
+                        </button>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-300">
+                        “Attach as verified” records your decision. It does not
+                        claim a measurement, code, or engineering result.
+                      </p>
+                    </div>
+                  </details>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 rounded-lg bg-emerald-950 p-3 font-bold text-emerald-200">
+              AI found photo coverage for every checklist item.
+            </p>
+          )}
+        </section>
 
         <section className="mt-5">
           <h3 className="text-xl font-black text-slate-950">Your photos</h3>
@@ -830,11 +1033,35 @@ export function GuidedDeckPhotoInbox({
           </p>
           <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {rows.map((row) => {
-              const matches = proposalEntries.filter(
+              const proposedMatches = proposalEntries.filter(
                 (entry) =>
                   entry.attempt.id === row.attempt.id &&
                   entry.decision?.decision !== "excluded",
               );
+              const assignmentMatches = effectiveAssignments
+                .filter(
+                  (assignment) =>
+                    assignment.intake_attempt_id === row.attempt.id &&
+                    ["accepted", "corrected"].includes(assignment.decision) &&
+                    !proposedMatches.some(
+                      (entry) =>
+                        entry.proposal.visitItemId ===
+                          assignment.visit_item_id &&
+                        entry.proposal.criterionKey ===
+                          assignment.criterion_key,
+                    ),
+                )
+                .map((assignment) => ({
+                  attempt: row.attempt,
+                  review: row.review!,
+                  member: row.member,
+                  proposal: {
+                    visitItemId: assignment.visit_item_id,
+                    criterionKey: assignment.criterion_key,
+                  },
+                  decision: assignment,
+                }));
+              const matches = [...proposedMatches, ...assignmentMatches];
               return (
                 <li key={`photo-result:${row.attempt.id}`}>
                   <details className="group overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
@@ -1290,10 +1517,14 @@ export function GuidedDeckPhotoInbox({
                                     {excludedPhotoFiles.join(", ")}
                                   </p>
                                   <p className="mt-2">
-                                    Take a clear photo of “
-                                    {summary.criterion.label}.” Center that item
-                                    in the photo and include enough of the deck
-                                    to show where it is located.
+                                    {summary.criterion.guidance ?? (
+                                      <>
+                                        Take a clear photo of “
+                                        {summary.criterion.label}.” Center that
+                                        item in the photo and include enough of
+                                        the deck to show where it is located.
+                                      </>
+                                    )}
                                   </p>
                                 </>
                               ) : pendingReviewCount ? (
@@ -1327,12 +1558,16 @@ export function GuidedDeckPhotoInbox({
                                     {summary.criterion.label}.”
                                   </p>
                                   <p className="mt-2">
-                                    Take a clear photo of “
-                                    {summary.criterion.label}.” Center that item
-                                    in the photo and include enough of the deck
-                                    to show where it is located. If a close
-                                    photo loses context, also take one wider
-                                    photo.
+                                    {summary.criterion.guidance ?? (
+                                      <>
+                                        Take a clear photo of “
+                                        {summary.criterion.label}.” Center that
+                                        item in the photo and include enough of
+                                        the deck to show where it is located. If
+                                        a close photo loses context, also take
+                                        one wider photo.
+                                      </>
+                                    )}
                                   </p>
                                 </>
                               )}

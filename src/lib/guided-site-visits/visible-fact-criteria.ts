@@ -1,4 +1,7 @@
-export const GUIDED_VISIBLE_FACT_CRITERIA: Record<string, readonly { key: string; label: string }[]> = {
+export const GUIDED_VISIBLE_FACT_CRITERIA: Record<
+  string,
+  readonly { key: string; label: string; guidance?: string }[]
+> = {
   property_context: [
     {key:"house_elevation",label:"House elevation and work area"},{key:"entire_deck_area",label:"Entire deck or proposed area"},{key:"yard_grade_access",label:"Surrounding yard, grade, and access direction"},
   ],
@@ -6,7 +9,30 @@ export const GUIDED_VISIBLE_FACT_CRITERIA: Record<string, readonly { key: string
     {key:"deck_width_surface_edge",label:"Full deck width and surface edge"},{key:"stairs_railings",label:"Visible stairs and railings"},{key:"grade_below_deck",label:"Grade below the deck"},
   ],
   house_ledger: [
-    {key:"ledger_connection",label:"Ledger or house connection"},{key:"flashing_area",label:"Visible flashing area"},{key:"exterior_finish",label:"Exterior finish above and below"},{key:"ledger_end_conditions",label:"Both end conditions when accessible"},
+    {
+      key: "ledger_connection",
+      label: "Deck-to-house attachment area is visible",
+      guidance:
+        "This only confirms that the photo shows where the deck meets the house. It does not confirm that both ends of the ledger are visible.",
+    },
+    {
+      key: "flashing_area",
+      label: "Flashing area above the ledger is visible",
+      guidance:
+        "Show the area directly above the ledger where flashing should direct water away from the house.",
+    },
+    {
+      key: "exterior_finish",
+      label: "Wall finish above and below the ledger is visible",
+      guidance:
+        "Include enough wall around the ledger to show the siding, brick, or other exterior finish above and below it.",
+    },
+    {
+      key: "ledger_end_conditions",
+      label: "Left and right ends of the ledger are visible when accessible",
+      guidance:
+        "This is separate from simply seeing the ledger. Show the left end and the right end so each termination can be reviewed. Use two photos if both ends do not fit clearly in one picture.",
+    },
   ],
   underside_framing: [
     {key:"joists_direction",label:"Joists and framing direction"},{key:"beam_locations",label:"Beam locations"},{key:"visible_blocking",label:"Visible blocking"},{key:"bearing_relationship",label:"Ledger or bearing relationship"},

@@ -18,6 +18,14 @@ const previewRoute = readFileSync(
   "src/app/api/guided-site-visits/[visitId]/intake-photos/[attemptId]/preview/route.ts",
   "utf8",
 );
+const classificationRoute = readFileSync(
+  "src/app/api/guided-site-visits/[visitId]/intake-photos/[attemptId]/classification-reviews/route.ts",
+  "utf8",
+);
+const criteria = readFileSync(
+  "src/lib/guided-site-visits/visible-fact-criteria.ts",
+  "utf8",
+);
 
 test("whole-visit Photo Inbox is the default with guided capture as fallback", () => {
   assert.match(visit, /useState<"inbox" \| "guided">\(\s*"inbox"/);
@@ -89,10 +97,32 @@ test("separates the missing list from per-photo review details", () => {
   assert.match(inbox, /photoReviewReady/);
   assert.match(inbox, /Nothing is being called missing early/);
   assert.match(inbox, /Missing information/);
+  assert.match(inbox, /Not found in completed reviews/);
+  assert.match(inbox, /You can attach a reviewed photo now/);
   assert.match(inbox, /Your photos/);
   assert.match(inbox, /what that picture checked off/);
   assert.match(inbox, /matches\.length.*checked/s);
   assert.match(inbox, /Open detailed correction tools/);
+  assert.match(inbox, /Select the photo or photos that show this item/);
+  assert.match(inbox, /Ask AI to check selected photos again/);
+  assert.match(inbox, /Attach as verified evidence/);
+  assert.match(inbox, /guided-visit-focused-review/);
+  assert.match(inbox, /guided-inbox-manual-evidence/);
+  assert.match(inbox, /assignmentMatches/);
+  assert.match(classificationRoute, /focusItemId/);
+  assert.match(classificationRoute, /focusCriterionKey/);
+  assert.match(classificationRoute, /Focused checklist item is invalid/);
+  assert.match(inbox, /What this check means/);
+});
+
+test("plainly separates seeing the ledger from seeing both ledger ends", () => {
+  assert.match(criteria, /Deck-to-house attachment area is visible/);
+  assert.match(
+    criteria,
+    /Left and right ends of the ledger are visible when accessible/,
+  );
+  assert.match(criteria, /separate from simply seeing the ledger/);
+  assert.match(criteria, /Use two photos if both ends do not fit clearly/);
 });
 
 test("serves authenticated short-lived private photo previews", () => {
