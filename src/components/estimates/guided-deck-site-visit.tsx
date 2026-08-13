@@ -101,6 +101,10 @@ type IntakeEvidenceLoadState =
   | { status: "loading" }
   | { status: "ready"; snapshot: IntakeEvidenceSnapshot }
   | { status: "unavailable" };
+type ConsolidatedFieldDraft = {
+  condition: "" | "yes" | "no";
+  measurements: Record<string, MeasurementDraft>;
+};
 
 const MAX_ACTIVE_PHOTOS = 5;
 const MAX_BATCH_BYTES = 60 * 1024 * 1024;
@@ -116,11 +120,11 @@ const FIELD_LABELS: Record<string, string> = {
   width: "Overall deck width",
   height_from_grade: "Height from grade to deck surface",
   ledger_length: "Ledger length",
-  joist_spacing: "Visible joist spacing",
+  joist_spacing: "Visible joist spacing (inches on center)",
   joist_depth: "Visible joist depth",
   beam_depth: "Visible beam depth",
   post_dimensions: "Post dimensions",
-  support_spacing: "Support-line spacing",
+  support_spacing: "Support-line spacing (inches on center)",
   exposed_footing_dimensions: "Exposed footing dimensions",
   stair_width: "Stair width",
   total_rise: "Total rise",
@@ -187,6 +191,31 @@ const COMPOSITE_FIELDS: Record<string, string[]> = {
     "Visible footing height or depth",
   ],
 };
+const DEFAULT_MEASUREMENT_UNITS: Record<string, "ft + in" | "in"> = {
+  length: "ft + in",
+  width: "ft + in",
+  height_from_grade: "ft + in",
+  ledger_length: "ft + in",
+  joist_spacing: "in",
+  joist_depth: "in",
+  beam_depth: "in",
+  post_dimensions: "in",
+  support_spacing: "in",
+  exposed_footing_dimensions: "in",
+  stair_width: "in",
+  total_rise: "in",
+  tread_depth: "in",
+  representative_riser: "in",
+  landing_dimensions: "in",
+  guard_height: "in",
+  opening: "in",
+  rail_lengths_by_area: "ft + in",
+  handrail_height: "in",
+  narrow_access_width: "in",
+  gate_width: "in",
+  clearance: "in",
+  obstruction_clearances: "in",
+};
 const CONDITIONS: Record<string, { prompt: string; yes: string; no: string }> =
   {
     attached: {
@@ -232,6 +261,20 @@ const BLOCK_REASONS = [
   ["customer_declined", "Customer denied access"],
   ["site_condition", "Weather, lighting, or site condition"],
   ["office_verification_required", "Office verification required"],
+] as const;
+const CONSOLIDATED_FIELD_GROUPS = [
+  {
+    key: "overall",
+    title: "Overall deck",
+    itemKeys: ["property_context", "full_deck_yard", "house_ledger"],
+  },
+  {
+    key: "framing",
+    title: "Framing and supports",
+    itemKeys: ["underside_framing", "supports_footings"],
+  },
+  { key: "stairs", title: "Stairs", itemKeys: ["stairs_landings"] },
+  { key: "railings", title: "Railings", itemKeys: ["guards_railings"] },
 ] as const;
 const REVIEW_GUIDANCE: Record<string, { reason: string; action: string }> = {
   blurry: {
@@ -397,6 +440,16 @@ export function GuidedDeckSiteVisit({
   const [discoveringVisit, setDiscoveringVisit] = useState(true);
   const [intakeEvidence, setIntakeEvidence] =
     useState<IntakeEvidenceLoadState>({ status: "loading" });
+  const [consolidatedDrafts, setConsolidatedDrafts] = useState<
+    Record<string, ConsolidatedFieldDraft>
+  >({});
+  const [consolidatedProgress, setConsolidatedProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [optionalJobsiteNotes, setOptionalJobsiteNotes] = useState<
+    Record<string, string>
+  >({});
 
   const loadIntakeEvidence = useCallback(async (visitId: string) => {
     setHumanAccepted(false);
@@ -707,6 +760,79 @@ export function GuidedDeckSiteVisit({
     selectedIntakeAssignments.length === declaredInboxCriteria.length;
   const guidedPhotoFallbackAllowed =
     intakeEvidence.status === "ready" && !inboxEvidenceReady;
+  function intakeCoverageForItem(item: VisitItem) {
+    if (intakeEvidence.status !== "ready") return [];
+    const declared = GUIDED_VISIBLE_FACT_CRITERIA[item.itemKey] ?? [];
+    const leaves = intakeEvidence.snapshot.assignments.filter(
+      (assignment) =>
+        assignment.visitItemId === item.id &&
+        assignment.decision !== "excluded" &&
+        intakeEvidence.snapshot.confirmedAttemptIds.has(
+          assignment.intakeAttemptId,
+        ) &&
+        !intakeEvidence.snapshot.assignments.some(
+          (later) => later.supersedesAssignmentEventId === assignment.id,
+        ),
+    );
+    return declared.flatMap((criterion) => {
+      const selected = leaves
+        .filter((assignment) => assignment.criterionKey === criterion.key)
+        .sort(
+          (a, b) =>
+            b.resultingVisitRevision - a.resultingVisitRevision ||
+            b.id.localeCompare(a.id),
+        )[0];
+      return selected ? [{ criterion, assignment: selected }] : [];
+    });
+  }
+  const usesWholeVisitIntake =
+    intakeEvidence.status === "ready" &&
+    (intakeEvidence.snapshot.confirmedAttemptIds.size > 0 ||
+      intakeEvidence.snapshot.assignments.length > 0);
+  const pendingRequiredItems =
+    visit?.items.filter(
+      (item) =>
+        item.state === "pending" &&
+        !["access_demolition", "utilities_obstructions"].includes(item.itemKey),
+    ) ?? [];
+  function itemHasFullIntakeCoverage(item: VisitItem) {
+    const declared = GUIDED_VISIBLE_FACT_CRITERIA[item.itemKey] ?? [];
+    return (
+      declared.length > 0 && intakeCoverageForItem(item).length === declared.length
+    );
+  }
+  function effectiveConsolidatedCondition(item: VisitItem) {
+    const chosen = consolidatedDrafts[item.id]?.condition;
+    if (chosen) return chosen;
+    return item.requirement.mode === "conditional" &&
+      itemHasFullIntakeCoverage(item)
+      ? "yes"
+      : "";
+  }
+  const conditionalDecisionsNeeded = pendingRequiredItems.filter(
+    (item) =>
+      item.requirement.mode === "conditional" &&
+      !effectiveConsolidatedCondition(item),
+  );
+  const intakeExceptions = pendingRequiredItems.flatMap((item) => {
+    const effectiveCondition = effectiveConsolidatedCondition(item);
+    if (item.requirement.mode === "conditional" && !effectiveCondition)
+      return [];
+    if (item.requirement.mode === "conditional" && effectiveCondition === "no")
+      return [];
+    const coverage = intakeCoverageForItem(item);
+    const declared = GUIDED_VISIBLE_FACT_CRITERIA[item.itemKey] ?? [];
+    const covered = new Set(coverage.map((entry) => entry.criterion.key));
+    const missing = declared.filter((criterion) => !covered.has(criterion.key));
+    return missing.length ? [{ item, missing }] : [];
+  });
+  const consolidatedItems = pendingRequiredItems;
+  const pendingOptionalItems =
+    visit?.items.filter(
+      (item) =>
+        item.state === "pending" &&
+        ["access_demolition", "utilities_obstructions"].includes(item.itemKey),
+    ) ?? [];
   const requiresFields =
     current?.requirement.mode === "required_measurements" ||
     (current?.requirement.mode === "conditional" && condition === "yes");
@@ -1442,6 +1568,135 @@ export function GuidedDeckSiteVisit({
     }
   }
 
+  function consolidatedObservation(item: VisitItem) {
+    const draft = consolidatedDrafts[item.id] ?? {
+      condition: "",
+      measurements: {},
+    };
+    const names = item.requirement.fields ?? [];
+    const stored = serializeMeasurements(names, draft.measurements);
+    if (item.requirement.mode === "photo_only") return {};
+    if (item.requirement.mode === "required_measurements")
+      return { measurements: stored };
+    return effectiveConsolidatedCondition(item) === "yes"
+      ? { conditionStatus: "applies", measurements: stored }
+      : {
+          conditionStatus: "not_applicable",
+          ...(item.requirement.otherwise
+            ? { confirmation: item.requirement.otherwise }
+            : {}),
+        };
+  }
+
+  function consolidatedItemReady(item: VisitItem) {
+    if (item.requirement.mode === "photo_only") return true;
+    const draft = consolidatedDrafts[item.id];
+    const effectiveCondition = effectiveConsolidatedCondition(item);
+    if (item.requirement.mode === "conditional" && !effectiveCondition)
+      return false;
+    if (item.requirement.mode === "conditional" && effectiveCondition === "no")
+      return true;
+    return (item.requirement.fields ?? []).every((field) =>
+      measurementComplete(field, draft?.measurements[field]),
+    );
+  }
+
+  async function submitConsolidatedFieldMeasurements() {
+    if (
+      !visit ||
+      busy ||
+      intakeExceptions.length ||
+      conditionalDecisionsNeeded.length ||
+      consolidatedItems.length + pendingOptionalItems.length === 0 ||
+      consolidatedItems.some((item) => !consolidatedItemReady(item))
+    )
+      return;
+    setBusy(true);
+    setError("");
+    let nextRevision = visit.revision;
+    try {
+      const totalOperations = consolidatedItems.length + pendingOptionalItems.length;
+      let operation = 0;
+      for (let index = 0; index < consolidatedItems.length; index += 1) {
+        const item = consolidatedItems[index];
+        operation += 1;
+        setConsolidatedProgress({
+          current: operation,
+          total: totalOperations,
+        });
+        const notApplicable =
+          item.requirement.mode === "conditional" &&
+          effectiveConsolidatedCondition(item) === "no";
+        const coverage = intakeCoverageForItem(item);
+        const result = notApplicable
+          ? await jsonRequest(
+              `/api/guided-site-visits/${visit.id}/items/${item.id}`,
+              "PATCH",
+              {
+                expectedRevision: nextRevision,
+                action: "confirm",
+                observation: consolidatedObservation(item),
+                followUpReasonCode: null,
+                followUpNotes: null,
+              },
+            )
+          : await jsonRequest(
+              `/api/guided-site-visits/${visit.id}/items/${item.id}/intake-evidence-confirmation`,
+              "POST",
+              {
+                expectedRevision: nextRevision,
+                idempotencyKey: `guided-intake-evidence:${item.id}:field-form`,
+                assignmentEventIds: coverage.map((entry) => entry.assignment.id),
+                observation: consolidatedObservation(item),
+              },
+            );
+        if (typeof result.nextRevision !== "number")
+          throw new Error("A field item saved without a usable revision.");
+        nextRevision = result.nextRevision;
+      }
+      for (const item of pendingOptionalItems) {
+        operation += 1;
+        setConsolidatedProgress({ current: operation, total: totalOperations });
+        const optionalResult = await jsonRequest(
+          `/api/guided-site-visits/${visit.id}/items/${item.id}`,
+          "PATCH",
+          {
+            expectedRevision: nextRevision,
+            action: "complete_optional",
+            followUpNotes:
+              optionalJobsiteNotes[item.id] ??
+              (typeof item.observation.notes === "string"
+                ? item.observation.notes
+                : ""),
+          },
+        );
+        if (typeof optionalResult.nextRevision !== "number")
+          throw new Error("An optional note saved without a usable revision.");
+        nextRevision = optionalResult.nextRevision;
+      }
+      const completion = await jsonRequest(
+        `/api/guided-site-visits/${visit.id}/complete`,
+        "POST",
+        { expectedRevision: nextRevision },
+      );
+      if (typeof completion.nextRevision === "number")
+        nextRevision = completion.nextRevision;
+      setConsolidatedDrafts({});
+      setOptionalJobsiteNotes({});
+      await loadVisit(visit.id);
+    } catch (requestError) {
+      await loadVisit(visit.id).catch(() => undefined);
+      setError(
+        requestError instanceof Error
+          ? `${requestError.message} Earlier field items remain saved; retry the remaining form.`
+          : "Field measurements could not be finished. Earlier items remain saved.",
+      );
+    } finally {
+      setConsolidatedProgress(null);
+      setBusy(false);
+    }
+  }
+
   async function blockItem() {
     if (!visit || !current || !blockReason || !blockNotes.trim() || busy)
       return;
@@ -1659,6 +1914,247 @@ export function GuidedDeckSiteVisit({
           }}
           onUseGuided={continueGuidedChecklist}
         />
+      </section>
+    );
+
+  if (usesWholeVisitIntake)
+    return (
+      <section
+        id="deck-field-visit"
+        tabIndex={-1}
+        aria-label="Deck field measurements"
+        className="scroll-mt-24 overflow-hidden rounded-xl border-2 border-blue-600 bg-white shadow-sm"
+      >
+        <BetaWarning />
+        <div className="border-b border-slate-200 p-4 sm:p-5">
+          <p className="text-xs font-black uppercase tracking-[.16em] text-blue-800">
+            One field form
+          </p>
+          <h2 className="mt-1 text-2xl font-black">Field Measurements</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-700">
+            Your human-approved Photo Inbox evidence handles the visible photo
+            checklist. Enter only measurements and applicability answers you
+            know from the field. No value is inferred from a photo.
+          </p>
+        </div>
+        <div className="p-4 sm:p-6">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setVisitCaptureMode("inbox")}
+            className={secondary}
+          >
+            Back to Photo Inbox
+          </button>
+
+          {intakeExceptions.length ? (
+            <section className="mt-5 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-amber-950">
+              <h3 className="font-black">Photo exceptions to resolve</h3>
+              <p className="mt-1 text-sm leading-6">
+                These are the only photo gaps. Existing accepted photos remain
+                saved; do not upload the full visit again.
+              </p>
+              <ul className="mt-3 space-y-3 text-sm">
+                {intakeExceptions.map(({ item, missing }) => (
+                  <li key={item.id} className="rounded-lg bg-white p-3">
+                    <strong>{item.title}</strong>
+                    <ul className="mt-1 list-disc pl-5 text-amber-900">
+                      {missing.map((criterion) => (
+                        <li key={criterion.key}>{criterion.label}</li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setVisitCaptureMode("inbox")}
+                className={`mt-4 ${primary}`}
+              >
+                Resolve photo exceptions
+              </button>
+            </section>
+          ) : null}
+
+          {conditionalDecisionsNeeded.length ? (
+            <p className="mt-4 rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-950">
+              Choose Yes or No for {conditionalDecisionsNeeded.length}{" "}
+              applicable field {conditionalDecisionsNeeded.length === 1 ? "question" : "questions"} below.
+              Unanswered applicability is not treated as missing photo evidence.
+            </p>
+          ) : null}
+
+          {CONSOLIDATED_FIELD_GROUPS.map((group) => {
+            const items = consolidatedItems.filter((item) =>
+              group.itemKeys.some((itemKey) => itemKey === item.itemKey),
+            );
+            if (!items.length) return null;
+            return (
+              <section
+                key={group.key}
+                className="mt-5 rounded-xl border border-slate-300 p-4"
+              >
+                <h3 className="text-lg font-black">{group.title}</h3>
+                <div className="mt-3 space-y-5">
+                  {items.map((item) => {
+                    const draft = consolidatedDrafts[item.id] ?? {
+                      condition: "" as const,
+                      measurements: {},
+                    };
+                    const conditional =
+                      item.requirement.mode === "conditional";
+                    const effectiveCondition =
+                      effectiveConsolidatedCondition(item);
+                    const showFields =
+                      item.requirement.mode === "required_measurements" ||
+                      (conditional && effectiveCondition === "yes");
+                    return (
+                      <div
+                        key={item.id}
+                        className="border-t border-slate-200 pt-4 first:border-t-0 first:pt-0"
+                      >
+                        <h4 className="font-bold">{item.title}</h4>
+                        {item.requirement.mode === "photo_only" ? (
+                          <p className="mt-1 text-sm text-emerald-800">
+                            Photo evidence ready · no field dimensions required.
+                          </p>
+                        ) : null}
+                        {conditional ? (
+                          <fieldset className="mt-3">
+                            <legend className="text-sm font-bold">
+                              {CONDITIONS[item.requirement.when ?? ""]?.prompt ??
+                                "Does this condition apply?"}
+                            </legend>
+                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              {(["yes", "no"] as const).map((value) => (
+                                <label
+                                  key={value}
+                                  className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 p-3 text-sm font-semibold"
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`consolidated-condition-${item.id}`}
+                                    checked={effectiveCondition === value}
+                                    onChange={() =>
+                                      setConsolidatedDrafts((current) => ({
+                                        ...current,
+                                        [item.id]: {
+                                          ...draft,
+                                          condition: value,
+                                        },
+                                      }))
+                                    }
+                                  />
+                                  {value === "yes"
+                                    ? (CONDITIONS[item.requirement.when ?? ""]
+                                        ?.yes ?? "Yes")
+                                    : (CONDITIONS[item.requirement.when ?? ""]
+                                        ?.no ?? "No")}
+                                </label>
+                              ))}
+                            </div>
+                            {!draft.condition &&
+                            effectiveCondition === "yes" ? (
+                              <p className="mt-2 text-xs font-bold text-emerald-800">
+                                Approved photos show this applies. Choose No if
+                                your field check says it does not.
+                              </p>
+                            ) : null}
+                          </fieldset>
+                        ) : null}
+                        {showFields ? (
+                          <div className="mt-4 grid gap-4">
+                            {(item.requirement.fields ?? []).map((field) => (
+                              <MeasurementField
+                                key={field}
+                                field={field}
+                                draft={
+                                  draft.measurements[field] ??
+                                  defaultMeasurementDraft(field)
+                                }
+                                onChange={(measurement) =>
+                                  setConsolidatedDrafts((current) => ({
+                                    ...current,
+                                    [item.id]: {
+                                      ...draft,
+                                      measurements: {
+                                        ...draft.measurements,
+                                        [field]: measurement,
+                                      },
+                                    },
+                                  }))
+                                }
+                              />
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+
+          {pendingOptionalItems.length ? (
+            <section className="mt-5 rounded-xl border border-slate-300 bg-slate-50 p-4">
+              <h3 className="text-lg font-black">Optional jobsite notes</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-700">
+                Add a note if useful, or leave it blank to Skip. These notes do
+                not require photo evidence.
+              </p>
+              <div className="mt-3 space-y-4">
+                {pendingOptionalItems.map((item) => (
+                  <label key={item.id} className="block text-sm font-bold">
+                    {item.title}
+                    <textarea
+                      maxLength={2000}
+                      rows={3}
+                      className={`${input} resize-y`}
+                      value={
+                        optionalJobsiteNotes[item.id] ??
+                        (typeof item.observation.notes === "string"
+                          ? item.observation.notes
+                          : "")
+                      }
+                      onChange={(event) =>
+                        setOptionalJobsiteNotes((current) => ({
+                          ...current,
+                          [item.id]: event.target.value,
+                        }))
+                      }
+                      placeholder="Optional note — blank means Skip"
+                    />
+                  </label>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <button
+            type="button"
+            disabled={
+              busy ||
+              intakeExceptions.length > 0 ||
+              conditionalDecisionsNeeded.length > 0 ||
+              consolidatedItems.length + pendingOptionalItems.length === 0 ||
+              consolidatedItems.some((item) => !consolidatedItemReady(item))
+            }
+            onClick={() => void submitConsolidatedFieldMeasurements()}
+            className={`mt-6 ${primary}`}
+          >
+            {consolidatedProgress
+              ? `Saving ${consolidatedProgress.current} of ${consolidatedProgress.total}…`
+              : "Submit field measurements and finish site visit"}
+          </button>
+          <p className="mt-2 text-xs leading-5 text-slate-600">
+            This confirms photo-only covered items and saves each field group
+            one at a time. Earlier items stay saved if a later item needs a
+            retry. Nothing is sent to a customer.
+          </p>
+          {error ? <ErrorMessage message={error} /> : null}
+        </div>
       </section>
     );
 
@@ -3010,6 +3506,13 @@ function MeasurementField({
       />
     </fieldset>
   );
+}
+
+function defaultMeasurementDraft(field: string): MeasurementDraft {
+  const unit = DEFAULT_MEASUREMENT_UNITS[field] ?? "in";
+  return unit === "ft + in"
+    ? { value: "", unit, feet: "", inches: "" }
+    : { value: "", unit, components: COMPOSITE_FIELDS[field] ? [] : undefined };
 }
 
 function UnitSelect({

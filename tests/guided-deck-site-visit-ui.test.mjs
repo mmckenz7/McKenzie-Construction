@@ -23,7 +23,7 @@ const captureMigration = readFileSync(
   "utf8",
 );
 
-test("Deck workflow is query gated and shows one persisted capture at a time", () => {
+test("Deck workflow is query gated and keeps the legacy capture as a targeted fallback", () => {
   assert.match(page, /showDeckWorkflow=\{query\.workflow === "deck"\}/);
   assert.match(builder, /<GuidedDeckSiteVisit estimateId=\{estimateId\}/);
   assert.match(
@@ -31,7 +31,10 @@ test("Deck workflow is query gated and shows one persisted capture at a time", (
     /visit\?\.items\.find\(\(item\) => item\.state === "pending"\)/,
   );
   assert.match(component, /Capture \{current\.ordinal\} of 9/);
-  assert.doesNotMatch(component, /\.map\(\(item\).*Required capture/s);
+  assert.match(component, /usesWholeVisitIntake/);
+  assert.match(component, /One field form/);
+  assert.match(component, /Photo exceptions to resolve/);
+  assert.match(component, /Required capture/);
 });
 
 test("continuing the guided checklist moves the user to the active step", () => {
