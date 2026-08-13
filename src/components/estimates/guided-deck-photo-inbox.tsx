@@ -82,6 +82,7 @@ export function GuidedDeckPhotoInbox({
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const draftsRef = useRef<Draft[]>([]);
   const [selectionNotice, setSelectionNotice] = useState("");
+  const [reviewNotice, setReviewNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{
@@ -216,6 +217,7 @@ export function GuidedDeckPhotoInbox({
     if (!drafts.length || busy) return;
     setBusy(true);
     setError("");
+    setReviewNotice("");
     const queue = [...drafts].sort(
       (a, b) =>
         (a.ordinal ?? Number.MAX_SAFE_INTEGER) -
@@ -224,6 +226,7 @@ export function GuidedDeckPhotoInbox({
     const successes = new Set<string>();
     let nextRevision = revision;
     let attemptToAbandon: string | null = null;
+    let reviewFailures = 0;
     try {
       const resumableBatchId = queue[0]?.batchId;
       if (
@@ -324,12 +327,16 @@ export function GuidedDeckPhotoInbox({
             percent: 100,
             phase: "reviewing",
           });
-          await requestJson(
-            `/api/guided-site-visits/${visitId}/intake-photos/${reserved.attemptId}/classification-reviews`,
-            {
-              idempotencyKey: `guided-visit-inbox-classification:${reserved.attemptId}:initial`,
-            },
-          );
+          try {
+            await requestJson(
+              `/api/guided-site-visits/${visitId}/intake-photos/${reserved.attemptId}/classification-reviews`,
+              {
+                idempotencyKey: `guided-visit-inbox-classification:${reserved.attemptId}:initial`,
+              },
+            );
+          } catch {
+            reviewFailures += 1;
+          }
         } catch (cause) {
           if (attemptToAbandon) {
             try {
@@ -351,6 +358,11 @@ export function GuidedDeckPhotoInbox({
           );
           break;
         }
+      }
+      if (reviewFailures > 0) {
+        setReviewNotice(
+          `${reviewFailures} ${reviewFailures === 1 ? "photo was" : "photos were"} uploaded safely, but the AI review needs to be retried. The remaining uploads continued.`,
+        );
       }
     } catch (cause) {
       setError(
@@ -632,6 +644,14 @@ export function GuidedDeckPhotoInbox({
           className="mt-3 rounded-lg bg-slate-900 p-3 text-sm font-bold text-white"
         >
           {selectionNotice}
+        </p>
+      ) : null}
+      {reviewNotice ? (
+        <p
+          role="status"
+          className="mt-3 rounded-lg border border-amber-500 bg-amber-950 p-3 text-sm font-bold text-amber-100"
+        >
+          {reviewNotice}
         </p>
       ) : null}
       {drafts.length ? (

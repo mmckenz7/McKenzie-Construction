@@ -70,6 +70,10 @@ test("retries the immutable batch and reselects device-local files by declared h
 
 test("classifies every confirmed photo and keeps AI advisory", () => {
   assert.match(inbox, /classification-reviews/);
+  assert.match(inbox, /let reviewFailures = 0/);
+  assert.match(inbox, /reviewFailures \+= 1/);
+  assert.match(inbox, /uploaded safely, but the AI review needs to be retried/);
+  assert.match(inbox, /The remaining uploads continued/);
   assert.match(inbox, /Review proposed groups/);
   assert.match(
     inbox,
