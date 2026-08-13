@@ -3,6 +3,7 @@ export type FeatureKey =
   | "ai_estimator"
   | "guided_site_visits"
   | "guided_site_visit_ai_usability_review"
+  | "guided_site_visit_ai_visible_facts"
   | "material_catalog"
   | "material_catalog_price_publication"
   | "material_catalog_estimate_pricing"
@@ -32,6 +33,7 @@ export const DEFAULT_FEATURE_MAP: FeatureMap = {
   ai_estimator: false,
   guided_site_visits: false,
   guided_site_visit_ai_usability_review: false,
+  guided_site_visit_ai_visible_facts: false,
   material_catalog: false,
   material_catalog_price_publication: false,
   material_catalog_estimate_pricing: false,

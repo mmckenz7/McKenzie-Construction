@@ -117,6 +117,12 @@ function normalizeFeatureMap(
       record.guided_site_visits === true &&
       record.guided_site_visit_ai_usability_review === true,
 
+    guided_site_visit_ai_visible_facts:
+      record.ai_estimator === true &&
+      record.guided_site_visits === true &&
+      record.guided_site_visit_ai_usability_review === true &&
+      record.guided_site_visit_ai_visible_facts === true,
+
     material_catalog:
       materialCatalog,
 

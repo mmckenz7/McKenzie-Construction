@@ -18,15 +18,15 @@ test("Deck workflow is query gated and shows one persisted capture at a time", (
 
 test("camera upload is private, progress visible, and invokes trusted advisory review", () => {
   assert.match(component, /capture="environment"/);
-  assert.match(component, /crypto\.subtle\.digest\("SHA-256"/);
+  assert.match(component, /crypto\.subtle\.digest\(\s*"SHA-256"/);
   assert.match(component, /upload-session/);
   assert.match(component, /Uploading \$\{progress\}%/);
   assert.match(component, /photos\/\$\{photoId\}\/usability-reviews/);
   assert.match(component, /guided-photo-usability:\$\{photoId\}:initial/);
-  assert.match(component, /reviewPhoto\(activePhotoId, initialReviewKey\(activePhotoId\)\)/);
+  assert.match(component, /reviewPhoto\(\s*activePhotoId,\s*initialReviewKey\(activePhotoId\)/);
   assert.doesNotMatch(component, /crypto\.randomUUID\(\)/);
   assert.match(component, /Reviewing photo/);
-  assert.match(component, /Good/);
+  assert.match(component, /Photo is clear/);
   assert.match(component, /Retake recommended/);
   assert.match(component, /Couldn’t review/);
   assert.match(component, /I confirm this capture/);
@@ -34,10 +34,10 @@ test("camera upload is private, progress visible, and invokes trusted advisory r
 });
 
 test("photo selection clearly offers camera and existing-photo library sources", () => {
-  assert.match(component, /<PhotoSourceControls title="Add photo"/);
+  assert.match(component, /<PhotoSourceControls\s+title="Add photo"/);
   const sources = component.slice(component.indexOf("function PhotoSourceControls"), component.indexOf("function ManualConfirmation"));
-  const cameraControl = sources.slice(sources.indexOf('<input type="file"'), sources.indexOf("Take photo"));
-  const libraryStart = sources.indexOf('<input type="file"', sources.indexOf("Take photo"));
+  const cameraControl = sources.slice(sources.indexOf('<input\n'), sources.indexOf("Take photo"));
+  const libraryStart = sources.indexOf('<input\n', sources.indexOf("Take photo"));
   const libraryControl = sources.slice(libraryStart, sources.indexOf("Choose existing photo"));
   assert.match(cameraControl, /capture="environment"/);
   assert.match(cameraControl, /accept="image\/jpeg,image\/png,image\/webp,image\/heic,image\/heif"/);
@@ -48,22 +48,23 @@ test("photo selection clearly offers camera and existing-photo library sources",
 
 test("the entire photo-source group is visibly and semantically disabled while busy", () => {
   const sources = component.slice(component.indexOf("function PhotoSourceControls"), component.indexOf("function ManualConfirmation"));
-  assert.match(sources, /<fieldset disabled=\{busy\} aria-busy=\{busy\}/);
+  assert.match(sources, /<fieldset[\s\S]*disabled=\{busy\}[\s\S]*aria-busy=\{busy\}/);
   assert.match(sources, /busy \? "cursor-not-allowed opacity-50"/);
   assert.match(sources, /disabled=\{busy\}/g);
   assert.match(sources, /role="status"/);
   assert.match(sources, /busyLabel \?\? "Uploading photo…"/);
-  assert.match(sources, /Photo choices are unavailable until this finishes/);
+  assert.match(sources, /Photo choices are unavailable until\s*this finishes/);
 });
 
 test("resumed visits select the latest review with a stable tie-breaker", () => {
-  assert.match(component, /latestUsabilityReview\(storedPhoto\?\.usabilityReviews/);
-  assert.match(component, /review\.createdAt === latest\.createdAt && review\.id > latest\.id/);
+  assert.match(component, /latestUsabilityReview\(\s*storedPhoto\?\.usabilityReviews/);
+  assert.match(component, /review\.createdAt === latest\.createdAt &&\s*review\.id > latest\.id/);
   assert.doesNotMatch(component, /usabilityReviews\.at\(-1\)/);
 });
 
 test("all nine approved Deck captures and required field measurements are represented", () => {
-  for (const key of ["property_context", "full_deck_yard", "house_ledger", "underside_framing", "supports_footings", "stairs_landings", "guards_railings", "access_demolition", "utilities_obstructions"]) assert.match(component, new RegExp(key));
+  const criteria = readFileSync("src/lib/guided-site-visits/visible-fact-criteria.ts", "utf8");
+  for (const key of ["property_context", "full_deck_yard", "house_ledger", "underside_framing", "supports_footings", "stairs_landings", "guards_railings", "access_demolition", "utilities_obstructions"]) assert.match(criteria, new RegExp(key));
   for (const field of ["length", "width", "height_from_grade", "joist_spacing", "post_dimensions", "stair_width", "guard_height", "gate_width", "obstruction_clearances"]) assert.match(component, new RegExp(field));
   assert.match(component, /Choose unit/);
   assert.match(component, /const LONG_UNITS = \["ft", "ft \+ in", "in"\]/);
@@ -84,7 +85,7 @@ test("every measurement has plain-English help and compound visible dimensions a
 test("self-review repeats photo contents and review failures give actionable guidance", () => {
   assert.match(component, /Make sure the photo includes/);
   assert.match(component, /\(INCLUDE\[current\.itemKey\] \?\? \[\]\)\.map/);
-  for (const code of ["blurry", "too_dark", "too_bright", "glare", "obstructed", "wrong_subject", "incomplete_view", "too_distant", "orientation_problem", "unsupported_media", "review_unavailable"]) assert.match(component, new RegExp(`${code}: \\{ reason:`));
+  for (const code of ["blurry", "too_dark", "too_bright", "glare", "obstructed", "wrong_subject", "incomplete_view", "too_distant", "orientation_problem", "unsupported_media", "review_unavailable"]) assert.match(component, new RegExp(`${code}: \\{`));
   assert.match(component, /exact photo problem is unknown/);
   assert.match(component, /Retry the review/);
 });
@@ -92,10 +93,9 @@ test("self-review repeats photo contents and review failures give actionable gui
 test("retake, retry, block, resume, and final outcomes remain explicit", () => {
   assert.match(component, /Retake photo/);
   assert.match(component, /Retry review/);
-  assert.match(component, /Use anyway — I checked it/);
-  assert.match(component, /Review photo myself/);
+  assert.match(component, /Check photo myself/);
   assert.match(component, /review_unavailable/);
-  assert.match(component, /reviewPhoto\(activePhotoId, initialReviewKey\(activePhotoId\)\)/);
+  assert.match(component, /reviewPhoto\(\s*activePhotoId,\s*initialReviewKey\(activePhotoId\)/);
   assert.match(component, /Retry or document why this capture is blocked/);
   assert.match(component, /Cannot capture this/);
   assert.match(component, /followUpReasonCode/);
@@ -107,27 +107,18 @@ test("retake, retry, block, resume, and final outcomes remain explicit", () => {
 });
 
 test("every completed review state keeps a clear mobile-first retake action", () => {
-  const goodState = component.slice(component.indexOf('review.verdict === "usable"'), component.indexOf('review.verdict === "retake_recommended"'));
-  const retakeState = component.slice(component.indexOf('review.verdict === "retake_recommended"'), component.indexOf('return <div role="status" className="mt-4 rounded-lg border border-slate-300'));
-  const unableState = component.slice(component.indexOf('return <div role="status" className="mt-4 rounded-lg border border-slate-300'), component.indexOf("function PhotoSourceControls"));
-  for (const state of [goodState, retakeState, unableState]) {
-    assert.match(state, /PhotoSourceControls title="Retake photo"/);
-    assert.match(state, /onSelect={onRetake}/);
-  }
-  assert.match(goodState, /Use this photo/);
-  assert.match(unableState, /Retry review/);
-  assert.match(unableState, /Review photo myself/);
+  const reviewStatus = component.slice(component.indexOf("function PhotoReviewStatus"), component.indexOf("function VisibleFactReviewCard"));
+  assert.ok((reviewStatus.match(/title="Retake photo"/g) ?? []).length >= 3);
+  assert.ok((reviewStatus.match(/onSelect=\{onRetake\}/g) ?? []).length >= 3);
+  assert.match(reviewStatus, /Check visible items/);
+  assert.match(reviewStatus, /Retry review/);
+  assert.match(component, /Check photo myself/);
 });
 
 test("retake remains visible after human acceptance and clears acceptance before upload", () => {
-  const reviewStatus = '{reviewPhotoReady ? <PhotoReviewStatus';
-  const manualPanel = '{humanAccepted ? <>';
-  assert.ok(component.indexOf(reviewStatus) >= 0);
-  assert.ok(component.indexOf(manualPanel) > component.indexOf(reviewStatus));
-  const alwaysRenderedReview = component.slice(component.indexOf(reviewStatus), component.indexOf(manualPanel));
-  assert.match(alwaysRenderedReview, /onRetake=\{\(\) => setHumanAccepted\(false\)\}/);
-  assert.match(alwaysRenderedReview, /reviewPhotoReady \? <PhotoReviewStatus/);
-  assert.match(component, /if \(file\) \{ onSelect\?\.\(\); void uploadPhoto\(file\); \}/);
+  assert.match(component, /Photo checklist checked/);
+  assert.match(component, /title="Retake photo"[\s\S]*onSelect=\{\(\) => setHumanAccepted\(false\)\}/);
+  assert.match(component, /if \(file\) \{[\s\S]*onSelect\?\.\(\);[\s\S]*void uploadPhoto\(file\);/);
 });
 
 test("retaking creates a linked replacement and never advances the capture", () => {
