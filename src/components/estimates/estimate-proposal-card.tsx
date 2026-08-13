@@ -27,7 +27,7 @@ function label(value: string) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-export function EstimateProposalCard({ estimateId, estimateStatus }: { estimateId: string; estimateStatus: string }) {
+export function EstimateProposalCard({ estimateId, estimateStatus, issuanceBlockedReason }: { estimateId: string; estimateStatus: string; issuanceBlockedReason?: string }) {
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
@@ -117,7 +117,7 @@ export function EstimateProposalCard({ estimateId, estimateStatus }: { estimateI
     }
   }
 
-  const canIssue = estimateStatus === "draft" || estimateStatus === "reviewing";
+  const canIssue = (estimateStatus === "draft" || estimateStatus === "reviewing") && !issuanceBlockedReason;
   const active = proposal && (proposal.status === "issued" || proposal.status === "viewed");
   const expired = Boolean(proposal && (proposal.status === "expired"
     || (active && new Date(proposal.expiresAt).getTime() <= Date.now())));
@@ -140,7 +140,7 @@ export function EstimateProposalCard({ estimateId, estimateStatus }: { estimateI
       {expired ? <p className="mt-3 text-sm font-semibold text-amber-800">This link has expired, but the lead remains active. Review current labor, material, subcontractor, tax, and markup pricing before issuing a fresh estimate.</p> : null}
       {active && !proposal.customerEmail ? <p className="mt-3 text-sm font-semibold text-amber-800">Add an email address to the customer lead, then revoke and reissue this link to refresh its frozen recipient details.</p> : null}
       {proposal.respondedAt ? <p className="mt-3 text-sm text-slate-700">Response recorded: <strong>{label(proposal.response ?? proposal.status)}</strong>{proposal.responseName ? ` by ${proposal.responseName}` : ""}.</p> : null}
-    </div> : canIssue ? <button type="button" disabled={pending} className={`mt-5 ${primary}`} onClick={() => void issue()}>{pending ? "Creating secure link…" : "Create customer link"}</button> : <p className="mt-5 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700">This estimate is {label(estimateStatus)}. Its customer-link lifecycle cannot be restarted from this state.</p>}
+    </div> : issuanceBlockedReason ? <p className="mt-5 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-950">{issuanceBlockedReason}</p> : canIssue ? <button type="button" disabled={pending} className={`mt-5 ${primary}`} onClick={() => void issue()}>{pending ? "Creating secure link…" : "Create customer link"}</button> : <p className="mt-5 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700">This estimate is {label(estimateStatus)}. Its customer-link lifecycle cannot be restarted from this state.</p>}
     {notice ? <p className="mt-4 text-sm font-semibold text-emerald-800">{notice}</p> : null}
     {error ? <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p> : null}
   </section>;

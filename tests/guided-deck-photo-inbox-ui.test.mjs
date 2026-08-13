@@ -129,6 +129,38 @@ test("plainly separates seeing the ledger from seeing both ledger ends", () => {
   assert.match(criteria, /Use two photos if both ends do not fit clearly/);
 });
 
+test("keeps access and utility notes optional and outside evidence blockers", () => {
+  assert.match(inbox, /OPTIONAL_JOBSITE_ITEM_KEYS/);
+  assert.match(inbox, /"access_demolition"/);
+  assert.match(inbox, /"utilities_obstructions"/);
+  assert.match(
+    inbox,
+    /const requiredCriterionSummaries = criterionSummaries\.filter/,
+  );
+  assert.match(
+    inbox,
+    /const suggestedConfirmations = requiredCriterionSummaries/,
+  );
+  assert.match(inbox, /const unresolvedCoverage = requiredCriterionSummaries/);
+  assert.match(inbox, /const aiMissing = requiredCriterionSummaries/);
+  assert.match(inbox, /const missing = requiredItems\.flatMap/);
+  assert.match(inbox, /Optional jobsite notes/);
+  assert.match(inbox, /Select any existing photos that help explain this note/);
+  assert.match(inbox, /Optional note/);
+  assert.match(inbox, /Skip and continue/);
+  assert.match(inbox, /Skip and finish/);
+  assert.match(inbox, /Save note and continue/);
+  assert.match(inbox, /Save note and finish/);
+  assert.match(inbox, /action: "complete_optional"/);
+  assert.match(inbox, /The note or Skip choice is saved with the visit/);
+  assert.match(inbox, /are not attached to the note/);
+  assert.match(inbox, /focus-within:ring-2/);
+  assert.match(inbox, /item\.observation\?\.notes/);
+  assert.match(inbox, /item\.state === "confirmed"/);
+  assert.match(inbox, /else onUseGuided\(\)/);
+  assert.match(inboxRoute, /state,observation/);
+});
+
 test("serves authenticated short-lived private photo previews", () => {
   assert.match(previewRoute, /authorizeGuidedSiteVisit/);
   assert.match(
@@ -198,7 +230,10 @@ test("defers consolidated missing results until terminal and human verified", ()
 test("uses the newest intake batch and confirms one suggestion per criterion", () => {
   assert.match(inbox, /const currentBatch = data\?\.batches\[0\]/);
   assert.match(inbox, /member\.batch_id === currentBatch\?\.id/);
-  assert.match(inbox, /const suggestedConfirmations = criterionSummaries/);
+  assert.match(
+    inbox,
+    /const suggestedConfirmations = requiredCriterionSummaries/,
+  );
   assert.match(inbox, /summary\.undecided\[0\]/);
   assert.match(inbox, /async function confirmPhotoSummary/);
 });

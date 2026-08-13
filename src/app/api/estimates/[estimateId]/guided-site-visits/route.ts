@@ -18,7 +18,7 @@ export async function GET(
     const db = createAdminServerClient();
     const visit = await db
       .from("guided_site_visits")
-      .select("id,status,revision,started_at,updated_at")
+      .select("id,status,revision,started_at,updated_at,completion_outcome")
       .eq("company_id", auth.authorization!.companyId)
       .eq("target_estimate_id", estimateId)
       .eq("status", "in_progress")
@@ -30,16 +30,35 @@ export async function GET(
         { success: false, error: "Active site visit could not be checked." },
         { status: 500 },
       );
-    if (!visit.data)
+    const completedVisit = visit.data
+      ? null
+      : await db
+          .from("guided_site_visits")
+          .select(
+            "id,status,revision,started_at,updated_at,completion_outcome",
+          )
+          .eq("company_id", auth.authorization!.companyId)
+          .eq("target_estimate_id", estimateId)
+          .eq("status", "completed")
+          .order("completed_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+    if (completedVisit?.error)
       return NextResponse.json(
-        { success: true, activeVisit: null },
+        { success: false, error: "Completed site visit could not be checked." },
+        { status: 500 },
+      );
+    const selectedVisit = visit.data ?? completedVisit?.data ?? null;
+    if (!selectedVisit)
+      return NextResponse.json(
+        { success: true, activeVisit: null, latestCompletedVisit: null },
         { headers: { "Cache-Control": "private, no-store" } },
       );
     const items = await db
       .from("guided_site_visit_items")
       .select("state")
       .eq("company_id", auth.authorization!.companyId)
-      .eq("visit_id", visit.data.id);
+      .eq("visit_id", selectedVisit.id);
     if (items.error)
       return NextResponse.json(
         {
@@ -49,19 +68,21 @@ export async function GET(
         { status: 500 },
       );
     const rows = items.data ?? [];
+    const summary = {
+      id: selectedVisit.id,
+      status: selectedVisit.status,
+      revision: selectedVisit.revision,
+      startedAt: selectedVisit.started_at,
+      updatedAt: selectedVisit.updated_at,
+      completionOutcome: selectedVisit.completion_outcome,
+      completedItems: rows.filter((item) => item.state !== "pending").length,
+      totalItems: rows.length,
+    };
     return NextResponse.json(
       {
         success: true,
-        activeVisit: {
-          id: visit.data.id,
-          status: visit.data.status,
-          revision: visit.data.revision,
-          startedAt: visit.data.started_at,
-          updatedAt: visit.data.updated_at,
-          completedItems: rows.filter((item) => item.state !== "pending")
-            .length,
-          totalItems: rows.length,
-        },
+        activeVisit: visit.data ? summary : null,
+        latestCompletedVisit: visit.data ? null : summary,
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );

@@ -13,6 +13,10 @@ const multiPhotoMigration = readFileSync(
   "supabase/migrations/20260813103000_guided_site_visit_multi_photo_sets.sql",
   "utf8",
 );
+const optionalNotesMigration = readFileSync(
+  "supabase/migrations/20260813142000_optional_deck_jobsite_notes.sql",
+  "utf8",
+);
 const files = [
   "src/app/api/estimates/[estimateId]/guided-site-visits/route.ts",
   "src/app/api/guided-site-visits/[visitId]/route.ts",
@@ -87,6 +91,21 @@ test("documented follow-up is terminal and distinct from all passed", () => {
     migration,
     /unsafe_access.*inaccessible.*concealed.*customer_declined.*site_condition.*office_verification_required/s,
   );
+});
+test("access and utilities are optional notes and cannot weaken structural items", () => {
+  assert.match(optionalNotesMigration, /complete_optional_guided_site_visit_item/);
+  assert.match(
+    optionalNotesMigration,
+    /item\.item_key not in \('access_demolition','utilities_obstructions'\)/,
+  );
+  assert.match(optionalNotesMigration, /state='confirmed'/);
+  assert.match(optionalNotesMigration, /jsonb_build_object\('notes',clean_notes\)/);
+  assert.match(optionalNotesMigration, /length\(coalesce\(clean_notes,''\)\)>2000/);
+  assert.doesNotMatch(
+    optionalNotesMigration,
+    /house_ledger|underside_framing|supports_footings|stairs_landings|guards_railings/,
+  );
+  assert.match(files, /complete_optional_guided_site_visit_item/);
 });
 test("database validates conditional measurements instead of trusting a client flag", () => {
   assert.match(migration, /is_valid_guided_site_visit_observation/);

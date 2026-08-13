@@ -287,7 +287,15 @@ const primary =
 const secondary =
   "w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base font-bold text-slate-800 disabled:opacity-50 sm:w-auto";
 
-export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
+export function GuidedDeckSiteVisit({
+  estimateId,
+  onVisitStatusChanged,
+  onContinueToEstimate,
+}: {
+  estimateId: string;
+  onVisitStatusChanged?: (status: "not_started" | "in_progress" | "completed") => void;
+  onContinueToEstimate?: () => void;
+}) {
   const [visit, setVisit] = useState<Visit | null>(null);
   const [permission, setPermission] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -431,13 +439,16 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
         const body = (await response.json()) as {
           error?: string;
           activeVisit?: { id?: unknown } | null;
+          latestCompletedVisit?: { id?: unknown } | null;
         };
         if (!response.ok)
           throw new Error(
             body.error ?? "Active site visit could not be checked.",
           );
-        const visitId = body.activeVisit?.id;
+        const visitId =
+          body.activeVisit?.id ?? body.latestCompletedVisit?.id;
         if (active && typeof visitId === "string") await loadVisit(visitId);
+        else if (active) onVisitStatusChanged?.("not_started");
       })
       .catch((discoveryError) => {
         if (active)
@@ -453,7 +464,11 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
     return () => {
       active = false;
     };
-  }, [estimateId, loadVisit]);
+  }, [estimateId, loadVisit, onVisitStatusChanged]);
+  useEffect(() => {
+    if (visit?.status === "completed") onVisitStatusChanged?.("completed");
+    else if (visit) onVisitStatusChanged?.("in_progress");
+  }, [onVisitStatusChanged, visit]);
   useEffect(
     () => () => {
       if (localPhoto) URL.revokeObjectURL(localPhoto.url);
@@ -1473,6 +1488,15 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
             </p>
           ) : null}
           <VisitSummary visit={visit} />
+          {onContinueToEstimate ? (
+            <button
+              type="button"
+              onClick={onContinueToEstimate}
+              className={`mt-5 ${primary}`}
+            >
+              Continue to human takeoff
+            </button>
+          ) : null}
         </div>
       </section>
     );
@@ -1921,9 +1945,10 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
               role="status"
               className="mt-4 rounded-lg border border-blue-300 bg-blue-50 p-4 text-sm leading-6 text-blue-950"
             >
-              <strong>Your check is required.</strong> The photo review is only
-              a visibility check. Confirm the requested area yourself; all
-              measurements must come from the field.
+              <strong>Your check is required.</strong> The photo review is {" "}
+              <span className="font-bold">only a visibility check.</span>{" "}
+              Confirm the requested area yourself; all measurements must come
+              from the field.
               <p className="mt-2 font-bold">Make sure the photo includes:</p>
               <ul className="mt-1 list-disc pl-5">
                 {(INCLUDE[current.itemKey] ?? []).map((criterion) => (
@@ -2870,8 +2895,8 @@ function BetaWarning() {
         Field beta limitations
       </strong>
       Photos document visible conditions only. No automatic engineering, code,
-      load, material, labor, measurement, or pricing decision is made. Michael
-      must verify every field fact.
+      load, material, labor, measurement, or pricing decision is made. {" "}
+      <span className="font-bold">Michael must verify every field fact.</span>
     </div>
   );
 }

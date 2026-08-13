@@ -128,7 +128,7 @@ export async function GET(
         .eq("company_id", auth.authorization!.companyId),
       db
         .from("guided_site_visit_items")
-        .select("id,item_key,ordinal,title")
+        .select("id,item_key,ordinal,title,state,observation")
         .eq("visit_id", visitId)
         .eq("company_id", auth.authorization!.companyId)
         .order("ordinal"),
@@ -150,12 +150,16 @@ export async function GET(
       attempts: attempts.data,
       reviews: reviews.data,
       assignments: assignments.data,
-      items: (items.data ?? []).map(({ id, item_key, ordinal, title }) => ({
-        id,
-        itemKey: item_key,
-        ordinal,
-        title,
-      })),
+      items: (items.data ?? []).map(
+        ({ id, item_key, ordinal, title, state, observation }) => ({
+          id,
+          itemKey: item_key,
+          ordinal,
+          title,
+          state,
+          observation,
+        }),
+      ),
     },
     { headers: { "Cache-Control": "private, no-store" } },
   );

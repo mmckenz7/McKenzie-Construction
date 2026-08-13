@@ -12,6 +12,8 @@ type InboxItem = {
   itemKey: string;
   ordinal: number;
   title: string;
+  state: "pending" | "confirmed" | "documented_follow_up";
+  observation: { notes?: string };
 };
 type InboxProposal = { visitItemId: string; criterionKey: string };
 type InboxReview = {
@@ -66,6 +68,10 @@ type Draft = {
 };
 
 const MAX_INBOX_PHOTOS = 30;
+const OPTIONAL_JOBSITE_ITEM_KEYS = new Set([
+  "access_demolition",
+  "utilities_obstructions",
+]);
 
 export function GuidedDeckPhotoInbox({
   visitId,
@@ -87,6 +93,16 @@ export function GuidedDeckPhotoInbox({
   const [busy, setBusy] = useState(false);
   const [missingPhotoSelections, setMissingPhotoSelections] = useState<
     Record<string, string[]>
+  >({});
+  const [optionalJobsiteDrafts, setOptionalJobsiteDrafts] = useState<
+    Record<
+      string,
+      {
+        attemptIds: string[];
+        note: string;
+        disposition: "open" | "saved" | "skipped";
+      }
+    >
   >({});
   const [screen, setScreen] = useState<"upload" | "review" | "correct">(
     "review",
@@ -154,6 +170,34 @@ export function GuidedDeckPhotoInbox({
     if (!activeReviewItemId && data?.items[0])
       setActiveReviewItemId(data.items[0].id);
   }, [activeReviewItemId, data]);
+  useEffect(() => {
+    if (!data?.items.length) return;
+    setOptionalJobsiteDrafts((current) => {
+      const next = { ...current };
+      for (const item of data.items) {
+        if (
+          !OPTIONAL_JOBSITE_ITEM_KEYS.has(item.itemKey) ||
+          next[item.id]?.disposition === "open"
+        )
+          continue;
+        const note =
+          typeof item.observation?.notes === "string"
+            ? item.observation.notes
+            : "";
+        next[item.id] = {
+          attemptIds: next[item.id]?.attemptIds ?? [],
+          note,
+          disposition:
+            item.state === "confirmed"
+              ? note
+                ? "saved"
+                : "skipped"
+              : "open",
+        };
+      }
+      return next;
+    });
+  }, [data?.items]);
 
   async function addFiles(files: File[]) {
     setError("");
@@ -548,6 +592,112 @@ export function GuidedDeckPhotoInbox({
     });
   }
 
+  function updateOptionalJobsiteDraft(
+    itemId: string,
+    update: (current: {
+      attemptIds: string[];
+      note: string;
+      disposition: "open" | "saved" | "skipped";
+    }) => {
+      attemptIds: string[];
+      note: string;
+      disposition: "open" | "saved" | "skipped";
+    },
+  ) {
+    setOptionalJobsiteDrafts((current) => ({
+      ...current,
+      [itemId]: update(
+        current[itemId] ?? {
+          attemptIds: [],
+          note: "",
+          disposition: "open",
+        },
+      ),
+    }));
+  }
+
+  function toggleOptionalJobsitePhoto(itemId: string, attemptId: string) {
+    updateOptionalJobsiteDraft(itemId, (current) => {
+      const attemptIds = new Set(current.attemptIds);
+      if (attemptIds.has(attemptId)) attemptIds.delete(attemptId);
+      else attemptIds.add(attemptId);
+      return { ...current, attemptIds: [...attemptIds], disposition: "open" };
+    });
+  }
+
+  async function completeOptionalJobsiteItem(
+    itemId: string,
+    disposition: "saved" | "skipped",
+  ) {
+    if (busy) return;
+    const draft = optionalJobsiteDrafts[itemId] ?? {
+      attemptIds: [],
+      note: "",
+      disposition: "open" as const,
+    };
+    setBusy(true);
+    setError("");
+    setReviewNotice("");
+    try {
+      const response = await fetch(
+        `/api/guided-site-visits/${visitId}/items/${itemId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            expectedRevision: revision,
+            action: "complete_optional",
+            followUpNotes: disposition === "saved" ? draft.note : "",
+          }),
+        },
+      );
+      const result = (await response.json()) as {
+        error?: string;
+        nextRevision?: number;
+      };
+      if (!response.ok || typeof result.nextRevision !== "number")
+        throw new Error(result.error ?? "Optional note could not be saved.");
+      setRevision(result.nextRevision);
+      updateOptionalJobsiteDraft(itemId, (current) => ({
+        ...current,
+        ...(disposition === "skipped" ? { attemptIds: [], note: "" } : {}),
+        disposition,
+      }));
+      setReviewNotice(
+        disposition === "skipped"
+          ? "Optional jobsite item skipped and saved."
+          : "Optional jobsite note saved with the visit.",
+      );
+      await loadInbox();
+      await onVisitChanged();
+      const itemIndex = optionalJobsiteItems.findIndex(
+        (item) => item.id === itemId,
+      );
+      const nextItem = optionalJobsiteItems[itemIndex + 1];
+      document
+        .getElementById(`optional-jobsite:${itemId}`)
+        ?.removeAttribute("open");
+      if (nextItem)
+        requestAnimationFrame(() => {
+          const nextDetails = document.getElementById(
+            `optional-jobsite:${nextItem.id}`,
+          );
+          nextDetails?.setAttribute("open", "");
+          nextDetails?.querySelector("summary")?.focus();
+        });
+      else onUseGuided();
+    } catch (cause) {
+      await loadInbox().catch(() => undefined);
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Optional note could not be saved.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function recheckMissingPhotos(
     summaryKey: string,
     itemId: string,
@@ -738,20 +888,32 @@ export function GuidedDeckPhotoInbox({
       };
     }),
   );
+  const requiredItems = (data?.items ?? []).filter(
+    (item) => !OPTIONAL_JOBSITE_ITEM_KEYS.has(item.itemKey),
+  );
+  const optionalJobsiteItems = (data?.items ?? []).filter((item) =>
+    OPTIONAL_JOBSITE_ITEM_KEYS.has(item.itemKey),
+  );
+  const requiredCriterionSummaries = criterionSummaries.filter(
+    (summary) => !OPTIONAL_JOBSITE_ITEM_KEYS.has(summary.item.itemKey),
+  );
   const activeReviewItem =
-    (data?.items ?? []).find((item) => item.id === activeReviewItemId) ??
-    data?.items[0];
-  const activeReviewSummaries = criterionSummaries.filter(
+    requiredItems.find((item) => item.id === activeReviewItemId) ??
+    requiredItems[0];
+  const activeReviewSummaries = requiredCriterionSummaries.filter(
     (summary) => summary.item.id === activeReviewItem?.id,
   );
   const activeReviewIndex = Math.max(
     0,
-    (data?.items ?? []).findIndex((item) => item.id === activeReviewItem?.id),
+    requiredItems.findIndex((item) => item.id === activeReviewItem?.id),
   );
-  const suggestedConfirmations = criterionSummaries.flatMap((summary) =>
-    summary.verified || !summary.undecided.length ? [] : [summary.undecided[0]],
+  const suggestedConfirmations = requiredCriterionSummaries.flatMap(
+    (summary) =>
+      summary.verified || !summary.undecided.length
+        ? []
+        : [summary.undecided[0]],
   );
-  const unresolvedCoverage = criterionSummaries.filter(
+  const unresolvedCoverage = requiredCriterionSummaries.filter(
     (summary) => !summary.verified && summary.undecided.length > 0,
   );
   const photoReviewReady =
@@ -760,7 +922,7 @@ export function GuidedDeckPhotoInbox({
     drafts.length === 0 &&
     pendingReviewCount === 0 &&
     unavailableRows.length === 0;
-  const aiMissing = criterionSummaries.filter(
+  const aiMissing = requiredCriterionSummaries.filter(
     (summary) => !summary.verified && summary.undecided.length === 0,
   );
   const reviewComplete =
@@ -770,7 +932,7 @@ export function GuidedDeckPhotoInbox({
     pendingReviewCount === 0 &&
     unavailableRows.length === 0 &&
     unresolvedCoverage.length === 0;
-  const missing = (data?.items ?? []).flatMap((item) =>
+  const missing = requiredItems.flatMap((item) =>
     (GUIDED_VISIBLE_FACT_CRITERIA[item.itemKey] ?? []).flatMap((criterion) =>
       verifiedCoverage.has(`${item.id}:${criterion.key}`)
         ? []
@@ -837,6 +999,22 @@ export function GuidedDeckPhotoInbox({
           This page only shows missing information. Open a photo below when you
           want to see what that picture checked off.
         </p>
+        {reviewNotice ? (
+          <p
+            role="status"
+            className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm font-bold text-emerald-950"
+          >
+            {reviewNotice}
+          </p>
+        ) : null}
+        {error ? (
+          <p
+            role="alert"
+            className="mt-3 rounded-lg border border-red-400 bg-red-50 p-3 text-sm font-bold text-red-950"
+          >
+            {error}
+          </p>
+        ) : null}
         <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
           <button
             type="button"
@@ -1049,6 +1227,147 @@ export function GuidedDeckPhotoInbox({
             </p>
           )}
         </section>
+
+        {optionalJobsiteItems.length ? (
+          <section className="mt-5 rounded-xl border border-slate-300 bg-slate-50 p-4 text-slate-950">
+            <h3 className="text-lg font-black">Optional jobsite notes</h3>
+            <p className="mt-1 text-sm text-slate-700">
+              Access, demolition, utilities, and obstructions do not block this
+              photo review. Add anything useful for planning, or skip them.
+            </p>
+            <p className="mt-2 rounded-lg bg-blue-50 p-2 text-xs font-semibold text-blue-950">
+              The note or Skip choice is saved with the visit. Selected photos
+              stay in the visit gallery, but are only visual references here and
+              are not attached to the note.
+            </p>
+            <div className="mt-3 space-y-3">
+              {optionalJobsiteItems.map((item, itemIndex) => {
+                const draft = optionalJobsiteDrafts[item.id] ?? {
+                  attemptIds: [],
+                  note: "",
+                  disposition: "open" as const,
+                };
+                return (
+                  <details
+                    id={`optional-jobsite:${item.id}`}
+                    key={`optional-jobsite:${item.id}`}
+                    className="group rounded-lg border border-slate-300 bg-white p-3"
+                  >
+                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                      <span>{item.title}</span>
+                      <span className="flex items-center gap-2">
+                        {draft.disposition === "saved"
+                          ? "Note saved"
+                          : draft.disposition === "skipped"
+                            ? "Skipped"
+                            : "Optional"}
+                        <span
+                          aria-hidden="true"
+                          className="transition-transform group-open:rotate-180"
+                        >
+                          ▾
+                        </span>
+                      </span>
+                    </summary>
+                    <div className="mt-3 border-t border-slate-200 pt-3">
+                      <p className="text-sm font-bold">
+                        Select any existing photos that help explain this note
+                      </p>
+                      <ul className="mt-2 grid max-h-64 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-4">
+                        {rows.map((row) => {
+                          const selected = draft.attemptIds.includes(
+                            row.attempt.id,
+                          );
+                          const filename =
+                            row.member?.original_filename ??
+                            `Photo ${row.attempt.member_ordinal}`;
+                          return (
+                            <li key={`${item.id}:${row.attempt.id}`}>
+                              <label
+                                className={`block cursor-pointer overflow-hidden rounded-lg border-2 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2 ${selected ? "border-blue-600 bg-blue-50" : "border-slate-300 bg-white"}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  disabled={busy}
+                                  onChange={() =>
+                                    toggleOptionalJobsitePhoto(
+                                      item.id,
+                                      row.attempt.id,
+                                    )
+                                  }
+                                  className="sr-only"
+                                />
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={`/api/guided-site-visits/${visitId}/intake-photos/${row.attempt.id}/preview`}
+                                  alt={filename}
+                                  className="h-20 w-full bg-slate-200 object-cover"
+                                />
+                                <span className="flex min-h-11 items-center justify-between gap-1 px-2 py-1 text-xs font-bold">
+                                  <span className="truncate">{filename}</span>
+                                  <span>{selected ? "✓" : "Select"}</span>
+                                </span>
+                              </label>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <label
+                        htmlFor={`optional-jobsite-note:${item.id}`}
+                        className="mt-3 block text-sm font-bold"
+                      >
+                        Optional note
+                      </label>
+                      <textarea
+                        id={`optional-jobsite-note:${item.id}`}
+                        value={draft.note}
+                        rows={3}
+                        maxLength={2000}
+                        disabled={busy}
+                        placeholder="Add a short field note, if useful."
+                        onChange={(event) =>
+                          updateOptionalJobsiteDraft(item.id, (current) => ({
+                            ...current,
+                            note: event.target.value,
+                            disposition: "open",
+                          }))
+                        }
+                        className="mt-1 w-full rounded-lg border border-slate-400 bg-white p-3 text-base"
+                      />
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void completeOptionalJobsiteItem(item.id, "skipped")
+                          }
+                          className="min-h-11 rounded-lg border border-slate-400 px-3 py-2 font-bold disabled:opacity-40"
+                        >
+                          {itemIndex === optionalJobsiteItems.length - 1
+                            ? "Skip and finish"
+                            : "Skip and continue"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy || !draft.note.trim()}
+                          onClick={() =>
+                            void completeOptionalJobsiteItem(item.id, "saved")
+                          }
+                          className="min-h-11 rounded-lg bg-blue-600 px-3 py-2 font-bold text-white disabled:opacity-40"
+                        >
+                          {itemIndex === optionalJobsiteItems.length - 1
+                            ? "Save note and finish"
+                            : "Save note and continue"}
+                        </button>
+                      </div>
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
 
         <section className="mt-5">
           <h3 className="text-xl font-black text-slate-950">Your photos</h3>
@@ -1333,7 +1652,7 @@ export function GuidedDeckPhotoInbox({
             <div className="rounded-lg bg-emerald-950 p-2">
               <strong className="block text-lg text-emerald-300">
                 {
-                  criterionSummaries.filter(
+                  requiredCriterionSummaries.filter(
                     (summary) =>
                       summary.verified || summary.undecided.length > 0,
                   ).length
@@ -1345,7 +1664,7 @@ export function GuidedDeckPhotoInbox({
               <strong className="block text-lg text-amber-200">
                 {pendingReviewCount || unavailableRows.length
                   ? "—"
-                  : criterionSummaries.filter(
+                  : requiredCriterionSummaries.filter(
                       (summary) =>
                         !summary.verified && !summary.undecided.length,
                     ).length}
@@ -1363,7 +1682,7 @@ export function GuidedDeckPhotoInbox({
             className="mt-4 block text-sm font-bold"
             htmlFor="review-section"
           >
-            Section {activeReviewIndex + 1} of {data?.items.length ?? 0}
+            Section {activeReviewIndex + 1} of {requiredItems.length}
           </label>
           <select
             id="review-section"
@@ -1371,8 +1690,8 @@ export function GuidedDeckPhotoInbox({
             onChange={(event) => setActiveReviewItemId(event.target.value)}
             className="mt-1 min-h-12 w-full rounded-lg border border-slate-500 bg-white px-3 text-base font-bold text-slate-950"
           >
-            {(data?.items ?? []).map((item) => {
-              const summaries = criterionSummaries.filter(
+            {requiredItems.map((item) => {
+              const summaries = requiredCriterionSummaries.filter(
                 (summary) => summary.item.id === item.id,
               );
               const found = summaries.filter(
@@ -1610,7 +1929,7 @@ export function GuidedDeckPhotoInbox({
               type="button"
               disabled={activeReviewIndex === 0}
               onClick={() => {
-                const previous = data?.items[activeReviewIndex - 1];
+                const previous = requiredItems[activeReviewIndex - 1];
                 if (previous) setActiveReviewItemId(previous.id);
               }}
               className="min-h-11 rounded-lg border border-slate-500 px-3 py-2 font-bold disabled:opacity-30"
@@ -1619,9 +1938,9 @@ export function GuidedDeckPhotoInbox({
             </button>
             <button
               type="button"
-              disabled={activeReviewIndex >= (data?.items.length ?? 1) - 1}
+              disabled={activeReviewIndex >= requiredItems.length - 1}
               onClick={() => {
-                const next = data?.items[activeReviewIndex + 1];
+                const next = requiredItems[activeReviewIndex + 1];
                 if (next) setActiveReviewItemId(next.id);
               }}
               className="min-h-11 rounded-lg bg-blue-500 px-3 py-2 font-bold text-white disabled:opacity-30"

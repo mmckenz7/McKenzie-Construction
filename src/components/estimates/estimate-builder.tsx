@@ -137,6 +137,19 @@ export function EstimateBuilder({
   const [ohpDraftPercent, setOhpDraftPercent] = useState<string | null>(null);
   const [ohpDraftDollars, setOhpDraftDollars] = useState<string | null>(null);
   const [presentationDraft, setPresentationDraft] = useState<PresentationDraft | null>(null);
+  const [deckVisitStatus, setDeckVisitStatus] = useState<"checking" | "unavailable" | "not_started" | "in_progress" | "completed">("checking");
+
+  const loadDeckVisitStatus = useCallback(async () => {
+    if (!showDeckWorkflow) return;
+    try {
+      const response = await fetch(`/api/estimates/${encodeURIComponent(estimateId)}/guided-site-visits`, { cache: "no-store" });
+      const body = await response.json() as { activeVisit?: { status?: unknown } | null; latestCompletedVisit?: { status?: unknown } | null };
+      if (!response.ok) throw new Error("Deck site visit status could not be loaded.");
+      setDeckVisitStatus(body.latestCompletedVisit?.status === "completed" ? "completed" : body.activeVisit ? "in_progress" : "not_started");
+    } catch {
+      setDeckVisitStatus("unavailable");
+    }
+  }, [estimateId, showDeckWorkflow]);
 
   const reload = useCallback(async () => {
     setLoading(true); setError("");
@@ -151,6 +164,7 @@ export function EstimateBuilder({
   }, [estimateId]);
 
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => { void loadDeckVisitStatus(); }, [loadDeckVisitStatus]);
   useEffect(() => {
     if (!notice) return;
     const timeout = window.setTimeout(() => setNotice(""), 4500);
@@ -212,6 +226,14 @@ export function EstimateBuilder({
   const customerPresentation = presentationSnapshot
     ? buildCustomerPresentation(presentationSnapshot, state.sections, state.items, calculation)
     : null;
+  const deckTakeoffStarted = state.sections.length > 0 || state.items.length > 0;
+  const deckTrueCostLineCount = state.items.filter((item) =>
+    item.itemType === "standard" && item.included && typeof item.directCostCents === "string" && /^\d+$/.test(item.directCostCents) && BigInt(item.directCostCents) > 0n
+  ).length;
+  const deckTrueCostsReady = deckTrueCostLineCount > 0;
+  const deckCustomerTotalReady = typeof calculation.customerTotalCents === "string" && /^\d+$/.test(calculation.customerTotalCents) && BigInt(calculation.customerTotalCents) > 0n;
+  const deckPricingReady = deckVisitStatus === "completed" && deckTrueCostsReady;
+  const deckProposalReady = deckVisitStatus === "completed" && deckTrueCostsReady && deckCustomerTotalReady;
   const fenceWorkflow = showFenceWorkflow
     ? projectFenceEstimateWorkflow({
         estimate: state.estimate,
@@ -319,6 +341,12 @@ export function EstimateBuilder({
     await mutate({ path: `/api/estimates/${estimateId}/${kind === "section" ? "sections" : "items"}/${id}`, method: "DELETE", body: {} });
   }
 
+  function beginDeckTakeoff() {
+    if (!state || !canMutate) return;
+    if (!state.sections.length && !sectionForm) setSectionForm(sectionDraft(undefined, 0));
+    requestAnimationFrame(() => document.getElementById("deck-takeoff-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
   return <div className="mt-6 space-y-6">
     <header className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-700">Structured estimate</p><h1 className="mt-2 text-3xl font-bold text-slate-950">{String(state.estimate.title ?? "Untitled estimate")}</h1><p className="mt-2 text-sm text-slate-600">Revision {state.calculationRevision} · {canMutate ? "Editing enabled" : "Read only"}</p></div><div className="text-right"><p className="text-sm font-semibold text-slate-600">Customer total</p><p className="text-2xl font-bold text-slate-950">{formatCents(calculation.customerTotalCents as string | null | undefined)}</p></div></div>
@@ -338,9 +366,9 @@ export function EstimateBuilder({
       editable={canMutate}
     /> : null}
 
-    {showDeckWorkflow ? <GuidedDeckSiteVisit estimateId={estimateId} /> : null}
+    {showDeckWorkflow ? <><GuidedDeckSiteVisit estimateId={estimateId} onVisitStatusChanged={setDeckVisitStatus} onContinueToEstimate={beginDeckTakeoff} /><DeckEstimateReadiness visitStatus={deckVisitStatus} takeoffStarted={deckTakeoffStarted} trueCostLineCount={deckTrueCostLineCount} ohpPercent={storedOhpPercent} proposalReady={deckProposalReady} canEdit={canMutate} onBeginTakeoff={beginDeckTakeoff} /></> : null}
 
-    {canMutate ? <div className="flex flex-wrap gap-3"><button disabled={controlsDisabled} className={primary} onClick={() => setSectionForm(sectionDraft(undefined, state.sections.length ? Math.max(...state.sections.map((section) => section.sortOrder)) + 10 : 0))}>Add section</button>{state.capabilities.canViewProfit ? <button disabled={controlsDisabled} className={secondary} onClick={() => setSetupForm(estimateSetupDraft(state))}>Edit estimate details</button> : null}{pending ? <span className="self-center text-sm font-semibold text-slate-600">Saving…</span> : null}</div> : !reloadRequirement ? <p className="border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{state.estimate.status !== "draft" ? `This estimate is ${humanizeStatus(state.estimate.status)} and can no longer be edited.` : "You can review this estimate, but you do not have permission to change pricing or structure."}</p> : null}
+    {canMutate ? <div id="deck-takeoff-workspace" className="flex scroll-mt-24 flex-wrap gap-3"><button disabled={controlsDisabled} className={primary} onClick={() => setSectionForm(sectionDraft(undefined, state.sections.length ? Math.max(...state.sections.map((section) => section.sortOrder)) + 10 : 0))}>Add section</button>{state.capabilities.canViewProfit ? <button disabled={controlsDisabled} className={secondary} onClick={() => setSetupForm(estimateSetupDraft(state))}>Edit estimate details</button> : null}{pending ? <span className="self-center text-sm font-semibold text-slate-600">Saving…</span> : null}</div> : !reloadRequirement ? <p className="border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{state.estimate.status !== "draft" ? `This estimate is ${humanizeStatus(state.estimate.status)} and can no longer be edited.` : "You can review this estimate, but you do not have permission to change pricing or structure."}</p> : null}
 
     {setupForm ? <form onSubmit={submitSetup} className="estimate-editor-panel rounded-xl border p-5">
       <h2 className="font-bold">Estimate details</h2>
@@ -367,12 +395,13 @@ export function EstimateBuilder({
       </section>;
     })}</div>
     {!state.sections.length ? <div className="border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">Add a section to begin organizing the estimate.</div> : null}
-    {state.capabilities.canViewProfit && presentationDraft ? <section className="rounded-2xl border-2 border-emerald-700 bg-white p-6 shadow-sm">
+    {state.capabilities.canViewProfit && presentationDraft ? <section className={`rounded-2xl border-2 bg-white p-6 shadow-sm ${showDeckWorkflow && !deckPricingReady ? "border-slate-300 opacity-75" : "border-emerald-700"}`}>
       <form onSubmit={submitPricing}>
-        <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-700">Bottom-line pricing</p><h2 className="mt-2 text-2xl font-bold text-slate-950">Set the job price</h2><p className="mt-1 text-sm text-slate-600">Set OH&amp;P, then choose how the finished price appears to the customer.</p></div><div className="grid grid-cols-3 gap-3 text-right"><Summary label="Raw costs" value={formatCents(directCostCents)} /><Summary label="OH&P" value={formatCents(ohpPreview)} /><Summary label="Customer price" value={formatCents(customerPricePreview)} /></div></div>
-        <div className="mt-6"><PercentageSlider label="OH&P markup" value={ohpPercent} dollarValue={ohpDollarInput} disabled={controlsDisabled || directCostCents === null} onPercentChange={(value) => { setOhpDraftDollars(null); setOhpDraftPercent(value); }} onDollarChange={(value) => { setOhpDraftPercent(null); setOhpDraftDollars(value); }} /></div>
+        <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-700">Bottom-line pricing</p><h2 className="mt-2 text-2xl font-bold text-slate-950">Set the job price</h2><p className="mt-1 text-sm text-slate-600">Set OH&amp;P only after verified field work and positive true-cost lines, then choose how the finished price appears to the customer.</p></div><div className="grid grid-cols-3 gap-3 text-right"><Summary label="Raw costs" value={formatCents(directCostCents)} /><Summary label="OH&P" value={formatCents(ohpPreview)} /><Summary label="Customer price" value={formatCents(customerPricePreview)} /></div></div>
+        {showDeckWorkflow && !deckPricingReady ? <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950">OH&amp;P is locked until the Deck visit is completed and at least one positive true-cost line is saved.</p> : null}
+        <div className="mt-6"><PercentageSlider label="OH&P markup" value={ohpPercent} dollarValue={ohpDollarInput} disabled={controlsDisabled || directCostCents === null || showDeckWorkflow && !deckPricingReady} onPercentChange={(value) => { setOhpDraftDollars(null); setOhpDraftPercent(value); }} onDollarChange={(value) => { setOhpDraftPercent(null); setOhpDraftDollars(value); }} /></div>
         {itemForm ? <p className="estimate-live-preview-note mt-4 rounded-lg p-3 text-sm font-semibold">Live preview includes the line item you are editing. Save the line item to make the cost permanent.</p> : null}
-        {canMutate ? <div className="mt-5 flex flex-wrap items-center gap-3"><button className={primary} disabled={controlsDisabled || directCostCents === null || !ohpPercent}>{pending ? "Saving…" : "Save job pricing"}</button>{ohpDraftPercent !== null || ohpDraftDollars !== null ? <button type="button" className={secondary} disabled={pending} onClick={() => { setOhpDraftPercent(null); setOhpDraftDollars(null); }}>Reset</button> : null}</div> : null}
+        {canMutate ? <div className="mt-5 flex flex-wrap items-center gap-3"><button className={primary} disabled={controlsDisabled || directCostCents === null || !ohpPercent || showDeckWorkflow && !deckPricingReady}>{pending ? "Saving…" : "Save job pricing"}</button>{ohpDraftPercent !== null || ohpDraftDollars !== null ? <button type="button" className={secondary} disabled={pending} onClick={() => { setOhpDraftPercent(null); setOhpDraftDollars(null); }}>Reset</button> : null}</div> : null}
       </form>
 
       <div className="my-6 border-t border-slate-200" />
@@ -392,9 +421,36 @@ export function EstimateBuilder({
       </details>
       <div className="mt-4 flex justify-end"><Link href={`/sales/estimates/${estimateId}/preview`} className={secondary}>Open printable customer preview</Link></div>
     </section> : null}
-    <EstimateProposalCard estimateId={estimateId} estimateStatus={String(state.estimate.status)} />
+    <EstimateProposalCard estimateId={estimateId} estimateStatus={String(state.estimate.status)} issuanceBlockedReason={showDeckWorkflow && !deckProposalReady ? "Finish field verification and add at least one saved positive true-cost line before creating a customer link." : undefined} />
     <ContractPreparationCard estimateId={estimateId} estimateStatus={String(state.estimate.status)} />
   </div>;
+}
+
+function DeckEstimateReadiness({ visitStatus, takeoffStarted, trueCostLineCount, ohpPercent, proposalReady, canEdit, onBeginTakeoff }: {
+  visitStatus: "checking" | "unavailable" | "not_started" | "in_progress" | "completed";
+  takeoffStarted: boolean;
+  trueCostLineCount: number;
+  ohpPercent: string;
+  proposalReady: boolean;
+  canEdit: boolean;
+  onBeginTakeoff: () => void;
+}) {
+  const fieldComplete = visitStatus === "completed";
+  const trueCostsReady = trueCostLineCount > 0;
+  const stages = [
+    { title: "Finish field verification", status: fieldComplete ? "Complete" : visitStatus === "in_progress" ? "In progress" : visitStatus === "checking" ? "Checking" : visitStatus === "unavailable" ? "Status unavailable" : "Not started", detail: "Reviewed photos document visible conditions. Required measurements and human confirmations still come from the guided visit." },
+    { title: "Enter human takeoff inputs", status: takeoffStarted ? "Manual inputs started" : fieldComplete ? "Ready" : "Waiting", detail: "Create sections and enter only measured or otherwise verified quantities. Photos do not become quantities automatically." },
+    { title: "Build true-cost lines", status: trueCostsReady ? `${trueCostLineCount} saved` : "Not started", detail: "Add separate material, labor, subcontractor, equipment, and other direct-cost lines with verified unit costs." },
+    { title: "Review OH&P", status: trueCostsReady ? `${ohpPercent || "0"}% currently saved` : "Waiting for costs", detail: "OH&P applies after true costs exist; it is not a substitute for takeoff or direct-cost lines." },
+    { title: "Review customer proposal", status: proposalReady ? "Ready for human review" : "Not ready", detail: "Preview the customer scope and price before anyone creates a link or email draft. Nothing is sent automatically." },
+  ];
+  return <section aria-labelledby="deck-estimate-readiness-title" className="rounded-xl border-2 border-blue-700 bg-white p-5 shadow-sm sm:p-6">
+    <p className="text-xs font-black uppercase tracking-[.16em] text-blue-700">Deck estimate workflow</p>
+    <h2 id="deck-estimate-readiness-title" className="mt-1 text-2xl font-black text-slate-950">From verified field work to a real estimate</h2>
+    <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-700">This workflow carries readiness forward, not guessed scope. There is no Deck takeoff calculation engine yet. It will not invent measurements, quantities, prices, engineering conclusions, or send anything to the customer.</p>
+    <ol className="mt-5 grid gap-3 lg:grid-cols-5">{stages.map((stage, index) => <li key={stage.title} className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="flex items-start justify-between gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-black text-white">{index + 1}</span><span className="rounded-full bg-white px-2 py-1 text-xs font-bold text-slate-700">{stage.status}</span></div><h3 className="mt-3 font-black text-slate-950">{stage.title}</h3><p className="mt-1 text-xs leading-5 text-slate-600">{stage.detail}</p></li>)}</ol>
+    {fieldComplete ? <button type="button" disabled={!canEdit} onClick={onBeginTakeoff} className={`mt-5 ${primary}`}>{takeoffStarted ? "Continue human takeoff" : "Begin human takeoff"}</button> : <p className="mt-5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950">Finish the required guided field verification before beginning takeoff.</p>}
+  </section>;
 }
 
 function Summary({ label, value }: { label: string; value: string }) {
