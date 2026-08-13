@@ -74,11 +74,14 @@ test("classifies every confirmed photo and keeps AI advisory", () => {
   assert.match(inbox, /reviewFailures \+= 1/);
   assert.match(inbox, /uploaded safely, but the AI review needs to be retried/);
   assert.match(inbox, /The remaining uploads continued/);
-  assert.match(inbox, /Review proposed groups/);
+  assert.match(inbox, /Site visit photo summary/);
   assert.match(
     inbox,
-    /AI suggestions are not evidence until you accept or correct them/,
+    /Check the nine sections below, then confirm the organization once/,
   );
+  assert.match(inbox, /Confirm AI organization for/);
+  assert.match(inbox, /Optional: review individual photo suggestions/);
+  assert.match(inbox, /AI found/);
   assert.match(inbox, /diagnostic_class !== "classified"/);
 });
 
@@ -121,7 +124,7 @@ test("defers consolidated missing results until terminal and human verified", ()
   assert.match(inbox, /drafts\.length === 0/);
   assert.match(inbox, /pendingReviewCount === 0/);
   assert.match(inbox, /unavailableRows\.length === 0/);
-  assert.match(inbox, /undecidedProposals\.length === 0/);
+  assert.match(inbox, /unresolvedCoverage\.length === 0/);
   assert.match(inbox, /Consolidated missing list/);
   assert.match(
     inbox,
@@ -130,4 +133,13 @@ test("defers consolidated missing results until terminal and human verified", ()
   assert.match(inbox, /not counted as missing evidence/);
   assert.match(inbox, /Upload the remaining/);
   assert.match(inboxRoute, /itemKey: item_key/);
+  assert.match(inboxRoute, /order\("created_at", \{ ascending: false \}\)/);
+});
+
+test("uses the newest intake batch and confirms one suggestion per criterion", () => {
+  assert.match(inbox, /const currentBatch = data\?\.batches\[0\]/);
+  assert.match(inbox, /member\.batch_id === currentBatch\?\.id/);
+  assert.match(inbox, /const suggestedConfirmations = criterionSummaries/);
+  assert.match(inbox, /summary\.undecided\[0\]/);
+  assert.match(inbox, /async function confirmPhotoSummary/);
 });

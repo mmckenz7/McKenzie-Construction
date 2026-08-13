@@ -100,7 +100,8 @@ export async function GET(
         .from("guided_site_visit_intake_batches")
         .select("id,member_count,created_at")
         .eq("visit_id", visitId)
-        .eq("company_id", auth.authorization!.companyId),
+        .eq("company_id", auth.authorization!.companyId)
+        .order("created_at", { ascending: false }),
       db
         .from("guided_site_visit_intake_members")
         .select(

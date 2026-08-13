@@ -41,7 +41,7 @@ type InboxAssignment = {
   resulting_visit_revision: number;
 };
 type InboxData = {
-  batches: { id: string; member_count: number }[];
+  batches: { id: string; member_count: number; created_at: string }[];
   members: {
     batch_id: string;
     ordinal: number;
@@ -85,6 +85,10 @@ export function GuidedDeckPhotoInbox({
   const [reviewNotice, setReviewNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [summaryProgress, setSummaryProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [progress, setProgress] = useState<{
     current: number;
     total: number;
@@ -541,8 +545,10 @@ export function GuidedDeckPhotoInbox({
         (later) => later.supersedes_assignment_event_id === assignment.id,
       ),
   );
+  const currentBatch = data?.batches[0];
   const remainingServerMembers = (data?.members ?? []).filter(
     (member) =>
+      member.batch_id === currentBatch?.id &&
       !(data?.attempts ?? []).some(
         (attempt) =>
           attempt.batch_id === member.batch_id &&
@@ -550,36 +556,22 @@ export function GuidedDeckPhotoInbox({
           attempt.state === "confirmed",
       ),
   );
-  const undecidedProposals = rows.flatMap(({ attempt, review }) =>
+  const proposalEntries = rows.flatMap(({ attempt, review, member }) =>
     review?.diagnostic_class === "classified"
-      ? review.proposals.filter(
-          (proposal) =>
-            !effectiveAssignments.some(
-              (assignment) =>
-                assignment.intake_attempt_id === attempt.id &&
-                assignment.visit_item_id === proposal.visitItemId &&
-                assignment.criterion_key === proposal.criterionKey,
-            ),
-        )
+      ? review.proposals.map((proposal) => ({
+          attempt,
+          review,
+          member,
+          proposal,
+          decision: effectiveAssignments.find(
+            (assignment) =>
+              assignment.intake_attempt_id === attempt.id &&
+              assignment.visit_item_id === proposal.visitItemId &&
+              assignment.criterion_key === proposal.criterionKey,
+          ),
+        }))
       : [],
   );
-  const classifiedWithoutProposals = rows.filter(
-    (row) =>
-      row.review?.diagnostic_class === "classified" &&
-      !row.review.proposals.length,
-  );
-  const reviewComplete =
-    rows.length > 0 &&
-    remainingServerMembers.length === 0 &&
-    drafts.length === 0 &&
-    pendingReviewCount === 0 &&
-    unavailableRows.length === 0 &&
-    undecidedProposals.length === 0 &&
-    classifiedWithoutProposals.every((row) =>
-      effectiveAssignments.some(
-        (assignment) => assignment.intake_attempt_id === row.attempt.id,
-      ),
-    );
   const verifiedCoverage = new Set(
     effectiveAssignments
       .filter((assignment) =>
@@ -590,6 +582,38 @@ export function GuidedDeckPhotoInbox({
           `${assignment.visit_item_id}:${assignment.criterion_key}`,
       ),
   );
+  const criterionSummaries = (data?.items ?? []).flatMap((item) =>
+    (GUIDED_VISIBLE_FACT_CRITERIA[item.itemKey] ?? []).map((criterion) => {
+      const key = `${item.id}:${criterion.key}`;
+      const candidates = proposalEntries.filter(
+        (entry) =>
+          entry.proposal.visitItemId === item.id &&
+          entry.proposal.criterionKey === criterion.key,
+      );
+      const undecided = candidates.filter((entry) => !entry.decision);
+      return {
+        item,
+        criterion,
+        key,
+        candidates,
+        undecided,
+        verified: verifiedCoverage.has(key),
+      };
+    }),
+  );
+  const suggestedConfirmations = criterionSummaries.flatMap((summary) =>
+    summary.verified || !summary.undecided.length ? [] : [summary.undecided[0]],
+  );
+  const unresolvedCoverage = criterionSummaries.filter(
+    (summary) => !summary.verified && summary.undecided.length > 0,
+  );
+  const reviewComplete =
+    rows.length > 0 &&
+    remainingServerMembers.length === 0 &&
+    drafts.length === 0 &&
+    pendingReviewCount === 0 &&
+    unavailableRows.length === 0 &&
+    unresolvedCoverage.length === 0;
   const missing = (data?.items ?? []).flatMap((item) =>
     (GUIDED_VISIBLE_FACT_CRITERIA[item.itemKey] ?? []).flatMap((criterion) =>
       verifiedCoverage.has(`${item.id}:${criterion.key}`)
@@ -597,6 +621,52 @@ export function GuidedDeckPhotoInbox({
         : [{ item, criterionKey: criterion.key, label: criterion.label }],
     ),
   );
+
+  async function confirmPhotoSummary() {
+    if (busy || !suggestedConfirmations.length) return;
+    setBusy(true);
+    setError("");
+    let nextRevision = revision;
+    try {
+      for (let index = 0; index < suggestedConfirmations.length; index += 1) {
+        const entry = suggestedConfirmations[index];
+        setSummaryProgress({
+          current: index + 1,
+          total: suggestedConfirmations.length,
+        });
+        const result = await requestJson(
+          `/api/guided-site-visits/${visitId}/intake-photos/${entry.attempt.id}/assignment-events`,
+          {
+            expectedRevision: nextRevision,
+            idempotencyKey: `guided-inbox-summary:${entry.attempt.id}:${entry.proposal.visitItemId}:${entry.proposal.criterionKey}:${crypto.randomUUID()}`,
+            reviewId: entry.review.id,
+            visitItemId: entry.proposal.visitItemId,
+            criterionKey: entry.proposal.criterionKey,
+            decision: "accepted",
+            supersedesEventId: null,
+          },
+        );
+        if (typeof result.nextRevision !== "number")
+          throw new Error("Photo summary confirmation was incomplete.");
+        nextRevision = result.nextRevision;
+      }
+      setRevision(nextRevision);
+      await loadInbox();
+      await onVisitChanged();
+    } catch (cause) {
+      setRevision(nextRevision);
+      await loadInbox().catch(() => undefined);
+      await onVisitChanged().catch(() => undefined);
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Photo summary could not be confirmed.",
+      );
+    } finally {
+      setSummaryProgress(null);
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="p-4 sm:p-6">
@@ -705,114 +775,73 @@ export function GuidedDeckPhotoInbox({
       ) : null}
       {rows.length ? (
         <section className="mt-5 rounded-xl bg-slate-950 p-4 text-white">
-          <h3 className="text-lg font-black">Review proposed groups</h3>
+          <h3 className="text-xl font-black">Site visit photo summary</h3>
           <p className="mt-1 text-sm text-slate-300">
-            AI suggestions are not evidence until you accept or correct them.
+            AI reviewed {rows.length} {rows.length === 1 ? "photo" : "photos"}.
+            Check the nine sections below, then confirm the organization once.
           </p>
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 space-y-3">
             {(data?.items ?? []).map((item) => {
-              const proposals = rows.flatMap(({ attempt, review, member }) =>
-                review?.diagnostic_class === "classified"
-                  ? review.proposals
-                      .filter((proposal) => proposal.visitItemId === item.id)
-                      .map((proposal) => ({
-                        attempt,
-                        review,
-                        member,
-                        proposal,
-                      }))
-                  : [],
+              const summaries = criterionSummaries.filter(
+                (summary) => summary.item.id === item.id,
               );
-              if (!proposals.length) return null;
+              const confirmed = summaries.filter(
+                (summary) => summary.verified,
+              ).length;
+              const found = summaries.filter(
+                (summary) => !summary.verified && summary.undecided.length > 0,
+              ).length;
               return (
                 <div
-                  key={item.id}
+                  key={`summary:${item.id}`}
                   className="rounded-lg border border-slate-700 bg-slate-900 p-3"
                 >
-                  <h4 className="font-bold">
-                    {item.ordinal}. {item.title}
-                  </h4>
-                  <ul className="mt-2 space-y-3">
-                    {proposals.map(({ attempt, review, member, proposal }) => {
-                      const correctionKey = `${attempt.id}:${proposal.visitItemId}:${proposal.criterionKey}`;
-                      const decided = effectiveAssignments.find(
-                        (assignment) =>
-                          assignment.intake_attempt_id === attempt.id &&
-                          assignment.visit_item_id === proposal.visitItemId &&
-                          assignment.criterion_key === proposal.criterionKey,
-                      );
-                      const criterion = (
-                        GUIDED_VISIBLE_FACT_CRITERIA[item.itemKey] ?? []
-                      ).find((row) => row.key === proposal.criterionKey);
+                  <div className="flex items-start justify-between gap-3">
+                    <h4 className="font-bold">
+                      {item.ordinal}. {item.title}
+                    </h4>
+                    <span className="shrink-0 text-xs font-bold text-slate-300">
+                      {confirmed + found}/{summaries.length} found
+                    </span>
+                  </div>
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {summaries.map((summary) => {
+                      const photoCount = new Set(
+                        summary.candidates.map(
+                          (candidate) => candidate.attempt.id,
+                        ),
+                      ).size;
+                      const allExcluded =
+                        summary.candidates.length > 0 &&
+                        summary.candidates.every(
+                          (candidate) =>
+                            candidate.decision?.decision === "excluded",
+                        );
                       return (
                         <li
-                          key={`${attempt.id}:${proposal.criterionKey}`}
-                          className="rounded-lg bg-slate-800 p-3 text-sm"
+                          key={summary.key}
+                          className="flex items-start justify-between gap-3 rounded-md bg-slate-800 px-3 py-2"
                         >
-                          <p>
-                            <strong>
-                              {member?.original_filename ??
-                                `Photo ${attempt.member_ordinal}`}
-                            </strong>{" "}
-                            · {criterion?.label ?? proposal.criterionKey}
-                          </p>
-                          {decided ? (
-                            <p className="mt-2 font-bold text-emerald-300">
-                              Human decision: {decided.decision}
-                            </p>
-                          ) : (
-                            <div className="mt-3 grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() =>
-                                  void decide(
-                                    attempt.id,
-                                    review.id,
-                                    proposal,
-                                    "accepted",
-                                  )
-                                }
-                                className="rounded-lg bg-emerald-400 px-3 py-2 font-bold text-slate-950"
-                              >
-                                Accept
-                              </button>
-                              <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() =>
-                                  void decide(
-                                    attempt.id,
-                                    review.id,
-                                    proposal,
-                                    "excluded",
-                                  )
-                                }
-                                className="rounded-lg border border-slate-500 px-3 py-2 font-bold"
-                              >
-                                Exclude
-                              </button>
-                              <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() =>
-                                  setCorrections((value) => ({
-                                    ...value,
-                                    [correctionKey]: value[correctionKey] ?? {
-                                      itemId: item.id,
-                                      criterionKey: proposal.criterionKey,
-                                      source: proposal,
-                                      reviewId: review.id,
-                                      attemptId: attempt.id,
-                                    },
-                                  }))
-                                }
-                                className="col-span-2 rounded-lg border border-amber-400 px-3 py-2 font-bold text-amber-200"
-                              >
-                                Correct assignment
-                              </button>
-                            </div>
-                          )}
+                          <span>{summary.criterion.label}</span>
+                          <strong
+                            className={
+                              summary.verified
+                                ? "text-emerald-300"
+                                : summary.undecided.length
+                                  ? "text-blue-300"
+                                  : "text-amber-300"
+                            }
+                          >
+                            {summary.verified
+                              ? "Confirmed"
+                              : summary.undecided.length
+                                ? `AI found · ${photoCount} ${photoCount === 1 ? "photo" : "photos"}`
+                                : allExcluded
+                                  ? "Excluded"
+                                  : pendingReviewCount || unavailableRows.length
+                                    ? "Not found yet"
+                                    : "Missing"}
+                          </strong>
                         </li>
                       );
                     })}
@@ -821,68 +850,209 @@ export function GuidedDeckPhotoInbox({
               );
             })}
           </div>
-          {Object.entries(corrections).map(([correctionKey, correction]) => {
-            const row = rows.find(
-              (entry) => entry.attempt.id === correction.attemptId,
-            );
-            return row ? (
-              <CorrectionEditor
-                key={`correct:${correctionKey}`}
-                attemptId={row.attempt.id}
-                filename={
-                  row.member?.original_filename ??
-                  `Photo ${row.attempt.member_ordinal}`
-                }
-                value={correction}
-                items={data?.items ?? []}
-                busy={busy}
-                onChange={(value) =>
-                  setCorrections((current) => ({
-                    ...current,
-                    [correctionKey]: { ...correction, ...value },
-                  }))
-                }
-                onSave={() => void correctAssignment(correctionKey, correction)}
-              />
-            ) : null;
-          })}
-          {rows
-            .filter(
-              (row) =>
-                row.review?.diagnostic_class === "classified" &&
-                !row.review.proposals.length &&
-                !effectiveAssignments.some(
-                  (assignment) =>
-                    assignment.intake_attempt_id === row.attempt.id,
-                ),
-            )
-            .map(({ attempt, review, member }) => {
-              const correctionKey = `${attempt.id}:unclassified`;
-              return corrections[correctionKey] ? null : (
-                <button
-                  key={correctionKey}
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
+          {suggestedConfirmations.length ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void confirmPhotoSummary()}
+              className="mt-4 w-full rounded-lg bg-emerald-400 px-4 py-3 font-black text-slate-950 disabled:opacity-50"
+            >
+              {summaryProgress
+                ? `Confirming ${summaryProgress.current} of ${summaryProgress.total}…`
+                : `Confirm AI organization for ${suggestedConfirmations.length} checklist ${suggestedConfirmations.length === 1 ? "item" : "items"}`}
+            </button>
+          ) : null}
+          <p className="mt-2 text-xs text-slate-400">
+            This confirms one supporting photo for each item AI found. You can
+            inspect or correct individual suggestions below when needed.
+          </p>
+          <details className="mt-4 rounded-lg border border-slate-700 bg-slate-900 p-3">
+            <summary className="cursor-pointer font-bold">
+              Optional: review individual photo suggestions
+            </summary>
+            <div className="mt-4 space-y-4">
+              {(data?.items ?? []).map((item) => {
+                const proposals = rows.flatMap(({ attempt, review, member }) =>
+                  review?.diagnostic_class === "classified"
+                    ? review.proposals
+                        .filter((proposal) => proposal.visitItemId === item.id)
+                        .map((proposal) => ({
+                          attempt,
+                          review,
+                          member,
+                          proposal,
+                        }))
+                    : [],
+                );
+                if (!proposals.length) return null;
+                return (
+                  <div
+                    key={item.id}
+                    className="rounded-lg border border-slate-700 bg-slate-900 p-3"
+                  >
+                    <h4 className="font-bold">
+                      {item.ordinal}. {item.title}
+                    </h4>
+                    <ul className="mt-2 space-y-3">
+                      {proposals.map(
+                        ({ attempt, review, member, proposal }) => {
+                          const correctionKey = `${attempt.id}:${proposal.visitItemId}:${proposal.criterionKey}`;
+                          const decided = effectiveAssignments.find(
+                            (assignment) =>
+                              assignment.intake_attempt_id === attempt.id &&
+                              assignment.visit_item_id ===
+                                proposal.visitItemId &&
+                              assignment.criterion_key ===
+                                proposal.criterionKey,
+                          );
+                          const criterion = (
+                            GUIDED_VISIBLE_FACT_CRITERIA[item.itemKey] ?? []
+                          ).find((row) => row.key === proposal.criterionKey);
+                          return (
+                            <li
+                              key={`${attempt.id}:${proposal.criterionKey}`}
+                              className="rounded-lg bg-slate-800 p-3 text-sm"
+                            >
+                              <p>
+                                <strong>
+                                  {member?.original_filename ??
+                                    `Photo ${attempt.member_ordinal}`}
+                                </strong>{" "}
+                                · {criterion?.label ?? proposal.criterionKey}
+                              </p>
+                              {decided ? (
+                                <p className="mt-2 font-bold text-emerald-300">
+                                  Human decision: {decided.decision}
+                                </p>
+                              ) : (
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      void decide(
+                                        attempt.id,
+                                        review.id,
+                                        proposal,
+                                        "accepted",
+                                      )
+                                    }
+                                    className="rounded-lg bg-emerald-400 px-3 py-2 font-bold text-slate-950"
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      void decide(
+                                        attempt.id,
+                                        review.id,
+                                        proposal,
+                                        "excluded",
+                                      )
+                                    }
+                                    className="rounded-lg border border-slate-500 px-3 py-2 font-bold"
+                                  >
+                                    Exclude
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      setCorrections((value) => ({
+                                        ...value,
+                                        [correctionKey]: value[
+                                          correctionKey
+                                        ] ?? {
+                                          itemId: item.id,
+                                          criterionKey: proposal.criterionKey,
+                                          source: proposal,
+                                          reviewId: review.id,
+                                          attemptId: attempt.id,
+                                        },
+                                      }))
+                                    }
+                                    className="col-span-2 rounded-lg border border-amber-400 px-3 py-2 font-bold text-amber-200"
+                                  >
+                                    Correct assignment
+                                  </button>
+                                </div>
+                              )}
+                            </li>
+                          );
+                        },
+                      )}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+            {Object.entries(corrections).map(([correctionKey, correction]) => {
+              const row = rows.find(
+                (entry) => entry.attempt.id === correction.attemptId,
+              );
+              return row ? (
+                <CorrectionEditor
+                  key={`correct:${correctionKey}`}
+                  attemptId={row.attempt.id}
+                  filename={
+                    row.member?.original_filename ??
+                    `Photo ${row.attempt.member_ordinal}`
+                  }
+                  value={correction}
+                  items={data?.items ?? []}
+                  busy={busy}
+                  onChange={(value) =>
                     setCorrections((current) => ({
                       ...current,
-                      [correctionKey]: {
-                        itemId: "",
-                        criterionKey: "",
-                        reviewId: review!.id,
-                        attemptId: attempt.id,
-                      },
+                      [correctionKey]: { ...correction, ...value },
                     }))
                   }
-                  className="mt-4 w-full rounded-lg border border-amber-400 p-3 font-bold text-amber-200"
-                >
-                  Assign{" "}
-                  {member?.original_filename ??
-                    `Photo ${attempt.member_ordinal}`}{" "}
-                  manually
-                </button>
-              );
+                  onSave={() =>
+                    void correctAssignment(correctionKey, correction)
+                  }
+                />
+              ) : null;
             })}
+            {rows
+              .filter(
+                (row) =>
+                  row.review?.diagnostic_class === "classified" &&
+                  !row.review.proposals.length &&
+                  !effectiveAssignments.some(
+                    (assignment) =>
+                      assignment.intake_attempt_id === row.attempt.id,
+                  ),
+              )
+              .map(({ attempt, review, member }) => {
+                const correctionKey = `${attempt.id}:unclassified`;
+                return corrections[correctionKey] ? null : (
+                  <button
+                    key={correctionKey}
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      setCorrections((current) => ({
+                        ...current,
+                        [correctionKey]: {
+                          itemId: "",
+                          criterionKey: "",
+                          reviewId: review!.id,
+                          attemptId: attempt.id,
+                        },
+                      }))
+                    }
+                    className="mt-4 w-full rounded-lg border border-amber-400 p-3 font-bold text-amber-200"
+                  >
+                    Assign{" "}
+                    {member?.original_filename ??
+                      `Photo ${attempt.member_ordinal}`}{" "}
+                    manually
+                  </button>
+                );
+              })}
+          </details>
           {pendingReviewCount || unavailableRows.length ? (
             <div
               role="alert"
