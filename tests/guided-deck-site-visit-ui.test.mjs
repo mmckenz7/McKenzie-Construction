@@ -154,6 +154,51 @@ test("collective review emphasizes missing items and a targeted follow-up", () =
   assert.match(component, /HEIC\/HEIF needs your manual visibility check/);
 });
 
+test("collective review never presents unavailable analysis as missing evidence", () => {
+  assert.match(component, /const collectiveReviewReady =/);
+  assert.match(component, /reviewingPhotoCount === 0/);
+  assert.match(component, /unavailablePhotoCount === 0/);
+  assert.match(component, /Review unavailable for \{unavailablePhotoCount\}/);
+  assert.match(component, /No checklist items are being marked missing/);
+  assert.match(
+    component,
+    /Coverage conclusions will appear after every photo finishes\s+review/,
+  );
+  assert.match(component, /collectiveReviewReady \? \([\s\S]*?<details/);
+  assert.match(component, /bg-slate-950/);
+});
+
+test("per-step selections report added and precise not-added reason counts", () => {
+  assert.match(
+    component,
+    /`Selected \$\{files\.length\} · added \$\{accepted\.length\} · not added \$\{notAddedCount\}/,
+  );
+  assert.match(component, /`step full: \$\{stepFullCount\}`/);
+  assert.match(component, /`unsupported type: \$\{unsupportedCount\}`/);
+  assert.match(component, /`too large: \$\{tooLargeCount\}`/);
+  assert.match(component, /`duplicate: \$\{duplicateCount\}`/);
+  assert.doesNotMatch(component, /rejected/);
+  assert.match(component, /selectionNotice/);
+  assert.match(component, /role="status"/);
+});
+
+test("camera and library inputs re-arm after every selection", () => {
+  const batchCapture = component.slice(
+    component.indexOf("function BatchPhotoCapture"),
+    component.indexOf("function ManualConfirmation"),
+  );
+  assert.equal(
+    (
+      batchCapture.match(
+        /choose\(event\.target\.files\);\s*event\.target\.value = "";/g,
+      ) ?? []
+    ).length,
+    2,
+  );
+  assert.match(batchCapture, /capture="environment"/);
+  assert.match(batchCapture, /multiple/);
+});
+
 test("the entire photo-source group is visibly and semantically disabled while busy", () => {
   const sources = component.slice(
     component.indexOf("function PhotoSourceControls"),

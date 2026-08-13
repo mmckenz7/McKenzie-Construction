@@ -10,6 +10,7 @@ import {
   GUIDED_PHOTO_MAX_BYTES,
   GUIDED_PHOTO_MIME_TYPES,
 } from "@/lib/guided-site-visits/core";
+import { GuidedDeckPhotoInbox } from "@/components/estimates/guided-deck-photo-inbox";
 
 type Requirement = {
   mode: "photo_only" | "required_measurements" | "conditional";
@@ -309,8 +310,15 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
     url: string;
   } | null>(null);
   const [captureMode, setCaptureMode] = useState<"batch" | "guided">("batch");
+  const [visitCaptureMode, setVisitCaptureMode] = useState<"inbox" | "guided">(
+    "inbox",
+  );
   const [batchDrafts, setBatchDrafts] = useState<BatchDraftPhoto[]>([]);
+  const [batchSelectionNotice, setBatchSelectionNotice] = useState("");
   const batchDraftsRef = useRef<BatchDraftPhoto[]>([]);
+  const [batchReviewState, setBatchReviewState] = useState<
+    Record<string, "reviewing" | "unavailable">
+  >({});
   const [pendingPhoto, setPendingPhoto] = useState<{
     id: string;
     revision: number;
@@ -524,6 +532,32 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
       ? [{ photoId: photo.id, review: facts }]
       : [];
   });
+  const photoReviewStates = activePhotos.map((photo) => {
+    const usability = latestUsabilityReview(photo.usabilityReviews);
+    const facts = latestVisibleFactReview(photo.visibleFactReviews);
+    const transient = batchReviewState[photo.id];
+    const state =
+      transient === "reviewing"
+        ? "reviewing"
+        : transient === "unavailable" ||
+            usability?.verdict === "unable_to_assess" ||
+            usability?.verdict === "retake_recommended"
+          ? "unavailable"
+          : usability?.verdict === "usable" && facts
+            ? "complete"
+            : "reviewing";
+    return { photoId: photo.id, state };
+  });
+  const reviewingPhotoCount = photoReviewStates.filter(
+    (photo) => photo.state === "reviewing",
+  ).length;
+  const unavailablePhotoCount = photoReviewStates.filter(
+    (photo) => photo.state === "unavailable",
+  ).length;
+  const collectiveReviewReady =
+    activePhotos.length > 0 &&
+    reviewingPhotoCount === 0 &&
+    unavailablePhotoCount === 0;
   if (
     visibleFacts?.status === "complete" &&
     !completedFactReviews.some(
@@ -607,57 +641,66 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
           `${draft.file.name}:${draft.file.size}:${draft.file.lastModified}`,
       ),
     );
-    const invalid = files.find(
-      (file) =>
-        !GUIDED_PHOTO_MIME_TYPES.has(file.type) ||
-        file.size < 1 ||
-        file.size > GUIDED_PHOTO_MAX_BYTES,
-    );
-    if (invalid) {
-      setError(
-        !GUIDED_PHOTO_MIME_TYPES.has(invalid.type)
-          ? `${invalid.name || "A photo"} is not a supported image format.`
-          : `${invalid.name || "A photo"} must be 15 MB or smaller.`,
-      );
-      return;
-    }
-    const selectedBytes = files.reduce((total, file) => total + file.size, 0);
+    let unsupportedCount = 0;
+    let tooLargeCount = 0;
+    let duplicateCount = 0;
+    let stepFullCount = 0;
+    const eligible = files.filter((file) => {
+      if (!GUIDED_PHOTO_MIME_TYPES.has(file.type)) {
+        unsupportedCount += 1;
+        return false;
+      }
+      if (file.size < 1 || file.size > GUIDED_PHOTO_MAX_BYTES) {
+        tooLargeCount += 1;
+        return false;
+      }
+      const key = `${file.name}:${file.size}:${file.lastModified}`;
+      if (existing.has(key)) {
+        duplicateCount += 1;
+        return false;
+      }
+      existing.add(key);
+      return true;
+    });
     const queuedBytes = batchDrafts.reduce(
       (total, draft) => total + draft.file.size,
       0,
     );
-    if (selectedBytes + queuedBytes > MAX_BATCH_BYTES) {
-      setError("Keep this local photo set at 60 MB or smaller.");
-      return;
+    let addedBytes = 0;
+    const accepted: File[] = [];
+    for (const file of eligible) {
+      if (accepted.length >= room) {
+        stepFullCount += 1;
+      } else if (queuedBytes + addedBytes + file.size > MAX_BATCH_BYTES) {
+        tooLargeCount += 1;
+      } else {
+        accepted.push(file);
+        addedBytes += file.size;
+      }
     }
-    const accepted = files
-      .filter((file) => {
-        const key = `${file.name}:${file.size}:${file.lastModified}`;
-        if (existing.has(key)) return false;
-        existing.add(key);
-        return true;
-      })
-      .slice(0, room);
-    if (!accepted.length) {
+    if (accepted.length)
+      setBatchDrafts((drafts) => [
+        ...drafts,
+        ...accepted.map((file) => ({
+          id: crypto.randomUUID(),
+          file,
+          url: URL.createObjectURL(file),
+          status: "ready" as const,
+        })),
+      ]);
+    const notAddedCount = files.length - accepted.length;
+    const reasons = [
+      stepFullCount ? `step full: ${stepFullCount}` : "",
+      unsupportedCount ? `unsupported type: ${unsupportedCount}` : "",
+      tooLargeCount ? `too large: ${tooLargeCount}` : "",
+      duplicateCount ? `duplicate: ${duplicateCount}` : "",
+    ].filter(Boolean);
+    setBatchSelectionNotice(
+      `Selected ${files.length} · added ${accepted.length} · not added ${notAddedCount}${reasons.length ? ` (${reasons.join(" · ")})` : ""}`,
+    );
+    if (notAddedCount > 0)
       setError(
-        room === 0
-          ? "Five photos is the limit for one checklist step."
-          : "Choose a supported image file that is not already in the tray.",
-      );
-      return;
-    }
-    setBatchDrafts((drafts) => [
-      ...drafts,
-      ...accepted.map((file) => ({
-        id: crypto.randomUUID(),
-        file,
-        url: URL.createObjectURL(file),
-        status: "ready" as const,
-      })),
-    ]);
-    if (accepted.length < files.length && accepted.length === room)
-      setError(
-        "Only the remaining photos up to the five-photo limit were added.",
+        `${notAddedCount} ${notAddedCount === 1 ? "photo was" : "photos were"} not added. Check the reason counts before continuing.`,
       );
   }
 
@@ -1065,6 +1108,7 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
 
   async function reviewPhoto(photoId: string, idempotencyKey: string) {
     if (!visit) return;
+    setBatchReviewState((states) => ({ ...states, [photoId]: "reviewing" }));
     setLocalReview({ photoId, status: "reviewing" });
     setError("");
     try {
@@ -1087,7 +1131,16 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
         ),
       });
       if (result.verdict === "usable") await reviewVisibleFacts(photoId);
+      else
+        setBatchReviewState((states) => ({
+          ...states,
+          [photoId]: "unavailable",
+        }));
     } catch {
+      setBatchReviewState((states) => ({
+        ...states,
+        [photoId]: "unavailable",
+      }));
       setLocalReview({
         photoId,
         status: "complete",
@@ -1132,7 +1185,16 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
           criteria.map((fact) => [fact.criterionKey, fact.status]),
         ),
       );
+      setBatchReviewState((states) => {
+        const next = { ...states };
+        delete next[photoId];
+        return next;
+      });
     } catch {
+      setBatchReviewState((states) => ({
+        ...states,
+        [photoId]: "unavailable",
+      }));
       setFactReview({ photoId, status: "unavailable", mode: "ai" });
     }
   }
@@ -1447,6 +1509,24 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
       </section>
     );
 
+  if (visitCaptureMode === "inbox")
+    return (
+      <section
+        id="deck-field-visit"
+        className="overflow-hidden rounded-xl border-2 border-amber-500 bg-white shadow-sm"
+      >
+        <BetaWarning />
+        <GuidedDeckPhotoInbox
+          visitId={visit.id}
+          visitRevision={visit.revision}
+          onVisitChanged={async () => {
+            await loadVisit(visit.id);
+          }}
+          onUseGuided={() => setVisitCaptureMode("guided")}
+        />
+      </section>
+    );
+
   return (
     <section
       id="deck-field-visit"
@@ -1468,6 +1548,14 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
         </div>
       </div>
       <div className="p-4 sm:p-6">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setVisitCaptureMode("inbox")}
+          className="mb-4 w-full rounded-lg border border-slate-400 bg-slate-950 px-4 py-3 font-bold text-white"
+        >
+          Back to whole-visit Photo Inbox
+        </button>
         <p className="text-xs font-bold uppercase tracking-[.16em] text-amber-800">
           Required capture
         </p>
@@ -1488,8 +1576,11 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
             <div className="flex items-center justify-between gap-3">
               <strong className="text-sm">Photos {activePhotos.length}</strong>
               <span className="text-xs font-bold text-slate-600">
-                {declaredFacts.length - missingCoverage.length} of{" "}
-                {declaredFacts.length} items covered
+                {collectiveReviewReady
+                  ? `${declaredFacts.length - missingCoverage.length} of ${declaredFacts.length} items covered`
+                  : reviewingPhotoCount
+                    ? `Reviewing ${reviewingPhotoCount} ${reviewingPhotoCount === 1 ? "photo" : "photos"}`
+                    : `Review unavailable for ${unavailablePhotoCount} ${unavailablePhotoCount === 1 ? "photo" : "photos"}`}
               </span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -1555,6 +1646,7 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
                 busy={busy}
                 activeCount={activePhotos.length}
                 progress={batchProgress}
+                selectionNotice={batchSelectionNotice}
                 onAdd={addBatchPhotos}
                 onRemove={removeBatchPhoto}
                 onUpload={() => void uploadPhotoBatch()}
@@ -1606,16 +1698,58 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
         reviewPhotoReady &&
         (captureMode === "batch" || visibleFacts?.status === "complete") &&
         !humanAccepted ? (
-          <div className="mt-4 rounded-lg border border-blue-300 bg-blue-50 p-4">
+          <div className="mt-4 rounded-lg border border-slate-600 bg-slate-950 p-4 text-white shadow-sm">
             <h3 className="font-bold">
               Photo set review · Combined photo coverage
             </h3>
-            <p className="mt-1 text-sm text-blue-950">
+            <p className="mt-1 text-sm text-slate-300">
               Review all {activePhotos.length}{" "}
-              {activePhotos.length === 1 ? "photo" : "photos"} together. Only
-              missing or unclear checklist items appear below.
+              {activePhotos.length === 1 ? "photo" : "photos"} together.
             </p>
-            {missingCoverage.length ? (
+            {reviewingPhotoCount ? (
+              <div
+                role="status"
+                className="mt-3 rounded-lg border border-blue-500 bg-blue-950 p-3 text-blue-100"
+              >
+                <p className="text-sm font-bold">
+                  Reviewing {reviewingPhotoCount}{" "}
+                  {reviewingPhotoCount === 1 ? "photo" : "photos"}…
+                </p>
+                <p className="mt-1 text-sm">
+                  Coverage conclusions will appear after every photo finishes
+                  review.
+                </p>
+              </div>
+            ) : unavailablePhotoCount ? (
+              <div
+                role="alert"
+                className="mt-3 rounded-lg border border-amber-500 bg-amber-950 p-3 text-amber-100"
+              >
+                <p className="text-sm font-bold">
+                  Review unavailable for {unavailablePhotoCount}{" "}
+                  {unavailablePhotoCount === 1 ? "photo" : "photos"}
+                </p>
+                <p className="mt-1 text-sm">
+                  No checklist items are being marked missing. Retry the review
+                  or use guided photo help to check each affected photo
+                  yourself.
+                </p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    const unavailable = photoReviewStates.find(
+                      (photo) => photo.state === "unavailable",
+                    );
+                    if (unavailable) setSelectedPhotoId(unavailable.photoId);
+                    setCaptureMode("guided");
+                  }}
+                  className="mt-3 w-full rounded-lg border border-amber-300 bg-amber-100 px-4 py-3 font-bold text-amber-950 sm:w-auto"
+                >
+                  Open guided review
+                </button>
+              </div>
+            ) : missingCoverage.length ? (
               <>
                 <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950">
                   <p className="text-sm font-bold">Missing or unclear</p>
@@ -1661,23 +1795,25 @@ export function GuidedDeckSiteVisit({ estimateId }: { estimateId: string }) {
                 </button>
               </>
             )}
-            <details className="mt-3 text-sm text-blue-950">
-              <summary className="cursor-pointer font-bold underline">
-                Review all photo results
-              </summary>
-              <ul className="mt-2 space-y-1">
-                {aggregateCoverage.map((fact) => (
-                  <li key={fact.criterionKey}>
-                    {fact.sourcePhotoId ? "✓" : "?"} {fact.label}
-                  </li>
-                ))}
-              </ul>
-            </details>
+            {collectiveReviewReady ? (
+              <details className="mt-3 text-sm text-slate-200">
+                <summary className="cursor-pointer font-bold underline">
+                  Review all photo results
+                </summary>
+                <ul className="mt-2 space-y-1">
+                  {aggregateCoverage.map((fact) => (
+                    <li key={fact.criterionKey}>
+                      {fact.sourcePhotoId ? "✓" : "?"} {fact.label}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
             <button
               type="button"
               disabled={busy}
               onClick={prepareRetake}
-              className={`mt-3 ${secondary}`}
+              className="mt-3 w-full rounded-lg border border-slate-500 bg-slate-800 px-4 py-3 text-base font-bold text-white disabled:opacity-50 sm:w-auto"
             >
               Replace this photo
             </button>
@@ -2288,6 +2424,7 @@ function BatchPhotoCapture({
   busy,
   activeCount,
   progress,
+  selectionNotice,
   onAdd,
   onRemove,
   onUpload,
@@ -2296,6 +2433,7 @@ function BatchPhotoCapture({
   busy: boolean;
   activeCount: number;
   progress: { current: number; total: number; percent: number } | null;
+  selectionNotice: string;
   onAdd: (files: File[]) => void;
   onRemove: (id: string) => void;
   onUpload: () => void;
@@ -2348,6 +2486,14 @@ function BatchPhotoCapture({
           </label>
         </div>
       </fieldset>
+      {selectionNotice ? (
+        <p
+          role="status"
+          className="mt-3 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm font-bold text-white"
+        >
+          {selectionNotice}
+        </p>
+      ) : null}
       {drafts.length ? (
         <div className="mt-4">
           <div className="flex items-center justify-between gap-3">
