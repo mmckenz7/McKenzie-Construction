@@ -32,7 +32,7 @@ begin company:=public.guided_site_visit_actor_company(requested_auth_user_id);if
  next_value:=visit.revision+1;if requested_next_action='confirm_item' then update public.guided_site_visit_items set state='confirmed',observation=requested_observation,confirmed_by_auth_user_id=requested_auth_user_id,confirmed_at=now() where id=item.id and state='pending';if not found then return query select 'not_editable',null::uuid,visit.revision,false;return;end if;end if;
  insert into public.guided_site_visit_visible_fact_decisions(company_id,visit_id,visit_item_id,photo_attempt_id,asset_id,visible_fact_review_id,idempotency_key,requested_expected_revision,decision,next_action,final_criteria,final_recommended_next_capture,confirmed_observation,resulting_visit_revision,decided_by_auth_user_id)
  values(company,visit.id,item.id,requested_photo_attempt_id,review.asset_id,review.id,requested_idempotency_key,requested_expected_revision,requested_decision,requested_next_action,requested_final_criteria,requested_final_recommended_next_capture,requested_observation,next_value,requested_auth_user_id) returning id into created;
- update public.guided_site_visits set revision=next_value,updated_at=now() where id=visit.id;return query select 'ok',created,next_value,false;end $function$;
+ update public.guided_site_visits set revision=next_value,updated_at=now() where id=visit.id;return query select 'ok',created,next_value,false;end; $function$;
 
 alter table public.guided_site_visit_photo_attempts
  add column capture_intent text,
@@ -86,7 +86,7 @@ begin
    raise exception 'Invalid Guided Site Visit photo confirmation timestamp.' using errcode='55000';
  end if;
  return new;
-end $$;
+end; $$;
 create trigger prevent_guided_photo_attempt_provenance_mutation
 before update on public.guided_site_visit_photo_attempts
 for each row execute function public.prevent_guided_site_visit_photo_attempt_provenance_mutation();
@@ -106,7 +106,7 @@ begin
    raise exception 'Retake source decision does not target the selected photo.' using errcode='23514';
  end if;
  return new;
-end $$;
+end; $$;
 create trigger enforce_guided_photo_attempt_source_decision
 before insert or update on public.guided_site_visit_photo_attempts
 for each row execute function public.enforce_guided_site_visit_photo_attempt_source_decision();
@@ -199,7 +199,7 @@ begin
  values(requested_attempt_id,company,visit.id,item.id,visit.case_id,requested_asset_id,requested_retake_of_attempt_id,next_ordinal,requested_capture_intent,requested_source_decision_id,requested_idempotency_key,requested_auth_user_id,next_value);
  update public.guided_site_visits set revision=next_value,updated_at=now() where id=visit.id;
  return query select 'ok',next_value,requested_attempt_id,requested_asset_id,requested_storage_path,false;
-exception when unique_violation or check_violation or invalid_text_representation then return query select 'invalid_photo',visit.revision,null::uuid,null::uuid,null::text,false;end $function$;
+exception when unique_violation or check_violation or invalid_text_representation then return query select 'invalid_photo',visit.revision,null::uuid,null::uuid,null::text,false;end; $function$;
 
 create or replace function public.confirm_guided_site_visit_photo(
  requested_auth_user_id uuid,requested_visit_id uuid,requested_attempt_id uuid,requested_expected_revision integer,requested_actual_byte_size bigint,requested_storage_mime_type text)
@@ -219,7 +219,7 @@ begin company:=public.guided_site_visit_actor_company(requested_auth_user_id);if
    update public.guided_site_visit_photo_attempts set state='superseded' where id=attempt.retake_of_attempt_id and company_id=company and visit_id=visit.id and visit_item_id=attempt.visit_item_id and state='confirmed';if not found then return query select 'stale_retake',visit.revision;return;end if;
  end if;
  update public.ai_estimator_assets set status='available',byte_size=requested_actual_byte_size,storage_reported_mime_type=requested_storage_mime_type where id=asset.id;update public.guided_site_visit_photo_attempts set state='confirmed',confirmed_by_auth_user_id=requested_auth_user_id,confirmed_at=now() where id=attempt.id;
- next_value:=visit.revision+1;update public.guided_site_visits set revision=next_value,updated_at=now() where id=visit.id;return query select 'ok',next_value;end $function$;
+ next_value:=visit.revision+1;update public.guided_site_visits set revision=next_value,updated_at=now() where id=visit.id;return query select 'ok',next_value;end; $function$;
 
 create or replace function public.confirm_guided_site_visit_photo_set(
  requested_auth_user_id uuid,requested_visit_id uuid,requested_item_id uuid,requested_expected_revision integer,
@@ -256,7 +256,7 @@ begin
  end loop;
  update public.guided_site_visit_items set state='confirmed',observation=requested_observation,confirmed_by_auth_user_id=requested_auth_user_id,confirmed_at=now() where id=item.id and state='pending';if not found then raise exception 'stale item' using errcode='P0001';end if;
  update public.guided_site_visits set revision=next_value,updated_at=now() where id=visit.id;return query select 'ok',created,next_value,false;
-exception when invalid_text_representation or check_violation or raise_exception then return query select 'invalid_coverage',null::uuid,visit.revision,false;end $function$;
+exception when invalid_text_representation or check_violation or raise_exception then return query select 'invalid_coverage',null::uuid,visit.revision,false;end; $function$;
 
 alter table public.guided_site_visit_photo_set_confirmations enable row level security;alter table public.guided_site_visit_photo_set_confirmation_facts enable row level security;
 revoke all on table public.guided_site_visit_photo_set_confirmations,public.guided_site_visit_photo_set_confirmation_facts from public,anon,authenticated,service_role;
