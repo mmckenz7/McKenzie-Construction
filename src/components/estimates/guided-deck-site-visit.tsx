@@ -84,6 +84,23 @@ type BatchDraftPhoto = {
   status: "ready" | "uploading" | "failed";
   error?: string;
 };
+type IntakeEvidenceAssignment = {
+  id: string;
+  intakeAttemptId: string;
+  visitItemId: string;
+  criterionKey: string;
+  supersedesAssignmentEventId: string | null;
+  decision: "accepted" | "corrected" | "excluded";
+  resultingVisitRevision: number;
+};
+type IntakeEvidenceSnapshot = {
+  confirmedAttemptIds: Set<string>;
+  assignments: IntakeEvidenceAssignment[];
+};
+type IntakeEvidenceLoadState =
+  | { status: "loading" }
+  | { status: "ready"; snapshot: IntakeEvidenceSnapshot }
+  | { status: "unavailable" };
 
 const MAX_ACTIVE_PHOTOS = 5;
 const MAX_BATCH_BYTES = 60 * 1024 * 1024;
@@ -378,6 +395,31 @@ export function GuidedDeckSiteVisit({
     crypto.randomUUID(),
   );
   const [discoveringVisit, setDiscoveringVisit] = useState(true);
+  const [intakeEvidence, setIntakeEvidence] =
+    useState<IntakeEvidenceLoadState>({ status: "loading" });
+
+  const loadIntakeEvidence = useCallback(async (visitId: string) => {
+    setHumanAccepted(false);
+    setCaptureIntent(null);
+    setIntakeEvidence({ status: "loading" });
+    try {
+      const response = await fetch(
+        `/api/guided-site-visits/${encodeURIComponent(visitId)}/intake-batches`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) throw new Error("Intake evidence could not be loaded.");
+      const body = (await response.json()) as {
+        attempts?: { id?: unknown; state?: unknown }[];
+        assignments?: Record<string, unknown>[];
+      };
+      setIntakeEvidence({
+        status: "ready",
+        snapshot: normalizeIntakeEvidence(body),
+      });
+    } catch {
+      setIntakeEvidence({ status: "unavailable" });
+    }
+  }, []);
 
   const loadVisit = useCallback(async (visitId: string) => {
     const response = await fetch(
@@ -393,8 +435,9 @@ export function GuidedDeckSiteVisit({
       throw new Error(body.error ?? "Site visit could not be loaded.");
     const normalized = normalizeVisit(body.visit);
     setVisit(normalized);
+    await loadIntakeEvidence(visitId);
     return normalized;
-  }, []);
+  }, [loadIntakeEvidence]);
 
   async function start() {
     if (!permission || busy) return;
@@ -629,12 +672,48 @@ export function GuidedDeckSiteVisit({
     visit?.items.filter((item) => item.state === "documented_follow_up")
       .length ?? 0;
   const fieldNames = current?.requirement.fields ?? [];
+  const declaredInboxCriteria =
+    GUIDED_VISIBLE_FACT_CRITERIA[current?.itemKey ?? ""] ?? [];
+  const intakeSnapshot =
+    intakeEvidence.status === "ready" ? intakeEvidence.snapshot : null;
+  const effectiveIntakeAssignments = (intakeSnapshot?.assignments ?? []).filter(
+    (assignment) =>
+      assignment.visitItemId === current?.id &&
+      assignment.decision !== "excluded" &&
+      intakeSnapshot?.confirmedAttemptIds.has(assignment.intakeAttemptId) &&
+      !(intakeSnapshot?.assignments ?? []).some(
+        (later) => later.supersedesAssignmentEventId === assignment.id,
+      ),
+  );
+  const selectedIntakeAssignments = declaredInboxCriteria.flatMap(
+    (criterion) => {
+      const selected = effectiveIntakeAssignments
+        .filter((assignment) => assignment.criterionKey === criterion.key)
+        .sort(
+          (a, b) =>
+            b.resultingVisitRevision - a.resultingVisitRevision ||
+            b.id.localeCompare(a.id),
+        )[0];
+      return selected ? [selected] : [];
+    },
+  );
+  const inboxEvidenceReady =
+    intakeEvidence.status === "ready" &&
+    Boolean(current) &&
+    !["access_demolition", "utilities_obstructions"].includes(
+      current?.itemKey ?? "",
+    ) &&
+    declaredInboxCriteria.length > 0 &&
+    selectedIntakeAssignments.length === declaredInboxCriteria.length;
+  const guidedPhotoFallbackAllowed =
+    intakeEvidence.status === "ready" && !inboxEvidenceReady;
   const requiresFields =
     current?.requirement.mode === "required_measurements" ||
     (current?.requirement.mode === "conditional" && condition === "yes");
   const reviewPhotoReady = Boolean(activePhotoId);
   const requirementSatisfied =
-    reviewPhotoReady &&
+    intakeEvidence.status === "ready" &&
+    (reviewPhotoReady || inboxEvidenceReady) &&
     humanAccepted &&
     (current?.requirement.mode !== "conditional" || condition !== "") &&
     (!requiresFields ||
@@ -1302,25 +1381,40 @@ export function GuidedDeckSiteVisit({
                     ? { confirmation: current.requirement.otherwise }
                     : {}),
                 };
-      const coverage = aggregateCoverage.map((fact) => ({
-        criterionKey: fact.criterionKey,
-        sourceReviewId: fact.sourceReviewId,
-        decision: fact.decision,
-      }));
-      if (coverage.some((fact) => !fact.sourceReviewId))
-        throw new Error(
-          "Add another photo for every missing checklist item before continuing.",
+      if (inboxEvidenceReady) {
+        await jsonRequest(
+          `/api/guided-site-visits/${visit.id}/items/${current.id}/intake-evidence-confirmation`,
+          "POST",
+          {
+            expectedRevision,
+            idempotencyKey: `guided-intake-evidence:${current.id}:confirm`,
+            assignmentEventIds: selectedIntakeAssignments.map(
+              (assignment) => assignment.id,
+            ),
+            observation,
+          },
         );
-      await jsonRequest(
-        `/api/guided-site-visits/${visit.id}/items/${current.id}/photo-set-confirmation`,
-        "POST",
-        {
-          expectedRevision,
-          idempotencyKey: `guided-photo-set:${current.id}:confirm`,
-          coverage,
-          observation,
-        },
-      );
+      } else {
+        const coverage = aggregateCoverage.map((fact) => ({
+          criterionKey: fact.criterionKey,
+          sourceReviewId: fact.sourceReviewId,
+          decision: fact.decision,
+        }));
+        if (coverage.some((fact) => !fact.sourceReviewId))
+          throw new Error(
+            "Add another photo for every missing checklist item before continuing.",
+          );
+        await jsonRequest(
+          `/api/guided-site-visits/${visit.id}/items/${current.id}/photo-set-confirmation`,
+          "POST",
+          {
+            expectedRevision,
+            idempotencyKey: `guided-photo-set:${current.id}:confirm`,
+            coverage,
+            observation,
+          },
+        );
+      }
       setMeasurements({});
       setCondition("");
       if (localPhoto) URL.revokeObjectURL(localPhoto.url);
@@ -1614,7 +1708,88 @@ export function GuidedDeckSiteVisit({
             ))}
           </ul>
         </div>
-        {activePhotos.length > 0 ? (
+        {intakeEvidence.status === "loading" ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-4 rounded-xl border border-blue-400 bg-blue-50 p-4 text-blue-950"
+          >
+            <h3 className="font-black">Checking saved Photo Inbox evidence…</h3>
+            <p className="mt-1 text-sm leading-6">
+              Photo controls will appear only after the saved evidence check
+              finishes.
+            </p>
+          </div>
+        ) : intakeEvidence.status === "unavailable" ? (
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-amber-950"
+          >
+            <h3 className="font-black">Saved photo evidence cannot be checked</h3>
+            <p className="mt-2 text-sm leading-6">
+              Your Photo Inbox evidence was not lost. The app cannot verify it
+              right now, so photo upload controls are paused to prevent a
+              duplicate upload.
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => visit && void loadIntakeEvidence(visit.id)}
+              className={`mt-4 ${primary}`}
+            >
+              Retry saved evidence check
+            </button>
+          </div>
+        ) : null}
+        {inboxEvidenceReady && !humanAccepted ? (
+          <div className="mt-4 rounded-xl border-2 border-emerald-600 bg-emerald-50 p-4 text-emerald-950">
+            <p className="text-xs font-black uppercase tracking-[.14em] text-emerald-800">
+              Photo requirement ready
+            </p>
+            <h3 className="mt-1 text-lg font-black">
+              Human-verified Photo Inbox evidence
+            </h3>
+            <p className="mt-2 text-sm leading-6">
+              Accepted whole-visit photos cover every required view for this
+              checklist item. No photo upload is needed here. You must still
+              enter the field measurements and confirmations yourself.
+            </p>
+            <p className="mt-2 text-xs font-bold leading-5 text-emerald-900">
+              For each required view, the app selected the latest effective
+              human-approved assignment. Superseded and excluded assignments
+              are not used.
+            </p>
+            <details className="mt-3 text-sm">
+              <summary className="cursor-pointer font-bold underline">
+                Review selected evidence coverage
+              </summary>
+              <ul className="mt-2 space-y-1">
+                {declaredInboxCriteria.map((criterion) => (
+                  <li key={criterion.key}>✓ {criterion.label}</li>
+                ))}
+              </ul>
+            </details>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setCaptureIntent(null);
+                setHumanAccepted(true);
+              }}
+              className={`mt-4 ${primary}`}
+            >
+              Use these photos—continue to field facts
+            </button>
+          </div>
+        ) : null}
+        {guidedPhotoFallbackAllowed && effectiveIntakeAssignments.length > 0 ? (
+          <div className="mt-4 rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950">
+            <strong>More photo evidence is needed for this item.</strong>{" "}
+            Photo Inbox evidence covers only part of the required view. Use
+            the guided photo controls below for the missing parts.
+          </div>
+        ) : null}
+        {guidedPhotoFallbackAllowed && activePhotos.length > 0 ? (
           <div className="mt-4 rounded-lg border border-slate-300 bg-white p-3">
             <div className="flex items-center justify-between gap-3">
               <strong className="text-sm">Photos {activePhotos.length}</strong>
@@ -1649,7 +1824,7 @@ export function GuidedDeckSiteVisit({
           </div>
         ) : null}
         {/* Blob previews are local-only and cannot use the Next image optimizer. */}
-        {localPhoto?.photoId === activePhotoId ? (
+        {guidedPhotoFallbackAllowed && localPhoto?.photoId === activePhotoId ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={localPhoto.url}
@@ -1657,7 +1832,7 @@ export function GuidedDeckSiteVisit({
             className="mt-4 max-h-96 w-full rounded-lg border border-slate-300 object-contain"
           />
         ) : null}{" "}
-        {!captureIntent && !humanAccepted ? (
+        {guidedPhotoFallbackAllowed && !captureIntent && !humanAccepted ? (
           <div className="mt-4">
             <div
               className="flex rounded-lg bg-slate-100 p-1"
@@ -1708,7 +1883,8 @@ export function GuidedDeckSiteVisit({
             ) : null}
           </div>
         ) : null}
-        {!captureIntent &&
+        {guidedPhotoFallbackAllowed &&
+        !captureIntent &&
         captureMode === "guided" &&
         reviewPhotoReady &&
         !visibleFacts &&
@@ -1737,7 +1913,8 @@ export function GuidedDeckSiteVisit({
             uploadPhoto={uploadPhoto}
           />
         ) : null}
-        {!captureIntent &&
+        {guidedPhotoFallbackAllowed &&
+        !captureIntent &&
         reviewPhotoReady &&
         (captureMode === "batch" || visibleFacts?.status === "complete") &&
         !humanAccepted ? (
@@ -1862,7 +2039,7 @@ export function GuidedDeckSiteVisit({
             </button>
           </div>
         ) : null}
-        {captureIntent ? (
+        {guidedPhotoFallbackAllowed && captureIntent ? (
           <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
             <strong>
               {captureIntent.kind === "complement"
@@ -1893,7 +2070,8 @@ export function GuidedDeckSiteVisit({
             </button>
           </div>
         ) : null}
-        {!captureIntent &&
+        {guidedPhotoFallbackAllowed &&
+        !captureIntent &&
         captureMode === "guided" &&
         reviewPhotoReady &&
         (visibleFacts || correctingFacts) &&
@@ -1945,7 +2123,7 @@ export function GuidedDeckSiteVisit({
             uploadPhoto={uploadPhoto}
           />
         ) : null}
-        {humanAccepted ? (
+        {humanAccepted && guidedPhotoFallbackAllowed ? (
           <div className="mt-4 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950">
             <strong>Photo set checked · {activePhotos.length} photos.</strong>{" "}
             Finish the field facts below, or review the photos if anything
@@ -2001,19 +2179,23 @@ export function GuidedDeckSiteVisit({
               onClick={() => void confirmItem()}
               className={primary}
             >
-              I confirm this capture
+              {inboxEvidenceReady
+                ? "I confirm these field facts"
+                : "I confirm this capture"}
             </button>
           </div>
         ) : null}
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => setBlockOpen(!blockOpen)}
-          className="mt-4 text-sm font-bold text-amber-900 underline"
-        >
-          Cannot capture this
-        </button>
-        {blockOpen ? (
+        {intakeEvidence.status === "ready" ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setBlockOpen(!blockOpen)}
+            className="mt-4 text-sm font-bold text-amber-900 underline"
+          >
+            Cannot capture this
+          </button>
+        ) : null}
+        {intakeEvidence.status === "ready" && blockOpen ? (
           <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
             <p className="font-bold text-amber-950">
               Document office follow-up
@@ -3185,6 +3367,48 @@ function normalizeVisit(raw: Record<string, unknown>): Visit {
             : [];
         }),
       };
+    }),
+  };
+}
+
+function normalizeIntakeEvidence(raw: {
+  attempts?: { id?: unknown; state?: unknown }[];
+  assignments?: Record<string, unknown>[];
+}): IntakeEvidenceSnapshot {
+  return {
+    confirmedAttemptIds: new Set(
+      (raw.attempts ?? []).flatMap((attempt) =>
+        attempt.state === "confirmed" && typeof attempt.id === "string"
+          ? [attempt.id]
+          : [],
+      ),
+    ),
+    assignments: (raw.assignments ?? []).flatMap((assignment) => {
+      const decision = assignment.decision;
+      if (
+        typeof assignment.id !== "string" ||
+        typeof assignment.intake_attempt_id !== "string" ||
+        typeof assignment.visit_item_id !== "string" ||
+        typeof assignment.criterion_key !== "string" ||
+        !["accepted", "corrected", "excluded"].includes(String(decision))
+      )
+        return [];
+      return [
+        {
+          id: assignment.id,
+          intakeAttemptId: assignment.intake_attempt_id,
+          visitItemId: assignment.visit_item_id,
+          criterionKey: assignment.criterion_key,
+          supersedesAssignmentEventId:
+            typeof assignment.supersedes_assignment_event_id === "string"
+              ? assignment.supersedes_assignment_event_id
+              : null,
+          decision: decision as IntakeEvidenceAssignment["decision"],
+          resultingVisitRevision: Number(
+            assignment.resulting_visit_revision ?? -1,
+          ),
+        },
+      ];
     }),
   };
 }
