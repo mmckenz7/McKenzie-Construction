@@ -122,6 +122,7 @@ export async function authorizeEstimateRequest(
     authorization: {
       authUserId: access.user.id,
       appUserId: String(effectiveAccess.user_id),
+      companyId: String(effectiveAccess.company_id),
       canEditPrices: hasEstimatePermission(effectiveAccess, "edit_prices"),
       canViewCosts: hasEstimatePermission(effectiveAccess, "view_costs"),
       canViewProfit: hasEstimatePermission(effectiveAccess, "view_profit"),

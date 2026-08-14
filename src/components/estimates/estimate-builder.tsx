@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { ContractPreparationCard } from "@/components/estimates/contract-preparation";
 import { GuidedDeckSiteVisit } from "@/components/estimates/guided-deck-site-visit";
+import { DeckTakeoffPlanner } from "@/components/estimates/deck-takeoff-planner";
 import { EstimateProposalCard } from "@/components/estimates/estimate-proposal-card";
 import { FenceEstimateWorkflow } from "@/components/estimates/fence-estimate-workflow";
 
@@ -68,6 +69,7 @@ type DeckVisitItemSummary = {
 type DeckVisitSummary = {
   id: string;
   status: string;
+  revision: number;
   items: DeckVisitItemSummary[];
 };
 type DeckWorkspaceStage = "site_visit" | "estimate" | "proposal";
@@ -258,6 +260,7 @@ export function EstimateBuilder({
     ? buildCustomerPresentation(presentationSnapshot, state.sections, state.items, calculation)
     : null;
   const deckTakeoffStarted = state.sections.length > 0 || state.items.length > 0;
+  const deckReviewedTakeoffApplied = state.sections.some((section) => section.name.trim().toLowerCase() === "reviewed deck takeoff");
   const deckTrueCostLineCount = state.items.filter((item) =>
     item.itemType === "standard" && item.included && typeof item.directCostCents === "string" && /^\d+$/.test(item.directCostCents) && BigInt(item.directCostCents) > 0n
   ).length;
@@ -452,15 +455,19 @@ export function EstimateBuilder({
     {showDeckWorkflow && deckWorkspaceStage === "site_visit" ? <section id="deck-stage-site_visit" tabIndex={-1} className="scroll-mt-24 focus-visible:outline-none"><GuidedDeckSiteVisit estimateId={estimateId} onVisitStatusChanged={handleDeckVisitStatusChanged} onContinueToEstimate={beginDeckTakeoff} /></section> : null}
 
     {showDeckWorkflow && deckWorkspaceStage === "estimate" ? <DeckTakeoffWorkspace
+      estimateId={estimateId}
+      calculationRevision={state.calculationRevision}
       visitStatus={deckVisitStatus}
       visitSummary={deckVisitSummary}
       hasSection={state.sections.length > 0}
       trueCostLineCount={deckTrueCostLineCount}
       directCost={formatCents("directCostCents" in calculation ? calculation.directCostCents as string | null | undefined : null)}
+      takeoffApplied={deckReviewedTakeoffApplied}
       canEdit={canCreateStandard}
       disabled={controlsDisabled}
       onCreateSection={beginDeckTakeoff}
       onAddCostLine={beginDeckCostLine}
+      onTakeoffApplied={(nextState) => { setState(nextState); setNotice("Reviewed Deck takeoff added. Review the true-cost lines, then continue to OH&P."); }}
       onContinuePricing={() => document.getElementById("deck-pricing-workspace")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}
     /> : null}
 
@@ -594,26 +601,34 @@ function deckObservationRows(observation: Record<string, unknown>) {
 }
 
 function DeckTakeoffWorkspace({
+  estimateId,
+  calculationRevision,
   visitStatus,
   visitSummary,
   hasSection,
   trueCostLineCount,
   directCost,
+  takeoffApplied,
   canEdit,
   disabled,
   onCreateSection,
   onAddCostLine,
+  onTakeoffApplied,
   onContinuePricing,
 }: {
+  estimateId: string;
+  calculationRevision: number;
   visitStatus: "checking" | "unavailable" | "not_started" | "in_progress" | "completed";
   visitSummary: DeckVisitSummary | null;
   hasSection: boolean;
   trueCostLineCount: number;
   directCost: string;
+  takeoffApplied: boolean;
   canEdit: boolean;
   disabled: boolean;
   onCreateSection: () => void;
   onAddCostLine: (category: EstimateCostCategory) => void;
+  onTakeoffApplied: (state: EstimateBuilderEnvelope) => void;
   onContinuePricing: () => void;
 }) {
   const categories: { key: EstimateCostCategory; label: string; help: string }[] = [
@@ -641,7 +656,16 @@ function DeckTakeoffWorkspace({
         <summary className="min-h-11 cursor-pointer font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">Saved field measurements and notes</summary>
         {measuredItems.length ? <div className="mt-3 grid gap-3 md:grid-cols-2">{measuredItems.map((item) => <section key={item.itemKey} className="rounded-lg bg-white p-3"><h3 className="font-bold text-slate-950">{item.title}</h3><dl className="mt-2 space-y-2 text-sm">{item.rows.map((row) => <div key={`${item.itemKey}-${row.label}`} className="flex items-start justify-between gap-4"><dt className="text-slate-600">{row.label}</dt><dd className="text-right font-bold text-slate-950">{row.value}</dd></div>)}</dl></section>)}</div> : <p className="mt-3 text-sm text-slate-600">No field measurements were returned. Reload the visit before entering quantities.</p>}
       </details>
-      {!hasSection ? <div className="mt-5 rounded-lg border border-blue-300 bg-blue-50 p-4"><h3 className="font-black text-blue-950">1. Create the Deck section</h3><p className="mt-1 text-sm text-blue-900">This gives the estimate one clean place for Deck costs.</p><button type="button" disabled={disabled} className={`mt-3 ${primary}`} onClick={onCreateSection}>Create Deck construction section</button></div> : <div className="mt-5"><h3 className="font-black text-slate-950">1. Add true-cost lines</h3><p className="mt-1 text-sm text-slate-600">Choose a cost type, then enter its verified quantity and unit cost.</p><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{categories.map((category) => <button key={category.key} type="button" disabled={disabled || !canEdit} onClick={() => onAddCostLine(category.key)} className="min-h-24 rounded-lg border border-slate-300 bg-slate-50 p-3 text-left transition hover:border-emerald-600 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"><strong className="block text-slate-950">Add {category.label}</strong><span className="mt-1 block text-xs leading-5 text-slate-600">{category.help}</span></button>)}</div></div>}
+      {visitSummary ? <DeckTakeoffPlanner
+        estimateId={estimateId}
+        visitId={visitSummary.id}
+        visitRevision={visitSummary.revision}
+        calculationRevision={calculationRevision}
+        takeoffApplied={takeoffApplied}
+        disabled={disabled || !canEdit}
+        onApplied={onTakeoffApplied}
+      /> : null}
+      <details className="mt-5 rounded-lg border border-slate-300 bg-slate-50 p-4"><summary className="min-h-11 cursor-pointer font-bold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">Manual cost-line fallback</summary>{!hasSection ? <div className="mt-3"><p className="text-sm text-slate-700">Use this only when you need to build the estimate without the reviewed takeoff.</p><button type="button" disabled={disabled} className={`mt-3 ${primary}`} onClick={onCreateSection}>Create Deck construction section</button></div> : <div className="mt-3"><p className="text-sm text-slate-600">Choose a cost type, then enter its verified quantity and unit cost.</p><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{categories.map((category) => <button key={category.key} type="button" disabled={disabled || !canEdit} onClick={() => onAddCostLine(category.key)} className="min-h-24 rounded-lg border border-slate-300 bg-white p-3 text-left transition hover:border-emerald-600 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"><strong className="block text-slate-950">Add {category.label}</strong><span className="mt-1 block text-xs leading-5 text-slate-600">{category.help}</span></button>)}</div></div>}</details>
       <div className="mt-5 rounded-lg border border-slate-300 p-4"><h3 className="font-black text-slate-950">2. Review true costs</h3><p className="mt-1 text-sm text-slate-700">{trueCostLineCount ? `${trueCostLineCount} positive true-cost ${trueCostLineCount === 1 ? "line" : "lines"} saved · ${directCost} current direct cost.` : "No positive true-cost lines are saved yet."}</p>{trueCostLineCount ? <button type="button" className={`mt-3 ${primary}`} onClick={onContinuePricing}>Continue to OH&amp;P</button> : null}</div>
     </>}
   </section>;
