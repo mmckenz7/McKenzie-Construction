@@ -3,11 +3,13 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   buildPrescriptiveDeckPlan,
+  deckEstimatingImmediateIssueIds,
   KNOXVILLE_2024_DECK_PROFILE,
   recommendedPrescriptiveDraft,
   type DeckPrescriptiveDraft,
   type DeckPrescriptivePlan,
 } from "@/lib/deck-prescriptive-plan";
+import type { DeckBlueprintVisitSeed } from "@/lib/deck-takeoff-v0";
 
 const control =
   "mt-1 min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100";
@@ -23,13 +25,25 @@ const STEPS = [
 type BlueprintFacts = Readonly<{ attachment: "ledger" | "freestanding" | null; stairs: boolean | null; railings: boolean | null }>;
 type BlueprintCallout = Readonly<{ id: string; label: string; step: number; anchorX: number; anchorY: number; markerX: number; markerY: number; kind: "input" | "exception" | "package" }>;
 
-function draftForFacts(facts: BlueprintFacts, lengthFeet: number, widthFeet: number) {
+function draftForFacts(facts: BlueprintFacts, lengthFeet: number, widthFeet: number, visitSeed: DeckBlueprintVisitSeed) {
   const draft = recommendedPrescriptiveDraft(facts.attachment ?? "ledger", facts.stairs ?? false, lengthFeet, widthFeet, facts.railings ?? false);
   return {
     ...draft,
     attachment: facts.attachment ?? "",
     stairsIncluded: facts.stairs === null ? "" : facts.stairs ? "yes" : "no",
     railingsIncluded: facts.railings === null ? "" : facts.railings ? "yes" : "no",
+    attachmentConfirmed: facts.attachment !== null,
+    stairsConfirmed: facts.stairs !== null,
+    joistSpacingInches: visitSeed.supportedJoistSpacingInches ?? draft.joistSpacingInches,
+    joistSize: visitSeed.estimatingAssumptions.joistSize ?? draft.joistSize,
+    beamSize: visitSeed.estimatingAssumptions.beamSize ?? draft.beamSize,
+    postSize: visitSeed.estimatingAssumptions.postSize ?? draft.postSize,
+    postCount: visitSeed.estimatingAssumptions.postCount ? String(visitSeed.estimatingAssumptions.postCount) : draft.postCount,
+    postHeightFeet: visitSeed.heightFromGradeFeet ? String(visitSeed.heightFromGradeFeet) : draft.postHeightFeet,
+    jurisdiction: "city_knoxville_estimating_assumption",
+    ledgerSubstrate: facts.attachment === "ledger" ? "estimating_band_rim_assumption" : draft.ledgerSubstrate,
+    footingDepthInches: draft.footingDepthInches || "24",
+    frostBasis: "24 in local frost-depth basis — estimating assumption pending AHJ verification",
   } satisfies DeckPrescriptiveDraft;
 }
 function Field({
@@ -60,24 +74,31 @@ export function DeckPrescriptivePlanGenerator({
   blueprintAttachment,
   blueprintStairs,
   blueprintRailings,
+  stairPlacementConfirmed,
+  visitSeed,
   stairEdge = "yard",
   stairPosition = "center",
   disabled,
   onApprove,
+  onEditStairPlacement,
 }: {
   lengthFeet: number;
   widthFeet: number;
   blueprintAttachment: "ledger" | "freestanding" | null;
   blueprintStairs: boolean | null;
   blueprintRailings: boolean | null;
+  stairPlacementConfirmed: boolean;
+  visitSeed: DeckBlueprintVisitSeed;
   stairEdge?: "left" | "right" | "yard" | "top";
   stairPosition?: "start" | "center" | "end";
   disabled: boolean;
   onApprove: (plan: DeckPrescriptivePlan) => void;
+  onEditStairPlacement: () => void;
 }) {
   const facts = useMemo<BlueprintFacts>(() => ({ attachment: blueprintAttachment, stairs: blueprintStairs, railings: blueprintRailings }), [blueprintAttachment, blueprintStairs, blueprintRailings]);
-  const factsSignature = `${lengthFeet}:${widthFeet}:${blueprintAttachment ?? "unknown"}:${blueprintStairs ?? "unknown"}:${blueprintRailings ?? "unknown"}`;
-  const [draft, setDraft] = useState<DeckPrescriptiveDraft>(() => draftForFacts(facts, lengthFeet, widthFeet));
+  const seedSignature = JSON.stringify(visitSeed);
+  const factsSignature = `${lengthFeet}:${widthFeet}:${blueprintAttachment ?? "unknown"}:${blueprintStairs ?? "unknown"}:${blueprintRailings ?? "unknown"}:${stairPlacementConfirmed}:${seedSignature}`;
+  const [draft, setDraft] = useState<DeckPrescriptiveDraft>(() => draftForFacts(facts, lengthFeet, widthFeet, visitSeed));
   const [step, setStep] = useState(0);
   const [generated, setGenerated] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -95,8 +116,8 @@ export function DeckPrescriptivePlanGenerator({
     if (lastFactsSignature.current === factsSignature) return;
     lastFactsSignature.current = factsSignature;
     if (dirty) { setPendingFacts(facts); setComparisonOnly(false); setApproved(false); }
-    else setDraft(draftForFacts(facts, lengthFeet, widthFeet));
-  }, [dirty, facts, factsSignature, lengthFeet, widthFeet]);
+    else setDraft(draftForFacts(facts, lengthFeet, widthFeet, visitSeed));
+  }, [dirty, facts, factsSignature, lengthFeet, visitSeed, widthFeet]);
   const plan = useMemo(
     () => buildPrescriptiveDeckPlan({ lengthFeet, widthFeet, draft }),
     [lengthFeet, widthFeet, draft],
@@ -122,27 +143,16 @@ export function DeckPrescriptivePlanGenerator({
   const callouts = useMemo<BlueprintCallout[]>(() => {
     const values: BlueprintCallout[] = [];
     const add = (value: BlueprintCallout) => { if (!values.some((item) => item.id === value.id)) values.push(value); };
+    const immediateIssues = new Set(deckEstimatingImmediateIssueIds({ lengthFeet, widthFeet, draft, stairPlacementConfirmed }));
     if (pendingFacts) add({ id: "stale-field-facts", label: "This drawing uses outdated field facts and is available for comparison only. Rebuild it before approval.", step: 0, anchorX: 160, anchorY: 95, markerX: 160, markerY: 12, kind: "exception" });
-    if (!Number.isFinite(lengthFeet) || !Number.isFinite(widthFeet) || lengthFeet <= 0 || widthFeet <= 0 || lengthFeet > 40 || widthFeet > 18) add({ id: "dimensions-profile", label: "The deck dimensions are missing or outside this profile's supported rectangular limits.", step: 0, anchorX: 160, anchorY: 95, markerX: 160, markerY: 55, kind: "exception" });
-    if (draft.jurisdiction !== "city_knoxville_verified") add({ id: "jurisdiction", label: "Verify the City of Knoxville jurisdiction. A mailing address alone is not enough.", step: 0, anchorX: 35, anchorY: 25, markerX: 18, markerY: 12, kind: "input" });
-    if (!draft.attachment || !draft.attachmentConfirmed) add({ id: "attachment-fact", label: "Confirm whether the deck is ledger-attached or freestanding.", step: 0, anchorX: 160, anchorY: 20, markerX: 116, markerY: 10, kind: "input" });
-    if (!draft.stairsIncluded || !draft.stairsConfirmed) add({ id: "stairs-fact", label: "Confirm whether stairs are included and verify their field location.", step: 0, anchorX: stairEdge === "left" ? 30 : stairEdge === "right" ? 290 : stairAlong, anchorY: stairEdge === "top" ? 20 : stairEdge === "yard" ? 170 : stairAcross, markerX: 300, markerY: 52, kind: "input" });
-    if (!draft.railingsIncluded) add({ id: "railings-fact", label: "Confirm whether guards or railings apply from the approved field facts.", step: 0, anchorX: 290, anchorY: 45, markerX: 302, markerY: 82, kind: "input" });
-    if (draft.attachment === "ledger" && draft.ledgerSubstrate !== "verified_band_rim") add({ id: "ledger-substrate", label: "Verify the house band/rim substrate. Veneer, concrete, concealed, or unknown conditions need an approved detail.", step: 0, anchorX: 160, anchorY: 20, markerX: 206, markerY: 10, kind: "exception" });
-    if (draft.speciesGrade !== "southern_pine_no2" || draft.treatmentService !== "pressure_treated_wet_service" || draft.designLoad !== "40_live_10_dead") add({ id: "material-profile", label: "Confirm the supported lumber species/grade, treatment/service condition, and design-load profile.", step: 1, anchorX: 115, anchorY: 75, markerX: 70, markerY: 52, kind: "input" });
-    if (!draft.postHeightFeet || !draft.footingDepthInches || !draft.frostBasis.trim() || draft.soilOrFootingUncertain) add({ id: "support-foundation", label: "Enter the measured post height and verified footing, soil, and frost-depth basis.", step: 2, anchorX: 160, anchorY: 120, markerX: 188, markerY: 136, kind: "input" });
-    if (plan.checks.some((check) => check.sourceId.includes("R507.6") && check.result === "exception")) add({ id: "joist-check", label: "The joist size, spacing, or span is outside this bounded profile.", step: 1, anchorX: 125, anchorY: 80, markerX: 96, markerY: 70, kind: "exception" });
-    if (plan.checks.some((check) => check.sourceId.includes("R507.5") && check.result === "exception")) add({ id: "beam-check", label: "The beam size, plies, or support spacing is outside this bounded profile.", step: 1, anchorX: 160, anchorY: 95, markerX: 218, markerY: 92, kind: "exception" });
-    if (plan.checks.some((check) => check.sourceId.includes("R507.4") && check.result === "exception")) add({ id: "post-check", label: "The selected post size, height, or tributary area is outside this bounded profile.", step: 2, anchorX: 160, anchorY: 120, markerX: 124, markerY: 142, kind: "exception" });
-    if (plan.checks.some((check) => check.sourceId.includes("R507.3.1") && check.result === "exception")) add({ id: "footing-check", label: "The selected footing pad does not pass the bounded soil and tributary-area check.", step: 2, anchorX: 160, anchorY: 126, markerX: 226, markerY: 144, kind: "exception" });
-    if (!/^\d+$/.test(draft.extraBlockingRows) || Number(draft.extraBlockingRows) > 10) add({ id: "blocking-input", label: "Extra blocking rows must be a reviewed whole number from zero through ten.", step: 2, anchorX: 225, anchorY: 78, markerX: 270, markerY: 66, kind: "input" });
-    if (draft.unusualGeometry || draft.cantilever || draft.roofOrSpecialLoad || draft.attachment === "freestanding") add({ id: "outside-profile", label: "This geometry or load condition needs an engineer or building-department-approved plan.", step: 3, anchorX: 250, anchorY: 145, markerX: 302, markerY: 154, kind: "exception" });
-    if (plan.unresolvedPackages.includes("stairs")) add({ id: "package-stairs", label: "A reviewed stair framing and connection detail is still required.", step: 4, anchorX: stairEdge === "left" ? 30 : stairEdge === "right" ? 290 : stairAlong, anchorY: stairEdge === "top" ? 20 : stairEdge === "yard" ? 170 : stairAcross, markerX: 18, markerY: 184, kind: "package" });
-    if (plan.unresolvedPackages.includes("guard_schedule")) add({ id: "package-guards", label: "The guard/railing post layout, load path, attachments, and manufacturer fasteners are still required.", step: 4, anchorX: 290, anchorY: 75, markerX: 302, markerY: 116, kind: "package" });
-    if (plan.unresolvedPackages.includes("connector_schedule")) add({ id: "package-connectors", label: "Compatible connector products, manufacturer fastener schedules, prices, and sources are completed in the takeoff checklist.", step: 4, anchorX: 160, anchorY: 120, markerX: 264, markerY: 184, kind: "package" });
+    if (immediateIssues.has("dimensions-profile")) add({ id: "dimensions-profile", label: "The deck dimensions are missing or outside this profile's supported rectangular limits.", step: 0, anchorX: 160, anchorY: 95, markerX: 160, markerY: 55, kind: "exception" });
+    if (immediateIssues.has("attachment-fact")) add({ id: "attachment-fact", label: "Confirm whether the replacement layout is ledger-attached or freestanding.", step: 0, anchorX: 160, anchorY: 20, markerX: 116, markerY: 10, kind: "input" });
+    if (immediateIssues.has("stairs-fact")) add({ id: "stairs-fact", label: draft.stairsIncluded ? "Place the verified stair opening on the replacement layout and confirm its position." : "Confirm whether stairs are included in the replacement layout.", step: 0, anchorX: stairEdge === "left" ? 30 : stairEdge === "right" ? 290 : stairAlong, anchorY: stairEdge === "top" ? 20 : stairEdge === "yard" ? 170 : stairAcross, markerX: 300, markerY: 52, kind: "input" });
+    if (immediateIssues.has("railings-fact")) add({ id: "railings-fact", label: "Confirm whether guards or railings apply from the approved field facts.", step: 0, anchorX: 290, anchorY: 45, markerX: 302, markerY: 82, kind: "input" });
+    if (immediateIssues.has("outside-profile")) add({ id: "outside-profile", label: "The proposed replacement geometry or load condition is outside this supported layout profile. Use an engineer/building-department-approved plan.", step: 3, anchorX: 250, anchorY: 145, markerX: 302, markerY: 154, kind: "exception" });
     return values;
-  }, [draft, lengthFeet, pendingFacts, plan.checks, plan.unresolvedPackages, stairAlong, stairAcross, stairEdge, widthFeet]);
-  const unresolvedLabels = plan.unresolvedPackages.map((item) => item === "stairs" ? "reviewed stair detail" : item === "guard_schedule" ? "guard/railing attachment schedule" : "compatible connector schedule");
+  }, [draft, lengthFeet, pendingFacts, stairAlong, stairAcross, stairEdge, stairPlacementConfirmed, widthFeet]);
+  const unresolvedLabels = plan.unresolvedPackages.map((item) => item === "stairs" ? "reviewed stair detail" : item === "guard_schedule" ? "guard/railing attachment schedule" : item === "jurisdiction" ? "jurisdiction verification" : item === "ledger_detail" ? "concealed ledger attachment detail" : item === "soil_frost" ? "soil/frost verification" : "compatible connector schedule");
   const openPackageGuidance = (id: string) => {
     const packageName = id === "package-stairs" ? "stairs" : id === "package-guards" ? "guards" : "connectors";
     setActivePackage(packageName);
@@ -161,7 +171,7 @@ export function DeckPrescriptivePlanGenerator({
         Subject to field verification and City building-department approval. An
         engineer/AHJ-approved plan may be used instead.
       </p>
-      {pendingFacts ? <div role="alert" className="mt-3 rounded-lg border-2 border-red-600 bg-red-50 p-3 text-sm text-red-950"><p className="font-black">Outdated field facts — approval blocked</p><p className="mt-1">The current drawing no longer matches the latest dimensions or applicability. You may keep it visible for comparison, but it cannot be approved until updated.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><button type="button" className={button} onClick={() => { setDraft(draftForFacts(pendingFacts, lengthFeet, widthFeet)); setPendingFacts(null); setComparisonOnly(false); setDirty(false); setApproved(false); setGenerated(true); setStep(4); }}>Rebuild from updated field facts</button>{!comparisonOnly ? <button type="button" className="min-h-11 rounded-md border-2 border-red-700 bg-white px-4 py-2 font-bold" onClick={() => setComparisonOnly(true)}>Keep current draft for comparison only</button> : <p className="rounded-md bg-white p-3 font-bold">Comparison only. Rebuild from updated field facts to enable approval.</p>}</div></div> : null}
+      {pendingFacts ? <div role="alert" className="mt-3 rounded-lg border-2 border-red-600 bg-red-50 p-3 text-sm text-red-950"><p className="font-black">Outdated field facts — approval blocked</p><p className="mt-1">The current drawing no longer matches the latest dimensions or applicability. You may keep it visible for comparison, but it cannot be approved until updated.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><button type="button" className={button} onClick={() => { setDraft(draftForFacts(pendingFacts, lengthFeet, widthFeet, visitSeed)); setPendingFacts(null); setComparisonOnly(false); setDirty(false); setApproved(false); setGenerated(true); setStep(4); }}>Rebuild from updated field facts</button>{!comparisonOnly ? <button type="button" className="min-h-11 rounded-md border-2 border-red-700 bg-white px-4 py-2 font-bold" onClick={() => setComparisonOnly(true)}>Keep current draft for comparison only</button> : <p className="rounded-md bg-white p-3 font-bold">Comparison only. Rebuild from updated field facts to enable approval.</p>}</div></div> : null}
       {!generated ? <button type="button" className={`mt-4 w-full ${button}`} disabled={disabled} onClick={() => { setGenerated(true); setDetailsOpen(false); setStep(4); }}>
         Generate draft blueprint
       </button> : <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -203,6 +213,7 @@ export function DeckPrescriptivePlanGenerator({
               <option value="city_knoxville_verified">
                 City of Knoxville verified
               </option>
+              <option value="city_knoxville_estimating_assumption">City of Knoxville estimating assumption — verify later</option>
               <option value="other_or_uncertain">Other or uncertain</option>
             </select>
           </Field>
@@ -276,6 +287,7 @@ export function DeckPrescriptivePlanGenerator({
                 <option value="verified_band_rim">
                   Verified wood band/rim joist
                 </option>
+                <option value="estimating_band_rim_assumption">Wood band/rim estimating assumption — verify concealed condition later</option>
                 <option value="masonry_veneer">Brick/stone veneer</option>
                 <option value="concrete_or_other">Concrete or other</option>
                 <option value="unknown">Unknown/concealed</option>
@@ -652,13 +664,15 @@ export function DeckPrescriptivePlanGenerator({
           </div>
           <button type="button" className="mt-2 min-h-11 rounded-md border-2 border-slate-400 bg-white px-4 py-2 text-sm font-bold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600" aria-pressed={drawingExpanded} onClick={() => setDrawingExpanded((value) => !value)}>{drawingExpanded ? "Fit drawing to screen" : "Expand drawing"}</button>
           <p className="mt-2 rounded-md border border-red-300 bg-red-50 p-3 text-xs font-black text-red-950">ESTIMATING DRAFT — NOT FOR PERMIT OR CONSTRUCTION — NOT STAMPED</p>
+          <section className="mt-3 grid gap-3 md:grid-cols-2" aria-label="Site visit evidence and proposed estimating assumptions"><div className="rounded-lg border border-blue-300 bg-blue-50 p-3"><h5 className="font-black text-blue-950">Observed existing — completed human site visit</h5><p className="mt-1 text-xs text-blue-900">Saved field observations are reused as evidence. They are not automatically declared to be the replacement design.</p><ul className="mt-2 space-y-1 text-sm text-blue-950">{visitSeed.observedMeasurements.length ? visitSeed.observedMeasurements.map((item) => <li key={`${item.itemKey}:${item.key}`}><strong>{item.key.replaceAll("_", " ")}:</strong> {item.value} {item.unit}</li>) : <li>No reusable measurement was saved.</li>}</ul></div><div className="rounded-lg border border-violet-300 bg-violet-50 p-3"><h5 className="font-black text-violet-950">Proposed estimating assumptions — reviewable</h5><p className="mt-1 text-xs text-violet-900">Supported observed values seed this editable draft only as explicit assumptions; the code-profile checks run again.</p><ul className="mt-2 space-y-1 text-sm text-violet-950"><li>Joists: {draft.joistSize || "not selected"} at {draft.joistSpacingInches || "?"} inches on center</li><li>Beam: {draft.beamPlies || "?"}-ply {draft.beamSize || "not selected"}</li><li>Posts: {draft.postCount || "?"} × {draft.postSize || "not selected"}</li><li>Attachment/stairs/railings: {draft.attachment || "unanswered"}; {draft.stairsIncluded || "unanswered"}; {draft.railingsIncluded || "unanswered"}</li></ul></div></section>
           {callouts.length ? <section aria-labelledby="blueprint-callouts-heading" aria-live="polite" className="mt-3 rounded-lg border-2 border-amber-400 bg-amber-50 p-3">
             <h5 id="blueprint-callouts-heading" className="font-black text-amber-950">What this draft still needs</h5>
             <p className="mt-1 text-sm text-amber-900">The numbered markers show where missing or unsupported decisions affect the drawing.</p>
             <ol className="mt-3 space-y-2">
-              {callouts.map((callout, index) => <li key={callout.id}><button type="button" className="flex min-h-11 w-full gap-3 rounded-md bg-white p-3 text-left text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-700" onClick={() => { if (callout.kind === "package") openPackageGuidance(callout.id); else { setDetailsOpen(true); setStep(callout.step); } }}><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-red-700 font-black text-white" aria-hidden="true">{index + 1}</span><span><span className="sr-only">Callout {index + 1}: </span>{callout.label}<span className="mt-1 block text-xs font-bold text-violet-800">{callout.kind === "package" ? "Open package guidance" : `Edit ${STEPS[callout.step]}`}</span></span></button></li>)}
+              {callouts.map((callout, index) => <li key={callout.id}><button type="button" className="flex min-h-11 w-full gap-3 rounded-md bg-white p-3 text-left text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-700" onClick={() => { if (callout.id === "stairs-fact" && draft.stairsIncluded === "yes") onEditStairPlacement(); else if (callout.kind === "package") openPackageGuidance(callout.id); else { setDetailsOpen(true); setStep(callout.step); } }}><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-red-700 font-black text-white" aria-hidden="true">{index + 1}</span><span><span className="sr-only">Callout {index + 1}: </span>{callout.label}<span className="mt-1 block text-xs font-bold text-violet-800">{callout.id === "stairs-fact" && draft.stairsIncluded === "yes" ? "Edit stair placement" : callout.kind === "package" ? "Open package guidance" : `Edit ${STEPS[callout.step]}`}</span></span></button></li>)}
             </ol>
-          </section> : plan.unresolvedPackages.length ? <p className="mt-3 rounded-md border border-amber-400 bg-amber-50 p-3 text-sm font-bold text-amber-950">The bounded main-deck checks passed, but the named stair, guard, or connector packages are still unresolved.</p> : <p className="mt-3 rounded-md border border-emerald-400 bg-emerald-50 p-3 text-sm font-bold text-emerald-950">No profile exceptions or unresolved packages remain. Review the drawing and quantities before approval.</p>}
+          </section> : <p className="mt-3 rounded-md border border-blue-400 bg-blue-50 p-3 text-sm font-bold text-blue-950">No immediate layout questions remain. Later design, ordering, and permit-readiness items are listed separately below.</p>}
+          <details className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3"><summary className="min-h-11 cursor-pointer py-2 font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-700">Later: design, ordering, and permit readiness</summary><p className="mt-2 text-sm text-slate-700">These items do not belong in “answer now” drawing callouts. They still block canonical approval or final estimate readiness at the appropriate later stage.</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-800"><li>Explicit City jurisdiction verification</li><li>Concealed ledger substrate and attachment detail</li><li>Soil bearing and frost-depth basis</li><li>Reviewed stair and guard details where applicable</li><li>Compatible connector products, manufacturer fasteners, prices, and traceable sources</li></ul><div className="mt-3 grid gap-2 sm:grid-cols-3">{plan.unresolvedPackages.includes("stairs") ? <button type="button" className={button} onClick={() => openPackageGuidance("package-stairs")}>Stair readiness guidance</button> : null}{plan.unresolvedPackages.includes("guard_schedule") ? <button type="button" className={button} onClick={() => openPackageGuidance("package-guards")}>Guard readiness guidance</button> : null}<button type="button" className={button} onClick={() => openPackageGuidance("package-connectors")}>Connector readiness guidance</button></div></details>
           {activePackage ? <div ref={packagePanelRef} tabIndex={-1} role="region" aria-live="polite" aria-labelledby="package-guidance-title" className="mt-3 rounded-lg border-2 border-violet-500 bg-violet-50 p-4 outline-none focus-visible:ring-2 focus-visible:ring-violet-700"><h5 id="package-guidance-title" className="font-black text-violet-950">{activePackage === "stairs" ? "Stair package guidance" : activePackage === "guards" ? "Guard and railing package guidance" : "Connector package guidance"}</h5><p className="mt-2 text-sm leading-6 text-violet-950">{activePackage === "stairs" ? "Complete the Stairs category in the takeoff checklist with a reviewed stair framing/landing/footing detail, purchasable quantities, compatible products, prices, and traceable sources. This drawing does not size stringers or landings." : activePackage === "guards" ? "Complete the Structural connectors category with the reviewed railing system layout: posts, corners, ends, blocking and load path, attachments, manufacturer fasteners, compatible products, prices, and sources." : "Complete the Structural connectors category in the takeoff checklist. Every applicable row needs its compatible product, manufacturer fastener schedule, verified substrate/coating/load path, purchase quantity, price, and traceable source."}</p><button type="button" className="mt-3 min-h-11 rounded-md border-2 border-violet-700 bg-white px-4 py-2 text-sm font-bold text-violet-950" onClick={() => setActivePackage(null)}>Close package guidance</button></div> : null}
           {plan.bom.length ? (
             <div className="mt-3 rounded border border-amber-400 bg-amber-50 p-3">
@@ -671,36 +685,25 @@ export function DeckPrescriptivePlanGenerator({
                   </li>
                 ))}
               </ul>
-              <div className="mt-3 border-t border-amber-300 pt-3">
-                <p className="font-black">Hardware requirements — products and prices still required</p>
-                <ul className="mt-2 space-y-2 text-sm">
-                  {plan.hardwareSchedule.map((item) => (
-                    <li key={item.key} className="rounded bg-white p-2">
-                      <strong>{item.quantity} {item.unit}</strong> · {item.specification}
-                      <span className="mt-1 block text-xs text-slate-600">Basis: {item.sourceId}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </div>
           ) : null}
           <label className="mt-3 flex min-h-11 gap-3 rounded border p-3 text-sm font-bold">
             <input
               type="checkbox"
-              disabled={!plan.quantities || Boolean(pendingFacts)}
+              disabled={!plan.quantities || callouts.length > 0 || Boolean(pendingFacts)}
               checked={approved}
               onChange={(e) => setApproved(e.target.checked)}
             />
-            I reviewed the field facts, rule checks, drawing, and material
-            quantities. This is not stamped engineering or permit approval.
+            I reviewed the saved field facts, explicit estimating assumptions,
+            rule checks, drawing, and preliminary quantities. Later permit and ordering packages remain unresolved.
           </label>
           <button
             type="button"
             className={`mt-3 w-full ${button}`}
-            disabled={disabled || !approved || !plan.quantities || Boolean(pendingFacts)}
+            disabled={disabled || !approved || !plan.quantities || callouts.length > 0 || Boolean(pendingFacts)}
             onClick={() => onApprove(plan)}
           >
-            Use approved main-deck framing in takeoff
+            Approve estimating layout and use preliminary framing in takeoff
           </button>
         </div>
       ) : null}

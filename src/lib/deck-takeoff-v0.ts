@@ -5,6 +5,48 @@ export type DeckObservationItem = Readonly<{
   observation: Record<string, unknown>;
 }>;
 
+export type DeckBlueprintVisitSeed = Readonly<{
+  source: "completed_human_site_visit";
+  observedMeasurements: readonly Readonly<{ itemKey: string; key: string; value: string; unit: string }>[];
+  supportedJoistSpacingInches: "12" | "16" | "24" | null;
+  heightFromGradeFeet: number | null;
+  estimatingAssumptions: Readonly<{
+    joistSize: "2x6" | "2x8" | "2x10" | "2x12" | null;
+    beamSize: "2x6" | "2x8" | "2x10" | "2x12" | null;
+    postSize: "4x4" | "6x6" | null;
+    postCount: number | null;
+  }>;
+}>;
+
+export function deckBlueprintVisitSeed(items: readonly DeckObservationItem[]): DeckBlueprintVisitSeed {
+  const keys = new Set(["height_from_grade", "ledger_length", "joist_spacing", "joist_depth", "beam_depth", "post_dimensions", "support_spacing", "exposed_footing_dimensions", "stair_width", "total_rise", "tread_depth", "representative_riser", "landing_dimensions", "guard_height", "opening", "rail_lengths_by_area", "handrail_height"]);
+  const observedMeasurements: { itemKey: string; key: string; value: string; unit: string }[] = [];
+  for (const item of items) {
+    const measurements = item.observation.measurements;
+    if (!measurements || typeof measurements !== "object" || Array.isArray(measurements)) continue;
+    for (const [key, raw] of Object.entries(measurements as Record<string, unknown>)) {
+      if (!keys.has(key) || !raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+      const measurement = raw as Record<string, unknown>;
+      if (typeof measurement.value === "string" && measurement.value.trim() && typeof measurement.unit === "string" && measurement.unit.trim()) observedMeasurements.push({ itemKey: item.itemKey, key, value: measurement.value.trim(), unit: measurement.unit.trim() });
+    }
+  }
+  const spacing = observedMeasurements.find((item) => item.key === "joist_spacing");
+  const spacingInches = spacing ? measurementFeet(spacing.value, spacing.unit) : null;
+  const rounded = spacingInches === null ? null : String(Math.round(spacingInches * 12));
+  const inches = (key: string) => { const item = observedMeasurements.find((entry) => entry.key === key); const feet = item ? measurementFeet(item.value, item.unit) : null; return feet === null ? null : Math.round(feet * 12); };
+  const member = (key: string) => { const depth = inches(key); return depth === 6 || depth === 8 || depth === 10 || depth === 12 ? `2x${depth}` as const : null; };
+  const post = observedMeasurements.find((entry) => entry.key === "post_dimensions");
+  const postNumbers = post?.value.match(/\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+  const postSize = postNumbers[0] === 4 && postNumbers[1] === 4 ? "4x4" : postNumbers[0] === 6 && postNumbers[1] === 6 ? "6x6" : null;
+  const support = observedMeasurements.find((entry) => entry.key === "support_spacing");
+  const supportFeet = support ? measurementFeet(support.value, support.unit) : null;
+  const dimensions = deckFieldDimensions(items);
+  const postCount = supportFeet && dimensions.lengthFeet ? Math.ceil(dimensions.lengthFeet / supportFeet) + 1 : null;
+  const height = observedMeasurements.find((entry) => entry.key === "height_from_grade");
+  const heightFromGradeFeet = height ? measurementFeet(height.value, height.unit) : null;
+  return { source: "completed_human_site_visit", observedMeasurements, supportedJoistSpacingInches: rounded === "12" || rounded === "16" || rounded === "24" ? rounded : null, heightFromGradeFeet, estimatingAssumptions: { joistSize: member("joist_depth"), beamSize: member("beam_depth"), postSize, postCount } };
+}
+
 export type DeckCatalogPrice = Readonly<{
   materialId: string;
   description: string;

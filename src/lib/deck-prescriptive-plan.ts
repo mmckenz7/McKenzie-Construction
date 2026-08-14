@@ -9,10 +9,10 @@ export const KNOXVILLE_2024_DECK_PROFILE = Object.freeze({
 } as const);
 
 export type DeckPrescriptiveDraft = Readonly<{
-  jurisdiction: "" | "city_knoxville_verified" | "other_or_uncertain";
+  jurisdiction: "" | "city_knoxville_verified" | "city_knoxville_estimating_assumption" | "other_or_uncertain";
   attachment: "" | "ledger" | "freestanding";
   attachmentConfirmed: boolean;
-  ledgerSubstrate: "" | "verified_band_rim" | "masonry_veneer" | "concrete_or_other" | "unknown";
+  ledgerSubstrate: "" | "verified_band_rim" | "estimating_band_rim_assumption" | "masonry_veneer" | "concrete_or_other" | "unknown";
   joistDirection: "" | "house_to_yard" | "side_to_side";
   joistSpacingInches: "" | "12" | "16" | "24";
   joistSize: "" | "2x6" | "2x8" | "2x10" | "2x12";
@@ -59,7 +59,7 @@ export type DeckPrescriptivePlan = Readonly<{
   profileId: typeof KNOXVILLE_2024_DECK_PROFILE.id;
   inputs: Readonly<{ lengthFeet: number; widthFeet: number; draft: DeckPrescriptiveDraft }>;
   checks: readonly Readonly<{ sourceId: string; result: "pass" | "exception"; actual: string; limit: string }>[];
-  unresolvedPackages: readonly ("stairs" | "connector_schedule" | "guard_schedule")[];
+  unresolvedPackages: readonly ("stairs" | "connector_schedule" | "guard_schedule" | "jurisdiction" | "ledger_detail" | "soil_frost")[];
   exceptions: readonly string[];
   quantities: Readonly<{ joists: number; beamLinearFeet: number; posts: number; footings: number; blockingPieces: number; ledgerLinearFeet: number; rimLinearFeet: number; joistHangers: number; postBases: number; postCaps: number; stairStringers: number; stairLandingFootings: number }> | null;
   bom: readonly FramingBomLine[];
@@ -87,6 +87,16 @@ const positive = (value: string) => { const n = Number(value); return Number.isF
 const whole = (value: string) => /^\d+$/.test(value.trim()) && Number(value) > 0 ? Number(value) : null;
 const lookupCeiling = <T extends { area: number }>(rows: readonly T[], area: number) => rows.find((row) => area <= row.area) ?? null;
 
+export function deckEstimatingImmediateIssueIds(args: Readonly<{ lengthFeet: number; widthFeet: number; draft: DeckPrescriptiveDraft; stairPlacementConfirmed: boolean }>) {
+  const issues: string[] = [];
+  if (!Number.isFinite(args.lengthFeet) || !Number.isFinite(args.widthFeet) || args.lengthFeet <= 0 || args.widthFeet <= 0 || args.lengthFeet > 40 || args.widthFeet > 18) issues.push("dimensions-profile");
+  if (!args.draft.attachment) issues.push("attachment-fact");
+  if (!args.draft.stairsIncluded || (args.draft.stairsIncluded === "yes" && !args.stairPlacementConfirmed)) issues.push("stairs-fact");
+  if (!args.draft.railingsIncluded) issues.push("railings-fact");
+  if (args.draft.unusualGeometry || args.draft.cantilever || args.draft.roofOrSpecialLoad || args.draft.attachment === "freestanding") issues.push("outside-profile");
+  return Object.freeze(issues);
+}
+
 export function recommendedPrescriptiveDraft(attachment: "ledger" | "freestanding", stairs: boolean, lengthFeet = 0, widthFeet = 0, railings = true): DeckPrescriptiveDraft {
   const tributaryArea = lengthFeet > 0 && widthFeet > 0 ? widthFeet * (lengthFeet / 2) / 2 : 0;
   const footing = lookupCeiling(FOOTING_1500, tributaryArea);
@@ -100,11 +110,11 @@ export function buildPrescriptiveDeckPlan(args: Readonly<{ lengthFeet: number; w
   const d = args.draft; const exceptions: string[] = []; const checks: { sourceId: string; result: "pass" | "exception"; actual: string; limit: string }[] = [];
   const fail = (message: string) => exceptions.push(message);
   if (!Number.isFinite(args.lengthFeet) || !Number.isFinite(args.widthFeet) || args.lengthFeet <= 0 || args.widthFeet <= 0 || args.lengthFeet > 40 || args.widthFeet > 18) fail("Deck dimensions must be finite, positive, and within this profile's 40 ft × 18 ft rectangular limit.");
-  if (d.jurisdiction !== "city_knoxville_verified") fail("City of Knoxville jurisdiction is not explicitly verified.");
+  if (d.jurisdiction !== "city_knoxville_verified" && d.jurisdiction !== "city_knoxville_estimating_assumption") fail("City of Knoxville jurisdiction is not explicitly verified or selected as an estimating-only assumption.");
   if (!d.attachmentConfirmed || !d.stairsConfirmed) fail("Confirm the blueprint attachment and stair facts before review.");
   if (!d.attachment || !d.stairsIncluded || !d.railingsIncluded) fail("Confirm attachment, stair, and railing applicability from the approved field facts.");
   if (d.attachment === "freestanding") fail("Freestanding support geometry is not supported by this profile yet; use an engineer/AHJ-approved plan.");
-  if (d.attachment === "ledger" && d.ledgerSubstrate !== "verified_band_rim") fail("This ledger path supports attachment only to a verified house band/rim joist; concrete, veneer, concealed, and other substrates need an approved detail.");
+  if (d.attachment === "ledger" && d.ledgerSubstrate !== "verified_band_rim" && d.ledgerSubstrate !== "estimating_band_rim_assumption") fail("This ledger path supports only a verified band/rim joist or an explicitly unresolved estimating assumption; concrete, veneer, and other substrates need an approved detail.");
   if (d.speciesGrade !== "southern_pine_no2" || d.treatmentService !== "pressure_treated_wet_service") fail("This profile supports only No. 2 Southern Pine with the wet-service table factor and verified pressure treatment/service use.");
   if (d.designLoad !== "40_live_10_dead") fail("This profile supports only 40 psf live plus 10 psf dead load; snow or greater loads require another approved profile.");
   if (d.unusualGeometry || d.cantilever || d.roofOrSpecialLoad) fail("Nonrectangular geometry, cantilevers, roofs, hot tubs, and special loads are outside this profile.");
@@ -129,7 +139,7 @@ export function buildPrescriptiveDeckPlan(args: Readonly<{ lengthFeet: number; w
   const footingRow = lookupCeiling(FOOTING_1500, tributaryArea);
   if (!footingRow || !footingDiameter || !footingThickness || footingDiameter < footingRow.diameter || footingThickness < footingRow.thickness || !footingDepth) fail("Footing diameter/thickness/depth does not satisfy IRC 2024 Table R507.3.1 plus the documented frost basis.");
   checks.push({ sourceId: "IRC2024:Table-R507.3.1:1500psf", result: footingRow && footingDiameter && footingThickness && footingDiameter >= footingRow.diameter && footingThickness >= footingRow.thickness ? "pass" : "exception", actual: `${footingDiameter ?? "?"} in dia × ${footingThickness ?? "?"} in thick; ${tributaryArea.toFixed(2)} sq ft`, limit: footingRow ? `≥${footingRow.diameter} in dia × ≥${footingRow.thickness} in thick` : "unsupported" });
-  const unresolvedPackages = Object.freeze([...(d.stairsIncluded === "yes" ? ["stairs" as const] : []), ...(d.railingsIncluded === "yes" ? ["guard_schedule" as const] : []), "connector_schedule" as const]);
+  const unresolvedPackages = Object.freeze([...(d.stairsIncluded === "yes" ? ["stairs" as const] : []), ...(d.railingsIncluded === "yes" ? ["guard_schedule" as const] : []), ...(d.jurisdiction === "city_knoxville_estimating_assumption" ? ["jurisdiction" as const] : []), ...(d.ledgerSubstrate === "estimating_band_rim_assumption" ? ["ledger_detail" as const] : []), ...(d.frostBasis.includes("estimating assumption") ? ["soil_frost" as const] : []), "connector_schedule" as const]);
   const inputs = Object.freeze({ lengthFeet: args.lengthFeet, widthFeet: args.widthFeet, draft: d });
   if (exceptions.length) return Object.freeze({ evidenceVersion: "deck-framing-evidence-v2", status: "exception_review", profileId: KNOXVILLE_2024_DECK_PROFILE.id, inputs, checks: Object.freeze(checks), unresolvedPackages, exceptions: Object.freeze(exceptions), quantities: null, bom: Object.freeze([]), hardwareSchedule: Object.freeze([]), reference: null });
   const spacing = Number(d.joistSpacingInches), joists = Math.ceil(args.lengthFeet * 12 / spacing) + 1, blockingRows = Math.max(0, Number(d.extraBlockingRows) || 0), blockingPieces = blockingRows * (joists - 1), beamLF = beamLines! * args.lengthFeet * plies!, ledgerLF = d.attachment === "ledger" ? args.lengthFeet : 0, rimLF = d.attachment === "ledger" ? args.lengthFeet + 2 * args.widthFeet : 2 * (args.lengthFeet + args.widthFeet), concreteCubicYards = Math.PI * Math.pow(footingDiameter! / 24, 2) * (footingThickness! / 12) * footings! / 27;

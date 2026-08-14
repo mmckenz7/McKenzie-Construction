@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { assertPartialFramingEvidenceBinding, buildPrescriptiveDeckPlan, isCanonicalFramingEvidence, KNOXVILLE_2024_DECK_PROFILE, recommendedPrescriptiveDraft } from "../src/lib/deck-prescriptive-plan.ts";
+import { assertPartialFramingEvidenceBinding, buildPrescriptiveDeckPlan, deckEstimatingImmediateIssueIds, isCanonicalFramingEvidence, KNOXVILLE_2024_DECK_PROFILE, recommendedPrescriptiveDraft } from "../src/lib/deck-prescriptive-plan.ts";
 import { buildDeckTakeoffPreview, COMPLETE_REBUILD_LINE_KEYS } from "../src/lib/deck-takeoff-v0.ts";
 
 const verified = { ...recommendedPrescriptiveDraft("ledger", false, 14, 12), jurisdiction: "city_knoxville_verified", attachmentConfirmed: true, stairsConfirmed: true, ledgerSubstrate: "verified_band_rim", postHeightFeet: "8", footingDiameterInches: "24", footingThicknessInches: "8", footingDepthInches: "24", frostBasis: "City permit reviewer confirmed 24 in basis", hardwareBasis: "Complete quoted connector schedule: Manufacturer quote H1, all applicable connection groups" };
@@ -38,6 +38,22 @@ test("bounded 2024 evaluator checks spans, posts, footings and emits purchasable
   assert.equal(plan.hardwareSchedule.some((item) => item.key === "beam_ply_fasteners"), false);
   const twoPly = buildPrescriptiveDeckPlan({ lengthFeet: 14, widthFeet: 12, draft: { ...verified, beamSize: "2x8", beamPlies: "2" } });
   assert.equal(twoPly.hardwareSchedule.find((item) => item.key === "beam_ply_fasteners").quantity, 24);
+});
+
+test("current 14x12 job produces preliminary quantities while readiness assumptions remain unresolved", () => {
+  const draft = { ...recommendedPrescriptiveDraft("ledger", true, 14, 12, true), jurisdiction: "city_knoxville_estimating_assumption", attachmentConfirmed: true, stairsConfirmed: true, ledgerSubstrate: "estimating_band_rim_assumption", joistSize: "2x10", joistSpacingInches: "16", beamSize: "2x12", beamPlies: "1", postSize: "6x6", postCount: "3", postHeightFeet: "10", footingDepthInches: "24", frostBasis: "24 in local frost-depth basis — estimating assumption pending AHJ verification" };
+  const beforePlacement = deckEstimatingImmediateIssueIds({ lengthFeet: 14, widthFeet: 12, draft, stairPlacementConfirmed: false });
+  const afterPlacement = deckEstimatingImmediateIssueIds({ lengthFeet: 14, widthFeet: 12, draft, stairPlacementConfirmed: true });
+  assert.deepEqual(beforePlacement, ["stairs-fact"]);
+  assert.deepEqual(afterPlacement, []);
+  const plan = buildPrescriptiveDeckPlan({ lengthFeet: 14, widthFeet: 12, draft });
+  assert.equal(plan.status, "ready_for_human_review");
+  assert.equal(plan.quantities.joists, 12);
+  assert.equal(plan.quantities.posts, 3);
+  assert.equal(Boolean(plan.quantities) && beforePlacement.length === 0, false, "approval unavailable before stair placement");
+  assert.equal(Boolean(plan.quantities) && afterPlacement.length === 0, true, "approval available after stair placement");
+  assert.deepEqual(plan.unresolvedPackages, ["stairs", "guard_schedule", "jurisdiction", "ledger_detail", "soil_frost", "connector_schedule"]);
+  assert.equal(isCanonicalFramingEvidence(plan), true);
 });
 
 test("every encoded IRC 2024 Table R507.5(1) 12-and-0 beam cell has an exact at/over boundary", () => {
@@ -107,7 +123,7 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(ui, /Main deck framing draft is partially ready/);
   assert.match(ui, /detail required/);
   assert.doesNotMatch(ui, /Complete quoted connector schedule:/);
-  assert.match(ui, /Hardware requirements — products and prices still required/);
+  assert.match(ui, /Compatible connector products, manufacturer fasteners, prices, and traceable sources/);
   assert.match(planner, /Price compatible hardware/);
   assert.match(ui, /Generate draft blueprint/);
   assert.match(ui, /Edit blueprint details/);
@@ -121,7 +137,8 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.doesNotMatch(planner, /<DeckPlanVisual/);
   assert.match(planner, /blueprintAttachment=\{railingGeometry\.attached === null \? null/);
   assert.match(ui, /type BlueprintCallout/);
-  for (const stableId of ["stale-field-facts", "dimensions-profile", "jurisdiction", "attachment-fact", "stairs-fact", "railings-fact", "ledger-substrate", "material-profile", "support-foundation", "joist-check", "beam-check", "post-check", "footing-check", "blocking-input", "outside-profile", "package-stairs", "package-guards", "package-connectors"]) assert.match(ui, new RegExp(`id: "${stableId}"`));
+  for (const stableId of ["stale-field-facts", "dimensions-profile", "attachment-fact", "stairs-fact", "railings-fact", "outside-profile"]) assert.match(ui, new RegExp(`id: "${stableId}"`));
+  for (const laterOnly of ["jurisdiction", "ledger-substrate", "support-foundation", "package-stairs", "package-guards", "package-connectors"]) assert.doesNotMatch(ui, new RegExp(`id: "${laterOnly}"`));
   assert.match(ui, /data-plan-member="callout-leader"/);
   assert.match(ui, /callout\.kind === "package"\) openPackageGuidance\(callout\.id\)/);
   assert.match(ui, /Open package guidance/);
@@ -134,10 +151,16 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(ui, /Outdated field facts — approval blocked/);
   assert.match(ui, /Rebuild from updated field facts/);
   assert.match(ui, /Keep current draft for comparison only/);
-  assert.match(ui, /disabled=\{!plan\.quantities \|\| Boolean\(pendingFacts\)\}/);
-  assert.match(ui, /disabled=\{disabled \|\| !approved \|\| !plan\.quantities \|\| Boolean\(pendingFacts\)\}/);
+  assert.match(ui, /disabled=\{!plan\.quantities \|\| callouts\.length > 0 \|\| Boolean\(pendingFacts\)\}/);
+  assert.match(ui, /disabled=\{disabled \|\| !approved \|\| !plan\.quantities \|\| callouts\.length > 0 \|\| Boolean\(pendingFacts\)\}/);
   assert.doesNotMatch(ui, /permit-preparation plan/);
   assert.match(ui, /sticky bottom-2/);
+  assert.match(ui, /Observed existing — completed human site visit/);
+  assert.match(ui, /Proposed estimating assumptions — reviewable/);
+  assert.match(ui, /They are not automatically declared to be the replacement design/);
+  assert.match(ui, /Later: design, ordering, and permit readiness/);
+  assert.match(ui, /No immediate layout questions remain/);
+  assert.match(planner, /deckBlueprintVisitSeed\(visitItems\)/);
 });
 
 test("exact partial stairs payload passes route binding while tampering and false completion reject", () => {

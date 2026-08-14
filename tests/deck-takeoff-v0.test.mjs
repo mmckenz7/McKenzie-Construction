@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildDeckTakeoffPreview,
   COMPLETE_REBUILD_LINE_KEYS,
+  deckBlueprintVisitSeed,
   deckFieldDimensions,
   deckRailingGeometry,
   deckStairPlacementIssue,
@@ -58,6 +59,16 @@ test("normalizes field measurements without reading dimensions from photos", () 
   assert.equal(measurementFeet("12 ft 6 in", "ft + in"), 12.5);
   assert.equal(measurementFeet("18", "in"), 1.5);
   assert.deepEqual(deckFieldDimensions(items), { lengthFeet: 12, widthFeet: 14 });
+});
+
+test("extracts completed human site-visit observations as explicit blueprint seeds", () => {
+  const seed = deckBlueprintVisitSeed([{ itemKey: "full_deck_yard", observation: { measurements: { length: { value: "14", unit: "ft" }, width: { value: "12", unit: "ft" }, height_from_grade: { value: "8", unit: "ft" } } } }, { itemKey: "underside_framing", observation: { measurements: { joist_spacing: { value: "16", unit: "in" }, joist_depth: { value: "10", unit: "in" }, beam_depth: { value: "12", unit: "in" } } } }, { itemKey: "supports_footings", observation: { measurements: { post_dimensions: { value: "6 × 6", unit: "in" }, support_spacing: { value: "84", unit: "in" }, exposed_footing_dimensions: { value: "24 × 24 × 8", unit: "in" } } } }]);
+  assert.equal(seed.source, "completed_human_site_visit");
+  assert.equal(seed.supportedJoistSpacingInches, "16");
+  assert.equal(seed.heightFromGradeFeet, 8);
+  assert.deepEqual(seed.estimatingAssumptions, { joistSize: "2x10", beamSize: "2x12", postSize: "6x6", postCount: 3 });
+  assert.ok(seed.observedMeasurements.some((item) => item.key === "height_from_grade" && item.value === "8"));
+  assert.ok(seed.observedMeasurements.some((item) => item.key === "exposed_footing_dimensions"));
 });
 
 test("creates deterministic decking, fastener, and human planned-cost lines", () => {

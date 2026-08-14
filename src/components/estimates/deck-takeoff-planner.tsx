@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DeckPrescriptivePlanGenerator } from "@/components/estimates/deck-prescriptive-plan-generator";
 import type { EstimateBuilderEnvelope } from "@/lib/estimate-builder-client";
 import type { DeckPrescriptivePlan } from "@/lib/deck-prescriptive-plan";
-import { buildDeckTakeoffPreview, COMPLETE_REBUILD_LINE_KEYS, completeRebuildScopeRequirement, deckFieldDimensions, deckRailingGeometry, type CompleteRebuildLineKey, type DeckObservationItem, type DeckTakeoffPlan, type DeckTakeoffPreview } from "@/lib/deck-takeoff-v0";
+import { buildDeckTakeoffPreview, COMPLETE_REBUILD_LINE_KEYS, completeRebuildScopeRequirement, deckBlueprintVisitSeed, deckFieldDimensions, deckRailingGeometry, type CompleteRebuildLineKey, type DeckObservationItem, type DeckTakeoffPlan, type DeckTakeoffPreview } from "@/lib/deck-takeoff-v0";
 
 type CatalogMaterial = {
   id: string;
@@ -118,8 +118,10 @@ export function DeckTakeoffPlanner({
   const [findingProducts, setFindingProducts] = useState(false);
   const [activeScopeKey, setActiveScopeKey] = useState<CompleteRebuildLineKey>(COMPLETE_REBUILD_LINE_KEYS[0]);
   const appliedDefaults = useRef(false);
+  const layoutDetailsRef = useRef<HTMLDetailsElement>(null);
   const dimensions = useMemo(() => deckFieldDimensions(visitItems), [visitItems]);
   const railingGeometry = useMemo(() => deckRailingGeometry(visitItems), [visitItems]);
+  const blueprintVisitSeed = useMemo(() => deckBlueprintVisitSeed(visitItems), [visitItems]);
 
   function productLengthFeet(description: string) {
     const matches = [...description.matchAll(/(?:^|\s|x|-)(\d+(?:\.\d+)?)\s*(?:ft|foot|feet)(?:\b|-)/gi)];
@@ -467,9 +469,9 @@ export function DeckTakeoffPlanner({
     <h3 className="mt-1 text-xl font-black text-slate-950">Turn field measurements into reviewed true costs</h3>
     <p className="mt-2 text-sm leading-6 text-slate-700">This is a complete-rebuild takeoff: old decking, framing, supports, and footings are not being reused. The app can calculate deck area, decking layout, and a reviewed rectangular railing perimeter. Every structural member, footing, connector, stair, labor, and logistics quantity must come from your named build plan.</p>
 
-    {dimensions.lengthFeet && dimensions.widthFeet ? <DeckPrescriptivePlanGenerator lengthFeet={dimensions.lengthFeet} widthFeet={dimensions.widthFeet} blueprintAttachment={railingGeometry.attached === null ? null : railingGeometry.attached ? "ledger" : "freestanding"} blueprintStairs={railingGeometry.stairsPresent} blueprintRailings={railingGeometry.railingsPresent} stairEdge={plan.stairEdge} stairPosition={plan.stairPosition} disabled={disabled} onApprove={usePrescriptivePlan} /> : <div className="mt-5 grid min-h-44 place-items-center rounded-xl border-2 border-amber-400 bg-amber-50 p-5 text-center text-sm font-bold text-amber-950">Enter the deck length and width in Field Measurements before generating the framing blueprint.</div>}
+    {dimensions.lengthFeet && dimensions.widthFeet ? <DeckPrescriptivePlanGenerator lengthFeet={dimensions.lengthFeet} widthFeet={dimensions.widthFeet} blueprintAttachment={railingGeometry.attached === null ? null : railingGeometry.attached ? "ledger" : "freestanding"} blueprintStairs={railingGeometry.stairsPresent} blueprintRailings={railingGeometry.railingsPresent} stairPlacementConfirmed={plan.stairPlacementConfirmed} visitSeed={blueprintVisitSeed} stairEdge={plan.stairEdge} stairPosition={plan.stairPosition} disabled={disabled} onEditStairPlacement={() => { if (layoutDetailsRef.current) { layoutDetailsRef.current.open = true; layoutDetailsRef.current.scrollIntoView({ behavior: "smooth", block: "start" }); } }} onApprove={usePrescriptivePlan} /> : <div className="mt-5 grid min-h-44 place-items-center rounded-xl border-2 border-amber-400 bg-amber-50 p-5 text-center text-sm font-bold text-amber-950">Enter the deck length and width in Field Measurements before generating the framing blueprint.</div>}
 
-    <details className="mt-5 rounded-xl border border-slate-300 bg-white p-4">
+    <details ref={layoutDetailsRef} className="mt-5 scroll-mt-24 rounded-xl border border-slate-300 bg-white p-4">
       <summary className="min-h-11 cursor-pointer py-2 font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700">Edit board layout and stair placement</summary>
       <div className="mt-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
