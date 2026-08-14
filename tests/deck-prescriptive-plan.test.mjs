@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { assertPartialFramingEvidenceBinding, buildPrescriptiveDeckPlan, deckEstimatingImmediateIssueIds, isCanonicalFramingEvidence, KNOXVILLE_2024_DECK_PROFILE, recommendedPrescriptiveDraft } from "../src/lib/deck-prescriptive-plan.ts";
+import { assertPartialFramingEvidenceBinding, buildPrescriptiveDeckPlan, deckEstimatingImmediateIssueIds, isCanonicalFramingEvidence, KNOXVILLE_2024_DECK_PROFILE, parseDeckPostPositions, recommendedPrescriptiveDraft } from "../src/lib/deck-prescriptive-plan.ts";
 import { buildDeckTakeoffPreview, COMPLETE_REBUILD_LINE_KEYS } from "../src/lib/deck-takeoff-v0.ts";
 
 const verified = { ...recommendedPrescriptiveDraft("ledger", false, 14, 12), jurisdiction: "city_knoxville_verified", attachmentConfirmed: true, stairsConfirmed: true, ledgerSubstrate: "verified_band_rim", postHeightFeet: "8", footingDiameterInches: "24", footingThicknessInches: "8", footingDepthInches: "24", frostBasis: "City permit reviewer confirmed 24 in basis", hardwareBasis: "Complete quoted connector schedule: Manufacturer quote H1, all applicable connection groups" };
+const withLayout = (draft, lengthFeet, widthFeet = 12, postCount = Number(draft.postCount || 3)) => ({ ...draft, beamDistanceFromHouseFeet: String(widthFeet), postCount: String(postCount), footingCount: String(postCount), postPositionsFeet: Array.from({ length: postCount }, (_, index) => String((lengthFeet * index) / Math.max(1, postCount - 1))).join(",") });
 
 test("bounded 2024 evaluator checks spans, posts, footings and emits purchasable BOM", () => {
   const plan = buildPrescriptiveDeckPlan({ lengthFeet: 14, widthFeet: 12, draft: verified });
@@ -17,6 +18,13 @@ test("bounded 2024 evaluator checks spans, posts, footings and emits purchasable
   assert.match(plan.bom[1].description, /2x12 × 14 ft beam plies/);
   assert.match(plan.bom[2].description, /6x6 × 8 ft posts/);
   assert.equal(isCanonicalFramingEvidence(plan), true);
+  const legacyPlan = structuredClone(plan);
+  delete legacyPlan.inputs.draft.beamDistanceFromHouseFeet;
+  delete legacyPlan.inputs.draft.postPositionsFeet;
+  delete legacyPlan.inputs.draft.postPlacementMode;
+  delete legacyPlan.inputs.draft.postDistancesFromHouseFeet;
+  delete legacyPlan.inputs.draft.postSnapInches;
+  assert.equal(isCanonicalFramingEvidence(legacyPlan), true, "previously saved canonical plans remain readable");
   assert.equal(isCanonicalFramingEvidence({ ...plan, bom: [{ ...plan.bom[0], quantity: 999 }] }), false);
   assert.equal(isCanonicalFramingEvidence({ ...plan, quantities: { ...plan.quantities, posts: 99 } }), false);
   assert.equal(isCanonicalFramingEvidence({ ...plan, extra: true }), false);
@@ -56,12 +64,26 @@ test("current 14x12 job produces preliminary quantities while readiness assumpti
   assert.equal(isCanonicalFramingEvidence(plan), true);
 });
 
+test("simple editor geometry preserves exact post locations and uses the largest real beam span", () => {
+  assert.deepEqual(parseDeckPostPositions("0,4,14", 14), [0, 4, 14]);
+  assert.equal(parseDeckPostPositions("0,14,4", 14)?.join(","), "0,4,14");
+  assert.equal(parseDeckPostPositions("0,14,14", 14), null);
+  const uneven = buildPrescriptiveDeckPlan({ lengthFeet: 14, widthFeet: 12, draft: { ...verified, postPositionsFeet: "0,4,14" } });
+  assert.equal(uneven.checks.find((check) => check.sourceId.includes("R507.5"))?.actual, "10.00 ft");
+  const inset = buildPrescriptiveDeckPlan({ lengthFeet: 14, widthFeet: 12, draft: { ...verified, postPositionsFeet: "1,7,13" } });
+  assert.match(inset.exceptions.join(" "), /overhanging beam needs a reviewed design/i);
+  const free = buildPrescriptiveDeckPlan({ lengthFeet: 14, widthFeet: 12, draft: { ...verified, postPlacementMode: "free", postDistancesFromHouseFeet: "10,10.1667,10" } });
+  assert.match(free.exceptions.join(" "), /reviewed custom beam\/support plan/i);
+});
+
 test("every encoded IRC 2024 Table R507.5(1) 12-and-0 beam cell has an exact at/over boundary", () => {
   const cells = { "2x6": { "1": 4, "2": 71/12, "3": 89/12 }, "2x8": { "1": 61/12, "2": 91/12, "3": 114/12 }, "2x10": { "1": 6, "2": 9, "3": 134/12 }, "2x12": { "1": 85/12, "2": 127/12, "3": 159/12 } };
   for (const [size, plies] of Object.entries(cells)) for (const [ply, limit] of Object.entries(plies)) {
-    const at = buildPrescriptiveDeckPlan({ lengthFeet: limit * 2, widthFeet: 12, draft: { ...verified, beamSize: size, beamPlies: ply, footingDiameterInches: "40", footingThicknessInches: "15" } });
+    const atLength = limit * 2;
+    const at = buildPrescriptiveDeckPlan({ lengthFeet: atLength, widthFeet: 12, draft: withLayout({ ...verified, beamSize: size, beamPlies: ply, footingDiameterInches: "40", footingThicknessInches: "15" }, atLength) });
     assert.equal(at.checks.find((check) => check.sourceId.includes("R507.5"))?.result, "pass", `${ply}-${size} at limit`);
-    const over = buildPrescriptiveDeckPlan({ lengthFeet: limit * 2 + 0.02, widthFeet: 12, draft: { ...verified, beamSize: size, beamPlies: ply, footingDiameterInches: "40", footingThicknessInches: "15" } });
+    const overLength = limit * 2 + 0.02;
+    const over = buildPrescriptiveDeckPlan({ lengthFeet: overLength, widthFeet: 12, draft: withLayout({ ...verified, beamSize: size, beamPlies: ply, footingDiameterInches: "40", footingThicknessInches: "15" }, overLength) });
     assert.equal(over.checks.find((check) => check.sourceId.includes("R507.5"))?.result, "exception", `${ply}-${size} over limit`);
   }
 });
@@ -70,17 +92,17 @@ test("4x4 post limits are enforced at and over each encoded tributary-area colum
   const rows = [[20,14],[40,13+8/12],[60,11],[80,9+5/12],[100,8+4/12],[120,7+5/12],[140,6+9/12],[160,6+2/12]];
   for (const [area, height] of rows) {
     const length = area / 3; // 12-ft joist span × (length/2 post span) ÷ 2 = 3×length tributary area.
-    const at = buildPrescriptiveDeckPlan({ lengthFeet: length, widthFeet: 12, draft: { ...verified, postCount: "3", postSize: "4x4", postHeightFeet: String(height), footingDiameterInches: "40", footingThicknessInches: "15" } });
+    const at = buildPrescriptiveDeckPlan({ lengthFeet: length, widthFeet: 12, draft: withLayout({ ...verified, postSize: "4x4", postHeightFeet: String(height), footingDiameterInches: "40", footingThicknessInches: "15" }, length) });
     assert.equal(at.checks.find((check) => check.sourceId.includes("R507.4"))?.result, "pass", `post at ${area}`);
-    const over = buildPrescriptiveDeckPlan({ lengthFeet: length, widthFeet: 12, draft: { ...verified, postCount: "3", postSize: "4x4", postHeightFeet: String(height + 0.01), footingDiameterInches: "40", footingThicknessInches: "15" } });
+    const over = buildPrescriptiveDeckPlan({ lengthFeet: length, widthFeet: 12, draft: withLayout({ ...verified, postSize: "4x4", postHeightFeet: String(height + 0.01), footingDiameterInches: "40", footingThicknessInches: "15" }, length) });
     assert.equal(over.checks.find((check) => check.sourceId.includes("R507.4"))?.result, "exception", `post over ${area}`);
   }
 });
 
 test("evaluator fails at rule boundaries and rejects unsupported assumptions", () => {
-  const overJoist = buildPrescriptiveDeckPlan({ lengthFeet: 14, widthFeet: 14.1, draft: verified });
+  const overJoist = buildPrescriptiveDeckPlan({ lengthFeet: 14, widthFeet: 14.1, draft: withLayout(verified, 14, 14.1) });
   assert.match(overJoist.exceptions.join(" "), /joist size\/spacing\/span/i);
-  const overBeam = buildPrescriptiveDeckPlan({ lengthFeet: 19, widthFeet: 12, draft: verified });
+  const overBeam = buildPrescriptiveDeckPlan({ lengthFeet: 19, widthFeet: 12, draft: withLayout(verified, 19) });
   assert.match(overBeam.exceptions.join(" "), /beam check/i);
   const overPost = buildPrescriptiveDeckPlan({ lengthFeet: 14, widthFeet: 12, draft: { ...verified, postSize: "4x4", postHeightFeet: "14" } });
   assert.match(overPost.exceptions.join(" "), /post size\/height/i);
@@ -161,6 +183,25 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(ui, /Later: design, ordering, and permit readiness/);
   assert.match(ui, /No immediate layout questions remain/);
   assert.match(planner, /deckBlueprintVisitSeed\(visitItems\)/);
+  assert.match(ui, /Simple deck editor/);
+  assert.match(ui, /Edit this drawing/);
+  assert.match(ui, /Support beam distance from house/);
+  assert.match(ui, /Add post/);
+  assert.match(ui, /Space posts evenly/);
+  assert.match(ui, /There is intentionally no AI instruction box/);
+  assert.match(ui, /Drag the purple beam up or down/);
+  assert.match(ui, /data-edit-handle/);
+  assert.match(ui, /onPointerMove/);
+  assert.match(ui, /setPointerCapture/);
+  assert.match(ui, /Snap to structural lines \(recommended\)/);
+  assert.match(ui, /Free placement/);
+  assert.match(ui, /1 inch \(recommended\)/);
+  assert.match(ui, /Automatic structural quantities pause/);
+  assert.match(ui, /within 6 inches of a perimeter snap exactly/);
+  assert.match(ui, /snapToStructuralLine/);
+  assert.match(ui, /postPositions\.map/);
+  assert.match(ui, /260 \* position/);
+  assert.match(planner, /framingPlanEvidence\.inputs\.lengthFeet/);
 });
 
 test("exact partial stairs payload passes route binding while tampering and false completion reject", () => {

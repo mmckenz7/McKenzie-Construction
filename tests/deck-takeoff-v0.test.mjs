@@ -84,6 +84,12 @@ test("creates deterministic decking, fastener, and human planned-cost lines", ()
   assert.match(preview.previewBinding, /^deck-reviewed-takeoff-v1:/);
 });
 
+test("an approved edited blueprint becomes the takeoff footprint", () => {
+  const preview = buildDeckTakeoffPreview({ items, plan: { ...basePlan, framingPlanEvidence: { inputs: { lengthFeet: 10, widthFeet: 10 }, unresolvedPackages: [], hardwareSchedule: [] } }, catalog });
+  assert.equal(preview.deckAreaSquareFeet, "100");
+  assert.match(preview.previewBinding, /"lengthFeet":10/);
+});
+
 test("complete rebuild requires every scope decision and a confirmed human build-plan source", () => {
   const blankScopeDecisions = Object.fromEntries(COMPLETE_REBUILD_LINE_KEYS.map((key) => [key, ""]));
   const scopeLines = COMPLETE_REBUILD_LINE_KEYS.map((key) => ({

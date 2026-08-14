@@ -5,6 +5,8 @@ import {
   buildPrescriptiveDeckPlan,
   deckEstimatingImmediateIssueIds,
   KNOXVILLE_2024_DECK_PROFILE,
+  parseDeckPostDistances,
+  parseDeckPostPositions,
   recommendedPrescriptiveDraft,
   type DeckPrescriptiveDraft,
   type DeckPrescriptivePlan,
@@ -27,6 +29,8 @@ type BlueprintCallout = Readonly<{ id: string; label: string; step: number; anch
 
 function draftForFacts(facts: BlueprintFacts, lengthFeet: number, widthFeet: number, visitSeed: DeckBlueprintVisitSeed) {
   const draft = recommendedPrescriptiveDraft(facts.attachment ?? "ledger", facts.stairs ?? false, lengthFeet, widthFeet, facts.railings ?? false);
+  const seededPostCount = visitSeed.estimatingAssumptions.postCount ?? Number(draft.postCount);
+  const seededPostPositions = Array.from({ length: seededPostCount }, (_, index) => String((lengthFeet * index) / Math.max(1, seededPostCount - 1))).join(",");
   return {
     ...draft,
     attachment: facts.attachment ?? "",
@@ -38,7 +42,11 @@ function draftForFacts(facts: BlueprintFacts, lengthFeet: number, widthFeet: num
     joistSize: visitSeed.estimatingAssumptions.joistSize ?? draft.joistSize,
     beamSize: visitSeed.estimatingAssumptions.beamSize ?? draft.beamSize,
     postSize: visitSeed.estimatingAssumptions.postSize ?? draft.postSize,
-    postCount: visitSeed.estimatingAssumptions.postCount ? String(visitSeed.estimatingAssumptions.postCount) : draft.postCount,
+    postCount: String(seededPostCount),
+    postPositionsFeet: seededPostPositions,
+    postPlacementMode: "aligned",
+    postDistancesFromHouseFeet: Array.from({ length: seededPostCount }, () => String(widthFeet)).join(","),
+    postSnapInches: "1",
     postHeightFeet: visitSeed.heightFromGradeFeet ? String(visitSeed.heightFromGradeFeet) : draft.postHeightFeet,
     jurisdiction: "city_knoxville_estimating_assumption",
     ledgerSubstrate: facts.attachment === "ledger" ? "estimating_band_rim_assumption" : draft.ledgerSubstrate,
@@ -108,7 +116,12 @@ export function DeckPrescriptivePlanGenerator({
   const [approved, setApproved] = useState(false);
   const [activePackage, setActivePackage] = useState<"stairs" | "guards" | "connectors" | null>(null);
   const packagePanelRef = useRef<HTMLDivElement>(null);
+  const drawingRef = useRef<SVGSVGElement>(null);
   const [drawingExpanded, setDrawingExpanded] = useState(false);
+  const [layoutEditorOpen, setLayoutEditorOpen] = useState(false);
+  const [activeDrawingDrag, setActiveDrawingDrag] = useState<Readonly<{ type: "beam" } | { type: "post"; index: number }> | null>(null);
+  const [proposedLengthFeet, setProposedLengthFeet] = useState(lengthFeet);
+  const [proposedWidthFeet, setProposedWidthFeet] = useState(widthFeet);
   const svgTitleId = useId();
   const svgDescriptionId = useId();
   const lastFactsSignature = useRef(factsSignature);
@@ -116,11 +129,15 @@ export function DeckPrescriptivePlanGenerator({
     if (lastFactsSignature.current === factsSignature) return;
     lastFactsSignature.current = factsSignature;
     if (dirty) { setPendingFacts(facts); setComparisonOnly(false); setApproved(false); }
-    else setDraft(draftForFacts(facts, lengthFeet, widthFeet, visitSeed));
+    else {
+      setProposedLengthFeet(lengthFeet);
+      setProposedWidthFeet(widthFeet);
+      setDraft(draftForFacts(facts, lengthFeet, widthFeet, visitSeed));
+    }
   }, [dirty, facts, factsSignature, lengthFeet, visitSeed, widthFeet]);
   const plan = useMemo(
-    () => buildPrescriptiveDeckPlan({ lengthFeet, widthFeet, draft }),
-    [lengthFeet, widthFeet, draft],
+    () => buildPrescriptiveDeckPlan({ lengthFeet: proposedLengthFeet, widthFeet: proposedWidthFeet, draft }),
+    [proposedLengthFeet, proposedWidthFeet, draft],
   );
   const set = <K extends keyof DeckPrescriptiveDraft>(
     key: K,
@@ -134,16 +151,20 @@ export function DeckPrescriptivePlanGenerator({
     plan.quantities?.joists ??
     Math.max(
       2,
-      Math.ceil((lengthFeet * 12) / Number(draft.joistSpacingInches || 16)) + 1,
+      Math.ceil((proposedLengthFeet * 12) / Number(draft.joistSpacingInches || 16)) + 1,
     );
   const beamLines = Math.max(1, Number(draft.beamLineCount || 1));
   const posts = Math.max(1, Number(draft.postCount || 1));
+  const postPositions = parseDeckPostPositions(draft.postPositionsFeet, proposedLengthFeet) ?? Array.from({ length: posts }, (_, index) => (proposedLengthFeet * index) / Math.max(1, posts - 1));
+  const beamDistance = Number(draft.beamDistanceFromHouseFeet || proposedWidthFeet);
+  const postDistances = parseDeckPostDistances(draft.postDistancesFromHouseFeet, proposedWidthFeet, posts) ?? Array.from({ length: posts }, () => beamDistance);
+  const beamY = 20 + (150 * Math.min(proposedWidthFeet, Math.max(0, beamDistance))) / Math.max(0.1, proposedWidthFeet);
   const stairAlong = stairPosition === "start" ? 55 : stairPosition === "end" ? 235 : 145;
   const stairAcross = stairPosition === "start" ? 35 : stairPosition === "end" ? 125 : 80;
   const callouts = useMemo<BlueprintCallout[]>(() => {
     const values: BlueprintCallout[] = [];
     const add = (value: BlueprintCallout) => { if (!values.some((item) => item.id === value.id)) values.push(value); };
-    const immediateIssues = new Set(deckEstimatingImmediateIssueIds({ lengthFeet, widthFeet, draft, stairPlacementConfirmed }));
+    const immediateIssues = new Set(deckEstimatingImmediateIssueIds({ lengthFeet: proposedLengthFeet, widthFeet: proposedWidthFeet, draft, stairPlacementConfirmed }));
     if (pendingFacts) add({ id: "stale-field-facts", label: "This drawing uses outdated field facts and is available for comparison only. Rebuild it before approval.", step: 0, anchorX: 160, anchorY: 95, markerX: 160, markerY: 12, kind: "exception" });
     if (immediateIssues.has("dimensions-profile")) add({ id: "dimensions-profile", label: "The deck dimensions are missing or outside this profile's supported rectangular limits.", step: 0, anchorX: 160, anchorY: 95, markerX: 160, markerY: 55, kind: "exception" });
     if (immediateIssues.has("attachment-fact")) add({ id: "attachment-fact", label: "Confirm whether the replacement layout is ledger-attached or freestanding.", step: 0, anchorX: 160, anchorY: 20, markerX: 116, markerY: 10, kind: "input" });
@@ -151,7 +172,53 @@ export function DeckPrescriptivePlanGenerator({
     if (immediateIssues.has("railings-fact")) add({ id: "railings-fact", label: "Confirm whether guards or railings apply from the approved field facts.", step: 0, anchorX: 290, anchorY: 45, markerX: 302, markerY: 82, kind: "input" });
     if (immediateIssues.has("outside-profile")) add({ id: "outside-profile", label: "The proposed replacement geometry or load condition is outside this supported layout profile. Use an engineer/building-department-approved plan.", step: 3, anchorX: 250, anchorY: 145, markerX: 302, markerY: 154, kind: "exception" });
     return values;
-  }, [draft, lengthFeet, pendingFacts, stairAlong, stairAcross, stairEdge, stairPlacementConfirmed, widthFeet]);
+  }, [draft, pendingFacts, proposedLengthFeet, proposedWidthFeet, stairAlong, stairAcross, stairEdge, stairPlacementConfirmed]);
+
+  const resetPostsEvenly = (count: number, nextLength = proposedLengthFeet) => {
+    const positions = Array.from({ length: count }, (_, index) => String((nextLength * index) / Math.max(1, count - 1))).join(",");
+    setDraft((current) => ({ ...current, postCount: String(count), footingCount: String(count), postPositionsFeet: positions, postDistancesFromHouseFeet: Array.from({ length: count }, () => String(Number(current.beamDistanceFromHouseFeet) || proposedWidthFeet)).join(",") }));
+    setDirty(true);
+    setApproved(false);
+  };
+  const snapToStructuralLine = (value: number, maximum: number) => {
+    if (draft.postPlacementMode !== "aligned") return value;
+    if (value <= 0.5) return 0;
+    if (maximum - value <= 0.5) return maximum;
+    const gridFeet = Number(draft.postSnapInches) / 12;
+    return Math.round(value / gridFeet) * gridFeet;
+  };
+  const movePost = (index: number, value: number) => {
+    const positions = [...postPositions];
+    const minimum = index === 0 ? 0 : positions[index - 1] + 0.25;
+    const maximum = index === positions.length - 1 ? proposedLengthFeet : positions[index + 1] - 0.25;
+    const snapped = snapToStructuralLine(value, proposedLengthFeet);
+    positions[index] = Number(Math.min(maximum, Math.max(minimum, snapped)).toFixed(4));
+    set("postPositionsFeet", positions.join(","));
+  };
+  const movePostDistance = (index: number, value: number) => {
+    const distances = [...postDistances];
+    distances[index] = Number(Math.min(proposedWidthFeet, Math.max(0, value)).toFixed(4));
+    set("postDistancesFromHouseFeet", distances.join(","));
+  };
+  const moveDrawingMember = (clientX: number, clientY: number) => {
+    if (!activeDrawingDrag || !drawingRef.current) return;
+    const bounds = drawingRef.current.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    const drawingX = ((clientX - bounds.left) * 320) / bounds.width;
+    const drawingY = ((clientY - bounds.top) * 210) / bounds.height;
+    if (activeDrawingDrag.type === "beam") {
+      const distance = ((drawingY - 20) * proposedWidthFeet) / 150;
+      const snapped = snapToStructuralLine(distance, proposedWidthFeet);
+      const nextDistance = Number(Math.min(proposedWidthFeet, Math.max(1, snapped)).toFixed(4));
+      setDraft((current) => ({ ...current, beamDistanceFromHouseFeet: String(nextDistance), postDistancesFromHouseFeet: current.postPlacementMode === "aligned" ? Array.from({ length: posts }, () => String(nextDistance)).join(",") : current.postDistancesFromHouseFeet }));
+      setDirty(true);
+      setApproved(false);
+      return;
+    }
+    const position = ((drawingX - 30) * proposedLengthFeet) / 260;
+    movePost(activeDrawingDrag.index, position);
+    if (draft.postPlacementMode === "free") movePostDistance(activeDrawingDrag.index, ((drawingY - 20) * proposedWidthFeet) / 150);
+  };
   const unresolvedLabels = plan.unresolvedPackages.map((item) => item === "stairs" ? "reviewed stair detail" : item === "guard_schedule" ? "guard/railing attachment schedule" : item === "jurisdiction" ? "jurisdiction verification" : item === "ledger_detail" ? "concealed ledger attachment detail" : item === "soil_frost" ? "soil/frost verification" : "compatible connector schedule");
   const openPackageGuidance = (id: string) => {
     const packageName = id === "package-stairs" ? "stairs" : id === "package-guards" ? "guards" : "connectors";
@@ -171,7 +238,7 @@ export function DeckPrescriptivePlanGenerator({
         Subject to field verification and City building-department approval. An
         engineer/AHJ-approved plan may be used instead.
       </p>
-      {pendingFacts ? <div role="alert" className="mt-3 rounded-lg border-2 border-red-600 bg-red-50 p-3 text-sm text-red-950"><p className="font-black">Outdated field facts — approval blocked</p><p className="mt-1">The current drawing no longer matches the latest dimensions or applicability. You may keep it visible for comparison, but it cannot be approved until updated.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><button type="button" className={button} onClick={() => { setDraft(draftForFacts(pendingFacts, lengthFeet, widthFeet, visitSeed)); setPendingFacts(null); setComparisonOnly(false); setDirty(false); setApproved(false); setGenerated(true); setStep(4); }}>Rebuild from updated field facts</button>{!comparisonOnly ? <button type="button" className="min-h-11 rounded-md border-2 border-red-700 bg-white px-4 py-2 font-bold" onClick={() => setComparisonOnly(true)}>Keep current draft for comparison only</button> : <p className="rounded-md bg-white p-3 font-bold">Comparison only. Rebuild from updated field facts to enable approval.</p>}</div></div> : null}
+      {pendingFacts ? <div role="alert" className="mt-3 rounded-lg border-2 border-red-600 bg-red-50 p-3 text-sm text-red-950"><p className="font-black">Outdated field facts — approval blocked</p><p className="mt-1">The current drawing no longer matches the latest dimensions or applicability. You may keep it visible for comparison, but it cannot be approved until updated.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><button type="button" className={button} onClick={() => { setProposedLengthFeet(lengthFeet); setProposedWidthFeet(widthFeet); setDraft(draftForFacts(pendingFacts, lengthFeet, widthFeet, visitSeed)); setPendingFacts(null); setComparisonOnly(false); setDirty(false); setApproved(false); setGenerated(true); setStep(4); }}>Rebuild from updated field facts</button>{!comparisonOnly ? <button type="button" className="min-h-11 rounded-md border-2 border-red-700 bg-white px-4 py-2 font-bold" onClick={() => setComparisonOnly(true)}>Keep current draft for comparison only</button> : <p className="rounded-md bg-white p-3 font-bold">Comparison only. Rebuild from updated field facts to enable approval.</p>}</div></div> : null}
       {!generated ? <button type="button" className={`mt-4 w-full ${button}`} disabled={disabled} onClick={() => { setGenerated(true); setDetailsOpen(false); setStep(4); }}>
         Generate draft blueprint
       </button> : <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -565,10 +632,15 @@ export function DeckPrescriptivePlanGenerator({
         <div className="mt-3">
           <div className="overflow-x-auto rounded border bg-slate-50">
           <svg
+            ref={drawingRef}
             viewBox="0 0 320 210"
             role="img"
             aria-labelledby={`${svgTitleId} ${svgDescriptionId}`}
             className={drawingExpanded ? "min-w-[720px] w-full" : "min-w-[320px] w-full"}
+            style={layoutEditorOpen ? { touchAction: "none" } : undefined}
+            onPointerMove={(event) => moveDrawingMember(event.clientX, event.clientY)}
+            onPointerUp={(event) => { if (drawingRef.current?.hasPointerCapture(event.pointerId)) drawingRef.current.releasePointerCapture(event.pointerId); setActiveDrawingDrag(null); }}
+            onPointerCancel={() => setActiveDrawingDrag(null)}
           >
             <title id={svgTitleId}>Prescriptive estimating draft framing blueprint</title>
             <desc id={svgDescriptionId}>Main deck framing drawing with joists, beams, posts, footings, attachment edge, stair opening when applicable, and numbered callouts for missing or unresolved work.</desc>
@@ -593,30 +665,48 @@ export function DeckPrescriptivePlanGenerator({
               />
             ))}
             {Array.from({ length: beamLines }, (_, i) => (
-              <line
-                data-plan-member="beam"
-                key={`b${i}`}
-                x1="30"
-                x2="290"
-                y1={20 + ((i + 1) * 150) / (beamLines + 1)}
-                y2={20 + ((i + 1) * 150) / (beamLines + 1)}
-                stroke="#7c3aed"
-                strokeWidth="4"
-              />
+              <g key={`b${i}`}>
+                <line
+                  data-edit-handle={layoutEditorOpen && beamLines === 1 ? "support-beam" : undefined}
+                  x1="30"
+                  x2="290"
+                  y1={beamLines === 1 ? beamY : 20 + ((i + 1) * 150) / (beamLines + 1)}
+                  y2={beamLines === 1 ? beamY : 20 + ((i + 1) * 150) / (beamLines + 1)}
+                  stroke="transparent"
+                  strokeWidth="18"
+                  className={layoutEditorOpen && beamLines === 1 ? "cursor-ns-resize" : undefined}
+                  onPointerDown={layoutEditorOpen && beamLines === 1 ? (event) => { drawingRef.current?.setPointerCapture(event.pointerId); setActiveDrawingDrag({ type: "beam" }); } : undefined}
+                />
+                <line
+                  data-plan-member="beam"
+                  x1="30"
+                  x2="290"
+                  y1={beamLines === 1 ? beamY : 20 + ((i + 1) * 150) / (beamLines + 1)}
+                  y2={beamLines === 1 ? beamY : 20 + ((i + 1) * 150) / (beamLines + 1)}
+                  stroke="#7c3aed"
+                  strokeWidth="4"
+                  pointerEvents="none"
+                />
+              </g>
             ))}
-            {Array.from({ length: posts }, (_, i) => (
-              <g key={`p${i}`}>
+            {postPositions.map((position, i) => (
+              <g
+                key={`p${i}`}
+                data-edit-handle={layoutEditorOpen ? `post-${i + 1}` : undefined}
+                className={layoutEditorOpen ? "cursor-ew-resize" : undefined}
+                onPointerDown={layoutEditorOpen ? (event) => { drawingRef.current?.setPointerCapture(event.pointerId); setActiveDrawingDrag({ type: "post", index: i }); } : undefined}
+              >
                 <circle
                   data-plan-member="footing"
-                  cx={45 + (i * 230) / Math.max(1, posts - 1)}
-                  cy="120"
-                  r="7"
+                  cx={30 + (260 * position) / Math.max(0.1, proposedLengthFeet)}
+                  cy={20 + (150 * postDistances[i]) / Math.max(0.1, proposedWidthFeet)}
+                  r={layoutEditorOpen ? "11" : "7"}
                   fill="#c4b5fd"
                 />
                 <rect
                   data-plan-member="post"
-                  x={41 + (i * 230) / Math.max(1, posts - 1)}
-                  y="116"
+                  x={26 + (260 * position) / Math.max(0.1, proposedLengthFeet)}
+                  y={16 + (150 * postDistances[i]) / Math.max(0.1, proposedWidthFeet)}
                   width="8"
                   height="8"
                   fill="#4c1d95"
@@ -658,11 +748,12 @@ export function DeckPrescriptivePlanGenerator({
             ))}
             <text x="160" y="188" textAnchor="middle" fontSize="8" fontWeight="700" fill="#991b1b">ESTIMATING DRAFT — NOT FOR PERMIT OR CONSTRUCTION — NOT STAMPED</text>
             <text x="160" y="198" textAnchor="middle" fontSize="10">
-              Plan geometry changes with framing inputs · not stamped
+              {proposedLengthFeet} ft × {proposedWidthFeet} ft · editable estimating layout
             </text>
           </svg>
           </div>
-          <button type="button" className="mt-2 min-h-11 rounded-md border-2 border-slate-400 bg-white px-4 py-2 text-sm font-bold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600" aria-pressed={drawingExpanded} onClick={() => setDrawingExpanded((value) => !value)}>{drawingExpanded ? "Fit drawing to screen" : "Expand drawing"}</button>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3"><button type="button" className="min-h-11 rounded-md bg-violet-700 px-4 py-2 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600" aria-expanded={layoutEditorOpen} onClick={() => setLayoutEditorOpen((value) => !value)}>{layoutEditorOpen ? "Close layout editor" : "Edit this drawing"}</button><button type="button" className="min-h-11 rounded-md border-2 border-slate-400 bg-white px-4 py-2 text-sm font-bold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600" aria-pressed={drawingExpanded} onClick={() => setDrawingExpanded((value) => !value)}>{drawingExpanded ? "Fit drawing to screen" : "Expand drawing"}</button>{draft.stairsIncluded === "yes" ? <button type="button" className="min-h-11 rounded-md border-2 border-amber-600 bg-white px-4 py-2 text-sm font-bold text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600" onClick={onEditStairPlacement}>Move stairs</button> : null}</div>
+          {layoutEditorOpen ? <section className="mt-3 rounded-lg border-2 border-violet-500 bg-violet-50 p-3" aria-labelledby="simple-deck-editor-heading"><h5 id="simple-deck-editor-heading" className="font-black text-violet-950">Simple deck editor</h5><p className="mt-1 text-sm text-violet-900">Drag the purple beam up or down. Drag each post left or right. The controls below provide the same edits with exact dimensions.</p><fieldset className="mt-3"><legend className="text-sm font-black text-violet-950">Post placement mode</legend><div className="mt-2 grid gap-2 sm:grid-cols-2"><label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-violet-400 bg-white p-3 text-sm font-bold"><input type="radio" name="post-placement-mode" checked={draft.postPlacementMode === "aligned"} onChange={() => { setDraft((current) => ({ ...current, postPlacementMode: "aligned", postDistancesFromHouseFeet: Array.from({ length: posts }, () => current.beamDistanceFromHouseFeet).join(",") })); setDirty(true); setApproved(false); }} />Snap to structural lines (recommended)</label><label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-amber-500 bg-white p-3 text-sm font-bold"><input type="radio" name="post-placement-mode" checked={draft.postPlacementMode === "free"} onChange={() => set("postPlacementMode", "free")} />Free placement</label></div></fieldset>{draft.postPlacementMode === "aligned" ? <><p className="mt-3 rounded-md bg-white p-3 text-sm font-bold text-violet-950">Posts stay on the selected beam. Beams and end posts dragged within 6 inches of a perimeter snap exactly onto that perimeter so an accidental offset cannot create a false extra beam line.</p><Field label="Measurement snap spacing"><select className={control} value={draft.postSnapInches} onChange={(event) => set("postSnapInches", event.target.value as DeckPrescriptiveDraft["postSnapInches"])}><option value="1">1 inch (recommended)</option><option value="3">3 inches</option><option value="6">6 inches</option><option value="12">12 inches</option></select></Field></> : <p role="alert" className="mt-3 rounded-md border-2 border-amber-500 bg-amber-50 p-3 text-sm font-bold text-amber-950">Free placement is for recording an unusual existing layout. Automatic structural quantities pause until a reviewed custom support plan is supplied.</p>}<div className="mt-3 grid gap-3 sm:grid-cols-2"><Field label="Deck length (feet)"><input className={control} type="number" min="1" max="40" step="0.25" value={proposedLengthFeet} onChange={(event) => { const value = Number(event.target.value); if (!Number.isFinite(value)) return; setProposedLengthFeet(value); resetPostsEvenly(posts, value); }} /></Field><Field label="Deck depth from house (feet)"><input className={control} type="number" min="1" max="18" step="0.25" value={proposedWidthFeet} onChange={(event) => { const value = Number(event.target.value); if (!Number.isFinite(value)) return; setProposedWidthFeet(value); setDraft((current) => ({ ...current, beamDistanceFromHouseFeet: String(value), postDistancesFromHouseFeet: current.postPlacementMode === "aligned" ? Array.from({ length: posts }, () => String(value)).join(",") : current.postDistancesFromHouseFeet })); setDirty(true); setApproved(false); }} /></Field></div><Field label={`Support beam distance from house: ${Number.isFinite(beamDistance) ? beamDistance : "?"} ft`} help="Drag the support line toward or away from the house. In snap mode, a beam within 6 inches of the outside edge becomes the outside beam instead of creating a second near-parallel line."><input className="mt-2 w-full accent-violet-700" type="range" min="1" max={Math.max(1, proposedWidthFeet)} step={Number(draft.postSnapInches) / 12} value={Math.min(proposedWidthFeet, Math.max(1, beamDistance || proposedWidthFeet))} onChange={(event) => { const snapped = snapToStructuralLine(Number(event.target.value), proposedWidthFeet); const value = String(snapped); setDraft((current) => ({ ...current, beamDistanceFromHouseFeet: value, postDistancesFromHouseFeet: current.postPlacementMode === "aligned" ? Array.from({ length: posts }, () => value).join(",") : current.postDistancesFromHouseFeet })); setDirty(true); setApproved(false); }} /></Field><div className="mt-3 flex flex-wrap gap-2"><button type="button" className={button} onClick={() => resetPostsEvenly(posts + 1)} disabled={posts >= 20}>Add post</button><button type="button" className="min-h-11 rounded-md border-2 border-slate-500 bg-white px-4 py-2 text-sm font-bold text-slate-900 disabled:opacity-50" onClick={() => resetPostsEvenly(posts - 1)} disabled={posts <= 2}>Remove post</button><button type="button" className="min-h-11 rounded-md border-2 border-violet-600 bg-white px-4 py-2 text-sm font-bold text-violet-950" onClick={() => resetPostsEvenly(posts)}>Space posts evenly</button></div><div className="mt-3 space-y-3">{postPositions.map((position, index) => <Field key={`post-control-${index}`} label={`Post ${index + 1}: ${position.toFixed(2)} ft from the left edge${draft.postPlacementMode === "free" ? `; ${postDistances[index].toFixed(2)} ft from house` : ""}`}><input className="mt-2 w-full accent-violet-700" type="range" min={index === 0 ? 0 : postPositions[index - 1] + 0.25} max={index === postPositions.length - 1 ? proposedLengthFeet : postPositions[index + 1] - 0.25} step={draft.postPlacementMode === "aligned" ? Number(draft.postSnapInches) / 12 : 0.01} value={position} onChange={(event) => movePost(index, Number(event.target.value))} /></Field>)}</div><p className="mt-3 rounded-md bg-white p-3 text-xs font-bold text-violet-950">There is intentionally no AI instruction box. What you place on this editor is what the estimating drawing records.</p></section> : null}
           <p className="mt-2 rounded-md border border-red-300 bg-red-50 p-3 text-xs font-black text-red-950">ESTIMATING DRAFT — NOT FOR PERMIT OR CONSTRUCTION — NOT STAMPED</p>
           <section className="mt-3 grid gap-3 md:grid-cols-2" aria-label="Site visit evidence and proposed estimating assumptions"><div className="rounded-lg border border-blue-300 bg-blue-50 p-3"><h5 className="font-black text-blue-950">Observed existing — completed human site visit</h5><p className="mt-1 text-xs text-blue-900">Saved field observations are reused as evidence. They are not automatically declared to be the replacement design.</p><ul className="mt-2 space-y-1 text-sm text-blue-950">{visitSeed.observedMeasurements.length ? visitSeed.observedMeasurements.map((item) => <li key={`${item.itemKey}:${item.key}`}><strong>{item.key.replaceAll("_", " ")}:</strong> {item.value} {item.unit}</li>) : <li>No reusable measurement was saved.</li>}</ul></div><div className="rounded-lg border border-violet-300 bg-violet-50 p-3"><h5 className="font-black text-violet-950">Proposed estimating assumptions — reviewable</h5><p className="mt-1 text-xs text-violet-900">Supported observed values seed this editable draft only as explicit assumptions; the code-profile checks run again.</p><ul className="mt-2 space-y-1 text-sm text-violet-950"><li>Joists: {draft.joistSize || "not selected"} at {draft.joistSpacingInches || "?"} inches on center</li><li>Beam: {draft.beamPlies || "?"}-ply {draft.beamSize || "not selected"}</li><li>Posts: {draft.postCount || "?"} × {draft.postSize || "not selected"}</li><li>Attachment/stairs/railings: {draft.attachment || "unanswered"}; {draft.stairsIncluded || "unanswered"}; {draft.railingsIncluded || "unanswered"}</li></ul></div></section>
           {callouts.length ? <section aria-labelledby="blueprint-callouts-heading" aria-live="polite" className="mt-3 rounded-lg border-2 border-amber-400 bg-amber-50 p-3">

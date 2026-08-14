@@ -119,8 +119,11 @@ export function DeckTakeoffPlanner({
   const [activeScopeKey, setActiveScopeKey] = useState<CompleteRebuildLineKey>(COMPLETE_REBUILD_LINE_KEYS[0]);
   const appliedDefaults = useRef(false);
   const layoutDetailsRef = useRef<HTMLDetailsElement>(null);
-  const dimensions = useMemo(() => deckFieldDimensions(visitItems), [visitItems]);
-  const railingGeometry = useMemo(() => deckRailingGeometry(visitItems), [visitItems]);
+  const fieldDimensions = useMemo(() => deckFieldDimensions(visitItems), [visitItems]);
+  const dimensions = plan.framingPlanEvidence
+    ? { lengthFeet: plan.framingPlanEvidence.inputs.lengthFeet, widthFeet: plan.framingPlanEvidence.inputs.widthFeet }
+    : fieldDimensions;
+  const railingGeometry = useMemo(() => deckRailingGeometry(visitItems, plan.framingPlanEvidence ? { lengthFeet: plan.framingPlanEvidence.inputs.lengthFeet, widthFeet: plan.framingPlanEvidence.inputs.widthFeet } : null), [plan.framingPlanEvidence, visitItems]);
   const blueprintVisitSeed = useMemo(() => deckBlueprintVisitSeed(visitItems), [visitItems]);
 
   function productLengthFeet(description: string) {

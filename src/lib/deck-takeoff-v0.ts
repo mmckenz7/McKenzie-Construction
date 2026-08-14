@@ -232,8 +232,10 @@ function conditionalApplies(item: DeckObservationItem | undefined) {
   return null;
 }
 
-export function deckRailingGeometry(items: readonly DeckObservationItem[]) {
-  const { lengthFeet, widthFeet } = deckFieldDimensions(items);
+export function deckRailingGeometry(items: readonly DeckObservationItem[], proposedDimensions?: Readonly<{ lengthFeet: number; widthFeet: number }> | null) {
+  const fieldDimensions = deckFieldDimensions(items);
+  const lengthFeet = proposedDimensions?.lengthFeet ?? fieldDimensions.lengthFeet;
+  const widthFeet = proposedDimensions?.widthFeet ?? fieldDimensions.widthFeet;
   const attached = conditionalApplies(items.find((item) => item.itemKey === "house_ledger"));
   const stairs = items.find((item) => item.itemKey === "stairs_landings");
   const stairsPresent = conditionalApplies(stairs);
@@ -359,12 +361,15 @@ export function buildDeckTakeoffPreview(input: Readonly<{
   plan: DeckTakeoffPlan;
   catalog: ReadonlyMap<string, DeckCatalogPrice>;
 }>): DeckTakeoffPreview {
-  const { lengthFeet, widthFeet } = deckFieldDimensions(input.items);
+  const fieldDimensions = deckFieldDimensions(input.items);
+  const proposedDimensions = input.plan.framingPlanEvidence?.inputs ?? null;
+  const lengthFeet = proposedDimensions?.lengthFeet ?? fieldDimensions.lengthFeet;
+  const widthFeet = proposedDimensions?.widthFeet ?? fieldDimensions.widthFeet;
   const unresolved: string[] = [];
   const lines: DeckTakeoffPreviewLine[] = [];
   if (!lengthFeet || !widthFeet) unresolved.push("Verified deck length and width are required.");
   const area = lengthFeet !== null && widthFeet !== null ? lengthFeet * widthFeet : null;
-  const railingGeometry = deckRailingGeometry(input.items);
+  const railingGeometry = deckRailingGeometry(input.items, lengthFeet && widthFeet ? { lengthFeet, widthFeet } : null);
   const stairPlacementIssue = deckStairPlacementIssue({
     lengthFeet, widthFeet,
     attached: railingGeometry.attached,

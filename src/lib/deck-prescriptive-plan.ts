@@ -20,9 +20,14 @@ export type DeckPrescriptiveDraft = Readonly<{
   treatmentService: "" | "pressure_treated_wet_service";
   designLoad: "" | "40_live_10_dead";
   beamLineCount: string;
+  beamDistanceFromHouseFeet: string;
   beamSize: "" | "2x6" | "2x8" | "2x10" | "2x12";
   beamPlies: "" | "1" | "2" | "3";
   postCount: string;
+  postPositionsFeet: string;
+  postPlacementMode: "aligned" | "free";
+  postDistancesFromHouseFeet: string;
+  postSnapInches: "1" | "3" | "6" | "12";
   postSize: "" | "4x4" | "6x6";
   postHeightFeet: string;
   footingCount: string;
@@ -85,7 +90,29 @@ const POST_MAX_4X4 = [{ area: 20, height: 14 }, { area: 40, height: 13 + 8 / 12 
 
 const positive = (value: string) => { const n = Number(value); return Number.isFinite(n) && n > 0 ? n : null; };
 const whole = (value: string) => /^\d+$/.test(value.trim()) && Number(value) > 0 ? Number(value) : null;
-const lookupCeiling = <T extends { area: number }>(rows: readonly T[], area: number) => rows.find((row) => area <= row.area) ?? null;
+const NUMERIC_TOLERANCE = 1e-8;
+const atOrBelow = (value: number, limit: number) => value <= limit + NUMERIC_TOLERANCE;
+const lookupCeiling = <T extends { area: number }>(rows: readonly T[], area: number) => rows.find((row) => atOrBelow(area, row.area)) ?? null;
+
+export function parseDeckPostPositions(value: string | undefined, lengthFeet: number) {
+  if (typeof value !== "string") return null;
+  const positions = value.split(",").map((entry) => Number(entry.trim()));
+  if (positions.length < 2 || positions.some((entry) => !Number.isFinite(entry) || entry < 0 || entry > lengthFeet)) return null;
+  const sorted = [...positions].sort((a, b) => a - b);
+  if (sorted.some((entry, index) => index > 0 && entry <= sorted[index - 1])) return null;
+  return Object.freeze(sorted);
+}
+
+export function parseDeckPostDistances(value: string | undefined, depthFeet: number, expectedCount: number) {
+  if (typeof value !== "string") return null;
+  const distances = value.split(",").map((entry) => Number(entry.trim()));
+  if (distances.length !== expectedCount || distances.some((entry) => !Number.isFinite(entry) || entry < 0 || entry > depthFeet)) return null;
+  return Object.freeze(distances);
+}
+
+function defaultPostPositions(lengthFeet: number, count = 3) {
+  return Array.from({ length: count }, (_, index) => String((lengthFeet * index) / Math.max(1, count - 1))).join(",");
+}
 
 export function deckEstimatingImmediateIssueIds(args: Readonly<{ lengthFeet: number; widthFeet: number; draft: DeckPrescriptiveDraft; stairPlacementConfirmed: boolean }>) {
   const issues: string[] = [];
@@ -103,7 +130,7 @@ export function recommendedPrescriptiveDraft(attachment: "ledger" | "freestandin
   const beamSpan = lengthFeet > 0 ? lengthFeet / 2 : 0;
   const beamOptions = Object.entries(BEAM_MAX_AT_12).flatMap(([size, plies]) => Object.entries(plies).map(([ply, limit]) => ({ size: size as DeckPrescriptiveDraft["beamSize"], ply: ply as DeckPrescriptiveDraft["beamPlies"], limit, material: Number(size.slice(2)) * Number(ply) }))).filter((option) => beamSpan > 0 && beamSpan <= option.limit).sort((a, b) => a.material - b.material || Number(a.ply) - Number(b.ply) || Number(a.size.slice(2)) - Number(b.size.slice(2)));
   const beam = beamOptions[0];
-  return { jurisdiction: "", attachment, attachmentConfirmed: false, ledgerSubstrate: attachment === "ledger" ? "" : "unknown", joistDirection: "house_to_yard", joistSpacingInches: "16", joistSize: "2x10", speciesGrade: "southern_pine_no2", treatmentService: "pressure_treated_wet_service", designLoad: "40_live_10_dead", beamLineCount: attachment === "ledger" ? "1" : "2", beamSize: beam?.size ?? "", beamPlies: beam?.ply ?? "", postCount: "3", postSize: "6x6", postHeightFeet: "", footingCount: "3", footingDiameterInches: footing ? String(footing.diameter) : "", footingThicknessInches: footing ? String(footing.thickness) : "", footingDepthInches: "", soilBearingPsf: "1500", frostBasis: "", extraBlockingRows: "0", hardwareBasis: "", stairsIncluded: stairs ? "yes" : "no", railingsIncluded: railings ? "yes" : "no", stairsConfirmed: false, stairStringerCount: stairs ? "3" : "0", stairLandingFootingCount: stairs ? "2" : "0", unusualGeometry: false, cantilever: false, roofOrSpecialLoad: false, soilOrFootingUncertain: false };
+  return { jurisdiction: "", attachment, attachmentConfirmed: false, ledgerSubstrate: attachment === "ledger" ? "" : "unknown", joistDirection: "house_to_yard", joistSpacingInches: "16", joistSize: "2x10", speciesGrade: "southern_pine_no2", treatmentService: "pressure_treated_wet_service", designLoad: "40_live_10_dead", beamLineCount: attachment === "ledger" ? "1" : "2", beamDistanceFromHouseFeet: widthFeet > 0 ? String(widthFeet) : "", beamSize: beam?.size ?? "", beamPlies: beam?.ply ?? "", postCount: "3", postPositionsFeet: lengthFeet > 0 ? defaultPostPositions(lengthFeet) : "", postPlacementMode: "aligned", postDistancesFromHouseFeet: widthFeet > 0 ? [widthFeet, widthFeet, widthFeet].join(",") : "", postSnapInches: "1", postSize: "6x6", postHeightFeet: "", footingCount: "3", footingDiameterInches: footing ? String(footing.diameter) : "", footingThicknessInches: footing ? String(footing.thickness) : "", footingDepthInches: "", soilBearingPsf: "1500", frostBasis: "", extraBlockingRows: "0", hardwareBasis: "", stairsIncluded: stairs ? "yes" : "no", railingsIncluded: railings ? "yes" : "no", stairsConfirmed: false, stairStringerCount: stairs ? "3" : "0", stairLandingFootingCount: stairs ? "2" : "0", unusualGeometry: false, cantilever: false, roofOrSpecialLoad: false, soilOrFootingUncertain: false };
 }
 
 export function buildPrescriptiveDeckPlan(args: Readonly<{ lengthFeet: number; widthFeet: number; draft: DeckPrescriptiveDraft }>): DeckPrescriptivePlan {
@@ -119,23 +146,30 @@ export function buildPrescriptiveDeckPlan(args: Readonly<{ lengthFeet: number; w
   if (d.designLoad !== "40_live_10_dead") fail("This profile supports only 40 psf live plus 10 psf dead load; snow or greater loads require another approved profile.");
   if (d.unusualGeometry || d.cantilever || d.roofOrSpecialLoad) fail("Nonrectangular geometry, cantilevers, roofs, hot tubs, and special loads are outside this profile.");
   if (d.soilOrFootingUncertain || d.soilBearingPsf !== "1500" || !d.frostBasis.trim()) fail("Document 1,500 psf soil bearing and the AHJ-verified frost-depth basis; uncertain soil/frost conditions stop the draft.");
-  const beamLines = whole(d.beamLineCount), plies = whole(d.beamPlies), posts = whole(d.postCount), footings = whole(d.footingCount), postHeight = positive(d.postHeightFeet), footingDiameter = positive(d.footingDiameterInches), footingThickness = positive(d.footingThicknessInches), footingDepth = positive(d.footingDepthInches);
+  const beamLines = whole(d.beamLineCount), beamDistance = positive(d.beamDistanceFromHouseFeet), plies = whole(d.beamPlies), posts = whole(d.postCount), postPositions = parseDeckPostPositions(d.postPositionsFeet, args.lengthFeet), postDistances = posts ? parseDeckPostDistances(d.postDistancesFromHouseFeet, args.widthFeet, posts) : null, footings = whole(d.footingCount), postHeight = positive(d.postHeightFeet), footingDiameter = positive(d.footingDiameterInches), footingThickness = positive(d.footingThicknessInches), footingDepth = positive(d.footingDepthInches);
   if (!beamLines || !plies || !posts || !footings || !postHeight || !footingDiameter || !footingThickness || !footingDepth) fail("Enter positive beam, post, and footing dimensions/counts.");
+  if (!beamDistance || beamDistance > args.widthFeet) fail("Place the support beam within the proposed deck depth.");
+  if (beamDistance && Math.abs(beamDistance - args.widthFeet) > 0.01) fail("This bounded profile supports the beam at the outside edge only; an inset beam creates an overhang that needs a reviewed design.");
+  if (!postPositions || postPositions.length !== posts) fail("Place every post once along the support beam.");
+  if (!postDistances) fail("Place every post within the proposed deck depth.");
+  if (d.postPlacementMode !== "aligned") fail("Free-positioned posts require a reviewed custom beam/support plan before structural quantities can be approved.");
+  if (d.postPlacementMode === "aligned" && postDistances?.some((distance) => !beamDistance || Math.abs(distance - beamDistance) > 0.01)) fail("Aligned posts must remain on the same support-beam line.");
+  if (postPositions && (Math.abs(postPositions[0]) > 0.01 || Math.abs(postPositions[postPositions.length - 1] - args.lengthFeet) > 0.01)) fail("This bounded profile supports end posts at the beam ends only; an overhanging beam needs a reviewed design.");
   if (d.attachment === "ledger" && beamLines !== 1) fail("The supported attached layout has exactly one exterior beam line.");
   if ((posts ?? 0) > 20 || (footings ?? 0) > 24 || (postHeight ?? 0) > 14 || (footingDiameter ?? 0) > 120 || (footingThickness ?? 0) > 48 || (footingDepth ?? 0) > 120) fail("A count or dimension exceeds this profile's bounded input limits.");
   if (!/^\d+$/.test(d.extraBlockingRows) || Number(d.extraBlockingRows) > 10) fail("Extra blocking rows must be a whole number from 0 through 10.");
   if (posts && footings && footings < posts) fail("Provide at least one footing per post.");
   if (d.joistDirection !== "house_to_yard") fail("The initial profile supports joists running house-to-yard only.");
-  const joistSpan = args.widthFeet; const joistLimit = d.joistSize && d.joistSpacingInches ? JOIST_MAX[d.joistSize]?.[d.joistSpacingInches] : null;
-  if (!joistLimit || joistSpan > joistLimit) fail("Joist size/spacing/span exceeds IRC 2024 Table R507.6 or is unsupported.");
-  checks.push({ sourceId: "IRC2024:Table-R507.6", result: joistLimit && joistSpan <= joistLimit ? "pass" : "exception", actual: `${joistSpan} ft`, limit: joistLimit ? `${joistLimit.toFixed(2)} ft max` : "unsupported" });
-  const beamSpan = posts ? args.lengthFeet / Math.max(1, posts - 1) : Infinity;
+  const joistSpan = beamDistance ?? args.widthFeet; const joistLimit = d.joistSize && d.joistSpacingInches ? JOIST_MAX[d.joistSize]?.[d.joistSpacingInches] : null;
+  if (!joistLimit || !atOrBelow(joistSpan, joistLimit)) fail("Joist size/spacing/span exceeds IRC 2024 Table R507.6 or is unsupported.");
+  checks.push({ sourceId: "IRC2024:Table-R507.6", result: joistLimit && atOrBelow(joistSpan, joistLimit) ? "pass" : "exception", actual: `${joistSpan} ft`, limit: joistLimit ? `${joistLimit.toFixed(2)} ft max` : "unsupported" });
+  const beamSpan = postPositions ? Math.max(...postPositions.slice(1).map((position, index) => position - postPositions[index])) : Infinity;
   const beamLimit = joistSpan === 12 && d.beamSize && d.beamPlies ? BEAM_MAX_AT_12[d.beamSize]?.[d.beamPlies] : null;
-  if (!beamLimit || beamSpan > beamLimit) fail("Beam check is supported only for an exact 12 ft joist span and the listed Southern Pine sizes/plies; post spacing exceeds the table limit or is unsupported.");
-  checks.push({ sourceId: "IRC2024:Table-R507.5(1):12ft-no-cantilever", result: beamLimit && beamSpan <= beamLimit ? "pass" : "exception", actual: `${beamSpan.toFixed(2)} ft`, limit: beamLimit ? `${beamLimit.toFixed(2)} ft max` : "unsupported" });
+  if (!beamLimit || !atOrBelow(beamSpan, beamLimit)) fail("Beam check is supported only for an exact 12 ft joist span and the listed Southern Pine sizes/plies; post spacing exceeds the table limit or is unsupported.");
+  checks.push({ sourceId: "IRC2024:Table-R507.5(1):12ft-no-cantilever", result: beamLimit && atOrBelow(beamSpan, beamLimit) ? "pass" : "exception", actual: `${beamSpan.toFixed(2)} ft`, limit: beamLimit ? `${beamLimit.toFixed(2)} ft max` : "unsupported" });
   const tributaryArea = joistSpan * beamSpan / 2; const postRow = lookupCeiling(POST_MAX_4X4, tributaryArea); const postLimit = d.postSize === "4x4" ? postRow?.height ?? null : d.postSize === "6x6" ? 14 : null;
-  if (!postLimit || !postHeight || postHeight > postLimit) fail("Post size/height exceeds IRC 2024 Table R507.4 or is unsupported.");
-  checks.push({ sourceId: "IRC2024:Table-R507.4", result: postLimit && postHeight && postHeight <= postLimit ? "pass" : "exception", actual: `${postHeight ?? "?"} ft at ${tributaryArea.toFixed(2)} sq ft tributary`, limit: postLimit ? `${postLimit.toFixed(2)} ft max` : "unsupported" });
+  if (!postLimit || !postHeight || !atOrBelow(postHeight, postLimit)) fail("Post size/height exceeds IRC 2024 Table R507.4 or is unsupported.");
+  checks.push({ sourceId: "IRC2024:Table-R507.4", result: postLimit && postHeight && atOrBelow(postHeight, postLimit) ? "pass" : "exception", actual: `${postHeight ?? "?"} ft at ${tributaryArea.toFixed(2)} sq ft tributary`, limit: postLimit ? `${postLimit.toFixed(2)} ft max` : "unsupported" });
   const footingRow = lookupCeiling(FOOTING_1500, tributaryArea);
   if (!footingRow || !footingDiameter || !footingThickness || footingDiameter < footingRow.diameter || footingThickness < footingRow.thickness || !footingDepth) fail("Footing diameter/thickness/depth does not satisfy IRC 2024 Table R507.3.1 plus the documented frost basis.");
   checks.push({ sourceId: "IRC2024:Table-R507.3.1:1500psf", result: footingRow && footingDiameter && footingThickness && footingDiameter >= footingRow.diameter && footingThickness >= footingRow.thickness ? "pass" : "exception", actual: `${footingDiameter ?? "?"} in dia × ${footingThickness ?? "?"} in thick; ${tributaryArea.toFixed(2)} sq ft`, limit: footingRow ? `≥${footingRow.diameter} in dia × ≥${footingRow.thickness} in thick` : "unsupported" });
@@ -193,13 +227,34 @@ export function isCanonicalFramingEvidence(value: unknown): value is DeckPrescri
   const inputKeys = new Set(["lengthFeet", "widthFeet", "draft"]);
   if (Object.keys(plan.inputs).length !== inputKeys.size || !Object.keys(plan.inputs).every((key) => inputKeys.has(key))) return false;
   const draftKeys = new Set(Object.keys(recommendedPrescriptiveDraft("ledger", false)));
-  if (!plan.inputs.draft || Object.keys(plan.inputs.draft).length !== draftKeys.size || !Object.keys(plan.inputs.draft).every((key) => draftKeys.has(key))) return false;
+  const legacyDraftKeys = new Set([...draftKeys].filter((key) => !["beamDistanceFromHouseFeet", "postPositionsFeet", "postPlacementMode", "postDistancesFromHouseFeet", "postSnapInches"].includes(key)));
+  if (!plan.inputs.draft) return false;
+  const actualDraftKeys = Object.keys(plan.inputs.draft);
+  const isCurrentDraft = actualDraftKeys.length === draftKeys.size && actualDraftKeys.every((key) => draftKeys.has(key));
+  const isLegacyDraft = actualDraftKeys.length === legacyDraftKeys.size && actualDraftKeys.every((key) => legacyDraftKeys.has(key));
+  if (!isCurrentDraft && !isLegacyDraft) return false;
   if (!Number.isFinite(plan.inputs.lengthFeet) || !Number.isFinite(plan.inputs.widthFeet)) return false;
   if (Object.values(plan.inputs.draft).some((entry) => typeof entry === "string" && entry.length > 160)) return false;
   const template = recommendedPrescriptiveDraft("ledger", false);
   if (Object.entries(plan.inputs.draft).some(([key, entry]) => typeof entry !== typeof template[key as keyof DeckPrescriptiveDraft])) return false;
-  const rebuilt = buildPrescriptiveDeckPlan(plan.inputs);
-  return rebuilt.status === "ready_for_human_review" && JSON.stringify(rebuilt) === JSON.stringify(plan);
+  const normalizedDraft = isLegacyDraft ? {
+    ...plan.inputs.draft,
+    beamDistanceFromHouseFeet: String(plan.inputs.widthFeet),
+    postPositionsFeet: defaultPostPositions(plan.inputs.lengthFeet, Number(plan.inputs.draft.postCount)),
+    postPlacementMode: "aligned",
+    postDistancesFromHouseFeet: Array.from({ length: Number(plan.inputs.draft.postCount) }, () => String(plan.inputs.widthFeet)).join(","),
+    postSnapInches: "1",
+  } as DeckPrescriptiveDraft : plan.inputs.draft;
+  const rebuilt = buildPrescriptiveDeckPlan({ ...plan.inputs, draft: normalizedDraft });
+  if (rebuilt.status !== "ready_for_human_review") return false;
+  if (!isLegacyDraft) return JSON.stringify(rebuilt) === JSON.stringify(plan);
+  const comparable = JSON.parse(JSON.stringify(rebuilt)) as { inputs: { draft: Record<string, unknown> } };
+  delete comparable.inputs.draft.beamDistanceFromHouseFeet;
+  delete comparable.inputs.draft.postPositionsFeet;
+  delete comparable.inputs.draft.postPlacementMode;
+  delete comparable.inputs.draft.postDistancesFromHouseFeet;
+  delete comparable.inputs.draft.postSnapInches;
+  return JSON.stringify(comparable) === JSON.stringify(plan);
 }
 
 export function assertPartialFramingEvidenceBinding(plan: Readonly<{
