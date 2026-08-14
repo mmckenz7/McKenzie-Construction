@@ -34,7 +34,7 @@ export type DeckPrescriptiveDraft = Readonly<{
   extraBlockingRows: string;
   hardwareBasis: string;
   stairsIncluded: "" | "yes" | "no";
-  railingsIncluded: "yes" | "no";
+  railingsIncluded: "" | "yes" | "no";
   stairsConfirmed: boolean;
   stairStringerCount: string;
   stairLandingFootingCount: string;
@@ -102,6 +102,7 @@ export function buildPrescriptiveDeckPlan(args: Readonly<{ lengthFeet: number; w
   if (!Number.isFinite(args.lengthFeet) || !Number.isFinite(args.widthFeet) || args.lengthFeet <= 0 || args.widthFeet <= 0 || args.lengthFeet > 40 || args.widthFeet > 18) fail("Deck dimensions must be finite, positive, and within this profile's 40 ft × 18 ft rectangular limit.");
   if (d.jurisdiction !== "city_knoxville_verified") fail("City of Knoxville jurisdiction is not explicitly verified.");
   if (!d.attachmentConfirmed || !d.stairsConfirmed) fail("Confirm the blueprint attachment and stair facts before review.");
+  if (!d.attachment || !d.stairsIncluded || !d.railingsIncluded) fail("Confirm attachment, stair, and railing applicability from the approved field facts.");
   if (d.attachment === "freestanding") fail("Freestanding support geometry is not supported by this profile yet; use an engineer/AHJ-approved plan.");
   if (d.attachment === "ledger" && d.ledgerSubstrate !== "verified_band_rim") fail("This ledger path supports attachment only to a verified house band/rim joist; concrete, veneer, concealed, and other substrates need an approved detail.");
   if (d.speciesGrade !== "southern_pine_no2" || d.treatmentService !== "pressure_treated_wet_service") fail("This profile supports only No. 2 Southern Pine with the wet-service table factor and verified pressure treatment/service use.");

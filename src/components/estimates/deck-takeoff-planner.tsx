@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { DeckPlanVisual } from "@/components/estimates/deck-plan-visual";
 import { DeckPrescriptivePlanGenerator } from "@/components/estimates/deck-prescriptive-plan-generator";
 import type { EstimateBuilderEnvelope } from "@/lib/estimate-builder-client";
 import type { DeckPrescriptivePlan } from "@/lib/deck-prescriptive-plan";
@@ -228,6 +227,11 @@ export function DeckTakeoffPlanner({
     const stairsIncluded = approvedPlan.inputs.draft.stairsIncluded === "yes";
     if (railingGeometry.stairsPresent !== null && stairsIncluded !== railingGeometry.stairsPresent) {
       setError("The framing draft stair choice does not match the approved blueprint. Correct the blueprint or framing draft before using it.");
+      return;
+    }
+    const railingsIncluded = approvedPlan.inputs.draft.railingsIncluded === "yes";
+    if (railingGeometry.railingsPresent !== null && railingsIncluded !== railingGeometry.railingsPresent) {
+      setError("The framing draft railing choice does not match the approved field facts. Correct the field facts or framing draft before using it.");
       return;
     }
     const quantities: Partial<Record<CompleteRebuildLineKey, { quantity: string; unit: string }>> = {
@@ -463,12 +467,15 @@ export function DeckTakeoffPlanner({
     <h3 className="mt-1 text-xl font-black text-slate-950">Turn field measurements into reviewed true costs</h3>
     <p className="mt-2 text-sm leading-6 text-slate-700">This is a complete-rebuild takeoff: old decking, framing, supports, and footings are not being reused. The app can calculate deck area, decking layout, and a reviewed rectangular railing perimeter. Every structural member, footing, connector, stair, labor, and logistics quantity must come from your named build plan.</p>
 
-    <section className="mt-5 rounded-xl border border-slate-300 bg-white p-4">
+    {dimensions.lengthFeet && dimensions.widthFeet ? <DeckPrescriptivePlanGenerator lengthFeet={dimensions.lengthFeet} widthFeet={dimensions.widthFeet} blueprintAttachment={railingGeometry.attached === null ? null : railingGeometry.attached ? "ledger" : "freestanding"} blueprintStairs={railingGeometry.stairsPresent} blueprintRailings={railingGeometry.railingsPresent} stairEdge={plan.stairEdge} stairPosition={plan.stairPosition} disabled={disabled} onApprove={usePrescriptivePlan} /> : <div className="mt-5 grid min-h-44 place-items-center rounded-xl border-2 border-amber-400 bg-amber-50 p-5 text-center text-sm font-bold text-amber-950">Enter the deck length and width in Field Measurements before generating the framing blueprint.</div>}
+
+    <details className="mt-5 rounded-xl border border-slate-300 bg-white p-4">
+      <summary className="min-h-11 cursor-pointer py-2 font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700">Edit board layout and stair placement</summary>
+      <div className="mt-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><p className="text-xs font-black uppercase tracking-[.16em] text-slate-500">Plan verification</p><h4 className="mt-1 text-lg font-black text-slate-950">Deck blueprint</h4></div>
         <p className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-900">{dimensions.lengthFeet ?? "?"} ft × {dimensions.widthFeet ?? "?"} ft</p>
       </div>
-      {dimensions.lengthFeet && dimensions.widthFeet ? <div className="mt-4"><DeckPlanVisual design={{ lengthFeet: dimensions.lengthFeet, widthFeet: dimensions.widthFeet, boardRunDirection: plan.boardRunDirection, deckingLayout: preview?.deckingLayout ?? "seamless", railingLengthFeet: railingGeometry.railingLengthFeet, attached: railingGeometry.attached, stairsPresent: railingGeometry.stairsPresent, stairWidthFeet: railingGeometry.stairsPresent ? railingGeometry.stairWidthFeet : null, stairEdge: plan.stairEdge, stairPosition: plan.stairPosition }} /></div> : <div className="mt-4 grid min-h-48 place-items-center rounded-lg border border-dashed border-amber-400 bg-amber-50 p-5 text-center text-sm font-bold text-amber-950">Enter the deck length and width in Field Measurements to create the plan.</div>}
       <fieldset className="mt-4"><legend className="text-sm font-black text-slate-900">Board direction</legend><div className="mt-2 grid gap-2 sm:grid-cols-2">
         {([['along_length', 'Run boards along the deck length'], ['along_width', 'Run boards across the deck width']] as const).map(([value, label]) => <label key={value} className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-700 ${plan.boardRunDirection === value ? "border-blue-700 bg-blue-50 text-blue-950" : "border-slate-300 text-slate-800"}`}><input type="radio" name="board-direction" checked={plan.boardRunDirection === value} onChange={() => { setPlan({ ...plan, boardRunDirection: value }); setPreview(null); appliedDefaults.current = false; }} />{label}</label>)}
       </div></fieldset>
@@ -502,9 +509,8 @@ export function DeckTakeoffPlanner({
         <label className={`mt-3 flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-700 ${plan.stairPlacementConfirmed ? "border-emerald-600 bg-emerald-50 text-emerald-950" : "border-amber-400 bg-amber-50 text-amber-950"}`}><input type="checkbox" checked={plan.stairPlacementConfirmed} onChange={(event) => { setPlan({ ...plan, stairPlacementConfirmed: event.target.checked }); setPreview(null); }} />I checked this stair location against the jobsite.</label>
       </fieldset> : null}
       <p className="mt-3 text-xs leading-5 text-slate-600">This drawing is a quantity plan, not a permit or structural drawing. If the shape or dimensions are wrong, return to Field Measurements and correct them before approving the takeoff.</p>
-    </section>
-
-    {dimensions.lengthFeet && dimensions.widthFeet && railingGeometry.attached !== null && railingGeometry.stairsPresent !== null && railingGeometry.railingsPresent !== null ? <DeckPrescriptivePlanGenerator lengthFeet={dimensions.lengthFeet} widthFeet={dimensions.widthFeet} blueprintAttachment={railingGeometry.attached ? "ledger" : "freestanding"} blueprintStairs={railingGeometry.stairsPresent} blueprintRailings={railingGeometry.railingsPresent} stairEdge={plan.stairEdge} stairPosition={plan.stairPosition} disabled={disabled} onApprove={usePrescriptivePlan} /> : null}
+      </div>
+    </details>
 
     {completeRebuildScope}
 
