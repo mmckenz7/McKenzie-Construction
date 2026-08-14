@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { buildDeckTakeoffPreview, deckRailingGeometry, DECK_TAKEOFF_VERSION, type DeckCatalogPrice, type DeckTakeoffPlan } from "@/lib/deck-takeoff-v0";
+import { buildDeckTakeoffPreview, COMPLETE_REBUILD_LINE_KEYS, deckRailingGeometry, DECK_TAKEOFF_VERSION, type CompleteRebuildLineKey, type CompleteRebuildScopeDecision, type DeckCatalogPrice, type DeckTakeoffPlan } from "@/lib/deck-takeoff-v0";
 import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimate-access";
 import {
   calculateMutation, canonicalItemRpcValue, completeCommittedMutationState,
@@ -10,10 +10,12 @@ import {
   type CanonicalEstimateItem,
 } from "@/lib/estimate-mutations";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import { assertPartialFramingEvidenceBinding, isCanonicalFramingEvidence } from "@/lib/deck-prescriptive-plan";
 
 type RouteContext = { params: Promise<{ estimateId: string }> };
 
 const PLAN_KEYS = new Set([
+  "takeoffScope", "completeRebuildConfirmed", "buildPlanReference", "buildPlanConfirmed", "scopeDecisions",
   "boardRunDirection",
   "stairEdge", "stairPosition", "stairPlacementConfirmed",
   "boardActualWidthInches", "boardGapInches", "boardStockLengthFeet", "boardWastePercent",
@@ -22,8 +24,12 @@ const PLAN_KEYS = new Set([
   "railingSectionLengthFeet", "railingCatalogMaterialId", "railingUnitCost", "railingSourceReference",
   "additionalLines",
 ]);
-const LEGACY_PLAN_KEYS = new Set([...PLAN_KEYS].filter((key) => !["stairEdge", "stairPosition", "stairPlacementConfirmed"].includes(key)));
+const EVIDENCE_PLAN_KEYS = new Set([...PLAN_KEYS, "framingPlanEvidence"]);
+const HARDWARE_EVIDENCE_PLAN_KEYS = new Set([...PLAN_KEYS, "framingPlanEvidence", "hardwareSelections"]);
+const PRE_REBUILD_PLAN_KEYS = new Set([...PLAN_KEYS].filter((key) => !["takeoffScope", "completeRebuildConfirmed", "buildPlanReference", "buildPlanConfirmed", "scopeDecisions"].includes(key)));
+const LEGACY_PLAN_KEYS = new Set([...PRE_REBUILD_PLAN_KEYS].filter((key) => !["stairEdge", "stairPosition", "stairPlacementConfirmed"].includes(key)));
 const LINE_KEYS = new Set(["key", "category", "description", "quantity", "unit", "unitCost", "catalogMaterialId", "sourceReference"]);
+const HARDWARE_KEYS = new Set(["key", "description", "quantity", "unit", "unitCost", "catalogMaterialId", "sourceReference", "verificationReference"]);
 const PREVIEW_KEYS = new Set(["visitId", "expectedVisitRevision", "plan"]);
 const APPLY_KEYS = new Set([...PREVIEW_KEYS, "expectedCalculationRevision", "applicationId", "idempotencyKey", "applicationVersion", "previewBinding"]);
 
@@ -48,7 +54,9 @@ function parsePlan(value: unknown): DeckTakeoffPlan {
   }
   const plan = value as Record<string, unknown>;
   const legacyPlan = exactFields(plan, LEGACY_PLAN_KEYS);
-  if (!legacyPlan && !exactFields(plan, PLAN_KEYS)) throw new TypeError("The Deck takeoff plan is invalid.");
+  const preRebuildPlan = exactFields(plan, PRE_REBUILD_PLAN_KEYS);
+  const rebuildPlan = exactFields(plan, PLAN_KEYS) || exactFields(plan, EVIDENCE_PLAN_KEYS) || exactFields(plan, HARDWARE_EVIDENCE_PLAN_KEYS);
+  if (!legacyPlan && !preRebuildPlan && !rebuildPlan) throw new TypeError("The Deck takeoff plan is invalid.");
   if (!Array.isArray(plan.additionalLines) || plan.additionalLines.length > 12) throw new TypeError("The Deck takeoff has too many planned lines.");
   const additionalLines = plan.additionalLines.map((raw) => {
     if (!raw || typeof raw !== "object" || Array.isArray(raw) || !exactFields(raw as Record<string, unknown>, LINE_KEYS)) throw new TypeError("A planned cost line is invalid.");
@@ -62,7 +70,41 @@ function parsePlan(value: unknown): DeckTakeoffPlan {
     };
   });
   if (new Set(additionalLines.map((line) => line.key)).size !== additionalLines.length) throw new TypeError("Planned cost keys must be unique.");
-  return {
+  const hardwareSelections = "hardwareSelections" in plan ? (() => {
+    if (!Array.isArray(plan.hardwareSelections) || plan.hardwareSelections.length > 24) throw new TypeError("The hardware selection schedule is invalid.");
+    const parsed = plan.hardwareSelections.map((raw) => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw) || !exactFields(raw as Record<string, unknown>, HARDWARE_KEYS)) throw new TypeError("A hardware selection is invalid.");
+      const item = raw as Record<string, unknown>;
+      return { key: text(item.key, 80), description: text(item.description, 1000), quantity: text(item.quantity, 30), unit: text(item.unit, 40), unitCost: text(item.unitCost, 30), catalogMaterialId: nullableUuid(item.catalogMaterialId), sourceReference: text(item.sourceReference, 1000), verificationReference: text(item.verificationReference, 1000) };
+    });
+    if (new Set(parsed.map((item) => item.key)).size !== parsed.length) throw new TypeError("Hardware selection keys must be unique.");
+    return parsed;
+  })() : [];
+  const scopeDecisions = Object.fromEntries(COMPLETE_REBUILD_LINE_KEYS.map((key) => [key, ""])) as Record<CompleteRebuildLineKey, CompleteRebuildScopeDecision>;
+  if (rebuildPlan) {
+    if (plan.takeoffScope !== "complete_rebuild"
+      || typeof plan.completeRebuildConfirmed !== "boolean"
+      || typeof plan.buildPlanConfirmed !== "boolean"
+      || !plan.scopeDecisions || typeof plan.scopeDecisions !== "object" || Array.isArray(plan.scopeDecisions)
+      || !exactFields(plan.scopeDecisions as Record<string, unknown>, new Set(COMPLETE_REBUILD_LINE_KEYS))) {
+      throw new TypeError("The complete-rebuild plan confirmation is invalid.");
+    }
+    for (const key of COMPLETE_REBUILD_LINE_KEYS) {
+      const decision = (plan.scopeDecisions as Record<string, unknown>)[key];
+      if (decision !== "" && decision !== "include" && decision !== "not_in_scope") {
+        throw new TypeError("A complete-rebuild scope decision is invalid.");
+      }
+      scopeDecisions[key] = decision;
+    }
+  }
+  const parsed: DeckTakeoffPlan = {
+    takeoffScope: rebuildPlan ? "complete_rebuild" : "legacy_partial",
+    completeRebuildConfirmed: rebuildPlan ? plan.completeRebuildConfirmed as boolean : false,
+    buildPlanReference: rebuildPlan ? text(plan.buildPlanReference, 500) : "",
+    buildPlanConfirmed: rebuildPlan ? plan.buildPlanConfirmed as boolean : false,
+    framingPlanEvidence: rebuildPlan && "framingPlanEvidence" in plan ? (plan.framingPlanEvidence === null ? null : isCanonicalFramingEvidence(plan.framingPlanEvidence) ? plan.framingPlanEvidence : (() => { throw new TypeError("The framing plan evidence is invalid."); })()) : null,
+    hardwareSelections,
+    scopeDecisions,
     boardRunDirection: plan.boardRunDirection === "along_length" || plan.boardRunDirection === "along_width"
       ? plan.boardRunDirection : (() => { throw new TypeError("The deck-board direction is invalid."); })(),
     stairEdge: legacyPlan ? "yard" : plan.stairEdge === "left" || plan.stairEdge === "right" || plan.stairEdge === "yard" || plan.stairEdge === "top"
@@ -86,6 +128,8 @@ function parsePlan(value: unknown): DeckTakeoffPlan {
     railingSourceReference: text(plan.railingSourceReference, 1000),
     additionalLines,
   };
+  assertPartialFramingEvidenceBinding(parsed);
+  return parsed;
 }
 
 function failure(code: string) {
@@ -114,6 +158,7 @@ async function loadVisitAndCatalog(
   const ids = [...new Set([
     plan.boardCatalogMaterialId, plan.screwCatalogMaterialId, plan.railingCatalogMaterialId,
     ...plan.additionalLines.map((line) => line.catalogMaterialId),
+    ...(plan.hardwareSelections ?? []).map((line) => line.catalogMaterialId),
   ].filter((id): id is string => Boolean(id)))];
   const catalog = new Map<string, DeckCatalogPrice>();
   if (ids.length) {

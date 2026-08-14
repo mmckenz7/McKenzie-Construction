@@ -24,7 +24,62 @@ export type DeckTakeoffPlanLine = Readonly<{
   sourceReference: string;
 }>;
 
+export type DeckHardwareSelection = Readonly<{
+  key: string;
+  description: string;
+  quantity: string;
+  unit: string;
+  unitCost: string;
+  catalogMaterialId: string | null;
+  sourceReference: string;
+  verificationReference: string;
+}>;
+
+export const COMPLETE_REBUILD_LINE_KEYS = [
+  "ledger_attachment",
+  "joists",
+  "beams",
+  "posts",
+  "footings",
+  "blocking",
+  "structural_connectors",
+  "stairs",
+  "demolition_disposal",
+  "delivery",
+  "equipment",
+  "labor",
+] as const;
+
+export type CompleteRebuildLineKey = typeof COMPLETE_REBUILD_LINE_KEYS[number];
+export type CompleteRebuildScopeDecision = "" | "include" | "not_in_scope";
+export type CompleteRebuildScopeRequirement = "required" | "optional" | "applicability_unknown";
+
+const ALWAYS_REQUIRED_REBUILD_KEYS = new Set<CompleteRebuildLineKey>([
+  "joists", "beams", "posts", "footings", "blocking", "structural_connectors",
+  "demolition_disposal", "labor",
+]);
+
+export function completeRebuildScopeRequirement(
+  key: CompleteRebuildLineKey,
+  items: readonly DeckObservationItem[],
+): CompleteRebuildScopeRequirement {
+  if (ALWAYS_REQUIRED_REBUILD_KEYS.has(key)) return "required";
+  if (key === "delivery" || key === "equipment") return "optional";
+  const geometry = deckRailingGeometry(items);
+  if (key === "ledger_attachment") {
+    return geometry.attached === null ? "applicability_unknown" : geometry.attached ? "required" : "optional";
+  }
+  return geometry.stairsPresent === null ? "applicability_unknown" : geometry.stairsPresent ? "required" : "optional";
+}
+
 export type DeckTakeoffPlan = Readonly<{
+  takeoffScope: "complete_rebuild" | "legacy_partial";
+  completeRebuildConfirmed: boolean;
+  buildPlanReference: string;
+  buildPlanConfirmed: boolean;
+  framingPlanEvidence?: import("@/lib/deck-prescriptive-plan").DeckPrescriptivePlan | null;
+  hardwareSelections?: readonly DeckHardwareSelection[];
+  scopeDecisions: Readonly<Record<CompleteRebuildLineKey, CompleteRebuildScopeDecision>>;
   boardRunDirection: "along_length" | "along_width";
   stairEdge: "left" | "right" | "yard" | "top";
   stairPosition: "start" | "center" | "end";
@@ -253,6 +308,10 @@ function bind(value: unknown) {
   return `${DECK_TAKEOFF_VERSION}:${JSON.stringify(value)}`;
 }
 
+function completeRebuildLineMap(lines: readonly DeckTakeoffPlanLine[]) {
+  return new Map(lines.map((line) => [line.key, line]));
+}
+
 export function buildDeckTakeoffPreview(input: Readonly<{
   items: readonly DeckObservationItem[];
   plan: DeckTakeoffPlan;
@@ -274,6 +333,32 @@ export function buildDeckTakeoffPreview(input: Readonly<{
   });
   if (stairPlacementIssue) unresolved.push(stairPlacementIssue);
   let deckingLayout: DeckTakeoffPreview["deckingLayout"] = null;
+  const rebuildLines = completeRebuildLineMap(input.plan.additionalLines);
+  if (input.plan.takeoffScope === "complete_rebuild") {
+    if (!input.plan.completeRebuildConfirmed) {
+      unresolved.push("Confirm that this estimate replaces the entire deck, including framing, supports, and footings.");
+    }
+    if (!input.plan.buildPlanReference.trim()) {
+      unresolved.push("Name the reviewed framing/build plan, engineer detail, or manufacturer installation detail used for this complete rebuild.");
+    }
+    if (!input.plan.buildPlanConfirmed) {
+      unresolved.push("Confirm that the framing and support quantities came from the named build-plan source and were not sized by this app.");
+    }
+    for (const key of COMPLETE_REBUILD_LINE_KEYS) {
+      const decision = input.plan.scopeDecisions[key];
+      const line = rebuildLines.get(key);
+      const requirement = completeRebuildScopeRequirement(key, input.items);
+      if (!line) {
+        unresolved.push(`The complete-rebuild scope is missing ${key.replaceAll("_", " ")}.`);
+      } else if (requirement === "applicability_unknown") {
+        unresolved.push(`Confirm whether ${line.description.trim() || key.replaceAll("_", " ")} applies in the approved deck plan.`);
+      } else if (requirement === "required" && decision !== "include") {
+        unresolved.push(`${line.description.trim() || key.replaceAll("_", " ")} is required for this complete-rebuild estimate and must be included.`);
+      } else if (!decision) {
+        unresolved.push(`Decide whether ${line.description.trim() || key.replaceAll("_", " ")} is included or not in this estimate.`);
+      }
+    }
+  }
 
   const boardWidth = decimal(input.plan.boardActualWidthInches);
   const boardGap = decimal(input.plan.boardGapInches);
@@ -332,8 +417,9 @@ export function buildDeckTakeoffPreview(input: Readonly<{
     input.catalog,
     "package",
   );
-  if (area !== null && (input.plan.screwCoverageSquareFeetPerPack || input.plan.screwCatalogMaterialId || input.plan.screwPackUnitCost)) {
-    if (!screwCoverage) unresolved.push("Fastener package coverage must come from the manufacturer guidance you are using.");
+  if (area !== null) {
+    if (!deckingLayout) unresolved.push("Deck fasteners cannot be calculated until the board product and supported board layout are reviewed.");
+    else if (!screwCoverage || !input.plan.screwSourceReference.trim()) unresolved.push("Deck fasteners are required. Enter package coverage and a traceable compatibility/installation source for the selected board layout and fastener product.");
     else if (!screwPrice) unresolved.push("Fasteners need an exact catalog match or a verified package cost and source.");
     else {
       const packs = Math.ceil(area / screwCoverage);
@@ -376,10 +462,41 @@ export function buildDeckTakeoffPreview(input: Readonly<{
     }
   }
 
+  if (input.plan.framingPlanEvidence) {
+    const selections = new Map((input.plan.hardwareSelections ?? []).map((item) => [item.key, item]));
+    for (const requirement of input.plan.framingPlanEvidence.hardwareSchedule) {
+      if (requirement.key === "picture_frame_blocking_connectors" && deckingLayout !== "picture_frame_divider") continue;
+      const selection = selections.get(requirement.key);
+      const quantity = selection ? decimal(selection.quantity) : null;
+      const cost = selection ? resolveCost(selection.catalogMaterialId, selection.unitCost, selection.sourceReference, input.catalog, selection.unit) : null;
+      const underRequiredQuantity = requirement.quantity > 0 && (quantity === null || quantity < requirement.quantity);
+      if (!selection || selection.description !== requirement.specification || !quantity || underRequiredQuantity || selection.unit !== requirement.unit || !cost || !selection.verificationReference.trim()) {
+        unresolved.push(`${requirement.key.replaceAll("_", " ")} needs a compatible reviewed product, purchase quantity${requirement.quantity > 0 ? ` of at least ${requirement.quantity} ${requirement.unit}` : " from the reviewed detail"}, price, traceable source, and documented compatibility/detail verification. Deck screws do not satisfy structural connector fastener requirements.`);
+        continue;
+      }
+      lines.push({
+        key: `hardware:${requirement.key}`, category: "material", customerDescription: requirement.specification,
+        internalDescription: `Code-grounded hardware requirement from ${requirement.sourceId}; compatibility/detail verification: ${selection.verificationReference.trim()}. Product compatibility was human verified and was not inferred by the app.`,
+        quantity: formatted(quantity), unit: selection.unit, unitCost: cost.unitCost,
+        catalogMaterialId: cost.catalogMaterialId, sourceReference: cost.sourceReference,
+        formula: `Reviewed compatible hardware selection: ${formatted(quantity)} ${selection.unit}`,
+      });
+    }
+  }
+
   for (const line of input.plan.additionalLines) {
     if (line.key === "railing") continue;
+    if (line.key === "structural_connectors" && input.plan.framingPlanEvidence) continue;
+    const scopeDecision = input.plan.takeoffScope === "complete_rebuild"
+      && COMPLETE_REBUILD_LINE_KEYS.includes(line.key as CompleteRebuildLineKey)
+      ? input.plan.scopeDecisions[line.key as CompleteRebuildLineKey]
+      : null;
+    if (scopeDecision === "not_in_scope") continue;
     const quantity = decimal(line.quantity);
-    if (quantity === null || quantity === 0) continue;
+    if (quantity === null || quantity === 0) {
+      if (scopeDecision === "include") unresolved.push(`${line.description.trim() || line.key} needs a reviewed planned quantity.`);
+      continue;
+    }
     const cost = resolveCost(line.catalogMaterialId, line.unitCost, line.sourceReference, input.catalog, line.unit);
     if (!line.description.trim() || !line.unit.trim()) {
       unresolved.push(`${line.key} needs a description and unit.`);
@@ -388,7 +505,11 @@ export function buildDeckTakeoffPreview(input: Readonly<{
     } else {
       lines.push({
         key: line.key, category: line.category, customerDescription: line.description.trim(),
-        internalDescription: "Human-entered planned quantity; not inferred from photos and not an engineering decision.",
+        internalDescription: input.plan.takeoffScope === "complete_rebuild"
+          ? input.plan.framingPlanEvidence
+            ? `Bounded prescriptive profile generated and checked this main-deck framing quantity; human approved the main-deck draft: ${input.plan.buildPlanReference.trim()}. Named unresolved work packages remain separate. Not inferred from photos.`
+            : `Human-entered complete-rebuild quantity from: ${input.plan.buildPlanReference.trim()}. Not inferred from photos or sized by this app.`
+          : "Human-entered planned quantity; not inferred from photos and not an engineering decision.",
         quantity: formatted(quantity), unit: line.unit.trim(), unitCost: cost.unitCost,
         catalogMaterialId: cost.catalogMaterialId, sourceReference: cost.sourceReference,
         formula: `Reviewed planned quantity: ${formatted(quantity)} ${line.unit.trim()}`,
@@ -415,7 +536,10 @@ export function buildDeckTakeoffPreview(input: Readonly<{
       "Photos document visible conditions; they do not create dimensions, quantities, structural design, or prices.",
       "Decking quantity uses verified length and width plus the reviewed board width, gap, stock length, and waste; it prefers full-length boards and otherwise requires a picture-frame divider layout.",
       "Railing length uses the verified rectangular deck perimeter, house attachment, and stair opening; product section count remains reviewable.",
-      "Framing, footings, stairs, labor, equipment, and disposal remain human-entered build-plan quantities.",
+      input.plan.framingPlanEvidence
+        ? `The bounded prescriptive profile generated and checked the main-deck structural draft from explicit inputs; ${input.plan.framingPlanEvidence.unresolvedPackages.join(" and ").replaceAll("_", " ")} remain unresolved. Human approval and building-department review remain required.`
+        : "The approved rectangle can establish deck area, decking layout, and reviewed railing perimeter only. It does not size or count structural members.",
+      "Ledger and attachment, joists, beams, posts, footings, blocking, structural connectors, stairs, demolition, delivery, equipment, and labor remain human-entered scope and build-plan quantities.",
       "Every price is bound to an exact catalog record or a human-entered source reference.",
     ]),
     previewBinding: bind(bindingValue),

@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DeckPlanVisual } from "@/components/estimates/deck-plan-visual";
+import { DeckPrescriptivePlanGenerator } from "@/components/estimates/deck-prescriptive-plan-generator";
 import type { EstimateBuilderEnvelope } from "@/lib/estimate-builder-client";
-import { buildDeckTakeoffPreview, deckFieldDimensions, deckRailingGeometry, type DeckObservationItem, type DeckTakeoffPlan, type DeckTakeoffPreview } from "@/lib/deck-takeoff-v0";
+import type { DeckPrescriptivePlan } from "@/lib/deck-prescriptive-plan";
+import { buildDeckTakeoffPreview, COMPLETE_REBUILD_LINE_KEYS, completeRebuildScopeRequirement, deckFieldDimensions, deckRailingGeometry, type CompleteRebuildLineKey, type DeckObservationItem, type DeckTakeoffPlan, type DeckTakeoffPreview } from "@/lib/deck-takeoff-v0";
 
 type CatalogMaterial = {
   id: string;
@@ -30,17 +32,48 @@ const input = "mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2
 const primary = "min-h-11 rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 const INITIAL_LINES: FixedLine[] = [
+  { key: "ledger_attachment", category: "material", description: "Ledger and house attachment", quantity: "", unit: "allowance", unitCost: "", catalogMaterialId: null, sourceReference: "" },
   { key: "joists", category: "material", description: "Planned joists", quantity: "", unit: "ea", unitCost: "", catalogMaterialId: null, sourceReference: "" },
-  { key: "beams", category: "material", description: "Planned beam lumber", quantity: "", unit: "ln ft", unitCost: "", catalogMaterialId: null, sourceReference: "" },
-  { key: "posts", category: "material", description: "Planned posts", quantity: "", unit: "ea", unitCost: "", catalogMaterialId: null, sourceReference: "" },
-  { key: "concrete", category: "material", description: "Concrete mix", quantity: "", unit: "bag", unitCost: "", catalogMaterialId: null, sourceReference: "" },
+  { key: "beams", category: "material", description: "Beam / support system", quantity: "", unit: "ln ft", unitCost: "", catalogMaterialId: null, sourceReference: "" },
+  { key: "posts", category: "material", description: "Posts / supports", quantity: "", unit: "ea", unitCost: "", catalogMaterialId: null, sourceReference: "" },
+  { key: "footings", category: "material", description: "Foundations / footings and concrete", quantity: "", unit: "allowance", unitCost: "", catalogMaterialId: null, sourceReference: "" },
+  { key: "blocking", category: "material", description: "Blocking and bracing", quantity: "", unit: "allowance", unitCost: "", catalogMaterialId: null, sourceReference: "" },
+  { key: "structural_connectors", category: "material", description: "Structural connectors and fasteners", quantity: "", unit: "allowance", unitCost: "", catalogMaterialId: null, sourceReference: "" },
   { key: "stairs", category: "material", description: "Stair materials", quantity: "", unit: "allowance", unitCost: "", catalogMaterialId: null, sourceReference: "" },
+  { key: "demolition_disposal", category: "other", description: "Demolition and disposal", quantity: "", unit: "allowance", unitCost: "", catalogMaterialId: null, sourceReference: "" },
+  { key: "delivery", category: "other", description: "Material delivery", quantity: "", unit: "allowance", unitCost: "", catalogMaterialId: null, sourceReference: "" },
+  { key: "equipment", category: "equipment", description: "Equipment and rentals", quantity: "", unit: "allowance", unitCost: "", catalogMaterialId: null, sourceReference: "" },
   { key: "labor", category: "labor", description: "Deck construction labor", quantity: "", unit: "hr", unitCost: "", catalogMaterialId: null, sourceReference: "" },
-  { key: "disposal", category: "other", description: "Demolition and disposal", quantity: "", unit: "allowance", unitCost: "", catalogMaterialId: null, sourceReference: "" },
 ];
+
+const LINE_GUIDANCE: Record<CompleteRebuildLineKey, string> = {
+  ledger_attachment: "Use the reviewed attachment detail. Do not copy the existing ledger connection or choose fasteners from photos.",
+  joists: "Enter the member quantity from the reviewed framing layout. Deck dimensions alone do not decide joist size, span, spacing, doubles, or openings.",
+  beams: "Enter the beam or alternate support-system material from the reviewed framing plan. The app does not select size, plies, span, or support locations.",
+  posts: "Enter the posts or alternate supports from the reviewed support plan. Existing visible posts do not set the replacement layout.",
+  footings: "Enter the reviewed foundation, footing, and concrete quantity. The app does not choose count, diameter, depth, reinforcement, or soil capacity.",
+  blocking: "Enter blocking and bracing from the reviewed framing plan, including any picture-frame or railing support requirements.",
+  structural_connectors: "Include the specified hangers, bases, caps, ties, bolts, screws, and other connectors from the reviewed details.",
+  stairs: "Enter the reviewed stair framing and finish materials. Field rise and width do not size stringers, landings, or foundations.",
+  demolition_disposal: "Include full-deck removal, hauling, disposal fees, and any separated hazardous or special handling actually in scope.",
+  delivery: "Enter the quoted delivery or handling charge, or mark it not in this estimate.",
+  equipment: "Enter reviewed rental or equipment costs, or mark them not in this estimate.",
+  labor: "Enter reviewed labor hours and rate. The app does not create production rates from deck area or photos.",
+};
+
+const INITIAL_SCOPE_DECISIONS = Object.fromEntries(
+  COMPLETE_REBUILD_LINE_KEYS.map((key) => [key, ""]),
+) as DeckTakeoffPlan["scopeDecisions"];
 
 function defaultPlan(): DeckTakeoffPlan {
   return {
+    takeoffScope: "complete_rebuild",
+    completeRebuildConfirmed: false,
+    buildPlanReference: "",
+    buildPlanConfirmed: false,
+    framingPlanEvidence: null,
+    hardwareSelections: [],
+    scopeDecisions: INITIAL_SCOPE_DECISIONS,
     boardRunDirection: "along_length",
     stairEdge: "right",
     stairPosition: "end",
@@ -84,6 +117,7 @@ export function DeckTakeoffPlanner({
   const [checks, setChecks] = useState({ dimensions: false, quantities: false, prices: false });
   const [suggestions, setSuggestions] = useState<LowesSuggestion[]>([]);
   const [findingProducts, setFindingProducts] = useState(false);
+  const [activeScopeKey, setActiveScopeKey] = useState<CompleteRebuildLineKey>(COMPLETE_REBUILD_LINE_KEYS[0]);
   const appliedDefaults = useRef(false);
   const dimensions = useMemo(() => deckFieldDimensions(visitItems), [visitItems]);
   const railingGeometry = useMemo(() => deckRailingGeometry(visitItems), [visitItems]);
@@ -168,8 +202,61 @@ export function DeckTakeoffPlanner({
   }
 
   function updateLine(key: string, field: keyof FixedLine, value: string) {
-    setPlan({ ...plan, additionalLines: plan.additionalLines.map((line) => line.key === key ? { ...line, [field]: value, ...(field === "unitCost" || field === "sourceReference" ? { catalogMaterialId: null } : {}) } : line) });
+    const generatedMainKeys = new Set(["ledger_attachment", "joists", "beams", "posts", "footings", "blocking"]);
+    const generatedShapeChanged = Boolean(plan.framingPlanEvidence && generatedMainKeys.has(key) && ["description", "quantity", "unit"].includes(field));
+    setPlan({ ...plan, framingPlanEvidence: generatedShapeChanged ? null : plan.framingPlanEvidence, buildPlanConfirmed: generatedShapeChanged ? false : plan.buildPlanConfirmed, additionalLines: plan.additionalLines.map((line) => line.key === key ? { ...line, [field]: value, ...(field === "unitCost" || field === "sourceReference" ? { catalogMaterialId: null } : {}) } : line) });
     setPreview(null);
+  }
+
+  function updateScopeDecision(key: CompleteRebuildLineKey, value: DeckTakeoffPlan["scopeDecisions"][CompleteRebuildLineKey]) {
+    setPlan((current) => ({ ...current, scopeDecisions: { ...current.scopeDecisions, [key]: value } }));
+    setPreview(null);
+  }
+
+  function updateHardwareSelection(key: string, field: "quantity" | "unitCost" | "sourceReference" | "verificationReference", value: string) {
+    setPlan((current) => ({ ...current, hardwareSelections: (current.hardwareSelections ?? []).map((item) => item.key === key ? { ...item, [field]: value, ...(field === "unitCost" || field === "sourceReference" ? { catalogMaterialId: null } : {}) } : item) }));
+    setPreview(null);
+  }
+
+  function usePrescriptivePlan(approvedPlan: DeckPrescriptivePlan) {
+    if (!approvedPlan.quantities || !approvedPlan.reference) return;
+    const attachmentIsLedger = approvedPlan.quantities.ledgerLinearFeet > 0;
+    if (railingGeometry.attached !== null && attachmentIsLedger !== railingGeometry.attached) {
+      setError("The framing draft attachment does not match the approved blueprint. Correct the blueprint or framing draft before using it.");
+      return;
+    }
+    const stairsIncluded = approvedPlan.inputs.draft.stairsIncluded === "yes";
+    if (railingGeometry.stairsPresent !== null && stairsIncluded !== railingGeometry.stairsPresent) {
+      setError("The framing draft stair choice does not match the approved blueprint. Correct the blueprint or framing draft before using it.");
+      return;
+    }
+    const quantities: Partial<Record<CompleteRebuildLineKey, { quantity: string; unit: string }>> = {
+      ledger_attachment: { quantity: String(approvedPlan.quantities.ledgerLinearFeet), unit: "ln ft" },
+      joists: { quantity: String(approvedPlan.quantities.joists), unit: "ea" },
+      beams: { quantity: String(approvedPlan.quantities.beamLinearFeet), unit: "ln ft" },
+      posts: { quantity: String(approvedPlan.quantities.posts), unit: "ea" },
+      footings: { quantity: String(approvedPlan.quantities.footings + approvedPlan.quantities.stairLandingFootings), unit: "ea" },
+      blocking: { quantity: String(approvedPlan.quantities.blockingPieces), unit: "ea" },
+    };
+    setPlan((current) => ({
+      ...current,
+      buildPlanReference: approvedPlan.reference!, buildPlanConfirmed: false, framingPlanEvidence: approvedPlan,
+      hardwareSelections: approvedPlan.hardwareSchedule.map((item) => ({ key: item.key, description: item.specification, quantity: item.quantity > 0 ? String(item.quantity) : "", unit: item.unit, unitCost: "", catalogMaterialId: null, sourceReference: "", verificationReference: "" })),
+      scopeDecisions: {
+        ...current.scopeDecisions,
+        ledger_attachment: attachmentIsLedger ? "include" : "not_in_scope",
+        joists: "include", beams: "include", posts: "include", footings: "include",
+        blocking: "include", structural_connectors: "",
+        stairs: stairsIncluded ? "" : "not_in_scope",
+      },
+      additionalLines: current.additionalLines.map((line) => {
+        const next = quantities[line.key as CompleteRebuildLineKey];
+        const bom = approvedPlan.bom.filter((item) => item.key === line.key || (line.key === "ledger_attachment" && item.key === "ledger") || (line.key === "beams" && item.key === "beam_plies") || (line.key === "footings" && item.key === "footing_concrete") || (line.key === "blocking" && ["rim_long", "extra_blocking"].includes(item.key)));
+        if (line.key === "structural_connectors") return { ...line, description: `Price compatible hardware: ${approvedPlan.hardwareSchedule.map((item) => `${item.key} ${item.quantity}`).join(", ")}`, quantity: "", unit: "", unitCost: "", catalogMaterialId: null, sourceReference: "" };
+        return next ? { ...line, ...next, ...(bom.length ? { description: bom.map((item) => item.description).join("; "), quantity: String(bom.reduce((sum, item) => sum + item.quantity, 0)), unit: bom[0].unit } : {}) } : line;
+      }),
+    }));
+    setPreview(null); setError(""); setNotice(approvedPlan.unresolvedPackages.includes("stairs") ? "Main deck framing was added. Stair detail and connector schedule still need reviewed quantities, costs, and sources." : "Main deck framing was added. The connector schedule still needs reviewed quantities, costs, and sources.");
   }
 
   async function findLowesProducts() {
@@ -319,12 +406,62 @@ export function DeckTakeoffPlanner({
     }),
   ).filter((option) => option.optionPreview.lines.some((line) => line.key === "decking"));
 
+  const activeScopeIndex = COMPLETE_REBUILD_LINE_KEYS.indexOf(activeScopeKey);
+  const activeScopeLine = plan.additionalLines.find((line) => line.key === activeScopeKey) ?? plan.additionalLines[0];
+  const activeScopeRequirement = completeRebuildScopeRequirement(activeScopeKey, visitItems);
+  const scopeLineComplete = (key: CompleteRebuildLineKey) => {
+    const requirement = completeRebuildScopeRequirement(key, visitItems);
+    const decision = plan.scopeDecisions[key];
+    if (requirement === "applicability_unknown" || !decision) return false;
+    if (decision === "not_in_scope") return requirement === "optional";
+    if (key === "structural_connectors" && plan.framingPlanEvidence) return plan.framingPlanEvidence.hardwareSchedule.every((requirement) => {
+      const selection = (plan.hardwareSelections ?? []).find((item) => item.key === requirement.key);
+      if (requirement.key === "picture_frame_blocking_connectors" && !(Number(plan.boardStockLengthFeet) > 0 && dimensions.lengthFeet && dimensions.widthFeet && Number(plan.boardStockLengthFeet) < (plan.boardRunDirection === "along_length" ? dimensions.lengthFeet : dimensions.widthFeet))) return true;
+      return Boolean(selection && Number(selection.quantity) > 0 && Number(selection.quantity) >= requirement.quantity && Number(selection.unitCost) > 0 && selection.sourceReference.trim() && selection.verificationReference.trim());
+    });
+    const line = plan.additionalLines.find((candidate) => candidate.key === key);
+    return Boolean(line && Number(line.quantity) > 0 && line.unit.trim() && Number(line.unitCost) > 0 && line.sourceReference.trim());
+  };
+  const completedScopeCount = COMPLETE_REBUILD_LINE_KEYS.filter(scopeLineComplete).length;
+
+  const completeRebuildScope = <section className="mt-5 rounded-lg border-2 border-amber-400 bg-white p-4">
+    <p className="text-xs font-black uppercase tracking-[.16em] text-amber-800">Required before calculation</p>
+    <h4 className="mt-1 font-black text-slate-950">Complete-rebuild scope and planned quantities</h4>
+    <p className="mt-1 text-sm text-slate-600">Complete the checklist one category at a time. Core rebuild work is required. Only delivery, equipment, and conditionally non-applicable ledger or stairs may be marked outside this estimate.</p>
+    <label className={`mt-3 flex min-h-11 items-start gap-3 rounded-md border p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-700 ${plan.completeRebuildConfirmed ? "border-emerald-500 bg-emerald-50 text-emerald-950" : "border-amber-400 bg-amber-50 text-amber-950"}`}><input className="mt-1" type="checkbox" checked={plan.completeRebuildConfirmed} onChange={(event) => { setPlan({ ...plan, completeRebuildConfirmed: event.target.checked }); setPreview(null); }} />This estimate replaces the entire deck, including decking, framing, supports, and footings.</label>
+    <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+      <Field label="Reviewed build-plan source" help="Name the reviewed framing/build plan, engineer detail, or manufacturer installation detail used as applicable. A casual note is not a structural design or quantity source. This is separate from material price sources."><input className={input} value={plan.buildPlanReference} maxLength={500} onChange={(event) => { setPlan({ ...plan, buildPlanReference: event.target.value, buildPlanConfirmed: false, framingPlanEvidence: null }); setPreview(null); }} /></Field>
+      <label className="mt-3 flex min-h-11 items-start gap-3 rounded-md border border-amber-400 bg-white p-3 text-sm font-bold text-amber-950 focus-within:ring-2 focus-within:ring-amber-700"><input className="mt-1" type="checkbox" checked={plan.buildPlanConfirmed} onChange={(event) => { setPlan({ ...plan, buildPlanConfirmed: event.target.checked }); setPreview(null); }} />{plan.framingPlanEvidence ? "The bounded profile generated and checked this framing draft; I reviewed and approved its inputs, exceptions, and quantities." : "I entered the framing and support quantities from the named reviewed source. This app did not size the structure or choose code requirements."}</label>
+    </div>
+    <div className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3">
+      <div className="flex items-center justify-between gap-3"><p className="text-sm font-black text-slate-950">Checklist progress</p><p className="text-sm font-bold text-slate-700">{completedScopeCount} of {COMPLETE_REBUILD_LINE_KEYS.length} complete</p></div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden="true"><div className="h-full bg-emerald-600" style={{ width: `${completedScopeCount / COMPLETE_REBUILD_LINE_KEYS.length * 100}%` }} /></div>
+      <Field label="Scope category"><select className={input} value={activeScopeKey} onChange={(event) => setActiveScopeKey(event.target.value as CompleteRebuildLineKey)}>{plan.additionalLines.map((line) => <option key={line.key} value={line.key}>{scopeLineComplete(line.key as CompleteRebuildLineKey) ? "✓ " : ""}{line.description}</option>)}</select></Field>
+    </div>
+    {activeScopeLine ? <fieldset className="mt-3 rounded-lg border border-slate-300 p-3"><legend className="px-1 font-bold text-slate-900">{activeScopeLine.description}</legend>
+      <p className={`inline-block rounded-full px-2 py-1 text-xs font-black ${activeScopeRequirement === "required" ? "bg-red-100 text-red-900" : activeScopeRequirement === "optional" ? "bg-blue-100 text-blue-900" : "bg-amber-100 text-amber-900"}`}>{activeScopeRequirement === "required" ? "Required for complete rebuild" : activeScopeRequirement === "optional" ? "Optional or not applicable" : "Applicability must be confirmed in Field Measurements"}</p>
+      <p className="mt-2 text-xs leading-5 text-slate-600">{LINE_GUIDANCE[activeScopeKey]}</p>
+      <Field label="Estimate scope"><select className={input} value={plan.scopeDecisions[activeScopeKey]} disabled={activeScopeRequirement === "applicability_unknown"} onChange={(event) => updateScopeDecision(activeScopeKey, event.target.value as DeckTakeoffPlan["scopeDecisions"][CompleteRebuildLineKey])}><option value="">Choose one</option><option value="include">Include in this estimate</option>{activeScopeRequirement === "optional" ? <option value="not_in_scope">Not in this estimate</option> : null}</select></Field>
+      {plan.scopeDecisions[activeScopeKey] === "include" ? <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {activeScopeKey === "structural_connectors" && plan.framingPlanEvidence ? <div className="sm:col-span-2 lg:col-span-5 space-y-3">{plan.framingPlanEvidence.hardwareSchedule.map((requirement) => { const selection = (plan.hardwareSelections ?? []).find((item) => item.key === requirement.key); return <fieldset key={requirement.key} className="rounded-md border border-slate-300 bg-white p-3"><legend className="px-1 text-sm font-black text-slate-950">{requirement.key.replaceAll("_", " ")}</legend><p className="text-xs leading-5 text-slate-700">{requirement.specification}</p><p className="mt-1 text-xs font-bold text-blue-900">Basis: {requirement.sourceId}</p><div className="mt-2 grid gap-2 sm:grid-cols-2"><Field label={`Purchase quantity (${requirement.unit})`}><input className={input} inputMode="decimal" value={selection?.quantity ?? ""} onChange={(event) => updateHardwareSelection(requirement.key, "quantity", event.target.value)} /></Field><Field label="Unit price"><input className={input} inputMode="decimal" value={selection?.unitCost ?? ""} onChange={(event) => updateHardwareSelection(requirement.key, "unitCost", event.target.value)} /></Field><Field label="Compatible product / price source"><input className={input} value={selection?.sourceReference ?? ""} onChange={(event) => updateHardwareSelection(requirement.key, "sourceReference", event.target.value)} /></Field><Field label="Compatibility / reviewed-detail verification" help="Record the checked model, manufacturer schedule, coating, substrate and load-path detail that applies."><input className={input} value={selection?.verificationReference ?? ""} onChange={(event) => updateHardwareSelection(requirement.key, "verificationReference", event.target.value)} /></Field></div></fieldset>; })}<p className="rounded-md bg-amber-50 p-3 text-xs font-bold text-amber-950">Verify product model, treated-lumber coating, substrate, anchors, and every manufacturer fastener schedule. General deck screws are not structural connector fasteners.</p></div> : null}
+        {activeScopeKey !== "structural_connectors" || !plan.framingPlanEvidence ? <>
+        <Field label="Reviewed quantity"><input className={input} inputMode="decimal" value={activeScopeLine.quantity} onChange={(e) => updateLine(activeScopeLine.key, "quantity", e.target.value)} /></Field>
+        <Field label="Unit"><input className={input} value={activeScopeLine.unit} onChange={(e) => updateLine(activeScopeLine.key, "unit", e.target.value)} /></Field>
+        {activeScopeLine.category === "material" ? <Field label="Exact catalog product"><select className={input} value={activeScopeLine.catalogMaterialId ?? ""} onChange={(e) => chooseCatalog(activeScopeLine.key, e.target.value)}><option value="">Enter verified cost manually</option>{catalogOptions(activeScopeLine.key).map((material) => <option key={material.id} value={material.id}>{material.description} · ${material.effective_unit_cost ?? "?"}</option>)}</select></Field> : <div />}
+        <Field label="Unit cost"><input className={input} inputMode="decimal" value={activeScopeLine.unitCost} onChange={(e) => updateLine(activeScopeLine.key, "unitCost", e.target.value)} /></Field>
+        <Field label="Cost source"><input className={input} value={activeScopeLine.sourceReference} onChange={(e) => updateLine(activeScopeLine.key, "sourceReference", e.target.value)} /></Field>
+        </> : null}
+      </div> : null}
+      <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" className={primary} disabled={activeScopeIndex === 0} onClick={() => setActiveScopeKey(COMPLETE_REBUILD_LINE_KEYS[activeScopeIndex - 1])}>Previous</button><button type="button" className={primary} disabled={activeScopeIndex === COMPLETE_REBUILD_LINE_KEYS.length - 1} onClick={() => setActiveScopeKey(COMPLETE_REBUILD_LINE_KEYS[activeScopeIndex + 1])}>Next category</button></div>
+    </fieldset> : null}
+  </section>;
+
   if (takeoffApplied) return <section className="mt-5 rounded-xl border-2 border-emerald-700 bg-emerald-50 p-5"><p className="text-xs font-black uppercase tracking-[.16em] text-emerald-800">Draft takeoff complete</p><h3 className="mt-1 text-xl font-black text-emerald-950">Reviewed quantities and true costs are in the estimate</h3><p className="mt-2 text-sm text-emerald-950">Review the saved lines below. Then continue to OH&amp;P and the customer proposal.</p></section>;
 
   return <section className="mt-5 rounded-xl border-2 border-blue-700 bg-blue-50 p-4 sm:p-5">
     <p className="text-xs font-black uppercase tracking-[.16em] text-blue-800">Draft material takeoff</p>
     <h3 className="mt-1 text-xl font-black text-slate-950">Turn field measurements into reviewed true costs</h3>
-    <p className="mt-2 text-sm leading-6 text-slate-700">Start with one recommended Lowe&apos;s package. The app optimizes board length, calculates a rectangular railing run, and keeps framing and labor as reviewed build-plan inputs. AI suggestions never become a price or purchase without a traceable Lowe&apos;s page and your review.</p>
+    <p className="mt-2 text-sm leading-6 text-slate-700">This is a complete-rebuild takeoff: old decking, framing, supports, and footings are not being reused. The app can calculate deck area, decking layout, and a reviewed rectangular railing perimeter. Every structural member, footing, connector, stair, labor, and logistics quantity must come from your named build plan.</p>
 
     <section className="mt-5 rounded-xl border border-slate-300 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -366,6 +503,10 @@ export function DeckTakeoffPlanner({
       </fieldset> : null}
       <p className="mt-3 text-xs leading-5 text-slate-600">This drawing is a quantity plan, not a permit or structural drawing. If the shape or dimensions are wrong, return to Field Measurements and correct them before approving the takeoff.</p>
     </section>
+
+    {dimensions.lengthFeet && dimensions.widthFeet && railingGeometry.attached !== null && railingGeometry.stairsPresent !== null && railingGeometry.railingsPresent !== null ? <DeckPrescriptivePlanGenerator lengthFeet={dimensions.lengthFeet} widthFeet={dimensions.widthFeet} blueprintAttachment={railingGeometry.attached ? "ledger" : "freestanding"} blueprintStairs={railingGeometry.stairsPresent} blueprintRailings={railingGeometry.railingsPresent} stairEdge={plan.stairEdge} stairPosition={plan.stairPosition} disabled={disabled} onApprove={usePrescriptivePlan} /> : null}
+
+    {completeRebuildScope}
 
     <section className="mt-5 rounded-lg border border-blue-200 bg-white p-4">
       <h4 className="font-black text-slate-950">Recommended Lowe&apos;s package</h4>
@@ -411,7 +552,7 @@ export function DeckTakeoffPlanner({
     </div>
 
     <div className="mt-4 rounded-lg bg-slate-50 p-4">
-      <h4 className="font-black text-slate-950">2. Fasteners (optional)</h4>
+      <h4 className="font-black text-slate-950">2. Deck-board fasteners (required)</h4>
       <div className="mt-3 grid gap-3 md:grid-cols-4">
         <Field label="Coverage per package (sq ft)" help="Use the fastener manufacturer's installation guidance."><input className={input} inputMode="decimal" value={plan.screwCoverageSquareFeetPerPack} onChange={(e) => { setPlan({ ...plan, screwCoverageSquareFeetPerPack: e.target.value }); setPreview(null); }} /></Field>
         <Field label="Exact catalog product"><select className={input} value={plan.screwCatalogMaterialId ?? ""} onChange={(e) => chooseCatalog("screw", e.target.value)}><option value="">Enter verified cost manually</option>{catalogOptions("screw").map((material) => <option key={material.id} value={material.id}>{material.description} · ${material.effective_unit_cost ?? "?"}</option>)}</select></Field>
@@ -431,17 +572,6 @@ export function DeckTakeoffPlanner({
       </div>
     </div>
 
-    <div className="mt-4 rounded-lg bg-slate-50 p-4">
-      <h4 className="font-black text-slate-950">4. Planned quantities geometry cannot decide</h4>
-      <p className="mt-1 text-sm text-slate-600">Leave a row blank when it does not apply. These quantities must come from your reviewed build plan, not AI.</p>
-      <div className="mt-3 space-y-4">{plan.additionalLines.map((line) => <fieldset key={line.key} className="rounded-lg border border-slate-200 p-3"><legend className="px-1 font-bold text-slate-900">{line.description}</legend><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <Field label="Quantity"><input className={input} inputMode="decimal" value={line.quantity} onChange={(e) => updateLine(line.key, "quantity", e.target.value)} /></Field>
-        <Field label="Unit"><input className={input} value={line.unit} onChange={(e) => updateLine(line.key, "unit", e.target.value)} /></Field>
-        {line.category === "material" ? <Field label="Exact catalog product"><select className={input} value={line.catalogMaterialId ?? ""} onChange={(e) => chooseCatalog(line.key, e.target.value)}><option value="">Enter verified cost manually</option>{catalogOptions(line.key).map((material) => <option key={material.id} value={material.id}>{material.description} · ${material.effective_unit_cost ?? "?"}</option>)}</select></Field> : <div />}
-        <Field label="Unit cost"><input className={input} inputMode="decimal" value={line.unitCost} onChange={(e) => updateLine(line.key, "unitCost", e.target.value)} /></Field>
-        <Field label="Cost source"><input className={input} value={line.sourceReference} onChange={(e) => updateLine(line.key, "sourceReference", e.target.value)} /></Field>
-      </div></fieldset>)}</div>
-    </div>
     </details>
 
     {error ? <p role="alert" className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-900">{error}</p> : null}

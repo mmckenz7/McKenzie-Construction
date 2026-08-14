@@ -23,6 +23,11 @@ test("preview and apply reconstruct the authoritative field and catalog inputs s
   assert.match(route, /stairEdge/);
   assert.match(route, /stairPosition/);
   assert.match(route, /stairPlacementConfirmed/);
+  assert.match(route, /PRE_REBUILD_PLAN_KEYS/);
+  assert.match(route, /COMPLETE_REBUILD_LINE_KEYS/);
+  assert.match(route, /exactFields\(plan\.scopeDecisions/);
+  assert.match(route, /buildPlanConfirmed/);
+  assert.match(route, /completeRebuildConfirmed/);
   assert.match(route, /LEGACY_PLAN_KEYS/);
   assert.match(route, /design:\s*\{/);
   assert.match(route, /apply_reviewed_deck_takeoff/);
@@ -59,6 +64,16 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "I reviewed the build-plan quantities",
     "I reviewed every true cost and its source",
     "Add reviewed takeoff to estimate",
+    "Complete-rebuild scope and planned quantities",
+    "Reviewed build-plan source",
+    "Ledger and house attachment",
+    "Foundations / footings and concrete",
+    "Blocking and bracing",
+    "Structural connectors and fasteners",
+    "Demolition and disposal",
+    "Material delivery",
+    "Equipment and rentals",
+    "This estimate replaces the entire deck, including decking, framing, supports, and footings",
   ]) assert.match(ui, new RegExp(copy, "i"));
   assert.match(ui, /\/api\/material-catalog\?active=true&includePrices=true/);
   assert.match(ui, /Deck blueprint/);
@@ -70,6 +85,17 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /Open Lowe(?:'|&apos;)s product and check price/);
   assert.match(ui, /The Lowe(?:'|&apos;)s links are already saved as the price sources/);
   assert.match(ui, /missingRequiredPrices\.length > 0/);
+  assert.match(ui, /This app did not size the structure or choose code requirements/);
+  assert.match(ui, /Not in this estimate/);
+  assert.match(ui, /does not choose count, diameter, depth, reinforcement, or soil capacity/);
+  assert.match(ui, /Required for complete rebuild/);
+  assert.match(ui, /Only delivery, equipment/);
+  assert.match(ui, /Checklist progress/);
+  assert.match(ui, /Next category/);
+  assert.match(ui, /Deck-board fasteners \(required\)/);
+  assert.match(ui, /Compatibility \/ reviewed-detail verification/);
+  assert.match(ui, /Number\(selection\.quantity\) >= requirement\.quantity/);
+  assert.match(route, /verificationReference/);
   assert.match(ui, /crypto\.randomUUID\(\)/);
   assert.match(ui, /method: "PUT"/);
   assert.match(builder, /onTakeoffApplied/);
