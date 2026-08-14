@@ -26,6 +26,9 @@ export type DeckTakeoffPlanLine = Readonly<{
 
 export type DeckTakeoffPlan = Readonly<{
   boardRunDirection: "along_length" | "along_width";
+  stairEdge: "left" | "right" | "yard" | "top";
+  stairPosition: "start" | "center" | "end";
+  stairPlacementConfirmed: boolean;
   boardActualWidthInches: string;
   boardGapInches: string;
   boardStockLengthFeet: string;
@@ -160,6 +163,27 @@ export function deckRailingGeometry(items: readonly DeckObservationItem[]) {
   } as const;
 }
 
+export function deckStairPlacementIssue(args: Readonly<{
+  lengthFeet: number | null;
+  widthFeet: number | null;
+  attached: boolean | null;
+  stairsPresent: boolean | null;
+  stairWidthFeet: number | null;
+  stairEdge: DeckTakeoffPlan["stairEdge"];
+  stairPlacementConfirmed: boolean;
+}>) {
+  if (!args.stairsPresent) return null;
+  if (!args.stairPlacementConfirmed) return "Confirm where the stairs belong on the blueprint.";
+  if (args.attached && args.stairEdge === "top") return "A house-attached deck cannot place the stairs on the house edge.";
+  const edgeLength = args.stairEdge === "left" || args.stairEdge === "right"
+    ? args.widthFeet : args.lengthFeet;
+  if (!edgeLength || !args.stairWidthFeet) return "The stair opening needs a verified width and deck edge.";
+  if (args.stairWidthFeet > edgeLength) {
+    return `The ${formatted(args.stairWidthFeet, 2)} ft stair opening is wider than the selected ${formatted(edgeLength, 2)} ft deck edge.`;
+  }
+  return null;
+}
+
 export function optimizeDeckBoardLayout(args: Readonly<{
   runLengthFeet: number;
   fieldWidthFeet: number;
@@ -240,6 +264,15 @@ export function buildDeckTakeoffPreview(input: Readonly<{
   if (!lengthFeet || !widthFeet) unresolved.push("Verified deck length and width are required.");
   const area = lengthFeet !== null && widthFeet !== null ? lengthFeet * widthFeet : null;
   const railingGeometry = deckRailingGeometry(input.items);
+  const stairPlacementIssue = deckStairPlacementIssue({
+    lengthFeet, widthFeet,
+    attached: railingGeometry.attached,
+    stairsPresent: railingGeometry.stairsPresent,
+    stairWidthFeet: railingGeometry.stairWidthFeet,
+    stairEdge: input.plan.stairEdge,
+    stairPlacementConfirmed: input.plan.stairPlacementConfirmed,
+  });
+  if (stairPlacementIssue) unresolved.push(stairPlacementIssue);
   let deckingLayout: DeckTakeoffPreview["deckingLayout"] = null;
 
   const boardWidth = decimal(input.plan.boardActualWidthInches);
@@ -323,7 +356,9 @@ export function buildDeckTakeoffPreview(input: Readonly<{
     "ea",
   );
   if (railingGeometry.railingsPresent) {
-    if (railingGeometry.railingLengthFeet === null) {
+    if (stairPlacementIssue) {
+      // The exact edge geometry must be valid before railing sections can be priced.
+    } else if (railingGeometry.railingLengthFeet === null) {
       unresolved.push("Automatic railing length needs the deck attachment and stair-opening facts from the field visit.");
     } else if (!railingSectionLength) {
       unresolved.push("The selected railing product needs its section length.");
@@ -373,7 +408,7 @@ export function buildDeckTakeoffPreview(input: Readonly<{
     deckLengthFeet: lengthFeet === null ? null : formatted(lengthFeet),
     deckWidthFeet: widthFeet === null ? null : formatted(widthFeet),
     deckAreaSquareFeet: area === null ? null : formatted(area),
-    railingLengthFeet: railingGeometry.railingLengthFeet === null ? null : formatted(railingGeometry.railingLengthFeet),
+    railingLengthFeet: stairPlacementIssue || railingGeometry.railingLengthFeet === null ? null : formatted(railingGeometry.railingLengthFeet),
     deckingLayout,
     lines: Object.freeze(lines), unresolved: Object.freeze(unresolved),
     disclosures: Object.freeze([

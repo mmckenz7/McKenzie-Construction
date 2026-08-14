@@ -20,6 +20,10 @@ test("preview and apply reconstruct the authoritative field and catalog inputs s
   assert.match(route, /preview\.previewBinding !== body\.previewBinding/);
   assert.match(route, /expectedCalculationRevision/);
   assert.match(route, /boardRunDirection/);
+  assert.match(route, /stairEdge/);
+  assert.match(route, /stairPosition/);
+  assert.match(route, /stairPlacementConfirmed/);
+  assert.match(route, /LEGACY_PLAN_KEYS/);
   assert.match(route, /design:\s*\{/);
   assert.match(route, /apply_reviewed_deck_takeoff/);
 });
@@ -55,6 +59,9 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   ]) assert.match(ui, new RegExp(copy, "i"));
   assert.match(ui, /\/api\/material-catalog\?active=true&includePrices=true/);
   assert.match(ui, /Deck blueprint/);
+  assert.match(ui, /Place the stairs on the drawing/);
+  assert.match(ui, /Farthest from the house/);
+  assert.match(ui, /I checked this stair location against the jobsite/);
   assert.match(ui, /Compare deck-board and railing combinations/);
   assert.match(ui, /material-only comparisons/i);
   assert.match(ui, /crypto\.randomUUID\(\)/);

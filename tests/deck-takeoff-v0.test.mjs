@@ -5,6 +5,7 @@ import {
   buildDeckTakeoffPreview,
   deckFieldDimensions,
   deckRailingGeometry,
+  deckStairPlacementIssue,
   measurementFeet,
   optimizeDeckBoardLayout,
 } from "../src/lib/deck-takeoff-v0.ts";
@@ -19,6 +20,9 @@ const items = [{
 
 const basePlan = {
   boardRunDirection: "along_length",
+  stairEdge: "right",
+  stairPosition: "end",
+  stairPlacementConfirmed: true,
   boardActualWidthInches: "5.5",
   boardGapInches: "0.125",
   boardStockLengthFeet: "12",
@@ -117,6 +121,45 @@ test("calculates railing from verified deck edges and the stair opening", () => 
   });
   assert.equal(preview.railingLengthFeet, "37");
   assert.equal(preview.lines.find((line) => line.key === "railing")?.quantity, "7");
+});
+
+test("requires explicit stair placement and blocks an opening wider than its selected edge", () => {
+  const stairItems = [
+    ...items,
+    { itemKey: "house_ledger", observation: { conditionStatus: "applies" } },
+    { itemKey: "guards_railings", observation: { conditionStatus: "applies" } },
+    { itemKey: "stairs_landings", observation: {
+      conditionStatus: "applies",
+      measurements: { stair_width: { value: "36", unit: "in" } },
+    } },
+  ];
+  const unconfirmed = buildDeckTakeoffPreview({
+    items: stairItems, catalog,
+    plan: { ...basePlan, stairPlacementConfirmed: false },
+  });
+  assert.equal(unconfirmed.status, "needs_input");
+  assert.ok(unconfirmed.unresolved.some((value) => value.includes("Confirm where the stairs")));
+  assert.notEqual(
+    unconfirmed.previewBinding,
+    buildDeckTakeoffPreview({ items: stairItems, catalog, plan: basePlan }).previewBinding,
+  );
+  const confirmed = buildDeckTakeoffPreview({ items: stairItems, catalog, plan: basePlan });
+  assert.notEqual(
+    confirmed.previewBinding,
+    buildDeckTakeoffPreview({ items: stairItems, catalog, plan: { ...basePlan, stairEdge: "yard" } }).previewBinding,
+  );
+  assert.notEqual(
+    confirmed.previewBinding,
+    buildDeckTakeoffPreview({ items: stairItems, catalog, plan: { ...basePlan, stairPosition: "center" } }).previewBinding,
+  );
+  assert.match(deckStairPlacementIssue({
+    lengthFeet: 12, widthFeet: 2, attached: true, stairsPresent: true,
+    stairWidthFeet: 3, stairEdge: "right", stairPlacementConfirmed: true,
+  }) ?? "", /wider than/);
+  assert.match(deckStairPlacementIssue({
+    lengthFeet: 12, widthFeet: 14, attached: true, stairsPresent: true,
+    stairWidthFeet: 3, stairEdge: "top", stairPlacementConfirmed: true,
+  }) ?? "", /house edge/);
 });
 
 test("manual plan lines require a traceable cost source and skip zero quantities", () => {

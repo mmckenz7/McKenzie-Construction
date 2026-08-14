@@ -6,7 +6,38 @@ export type DeckProposalDesign = Readonly<{
   railingLengthFeet: number | null;
   attached: boolean | null;
   stairsPresent: boolean | null;
+  stairWidthFeet: number | null;
+  stairEdge: "left" | "right" | "yard" | "top";
+  stairPosition: "start" | "center" | "end";
 }>;
+
+export type DeckStairOpeningGeometry = Readonly<{
+  edge: DeckProposalDesign["stairEdge"];
+  start: number;
+  end: number;
+  center: number;
+}>;
+
+export function deckStairOpeningGeometry(
+  design: DeckProposalDesign,
+  drawing: Readonly<{ x: number; y: number; width: number; height: number }>,
+): DeckStairOpeningGeometry | null {
+  if (!design.stairsPresent) return null;
+  const horizontal = design.stairEdge === "top" || design.stairEdge === "yard";
+  const edgeStart = horizontal ? drawing.x : drawing.y;
+  const edgePixels = horizontal ? drawing.width : drawing.height;
+  const edgeFeet = horizontal ? design.lengthFeet : design.widthFeet;
+  if (design.stairWidthFeet !== null && design.stairWidthFeet > edgeFeet) return null;
+  const opening = design.stairWidthFeet === null
+    ? edgePixels * 0.24
+    : edgePixels * design.stairWidthFeet / edgeFeet;
+  const center = design.stairPosition === "start"
+    ? edgeStart + opening / 2
+    : design.stairPosition === "end"
+      ? edgeStart + edgePixels - opening / 2
+      : edgeStart + edgePixels / 2;
+  return Object.freeze({ edge: design.stairEdge, start: center - opening / 2, end: center + opening / 2, center });
+}
 
 function finitePositive(value: unknown) {
   const number = typeof value === "string" || typeof value === "number" ? Number(value) : NaN;
@@ -18,11 +49,21 @@ export function parseDeckProposalDesign(value: unknown): DeckProposalDesign | nu
   const source = value as Record<string, unknown>;
   const lengthFeet = finitePositive(source.lengthFeet);
   const widthFeet = finitePositive(source.widthFeet);
+  const rawStairWidth = source.stairWidthFeet;
+  const compatibleNoStairsZero = source.stairsPresent === false && typeof rawStairWidth === "number" && rawStairWidth === 0;
+  const stairWidthFeet = rawStairWidth === null || rawStairWidth === undefined || compatibleNoStairsZero
+    ? null : finitePositive(rawStairWidth);
+  const stairEdge = source.stairEdge === undefined ? "yard" : source.stairEdge;
+  const stairPosition = source.stairPosition === undefined ? "center" : source.stairPosition;
   if (!lengthFeet || !widthFeet
     || (source.boardRunDirection !== "along_length" && source.boardRunDirection !== "along_width")
     || (source.deckingLayout !== "seamless" && source.deckingLayout !== "picture_frame_divider")
     || (source.attached !== null && typeof source.attached !== "boolean")
-    || (source.stairsPresent !== null && typeof source.stairsPresent !== "boolean")) return null;
+    || (source.stairsPresent !== null && typeof source.stairsPresent !== "boolean")
+    || (rawStairWidth !== null && rawStairWidth !== undefined && !compatibleNoStairsZero && stairWidthFeet === null)
+    || (stairEdge !== "left" && stairEdge !== "right" && stairEdge !== "yard" && stairEdge !== "top")
+    || (stairPosition !== "start" && stairPosition !== "center" && stairPosition !== "end")
+    || (source.stairsPresent === true && source.attached === true && stairEdge === "top")) return null;
   const railingLengthFeet = source.railingLengthFeet === null ? null : finitePositive(source.railingLengthFeet);
   if (source.railingLengthFeet !== null && railingLengthFeet === null && Number(source.railingLengthFeet) !== 0) return null;
   return Object.freeze({
@@ -32,6 +73,9 @@ export function parseDeckProposalDesign(value: unknown): DeckProposalDesign | nu
     railingLengthFeet: source.railingLengthFeet === null ? null : Number(source.railingLengthFeet),
     attached: source.attached,
     stairsPresent: source.stairsPresent,
+    stairWidthFeet,
+    stairEdge,
+    stairPosition,
   });
 }
 

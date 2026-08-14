@@ -42,6 +42,9 @@ const INITIAL_LINES: FixedLine[] = [
 function defaultPlan(): DeckTakeoffPlan {
   return {
     boardRunDirection: "along_length",
+    stairEdge: "right",
+    stairPosition: "end",
+    stairPlacementConfirmed: false,
     boardActualWidthInches: "5.5", boardGapInches: "0.125", boardStockLengthFeet: "",
     boardWastePercent: "10", boardCatalogMaterialId: null, boardUnitCost: "", boardSourceReference: "",
     screwCoverageSquareFeetPerPack: "", screwCatalogMaterialId: null, screwPackUnitCost: "", screwSourceReference: "",
@@ -298,10 +301,39 @@ export function DeckTakeoffPlanner({
         <div><p className="text-xs font-black uppercase tracking-[.16em] text-slate-500">Plan verification</p><h4 className="mt-1 text-lg font-black text-slate-950">Deck blueprint</h4></div>
         <p className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-900">{dimensions.lengthFeet ?? "?"} ft × {dimensions.widthFeet ?? "?"} ft</p>
       </div>
-      {dimensions.lengthFeet && dimensions.widthFeet ? <div className="mt-4"><DeckPlanVisual design={{ lengthFeet: dimensions.lengthFeet, widthFeet: dimensions.widthFeet, boardRunDirection: plan.boardRunDirection, deckingLayout: preview?.deckingLayout ?? "seamless", railingLengthFeet: railingGeometry.railingLengthFeet, attached: railingGeometry.attached, stairsPresent: railingGeometry.stairsPresent }} /></div> : <div className="mt-4 grid min-h-48 place-items-center rounded-lg border border-dashed border-amber-400 bg-amber-50 p-5 text-center text-sm font-bold text-amber-950">Enter the deck length and width in Field Measurements to create the plan.</div>}
+      {dimensions.lengthFeet && dimensions.widthFeet ? <div className="mt-4"><DeckPlanVisual design={{ lengthFeet: dimensions.lengthFeet, widthFeet: dimensions.widthFeet, boardRunDirection: plan.boardRunDirection, deckingLayout: preview?.deckingLayout ?? "seamless", railingLengthFeet: railingGeometry.railingLengthFeet, attached: railingGeometry.attached, stairsPresent: railingGeometry.stairsPresent, stairWidthFeet: railingGeometry.stairsPresent ? railingGeometry.stairWidthFeet : null, stairEdge: plan.stairEdge, stairPosition: plan.stairPosition }} /></div> : <div className="mt-4 grid min-h-48 place-items-center rounded-lg border border-dashed border-amber-400 bg-amber-50 p-5 text-center text-sm font-bold text-amber-950">Enter the deck length and width in Field Measurements to create the plan.</div>}
       <fieldset className="mt-4"><legend className="text-sm font-black text-slate-900">Board direction</legend><div className="mt-2 grid gap-2 sm:grid-cols-2">
         {([['along_length', 'Run boards along the deck length'], ['along_width', 'Run boards across the deck width']] as const).map(([value, label]) => <label key={value} className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-700 ${plan.boardRunDirection === value ? "border-blue-700 bg-blue-50 text-blue-950" : "border-slate-300 text-slate-800"}`}><input type="radio" name="board-direction" checked={plan.boardRunDirection === value} onChange={() => { setPlan({ ...plan, boardRunDirection: value }); setPreview(null); appliedDefaults.current = false; }} />{label}</label>)}
       </div></fieldset>
+      {railingGeometry.stairsPresent ? <fieldset className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <legend className="px-1 text-sm font-black text-slate-900">Place the stairs on the drawing</legend>
+        <p className="mt-1 text-xs leading-5 text-slate-600">{railingGeometry.attached ? "The house is at the top." : "The top label sets the drawing orientation."} Choose the deck edge, then where the opening sits on that edge. This changes the plan—not your field measurements.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <Field label="Stair edge">
+            <select className={input} value={plan.stairEdge} onChange={(event) => { setPlan({ ...plan, stairEdge: event.target.value as DeckTakeoffPlan["stairEdge"], stairPlacementConfirmed: false }); setPreview(null); }}>
+              {railingGeometry.attached === false ? <option value="top">Top edge of drawing</option> : null}
+              <option value="left">Left side</option>
+              <option value="right">Right side</option>
+              <option value="yard">Yard edge</option>
+            </select>
+          </Field>
+          <Field label="Position on that edge">
+            <select className={input} value={plan.stairPosition} onChange={(event) => { setPlan({ ...plan, stairPosition: event.target.value as DeckTakeoffPlan["stairPosition"], stairPlacementConfirmed: false }); setPreview(null); }}>
+              {plan.stairEdge === "yard" || plan.stairEdge === "top" ? <>
+                <option value="start">Left side of this edge</option>
+                <option value="center">Center of this edge</option>
+                <option value="end">Right side of this edge</option>
+              </> : <>
+                <option value="start">{railingGeometry.attached ? "Nearest the house" : "Nearest the top of the drawing"}</option>
+                <option value="center">Middle of the side</option>
+                <option value="end">{railingGeometry.attached ? "Farthest from the house" : "Farthest from the top of the drawing"}</option>
+              </>}
+            </select>
+          </Field>
+        </div>
+        <p className="mt-3 rounded-md bg-blue-100 p-3 text-sm font-bold text-blue-950">Current plan: stairs on the {plan.stairEdge === "yard" ? "yard edge" : plan.stairEdge === "top" ? "top edge" : `${plan.stairEdge} side`}, {plan.stairEdge === "yard" || plan.stairEdge === "top" ? plan.stairPosition === "start" ? "toward the left" : plan.stairPosition === "center" ? "centered" : "toward the right" : plan.stairPosition === "start" ? railingGeometry.attached ? "nearest the house" : "nearest the top of the drawing" : plan.stairPosition === "center" ? "in the middle" : railingGeometry.attached ? "farthest from the house" : "farthest from the top of the drawing"}.</p>
+        <label className={`mt-3 flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-700 ${plan.stairPlacementConfirmed ? "border-emerald-600 bg-emerald-50 text-emerald-950" : "border-amber-400 bg-amber-50 text-amber-950"}`}><input type="checkbox" checked={plan.stairPlacementConfirmed} onChange={(event) => { setPlan({ ...plan, stairPlacementConfirmed: event.target.checked }); setPreview(null); }} />I checked this stair location against the jobsite.</label>
+      </fieldset> : null}
       <p className="mt-3 text-xs leading-5 text-slate-600">This drawing is a quantity plan, not a permit or structural drawing. If the shape or dimensions are wrong, return to Field Measurements and correct them before approving the takeoff.</p>
     </section>
 

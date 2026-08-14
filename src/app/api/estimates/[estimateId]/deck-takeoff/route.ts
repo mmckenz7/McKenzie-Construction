@@ -15,12 +15,14 @@ type RouteContext = { params: Promise<{ estimateId: string }> };
 
 const PLAN_KEYS = new Set([
   "boardRunDirection",
+  "stairEdge", "stairPosition", "stairPlacementConfirmed",
   "boardActualWidthInches", "boardGapInches", "boardStockLengthFeet", "boardWastePercent",
   "boardCatalogMaterialId", "boardUnitCost", "boardSourceReference",
   "screwCoverageSquareFeetPerPack", "screwCatalogMaterialId", "screwPackUnitCost", "screwSourceReference",
   "railingSectionLengthFeet", "railingCatalogMaterialId", "railingUnitCost", "railingSourceReference",
   "additionalLines",
 ]);
+const LEGACY_PLAN_KEYS = new Set([...PLAN_KEYS].filter((key) => !["stairEdge", "stairPosition", "stairPlacementConfirmed"].includes(key)));
 const LINE_KEYS = new Set(["key", "category", "description", "quantity", "unit", "unitCost", "catalogMaterialId", "sourceReference"]);
 const PREVIEW_KEYS = new Set(["visitId", "expectedVisitRevision", "plan"]);
 const APPLY_KEYS = new Set([...PREVIEW_KEYS, "expectedCalculationRevision", "applicationId", "idempotencyKey", "applicationVersion", "previewBinding"]);
@@ -41,10 +43,12 @@ function nullableUuid(value: unknown) {
 }
 
 function parsePlan(value: unknown): DeckTakeoffPlan {
-  if (!value || typeof value !== "object" || Array.isArray(value) || !exactFields(value as Record<string, unknown>, PLAN_KEYS)) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("The Deck takeoff plan is invalid.");
   }
   const plan = value as Record<string, unknown>;
+  const legacyPlan = exactFields(plan, LEGACY_PLAN_KEYS);
+  if (!legacyPlan && !exactFields(plan, PLAN_KEYS)) throw new TypeError("The Deck takeoff plan is invalid.");
   if (!Array.isArray(plan.additionalLines) || plan.additionalLines.length > 12) throw new TypeError("The Deck takeoff has too many planned lines.");
   const additionalLines = plan.additionalLines.map((raw) => {
     if (!raw || typeof raw !== "object" || Array.isArray(raw) || !exactFields(raw as Record<string, unknown>, LINE_KEYS)) throw new TypeError("A planned cost line is invalid.");
@@ -61,6 +65,12 @@ function parsePlan(value: unknown): DeckTakeoffPlan {
   return {
     boardRunDirection: plan.boardRunDirection === "along_length" || plan.boardRunDirection === "along_width"
       ? plan.boardRunDirection : (() => { throw new TypeError("The deck-board direction is invalid."); })(),
+    stairEdge: legacyPlan ? "yard" : plan.stairEdge === "left" || plan.stairEdge === "right" || plan.stairEdge === "yard" || plan.stairEdge === "top"
+      ? plan.stairEdge : (() => { throw new TypeError("The stair edge is invalid."); })(),
+    stairPosition: legacyPlan ? "center" : plan.stairPosition === "start" || plan.stairPosition === "center" || plan.stairPosition === "end"
+      ? plan.stairPosition : (() => { throw new TypeError("The stair position is invalid."); })(),
+    stairPlacementConfirmed: legacyPlan ? true : typeof plan.stairPlacementConfirmed === "boolean"
+      ? plan.stairPlacementConfirmed : (() => { throw new TypeError("The stair placement confirmation is invalid."); })(),
     boardActualWidthInches: text(plan.boardActualWidthInches, 30),
     boardGapInches: text(plan.boardGapInches, 30),
     boardStockLengthFeet: text(plan.boardStockLengthFeet, 30),
@@ -201,6 +211,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         railingLengthFeet: preview.railingLengthFeet,
         attached: deckRailingGeometry(loaded.items).attached,
         stairsPresent: deckRailingGeometry(loaded.items).stairsPresent,
+        stairWidthFeet: deckRailingGeometry(loaded.items).stairsPresent ? deckRailingGeometry(loaded.items).stairWidthFeet : null,
+        stairEdge: prepared.plan.stairEdge,
+        stairPosition: prepared.plan.stairPosition,
       },
       disclosures: preview.disclosures, plan: prepared.plan,
       lines: preview.lines.map((line, index) => ({ ...line, estimateLineItemId: newItems[index].id })),
