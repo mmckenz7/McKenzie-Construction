@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server.js";
 
+import { parseDeckProposalDesign } from "./deck-proposal-design";
+
 export const PUBLIC_LINK_UNAVAILABLE_MESSAGE =
   "This link is invalid or no longer available.";
 
@@ -240,6 +242,7 @@ export function minimizeEstimateProposalPayload(value: unknown) {
   const document = record(snapshot.document);
   const presentation = record(document.presentation);
   const company = record(snapshot.company);
+  const deckDesign = parseDeckProposalDesign(snapshot.deckDesign);
   const rows = Array.isArray(presentation.rows)
     ? presentation.rows.map((value) => {
         const row = record(value);
@@ -264,6 +267,7 @@ export function minimizeEstimateProposalPayload(value: unknown) {
     responseNotes: source.response_notes,
     acknowledgedNonbinding: source.acknowledged_nonbinding,
     customerName: snapshot.customerName,
+    deckDesign,
     document: {
       title: document.title,
       description: document.description,

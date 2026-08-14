@@ -25,6 +25,7 @@ export type DeckTakeoffPlanLine = Readonly<{
 }>;
 
 export type DeckTakeoffPlan = Readonly<{
+  boardRunDirection: "along_length" | "along_width";
   boardActualWidthInches: string;
   boardGapInches: string;
   boardStockLengthFeet: string;
@@ -36,6 +37,10 @@ export type DeckTakeoffPlan = Readonly<{
   screwCatalogMaterialId: string | null;
   screwPackUnitCost: string;
   screwSourceReference: string;
+  railingSectionLengthFeet: string;
+  railingCatalogMaterialId: string | null;
+  railingUnitCost: string;
+  railingSourceReference: string;
   additionalLines: readonly DeckTakeoffPlanLine[];
 }>;
 
@@ -58,6 +63,8 @@ export type DeckTakeoffPreview = Readonly<{
   deckLengthFeet: string | null;
   deckWidthFeet: string | null;
   deckAreaSquareFeet: string | null;
+  railingLengthFeet: string | null;
+  deckingLayout: "seamless" | "picture_frame_divider" | null;
   lines: readonly DeckTakeoffPreviewLine[];
   unresolved: readonly string[];
   disclosures: readonly string[];
@@ -107,10 +114,95 @@ export function deckFieldDimensions(items: readonly DeckObservationItem[]) {
   return { lengthFeet: read("length"), widthFeet: read("width") } as const;
 }
 
+function observationMeasurementFeet(
+  item: DeckObservationItem | undefined,
+  key: string,
+) {
+  const measurements = item?.observation.measurements;
+  if (!measurements || typeof measurements !== "object" || Array.isArray(measurements)) return null;
+  const raw = (measurements as Record<string, unknown>)[key];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const measurement = raw as Record<string, unknown>;
+  return measurementFeet(measurement.value, measurement.unit);
+}
+
+function conditionalApplies(item: DeckObservationItem | undefined) {
+  if (item?.observation.conditionStatus === "applies") return true;
+  if (item?.observation.conditionStatus === "not_applicable") return false;
+  return null;
+}
+
+export function deckRailingGeometry(items: readonly DeckObservationItem[]) {
+  const { lengthFeet, widthFeet } = deckFieldDimensions(items);
+  const attached = conditionalApplies(items.find((item) => item.itemKey === "house_ledger"));
+  const stairs = items.find((item) => item.itemKey === "stairs_landings");
+  const stairsPresent = conditionalApplies(stairs);
+  const railingsPresent = conditionalApplies(items.find((item) => item.itemKey === "guards_railings"));
+  const stairWidthFeet = stairsPresent ? observationMeasurementFeet(stairs, "stair_width") : 0;
+  if (!lengthFeet || !widthFeet || attached === null || railingsPresent === null) {
+    return { railingLengthFeet: null, attached, stairsPresent, railingsPresent, stairWidthFeet } as const;
+  }
+  if (!railingsPresent) {
+    return { railingLengthFeet: 0, attached, stairsPresent, railingsPresent, stairWidthFeet } as const;
+  }
+  if (stairsPresent === null || (stairsPresent && !stairWidthFeet)) {
+    return { railingLengthFeet: null, attached, stairsPresent, railingsPresent, stairWidthFeet } as const;
+  }
+  const exposedPerimeter = attached
+    ? lengthFeet + 2 * widthFeet
+    : 2 * (lengthFeet + widthFeet);
+  return {
+    railingLengthFeet: Math.max(0, exposedPerimeter - (stairWidthFeet ?? 0)),
+    attached,
+    stairsPresent,
+    railingsPresent,
+    stairWidthFeet,
+  } as const;
+}
+
+export function optimizeDeckBoardLayout(args: Readonly<{
+  runLengthFeet: number;
+  fieldWidthFeet: number;
+  boardActualWidthInches: number;
+  boardGapInches: number;
+  stockLengthFeet: number;
+  wastePercent: number;
+}>) {
+  const rows = Math.ceil(
+    (args.fieldWidthFeet * 12) /
+      (args.boardActualWidthInches + args.boardGapInches),
+  );
+  if (args.stockLengthFeet >= args.runLengthFeet) {
+    return {
+      layout: "seamless" as const,
+      rows,
+      fieldPieces: rows,
+      borderAndDividerPieces: 0,
+      totalPieces: Math.ceil(rows * (1 + args.wastePercent / 100)),
+    };
+  }
+  if (args.stockLengthFeet * 2 < args.runLengthFeet) return null;
+  const pictureFrameLinearFeet = 2 * (args.runLengthFeet + args.fieldWidthFeet);
+  const centerDividerLinearFeet = args.fieldWidthFeet;
+  const borderAndDividerPieces = Math.ceil(
+    (pictureFrameLinearFeet + centerDividerLinearFeet) / args.stockLengthFeet,
+  );
+  const fieldPieces = rows * 2;
+  return {
+    layout: "picture_frame_divider" as const,
+    rows,
+    fieldPieces,
+    borderAndDividerPieces,
+    totalPieces: Math.ceil(
+      (fieldPieces + borderAndDividerPieces) * (1 + args.wastePercent / 100),
+    ),
+  };
+}
+
 function resolveCost(
-  catalogId: string | null,
-  enteredCost: string,
-  enteredSource: string,
+  catalogId: string | null | undefined,
+  enteredCost: string | undefined,
+  enteredSource: string | undefined,
   catalog: ReadonlyMap<string, DeckCatalogPrice>,
   expectedUnit: string,
 ) {
@@ -128,7 +220,7 @@ function resolveCost(
     return { unitCost: match.unitCost, sourceReference: match.sourceReference, catalogMaterialId: match.materialId };
   }
   const cost = decimal(enteredCost);
-  const source = enteredSource.trim();
+  const source = typeof enteredSource === "string" ? enteredSource.trim() : "";
   if (cost === null || cost <= 0 || !source) return null;
   return { unitCost: formatted(cost), sourceReference: source, catalogMaterialId: null };
 }
@@ -147,6 +239,8 @@ export function buildDeckTakeoffPreview(input: Readonly<{
   const lines: DeckTakeoffPreviewLine[] = [];
   if (!lengthFeet || !widthFeet) unresolved.push("Verified deck length and width are required.");
   const area = lengthFeet !== null && widthFeet !== null ? lengthFeet * widthFeet : null;
+  const railingGeometry = deckRailingGeometry(input.items);
+  let deckingLayout: DeckTakeoffPreview["deckingLayout"] = null;
 
   const boardWidth = decimal(input.plan.boardActualWidthInches);
   const boardGap = decimal(input.plan.boardGapInches);
@@ -162,23 +256,38 @@ export function buildDeckTakeoffPreview(input: Readonly<{
   if (area !== null && lengthFeet !== null && widthFeet !== null) {
     if (!boardWidth || boardGap === null || boardGap < 0 || !stockLength || waste === null || waste < 0 || waste > 50) {
       unresolved.push("Deck-board size, gap, stock length, and waste must be completed.");
-    } else if (stockLength < lengthFeet) {
-      unresolved.push("Board stock length must span the verified deck length; splice design is not automated.");
     } else if (!boardPrice) {
       unresolved.push("Deck boards need an exact catalog match or a verified unit cost and source.");
     } else {
-      const rows = Math.ceil((widthFeet * 12) / (boardWidth + boardGap));
-      const pieces = Math.ceil(rows * (1 + waste / 100));
-      lines.push({
-        key: "decking",
-        category: "material",
-        customerDescription: "Decking boards",
-        internalDescription: `${rows} board rows across ${formatted(widthFeet, 2)} ft; ${formatted(waste, 2)}% reviewed waste. Stock length spans the ${formatted(lengthFeet, 2)} ft run.`,
-        quantity: String(pieces), unit: "ea", unitCost: boardPrice.unitCost,
-        catalogMaterialId: boardPrice.catalogMaterialId,
-        sourceReference: boardPrice.sourceReference,
-        formula: `ceil(ceil(${formatted(widthFeet, 2)} ft × 12 ÷ (${formatted(boardWidth, 3)} in + ${formatted(boardGap, 3)} in)) × (1 + ${formatted(waste, 2)}%)) = ${pieces} boards`,
+      const runLengthFeet = input.plan.boardRunDirection === "along_width" ? widthFeet : lengthFeet;
+      const fieldWidthFeet = input.plan.boardRunDirection === "along_width" ? lengthFeet : widthFeet;
+      const optimized = optimizeDeckBoardLayout({
+        runLengthFeet,
+        fieldWidthFeet,
+        boardActualWidthInches: boardWidth,
+        boardGapInches: boardGap,
+        stockLengthFeet: stockLength,
+        wastePercent: waste,
       });
+      if (!optimized) {
+        unresolved.push("Available deck boards are too short for a seamless run or a reviewed picture-frame divider layout.");
+      } else {
+        deckingLayout = optimized.layout;
+        lines.push({
+          key: "decking",
+          category: "material",
+          customerDescription: "Decking boards",
+          internalDescription: optimized.layout === "seamless"
+            ? `${optimized.rows} board rows across ${formatted(fieldWidthFeet, 2)} ft; ${formatted(waste, 2)}% reviewed waste. Each ${formatted(stockLength, 2)} ft board spans the ${formatted(runLengthFeet, 2)} ft run with no field joint.`
+            : `${optimized.rows} field rows use two pieces landing at a center divider, plus ${optimized.borderAndDividerPieces} pieces for the perimeter picture frame and divider; ${formatted(waste, 2)}% reviewed waste. No unsupported butt-joint layout is used.`,
+          quantity: String(optimized.totalPieces), unit: "ea", unitCost: boardPrice.unitCost,
+          catalogMaterialId: boardPrice.catalogMaterialId,
+          sourceReference: boardPrice.sourceReference,
+          formula: optimized.layout === "seamless"
+            ? `ceil(${optimized.rows} rows × (1 + ${formatted(waste, 2)}%)) = ${optimized.totalPieces} boards`
+            : `ceil((${optimized.fieldPieces} field pieces + ${optimized.borderAndDividerPieces} picture-frame/divider pieces) × (1 + ${formatted(waste, 2)}%)) = ${optimized.totalPieces} boards`,
+        });
+      }
     }
   }
 
@@ -205,7 +314,35 @@ export function buildDeckTakeoffPreview(input: Readonly<{
     }
   }
 
+  const railingSectionLength = decimal(input.plan.railingSectionLengthFeet);
+  const railingPrice = resolveCost(
+    input.plan.railingCatalogMaterialId,
+    input.plan.railingUnitCost,
+    input.plan.railingSourceReference,
+    input.catalog,
+    "ea",
+  );
+  if (railingGeometry.railingsPresent) {
+    if (railingGeometry.railingLengthFeet === null) {
+      unresolved.push("Automatic railing length needs the deck attachment and stair-opening facts from the field visit.");
+    } else if (!railingSectionLength) {
+      unresolved.push("The selected railing product needs its section length.");
+    } else if (!railingPrice) {
+      unresolved.push("Railing needs an exact Lowe's catalog match or a verified product cost and source.");
+    } else {
+      const sections = Math.ceil(railingGeometry.railingLengthFeet / railingSectionLength);
+      lines.push({
+        key: "railing", category: "material", customerDescription: "Railing sections",
+        internalDescription: `Calculated from the rectangular deck perimeter (${railingGeometry.attached ? "house-attached" : "freestanding"})${railingGeometry.stairsPresent ? ` less the ${formatted(railingGeometry.stairWidthFeet ?? 0, 2)} ft stair opening` : ""}.`,
+        quantity: String(sections), unit: "ea", unitCost: railingPrice.unitCost,
+        catalogMaterialId: railingPrice.catalogMaterialId, sourceReference: railingPrice.sourceReference,
+        formula: `ceil(${formatted(railingGeometry.railingLengthFeet, 2)} railing ft ÷ ${formatted(railingSectionLength, 2)} ft/section) = ${sections} sections`,
+      });
+    }
+  }
+
   for (const line of input.plan.additionalLines) {
+    if (line.key === "railing") continue;
     const quantity = decimal(line.quantity);
     if (quantity === null || quantity === 0) continue;
     const cost = resolveCost(line.catalogMaterialId, line.unitCost, line.sourceReference, input.catalog, line.unit);
@@ -236,11 +373,14 @@ export function buildDeckTakeoffPreview(input: Readonly<{
     deckLengthFeet: lengthFeet === null ? null : formatted(lengthFeet),
     deckWidthFeet: widthFeet === null ? null : formatted(widthFeet),
     deckAreaSquareFeet: area === null ? null : formatted(area),
+    railingLengthFeet: railingGeometry.railingLengthFeet === null ? null : formatted(railingGeometry.railingLengthFeet),
+    deckingLayout,
     lines: Object.freeze(lines), unresolved: Object.freeze(unresolved),
     disclosures: Object.freeze([
       "Photos document visible conditions; they do not create dimensions, quantities, structural design, or prices.",
-      "Decking quantity uses verified length and width plus the reviewed board width, gap, stock length, and waste.",
-      "Framing, footings, stairs, railing, labor, equipment, and disposal remain human-entered build-plan quantities.",
+      "Decking quantity uses verified length and width plus the reviewed board width, gap, stock length, and waste; it prefers full-length boards and otherwise requires a picture-frame divider layout.",
+      "Railing length uses the verified rectangular deck perimeter, house attachment, and stair opening; product section count remains reviewable.",
+      "Framing, footings, stairs, labor, equipment, and disposal remain human-entered build-plan quantities.",
       "Every price is bound to an exact catalog record or a human-entered source reference.",
     ]),
     previewBinding: bind(bindingValue),

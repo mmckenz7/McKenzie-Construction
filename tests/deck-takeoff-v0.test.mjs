@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildDeckTakeoffPreview, deckFieldDimensions, measurementFeet } from "../src/lib/deck-takeoff-v0.ts";
+import {
+  buildDeckTakeoffPreview,
+  deckFieldDimensions,
+  deckRailingGeometry,
+  measurementFeet,
+  optimizeDeckBoardLayout,
+} from "../src/lib/deck-takeoff-v0.ts";
 
 const items = [{
   itemKey: "full_deck_yard",
@@ -12,6 +18,7 @@ const items = [{
 }];
 
 const basePlan = {
+  boardRunDirection: "along_length",
   boardActualWidthInches: "5.5",
   boardGapInches: "0.125",
   boardStockLengthFeet: "12",
@@ -23,6 +30,10 @@ const basePlan = {
   screwCatalogMaterialId: "71000000-0000-4000-8000-000000000001",
   screwPackUnitCost: "",
   screwSourceReference: "",
+  railingSectionLengthFeet: "",
+  railingCatalogMaterialId: null,
+  railingUnitCost: "",
+  railingSourceReference: "",
   additionalLines: [{
     key: "labor", category: "labor", description: "Deck installation labor",
     quantity: "40", unit: "hr", unitCost: "32.50", catalogMaterialId: null,
@@ -57,15 +68,55 @@ test("creates deterministic decking, fastener, and human planned-cost lines", ()
   assert.match(preview.previewBinding, /^deck-reviewed-takeoff-v1:/);
 });
 
-test("does not guess around unsupported splices or missing price evidence", () => {
+test("does not guess when stock is too short or price evidence is missing", () => {
   const preview = buildDeckTakeoffPreview({
     items,
     catalog: new Map(),
-    plan: { ...basePlan, boardStockLengthFeet: "10", screwCatalogMaterialId: null },
+    plan: { ...basePlan, boardStockLengthFeet: "5", screwCatalogMaterialId: null },
   });
   assert.equal(preview.status, "needs_input");
-  assert.ok(preview.unresolved.some((value) => value.includes("splice design")));
+  assert.ok(preview.unresolved.some((value) => value.includes("too short")));
   assert.ok(preview.unresolved.some((value) => value.includes("Fasteners need")));
+});
+
+test("optimizes board lengths to seamless runs before a picture-frame divider", () => {
+  assert.equal(optimizeDeckBoardLayout({
+    runLengthFeet: 12, fieldWidthFeet: 14, boardActualWidthInches: 5.5,
+    boardGapInches: 0.125, stockLengthFeet: 12, wastePercent: 10,
+  })?.layout, "seamless");
+  assert.equal(optimizeDeckBoardLayout({
+    runLengthFeet: 18, fieldWidthFeet: 14, boardActualWidthInches: 5.5,
+    boardGapInches: 0.125, stockLengthFeet: 12, wastePercent: 10,
+  })?.layout, "picture_frame_divider");
+  assert.equal(optimizeDeckBoardLayout({
+    runLengthFeet: 30, fieldWidthFeet: 14, boardActualWidthInches: 5.5,
+    boardGapInches: 0.125, stockLengthFeet: 12, wastePercent: 10,
+  }), null);
+});
+
+test("calculates railing from verified deck edges and the stair opening", () => {
+  const railingItems = [
+    ...items,
+    { itemKey: "house_ledger", observation: { conditionStatus: "applies" } },
+    { itemKey: "guards_railings", observation: { conditionStatus: "applies" } },
+    { itemKey: "stairs_landings", observation: {
+      conditionStatus: "applies",
+      measurements: { stair_width: { value: "36", unit: "in" } },
+    } },
+  ];
+  assert.equal(deckRailingGeometry(railingItems).railingLengthFeet, 37);
+  const preview = buildDeckTakeoffPreview({
+    items: railingItems,
+    catalog,
+    plan: {
+      ...basePlan,
+      railingSectionLengthFeet: "6",
+      railingUnitCost: "149",
+      railingSourceReference: "https://www.lowes.com/pd/example-railing",
+    },
+  });
+  assert.equal(preview.railingLengthFeet, "37");
+  assert.equal(preview.lines.find((line) => line.key === "railing")?.quantity, "7");
 });
 
 test("manual plan lines require a traceable cost source and skip zero quantities", () => {

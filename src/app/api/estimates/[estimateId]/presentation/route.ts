@@ -4,6 +4,7 @@ import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimat
 import { buildEstimateCustomerDocument } from "@/lib/estimate-customer-document";
 import { calculateMutation, loadMutationState, UUID_PATTERN } from "@/lib/estimate-mutations";
 import { getCompanyBranding } from "@/lib/company-branding";
+import { loadDeckProposalDesign } from "@/lib/deck-proposal-design";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = { params: Promise<{ estimateId: string }> };
@@ -25,17 +26,19 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const document = buildEstimateCustomerDocument(state, calculation);
     const customerId = text(state.estimate.customer_id);
     const leadId = text(state.estimate.lead_id);
-    const [branding, companyResult, customerResult, leadResult] = await Promise.all([
+    const [branding, companyResult, customerResult, leadResult, deckDesign] = await Promise.all([
       getCompanyBranding(),
       supabase.from("company_settings").select("company_phone, company_email, website_url").limit(1).maybeSingle(),
       customerId ? supabase.from("customers").select("customer_name").eq("id", customerId).maybeSingle() : Promise.resolve({ data: null, error: null }),
       !customerId && leadId ? supabase.from("leads").select("name").eq("id", leadId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      loadDeckProposalDesign(supabase, auth.authorization!.companyId, estimateId),
     ]);
     if (companyResult.error || customerResult.error || leadResult.error) throw new Error("Customer document details could not be loaded.");
     const customerName = text(customerResult.data?.customer_name) ?? text(leadResult.data?.name) ?? "Customer";
     return NextResponse.json({
       success: true,
       document,
+      deckDesign,
       customerName,
       company: {
         ...branding,

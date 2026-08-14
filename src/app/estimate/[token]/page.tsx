@@ -3,6 +3,9 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { useParams } from "next/navigation";
 
+import { DeckPlanVisual } from "@/components/estimates/deck-plan-visual";
+import type { DeckProposalDesign } from "@/lib/deck-proposal-design";
+
 type ProposalRow = {
   id: string;
   kind: "item" | "section" | "adjustment";
@@ -20,6 +23,7 @@ type Proposal = {
   responseName: string | null;
   responseNotes: string | null;
   customerName: string;
+  deckDesign: DeckProposalDesign | null;
   document: {
     title: string;
     description: string | null;
@@ -168,6 +172,7 @@ export default function PublicEstimatePage() {
 
         {proposal.document.description ? <TextSection title="Project overview" value={proposal.document.description} /> : null}
         {proposal.document.scopeNotes ? <TextSection title="Scope of work" value={proposal.document.scopeNotes} /> : null}
+        {proposal.deckDesign ? <section><h2 className="text-xl font-bold">Proposed deck layout</h2><p className="mt-2 text-sm leading-6 text-slate-300">This conceptual plan shows the dimensions, board direction, stair opening, and calculated railing used for this estimate.</p><div className="mt-4 text-slate-950"><DeckPlanVisual design={proposal.deckDesign} /></div></section> : null}
 
         <section className="overflow-hidden rounded-2xl border border-slate-700">
           <div className="grid grid-cols-[1fr_auto] border-b border-slate-700 bg-slate-950 px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-400"><span>Description</span><span>Price</span></div>

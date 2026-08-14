@@ -660,6 +660,7 @@ function DeckTakeoffWorkspace({
         estimateId={estimateId}
         visitId={visitSummary.id}
         visitRevision={visitSummary.revision}
+        visitItems={visitSummary.items}
         calculationRevision={calculationRevision}
         takeoffApplied={takeoffApplied}
         disabled={disabled || !canEdit}

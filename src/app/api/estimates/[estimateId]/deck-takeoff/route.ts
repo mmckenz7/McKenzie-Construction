@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { buildDeckTakeoffPreview, DECK_TAKEOFF_VERSION, type DeckCatalogPrice, type DeckTakeoffPlan } from "@/lib/deck-takeoff-v0";
+import { buildDeckTakeoffPreview, deckRailingGeometry, DECK_TAKEOFF_VERSION, type DeckCatalogPrice, type DeckTakeoffPlan } from "@/lib/deck-takeoff-v0";
 import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimate-access";
 import {
   calculateMutation, canonicalItemRpcValue, completeCommittedMutationState,
@@ -14,9 +14,11 @@ import { createAdminServerClient } from "@/lib/supabase/admin-server";
 type RouteContext = { params: Promise<{ estimateId: string }> };
 
 const PLAN_KEYS = new Set([
+  "boardRunDirection",
   "boardActualWidthInches", "boardGapInches", "boardStockLengthFeet", "boardWastePercent",
   "boardCatalogMaterialId", "boardUnitCost", "boardSourceReference",
   "screwCoverageSquareFeetPerPack", "screwCatalogMaterialId", "screwPackUnitCost", "screwSourceReference",
+  "railingSectionLengthFeet", "railingCatalogMaterialId", "railingUnitCost", "railingSourceReference",
   "additionalLines",
 ]);
 const LINE_KEYS = new Set(["key", "category", "description", "quantity", "unit", "unitCost", "catalogMaterialId", "sourceReference"]);
@@ -57,6 +59,8 @@ function parsePlan(value: unknown): DeckTakeoffPlan {
   });
   if (new Set(additionalLines.map((line) => line.key)).size !== additionalLines.length) throw new TypeError("Planned cost keys must be unique.");
   return {
+    boardRunDirection: plan.boardRunDirection === "along_length" || plan.boardRunDirection === "along_width"
+      ? plan.boardRunDirection : (() => { throw new TypeError("The deck-board direction is invalid."); })(),
     boardActualWidthInches: text(plan.boardActualWidthInches, 30),
     boardGapInches: text(plan.boardGapInches, 30),
     boardStockLengthFeet: text(plan.boardStockLengthFeet, 30),
@@ -66,6 +70,10 @@ function parsePlan(value: unknown): DeckTakeoffPlan {
     screwCoverageSquareFeetPerPack: text(plan.screwCoverageSquareFeetPerPack, 30),
     screwCatalogMaterialId: nullableUuid(plan.screwCatalogMaterialId),
     screwPackUnitCost: text(plan.screwPackUnitCost, 30), screwSourceReference: text(plan.screwSourceReference, 1000),
+    railingSectionLengthFeet: text(plan.railingSectionLengthFeet, 30),
+    railingCatalogMaterialId: nullableUuid(plan.railingCatalogMaterialId),
+    railingUnitCost: text(plan.railingUnitCost, 30),
+    railingSourceReference: text(plan.railingSourceReference, 1000),
     additionalLines,
   };
 }
@@ -94,7 +102,7 @@ async function loadVisitAndCatalog(
     .select("item_key,observation").eq("company_id", companyId).eq("visit_id", visitId).order("ordinal");
   if (itemResult.error) throw new Error("The completed Deck field facts could not be loaded.");
   const ids = [...new Set([
-    plan.boardCatalogMaterialId, plan.screwCatalogMaterialId,
+    plan.boardCatalogMaterialId, plan.screwCatalogMaterialId, plan.railingCatalogMaterialId,
     ...plan.additionalLines.map((line) => line.catalogMaterialId),
   ].filter((id): id is string => Boolean(id)))];
   const catalog = new Map<string, DeckCatalogPrice>();
@@ -185,6 +193,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const evidenceSnapshot = {
       version: DECK_TAKEOFF_VERSION, visitId: loaded.visit.id, visitRevision: loaded.visit.revision,
       previewBinding: preview.previewBinding, fieldDimensions: { lengthFeet: preview.deckLengthFeet, widthFeet: preview.deckWidthFeet, areaSquareFeet: preview.deckAreaSquareFeet },
+      design: {
+        lengthFeet: preview.deckLengthFeet,
+        widthFeet: preview.deckWidthFeet,
+        boardRunDirection: prepared.plan.boardRunDirection,
+        deckingLayout: preview.deckingLayout,
+        railingLengthFeet: preview.railingLengthFeet,
+        attached: deckRailingGeometry(loaded.items).attached,
+        stairsPresent: deckRailingGeometry(loaded.items).stairsPresent,
+      },
       disclosures: preview.disclosures, plan: prepared.plan,
       lines: preview.lines.map((line, index) => ({ ...line, estimateLineItemId: newItems[index].id })),
     };

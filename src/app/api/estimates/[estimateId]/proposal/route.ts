@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimate-access";
 import { getCompanyBranding } from "@/lib/company-branding";
 import { buildEstimateCustomerDocument } from "@/lib/estimate-customer-document";
+import { loadDeckProposalDesign } from "@/lib/deck-proposal-design";
 import { calculateMutation, loadMutationState, UUID_PATTERN } from "@/lib/estimate-mutations";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const document = buildEstimateCustomerDocument(state, calculation);
     const customerId = text(state.estimate.customer_id);
     const leadId = text(state.estimate.lead_id);
-    const [branding, companyResult, customerResult, leadResult] = await Promise.all([
+    const [branding, companyResult, customerResult, leadResult, deckDesign] = await Promise.all([
       getCompanyBranding(),
       supabase.from("company_settings").select("company_phone, company_email, website_url").limit(1).maybeSingle(),
       customerId
@@ -136,6 +137,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       leadId
         ? supabase.from("leads").select("name, email").eq("id", leadId).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
+      loadDeckProposalDesign(supabase, checked.auth!.authorization!.companyId, estimateId),
     ]);
     if (companyResult.error || customerResult.error || leadResult.error) throw new Error("Customer proposal details could not be loaded.");
     const customerName = text(customerResult.data?.customer_name) ?? text(leadResult.data?.name) ?? "Customer";
@@ -144,6 +146,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     expiresAt.setDate(expiresAt.getDate() + expiresInDays);
     const snapshot = {
       document,
+      deckDesign,
       customerName,
       company: {
         publicName: branding.companyName,
