@@ -51,7 +51,10 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "Draft material takeoff",
     "Recommended Lowe(?:'|&apos;)s package",
     "Change products, costs, or advanced quantities",
-    "Calculate draft takeoff",
+    "Calculate quantities and costs",
+    "Current price per board",
+    "Current price per railing section",
+    "Enter .* missing price.* to continue",
     "I reviewed the field dimensions",
     "I reviewed the build-plan quantities",
     "I reviewed every true cost and its source",
@@ -64,6 +67,9 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /I checked this stair location against the jobsite/);
   assert.match(ui, /Compare deck-board and railing combinations/);
   assert.match(ui, /material-only comparisons/i);
+  assert.match(ui, /Open Lowe(?:'|&apos;)s product and check price/);
+  assert.match(ui, /The Lowe(?:'|&apos;)s links are already saved as the price sources/);
+  assert.match(ui, /missingRequiredPrices\.length > 0/);
   assert.match(ui, /crypto\.randomUUID\(\)/);
   assert.match(ui, /method: "PUT"/);
   assert.match(builder, /onTakeoffApplied/);

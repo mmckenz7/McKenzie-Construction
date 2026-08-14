@@ -182,10 +182,10 @@ export function DeckTakeoffPlanner({
       const body = await response.json() as { success?: boolean; products?: LowesSuggestion[]; error?: string };
       if (!response.ok || !body.success || !body.products?.length) throw new Error(body.error || "Lowe's defaults could not be found.");
       setSuggestions(body.products);
+      const board = body.products.find((item) => item.kind === "deck_board");
+      const screw = body.products.find((item) => item.kind === "deck_fastener");
+      const railing = body.products.find((item) => item.kind === "railing_section");
       setPlan((current) => {
-        const board = body.products?.find((item) => item.kind === "deck_board");
-        const screw = body.products?.find((item) => item.kind === "deck_fastener");
-        const railing = body.products?.find((item) => item.kind === "railing_section");
         return {
           ...current,
           ...(board ? {
@@ -209,7 +209,13 @@ export function DeckTakeoffPlanner({
         };
       });
       setPreview(null);
-      setNotice("Lowe's defaults are ready. Review the three product cards, then calculate the takeoff.");
+      const missingPrices = [
+        board && !board.unitCost ? "deck-board" : null,
+        railingGeometry.railingsPresent && railing && !railing.unitCost ? "railing" : null,
+      ].filter(Boolean);
+      setNotice(missingPrices.length
+        ? `Products found. Enter the current Lowe's ${missingPrices.join(" and ")} price${missingPrices.length === 1 ? "" : "s"} shown on the linked product page, then continue.`
+        : "Products and required prices are ready. Continue to calculate quantities and costs.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Lowe's defaults could not be found.");
     } finally {
@@ -264,6 +270,30 @@ export function DeckTakeoffPlanner({
   const selectedScrew = catalogById.get(plan.screwCatalogMaterialId ?? "");
   const selectedRailing = catalogById.get(plan.railingCatalogMaterialId ?? "");
   const suggestionByKind = new Map(suggestions.map((item) => [item.kind, item]));
+  const recommendedProducts = [
+    {
+      key: "board", label: "Deck boards", priceLabel: "Current price per board",
+      description: selectedBoard?.description ?? suggestionByKind.get("deck_board")?.description ?? "No Lowe's product found yet",
+      cost: plan.boardUnitCost, source: plan.boardSourceReference,
+      setCost: (value: string) => setPlan((current) => ({ ...current, boardCatalogMaterialId: null, boardUnitCost: value })),
+    },
+    {
+      key: "screw", label: "Fasteners", priceLabel: "Current price per box",
+      description: selectedScrew?.description ?? suggestionByKind.get("deck_fastener")?.description ?? "No Lowe's product found yet",
+      cost: plan.screwPackUnitCost, source: plan.screwSourceReference,
+      setCost: (value: string) => setPlan((current) => ({ ...current, screwCatalogMaterialId: null, screwPackUnitCost: value })),
+    },
+    {
+      key: "railing", label: "Railing", priceLabel: "Current price per railing section",
+      description: selectedRailing?.description ?? suggestionByKind.get("railing_section")?.description ?? "No Lowe's product found yet",
+      cost: plan.railingUnitCost, source: plan.railingSourceReference,
+      setCost: (value: string) => setPlan((current) => ({ ...current, railingCatalogMaterialId: null, railingUnitCost: value })),
+    },
+  ] as const;
+  const missingRequiredPrices = [
+    plan.boardSourceReference && !(Number(plan.boardUnitCost) > 0) ? "deck-board price" : null,
+    railingGeometry.railingsPresent && plan.railingSourceReference && !(Number(plan.railingUnitCost) > 0) ? "railing price" : null,
+  ].filter((value): value is string => Boolean(value));
   const boardSuggestions = suggestions.filter((item) => item.kind === "deck_board");
   const railingSuggestions = suggestions.filter((item) => item.kind === "railing_section");
   const productCombinations = boardSuggestions.flatMap((board) =>
@@ -342,17 +372,23 @@ export function DeckTakeoffPlanner({
       <p className="mt-1 text-sm text-slate-600">The shortest full-length board wins. If no board spans the run, the only automatic fallback is a perimeter picture frame with a center divider.</p>
       <button type="button" className={`mt-3 w-full ${primary}`} disabled={disabled || findingProducts} onClick={() => void findLowesProducts()}>{findingProducts ? "Searching Lowe's…" : "Find Lowe's defaults"}</button>
       <div className="mt-3 grid gap-3 md:grid-cols-3">
-        {([
-          ["Deck boards", selectedBoard?.description ?? suggestionByKind.get("deck_board")?.description ?? "No verified Lowe's default selected", plan.boardUnitCost, plan.boardSourceReference],
-          ["Fasteners", selectedScrew?.description ?? suggestionByKind.get("deck_fastener")?.description ?? "No verified Lowe's default selected", plan.screwPackUnitCost, plan.screwSourceReference],
-          ["Railing", selectedRailing?.description ?? suggestionByKind.get("railing_section")?.description ?? "No verified Lowe's default selected", plan.railingUnitCost, plan.railingSourceReference],
-        ] as const).map(([label, description, cost, source]) => <article key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
-          <p className="mt-1 text-sm font-bold text-slate-950">{description}</p>
-          <p className="mt-1 text-xs text-slate-600">{cost ? `$${cost}` : "Price still needs verification"}</p>
-          {source.startsWith("https://www.lowes.com/") || source.startsWith("https://lowes.com/") ? <a className="mt-2 inline-block text-xs font-bold text-blue-800 underline" href={source} target="_blank" rel="noreferrer">Open Lowe&apos;s product</a> : null}
-        </article>)}
+        {recommendedProducts.map((product) => {
+          const lowesPage = product.source.startsWith("https://www.lowes.com/") || product.source.startsWith("https://lowes.com/");
+          const priced = Number(product.cost) > 0;
+          return <article key={product.key} className={`rounded-lg border p-3 ${priced ? "border-emerald-300 bg-emerald-50" : "border-amber-300 bg-amber-50"}`}>
+            <p className="text-xs font-black uppercase tracking-wide text-slate-600">{product.label}</p>
+            <p className="mt-1 text-sm font-bold text-slate-950">{product.description}</p>
+            {lowesPage ? <a className="mt-2 inline-block min-h-11 py-2 text-sm font-bold text-blue-800 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700" href={product.source} target="_blank" rel="noreferrer">Open Lowe&apos;s product and check price</a> : null}
+            {product.source ? <label className="mt-2 block text-sm font-bold text-slate-900">
+              <span>{product.priceLabel}</span>
+              <span className="mt-1 flex items-center rounded-md border border-slate-300 bg-white focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-100"><span className="pl-3 text-slate-600">$</span><input aria-label={product.priceLabel} className="min-h-11 w-full rounded-md bg-transparent px-2 py-2 text-slate-950 outline-none" inputMode="decimal" value={product.cost} onChange={(event) => { product.setCost(event.target.value); setPreview(null); }} /></span>
+            </label> : <p className="mt-2 text-sm font-bold text-amber-900">Find a Lowe&apos;s product to continue.</p>}
+            <p className={`mt-2 text-xs font-bold ${priced ? "text-emerald-800" : "text-amber-900"}`}>{priced ? `Price ready: $${product.cost}` : product.source ? "Enter the current price shown on the Lowe's page." : "Product and price still needed."}</p>
+          </article>;
+        })}
       </div>
+      {missingRequiredPrices.length ? <div role="status" className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><p className="font-black">Before continuing</p><p className="mt-1">Enter the current {missingRequiredPrices.join(" and ")} in the cards above. The Lowe&apos;s links are already saved as the price sources.</p></div> : null}
+      <button type="button" className={`mt-4 w-full ${primary}`} disabled={disabled || pending || missingRequiredPrices.length > 0} onClick={() => void requestPreview()}>{pending ? "Calculating…" : missingRequiredPrices.length ? `Enter ${missingRequiredPrices.length} missing price${missingRequiredPrices.length === 1 ? "" : "s"} to continue` : "Calculate quantities and costs"}</button>
       {productCombinations.length ? <section className="mt-4 border-t border-slate-200 pt-4"><h5 className="font-black text-slate-950">Compare deck-board and railing combinations</h5><p className="mt-1 text-xs leading-5 text-slate-600">These are material-only comparisons. Labor, framing, tax, and OH&amp;P are added by the complete estimate before anything is shown to the customer.</p><div className="mt-3 grid gap-3 lg:grid-cols-2">{productCombinations.slice(0, 6).map((option, index) => <article key={`${option.board.sourceUrl}:${option.railing?.sourceUrl ?? "no-rail"}`} className="rounded-lg border border-slate-300 bg-slate-50 p-3"><p className="text-xs font-black uppercase tracking-wide text-blue-800">Option {index + 1}</p><p className="mt-1 text-sm font-bold text-slate-950">{option.board.description}</p><p className="mt-1 text-xs text-slate-700">{option.railing?.description ?? "No railing system required"}</p><p className="mt-2 text-sm font-black text-slate-950">Known materials: {option.materialSubtotal > 0 ? `$${option.materialSubtotal.toFixed(2)}` : "prices incomplete"}</p><button type="button" className={`mt-3 w-full ${primary}`} onClick={() => { setPlan(option.optionPlan); setPreview(null); setNotice(`Option ${index + 1} selected. Calculate the takeoff to verify every quantity and cost.`); }}>Use this combination</button></article>)}</div></section> : null}
     </section>
 
@@ -410,8 +446,6 @@ export function DeckTakeoffPlanner({
 
     {error ? <p role="alert" className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-900">{error}</p> : null}
     {notice ? <p role="status" className="mt-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm font-bold text-emerald-900">{notice}</p> : null}
-    <button type="button" className={`mt-5 w-full ${primary}`} disabled={disabled || pending} onClick={() => void requestPreview()}>{pending ? "Working…" : "Calculate draft takeoff"}</button>
-
     {preview ? <section className="mt-5 rounded-lg border border-slate-300 bg-white p-4">
       <h4 className="text-lg font-black text-slate-950">Review before adding costs</h4>
       <p className="mt-1 text-sm text-slate-700">Verified deck area: {preview.deckAreaSquareFeet ? `${preview.deckAreaSquareFeet} sq ft` : "not available"}</p>
