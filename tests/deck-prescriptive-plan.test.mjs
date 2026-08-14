@@ -127,69 +127,92 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   const initial = recommendedPrescriptiveDraft("freestanding", false);
   assert.equal(initial.attachment, "freestanding"); assert.equal(initial.stairsIncluded, "no"); assert.equal(initial.attachmentConfirmed, false);
   const ui = readFileSync("src/components/estimates/deck-prescriptive-plan-generator.tsx", "utf8");
+  const compactUi = ui.replace(/\s+/g, " ");
   const planner = readFileSync("src/components/estimates/deck-takeoff-planner.tsx", "utf8");
   const route = readFileSync("src/app/api/estimates/[estimateId]/deck-takeoff/route.ts", "utf8");
   assert.equal(KNOXVILLE_2024_DECK_PROFILE.id, "city-knoxville-2024-irc-r507-southern-pine-v2");
   for (const marker of ['data-plan-member="joist"','data-plan-member="beam"','data-plan-member="post"','data-plan-member="footing"','data-plan-member="stair-opening"']) assert.match(ui, new RegExp(marker));
   assert.match(ui, /Required framing source for a full rebuild/);
   assert.match(ui, /not stamped/i);
-  assert.match(planner, /blueprintAttachment=.*railingGeometry\.attached/);
+  assert.match(planner, /blueprintAttachment=\{[\s\S]*railingGeometry\.attached/);
   assert.match(planner, /framingPlanEvidence: approvedPlan/);
-  assert.match(planner, /generatedShapeChanged[\s\S]*framingPlanEvidence: generatedShapeChanged \? null/);
+  assert.match(planner, /generatedShapeChanged[\s\S]*framingPlanEvidence:[\s\S]*generatedShapeChanged[\s\S]*\?[\s\S]*null/);
   assert.match(route, /isCanonicalFramingEvidence/);
   assert.match(route, /assertPartialFramingEvidenceBinding\(parsed\)/);
   assert.match(planner, /bounded profile generated and checked/i);
-  assert.match(planner, /buildPlanConfirmed: false, framingPlanEvidence: approvedPlan/);
+  assert.match(planner, /buildPlanConfirmed: false,[\s\S]*framingPlanEvidence: approvedPlan/);
   assert.match(planner, /structural_connectors: ""/);
   assert.match(planner, /stairs: stairsIncluded \? "" : "not_in_scope"/);
   assert.match(ui, /Main deck framing draft is partially ready/);
-  assert.match(ui, /detail required/);
+  assert.match(ui, /drag stairs/);
   assert.doesNotMatch(ui, /Complete quoted connector schedule:/);
-  assert.match(ui, /Compatible connector products, manufacturer fasteners, prices, and traceable sources/);
+  assert.match(
+    ui,
+    /Compatible connector products, manufacturer fasteners, prices,[\s\S]*and traceable sources/,
+  );
   assert.match(planner, /Price compatible hardware/);
   assert.match(ui, /Generate draft blueprint/);
   assert.match(ui, /Edit blueprint details/);
   assert.match(ui, /What this draft still needs/);
   assert.match(ui, /data-plan-member="blueprint-callout"/);
   assert.match(ui, /aria-labelledby="blueprint-callouts-heading"/);
-  assert.match(ui, /The numbered markers show where missing or unsupported decisions affect the drawing/);
-  assert.match(ui, /setGenerated\(true\); setDetailsOpen\(false\); setStep\(4\)/);
+  assert.match(
+    ui,
+    /The numbered markers show where missing or unsupported decisions[\s\S]*affect the drawing/,
+  );
+  assert.match(
+    ui,
+    /setGenerated\(true\);[\s\S]*setDetailsOpen\(false\);[\s\S]*setStep\(4\)/,
+  );
   assert.match(ui, /detailsOpen && step === 0/);
   assert.ok(planner.indexOf("<DeckPrescriptivePlanGenerator") < planner.indexOf("Edit board layout and stair placement"));
   assert.doesNotMatch(planner, /<DeckPlanVisual/);
-  assert.match(planner, /blueprintAttachment=\{railingGeometry\.attached === null \? null/);
+  assert.match(planner, /blueprintAttachment=\{[\s\S]*railingGeometry\.attached === null[\s\S]*\? null/);
   assert.match(ui, /type BlueprintCallout/);
   for (const stableId of ["stale-field-facts", "dimensions-profile", "attachment-fact", "stairs-fact", "railings-fact", "outside-profile"]) assert.match(ui, new RegExp(`id: "${stableId}"`));
   for (const laterOnly of ["jurisdiction", "ledger-substrate", "support-foundation", "package-stairs", "package-guards", "package-connectors"]) assert.doesNotMatch(ui, new RegExp(`id: "${laterOnly}"`));
   assert.match(ui, /data-plan-member="callout-leader"/);
-  assert.match(ui, /callout\.kind === "package"\) openPackageGuidance\(callout\.id\)/);
+  assert.match(
+    ui,
+    /callout\.kind === "package"\)[\s\S]*openPackageGuidance\(callout\.id\)/,
+  );
   assert.match(ui, /Open package guidance/);
   assert.match(ui, /Complete the Stairs category in the takeoff checklist/);
   assert.match(ui, /Complete the Structural connectors category/);
-  assert.match(ui, /stairEdge === "left" \? 30 : stairEdge === "right" \? 265 : stairAlong/);
+  assert.match(ui, /data-edit-handle=\{layoutEditorOpen \? "stairs"/);
   assert.match(ui, /stairEdge === "left" \|\| stairEdge === "right" \? 25 : 40/);
   assert.match(ui, /ESTIMATING DRAFT — NOT FOR PERMIT OR CONSTRUCTION — NOT STAMPED/);
   assert.match(ui, /aria-labelledby=\{`\$\{svgTitleId\} \$\{svgDescriptionId\}`\}/);
   assert.match(ui, /Outdated field facts — approval blocked/);
   assert.match(ui, /Rebuild from updated field facts/);
   assert.match(ui, /Keep current draft for comparison only/);
-  assert.match(ui, /disabled=\{!plan\.quantities \|\| callouts\.length > 0 \|\| Boolean\(pendingFacts\)\}/);
-  assert.match(ui, /disabled=\{disabled \|\| !approved \|\| !plan\.quantities \|\| callouts\.length > 0 \|\| Boolean\(pendingFacts\)\}/);
+  assert.match(compactUi, /disabled=\{ ?!plan\.quantities \|\| callouts\.length > 0 \|\| Boolean\(pendingFacts\) ?\}/);
+  assert.match(compactUi, /disabled=\{ ?disabled \|\| !approved \|\| !plan\.quantities \|\| callouts\.length > 0 \|\| Boolean\(pendingFacts\) ?\}/);
   assert.doesNotMatch(ui, /permit-preparation plan/);
   assert.match(ui, /sticky bottom-2/);
   assert.match(ui, /Observed existing — completed human site visit/);
   assert.match(ui, /Proposed estimating assumptions — reviewable/);
-  assert.match(ui, /They are not automatically declared to be the replacement design/);
+  assert.match(
+    ui,
+    /They are not[\s\S]*automatically declared to be the replacement design/,
+  );
   assert.match(ui, /Later: design, ordering, and permit readiness/);
   assert.match(ui, /No immediate layout questions remain/);
   assert.match(planner, /deckBlueprintVisitSeed\(visitItems\)/);
-  assert.match(ui, /Simple deck editor/);
+  assert.match(ui, /Measured deck drawing/);
   assert.match(ui, /Edit this drawing/);
   assert.match(ui, /Support beam distance from house/);
   assert.match(ui, /Add post/);
   assert.match(ui, /Space posts evenly/);
   assert.match(ui, /There is intentionally no AI instruction box/);
-  assert.match(ui, /Drag the purple beam up or down/);
+  assert.match(ui, /Free draw outline/);
+  assert.match(ui, /Add outline dot/);
+  assert.match(ui, /Edge measurements update as you draw/);
+  assert.match(ui, /activeDrawingDrag\.type === "corner"/);
+  assert.match(ui, /activeDrawingDrag\.type === "stair"/);
+  assert.match(ui, /onStairPlacementChange\(nearest\.edge, snapped\)/);
+  assert.match(ui, /draft\.postPlacementMode === "free"[\s\S]*movePostDistance/);
+  assert.match(ui, /Drag the support line toward or away from the house/);
   assert.match(ui, /data-edit-handle/);
   assert.match(ui, /onPointerMove/);
   assert.match(ui, /setPointerCapture/);

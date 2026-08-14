@@ -25,7 +25,7 @@ test("preview and apply reconstruct the authoritative field and catalog inputs s
   assert.match(route, /stairPlacementConfirmed/);
   assert.match(route, /PRE_REBUILD_PLAN_KEYS/);
   assert.match(route, /COMPLETE_REBUILD_LINE_KEYS/);
-  assert.match(route, /exactFields\(plan\.scopeDecisions/);
+  assert.match(route, /exactFields\([\s\S]*plan\.scopeDecisions/);
   assert.match(route, /buildPlanConfirmed/);
   assert.match(route, /completeRebuildConfirmed/);
   assert.match(route, /LEGACY_PLAN_KEYS/);
@@ -73,7 +73,7 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "Demolition and disposal",
     "Material delivery",
     "Equipment and rentals",
-    "This estimate replaces the entire deck, including decking, framing, supports, and footings",
+    "This estimate replaces the entire deck,[\\s\\S]*including decking, framing,[\\s\\S]*supports, and footings",
   ]) assert.match(ui, new RegExp(copy, "i"));
   assert.match(ui, /\/api\/material-catalog\?active=true&includePrices=true/);
   assert.match(ui, /Deck blueprint/);
@@ -83,7 +83,10 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /Compare deck-board and railing combinations/);
   assert.match(ui, /material-only comparisons/i);
   assert.match(ui, /Open Lowe(?:'|&apos;)s product and check price/);
-  assert.match(ui, /The Lowe(?:'|&apos;)s links are already saved as the price sources/);
+  assert.match(
+    ui,
+    /The Lowe(?:'|&apos;)s links are already saved[\s\S]*as the price[\s\S]*sources/,
+  );
   assert.match(ui, /missingRequiredPrices\.length > 0/);
   assert.match(ui, /This app did not size the structure or choose code requirements/);
   assert.match(ui, /Not in this estimate/);

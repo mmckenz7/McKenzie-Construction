@@ -82,6 +82,19 @@ test("places measured stair openings proportionally on every editable edge", () 
   assert.equal(deckStairOpeningGeometry({ ...base, stairWidthFeet: 19, stairEdge: "top", stairPosition: "center" }, drawing), null);
 });
 
+test("preserves an exact dragged stair offset in the frozen customer drawing", () => {
+  const design = parseDeckProposalDesign({
+    lengthFeet: 18, widthFeet: 12, boardRunDirection: "along_length",
+    deckingLayout: "seamless", railingLengthFeet: 39, attached: true,
+    stairsPresent: true, stairWidthFeet: 3, stairEdge: "yard",
+    stairPosition: "center", stairOffsetFeet: 5.5,
+  });
+  assert.equal(design?.stairOffsetFeet, 5.5);
+  assert.deepEqual(deckStairOpeningGeometry(design, { x: 0, y: 0, width: 180, height: 120 }), {
+    edge: "yard", start: 40, end: 70, center: 55,
+  });
+});
+
 test("the frozen proposal and internal preview use the same immutable Deck design", () => {
   assert.match(proposalRoute, /loadDeckProposalDesign/);
   assert.match(proposalRoute, /snapshot = \{[\s\S]*deckDesign/);
