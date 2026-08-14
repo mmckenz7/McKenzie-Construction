@@ -94,7 +94,7 @@ export async function GET(
       { status: 400 },
     );
   const db = createAdminServerClient();
-  const [batches, members, attempts, reviews, assignments, items] =
+  const [batches, members, attempts, reviews, applicabilityFindings, assignments, items] =
     await Promise.all([
       db
         .from("guided_site_visit_intake_batches")
@@ -116,7 +116,12 @@ export async function GET(
         .eq("company_id", auth.authorization!.companyId),
       db
         .from("guided_site_visit_intake_classification_reviews")
-        .select("id,intake_attempt_id,diagnostic_class,proposals,created_at")
+        .select("id,intake_attempt_id,diagnostic_class,proposals,provider,model_version,prompt_version,schema_version,created_at")
+        .eq("visit_id", visitId)
+        .eq("company_id", auth.authorization!.companyId),
+      db
+        .from("guided_site_visit_intake_applicability_findings")
+        .select("id,visit_item_id,intake_attempt_id,classification_review_id,finding_key,finding,confidence,reason,created_at")
         .eq("visit_id", visitId)
         .eq("company_id", auth.authorization!.companyId),
       db
@@ -134,7 +139,7 @@ export async function GET(
         .order("ordinal"),
     ]);
   if (
-    [batches, members, attempts, reviews, assignments, items].some(
+    [batches, members, attempts, reviews, applicabilityFindings, assignments, items].some(
       (x) => x.error,
     )
   )
@@ -149,6 +154,7 @@ export async function GET(
       members: members.data,
       attempts: attempts.data,
       reviews: reviews.data,
+      applicabilityFindings: applicabilityFindings.data,
       assignments: assignments.data,
       items: (items.data ?? []).map(
         ({ id, item_key, ordinal, title, state, observation }) => ({

@@ -29,22 +29,33 @@ test("rediscovers the latest completed Deck visit without weakening tenant scope
   );
   assert.match(visitRoute, /Cache-Control": "private, no-store/);
   assert.match(guidedVisit, /body\.latestCompletedVisit\?\.id/);
+  assert.match(
+    visitRoute,
+    /\.select\("item_key,title,ordinal,state,observation"\)/,
+  );
+  assert.match(visitRoute, /items: rows\.map/);
 });
 
-test("shows the truthful five-stage Deck estimate readiness workflow", () => {
+test("shows one focused Deck stage at a time with a truthful next action", () => {
   for (const copy of [
-    "Finish field verification",
-    "Enter human takeoff inputs",
-    "Build true-cost lines",
-    "Review OH&P",
-    "Review customer proposal",
-    "There is no Deck takeoff calculation engine yet",
-    "Photos do not become quantities automatically",
+    "Current step:",
+    "Site visit",
+    "Estimate",
+    "Proposal",
+    "Review and send estimate",
+    "Photos never become dimensions, quantities, prices, or engineering decisions",
     "Nothing is sent automatically",
   ]) assert.match(builder, new RegExp(copy, "i"));
   assert.match(guidedVisit, /Continue to human takeoff/);
-  assert.match(builder, /Begin human takeoff/);
+  assert.match(builder, /deckWorkspaceStage === "site_visit"/);
+  assert.match(builder, /deckWorkspaceStage === "estimate"/);
+  assert.match(builder, /deckWorkspaceStage === "proposal"/);
+  assert.match(builder, /aria-current=\{activeStage === stage\.key \? "step"/);
+  assert.match(builder, /disabled=\{!stage\.enabled\}/);
+  assert.match(builder, /issuedOrResponded \? "proposal"/);
+  assert.match(builder, /sticky top-20/);
   assert.match(builder, /deck-takeoff-workspace/);
+  assert.doesNotMatch(builder, /function DeckEstimateReadiness/);
   assert.doesNotMatch(
     builder,
     /generateDeckTakeoff|auto(?:matic)?(?:ally)? create.*(?:quantity|price)|sendAutomatically/i,
@@ -69,5 +80,30 @@ test("gates Deck OH&P and customer-link creation on real readiness", () => {
   assert.match(
     proposalCard,
     /&& !issuanceBlockedReason/,
+  );
+});
+
+test("completed field work opens a Deck-specific true-cost workspace", () => {
+  for (const copy of [
+    "Deck takeoff and true-cost workspace",
+    "Saved field measurements and notes",
+    "Create Deck construction section",
+  ]) assert.match(builder, new RegExp(copy, "i"));
+  assert.match(builder, /Continue to OH&amp;P/);
+  for (const category of ["material", "labor", "subcontractor", "equipment", "other"])
+    assert.match(builder, new RegExp(`key: "${category}"`));
+  assert.match(builder, /Add \{category\.label\}/);
+  assert.match(builder, /deckObservationRows/);
+  assert.match(builder, /item\.observation/);
+  assert.match(builder, /status === "completed"\) void loadDeckVisitStatus\(\)/);
+  assert.match(builder, /entry\.name\.trim\(\)\.toLowerCase\(\) === "deck construction"/);
+  assert.match(builder, /costCategory: category/);
+  assert.match(builder, /category === "labor" \? "hr"/);
+  assert.match(builder, /category === "equipment" \? "day"/);
+  assert.match(builder, /prefers-reduced-motion: reduce/);
+  assert.match(builder, /target\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.doesNotMatch(
+    builder,
+    /(?:photo|image).{0,80}(?:calculate|derive|infer).{0,40}(?:quantity|price)/i,
   );
 });

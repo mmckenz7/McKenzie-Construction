@@ -93,9 +93,31 @@ type IntakeEvidenceAssignment = {
   decision: "accepted" | "corrected" | "excluded";
   resultingVisitRevision: number;
 };
+type IntakeApplicabilityFinding = {
+  id: string;
+  intakeAttemptId: string;
+  classificationReviewId: string;
+  visitItemId: string;
+  findingKey: string;
+  finding: "present" | "absent" | "unclear";
+  confidence: number;
+  reason: string;
+  provider: string;
+  modelVersion: string;
+  createdAt: string;
+};
+type IntakeClassificationReview = {
+  id: string;
+  intakeAttemptId: string;
+  diagnosticClass: string;
+  schemaVersion: string;
+  createdAt: string;
+};
 type IntakeEvidenceSnapshot = {
   confirmedAttemptIds: Set<string>;
   assignments: IntakeEvidenceAssignment[];
+  reviews: IntakeClassificationReview[];
+  applicabilityFindings: IntakeApplicabilityFinding[];
 };
 type IntakeEvidenceLoadState =
   | { status: "loading" }
@@ -103,6 +125,7 @@ type IntakeEvidenceLoadState =
   | { status: "unavailable" };
 type ConsolidatedFieldDraft = {
   condition: "" | "yes" | "no";
+  applicability: Record<string, "" | "yes" | "no">;
   measurements: Record<string, MeasurementDraft>;
 };
 
@@ -130,7 +153,7 @@ const FIELD_LABELS: Record<string, string> = {
   total_rise: "Total rise",
   tread_depth: "Tread depth",
   representative_riser: "Representative riser height",
-  landing_dimensions: "Landing dimensions",
+  landing_dimensions: "Stair landing size (length × width)",
   guard_height: "Guard height",
   opening: "Representative opening",
   rail_lengths_by_area: "Railing lengths by area",
@@ -163,7 +186,7 @@ const FIELD_GUIDANCE: Record<string, string> = {
   representative_riser:
     "Measure vertically between two adjacent representative tread surfaces.",
   landing_dimensions:
-    "Measure the visible landing and record the requested overall dimension without assuming concealed edges.",
+    "Measure the visible landing length and width. Do not estimate concealed edges or infer a size from the photo.",
   guard_height:
     "Measure vertically from the deck surface to the top of the guard.",
   opening:
@@ -184,6 +207,7 @@ const LONG_UNITS = ["ft", "ft + in", "in"] as const;
 const DETAIL_UNITS = ["in", "ft", "ft + in"] as const;
 const COMPOSITE_UNITS = ["in", "ft"] as const;
 const COMPOSITE_FIELDS: Record<string, string[]> = {
+  landing_dimensions: ["Landing length", "Landing width"],
   post_dimensions: ["Post width", "Post depth"],
   exposed_footing_dimensions: [
     "Visible footing width",
@@ -450,6 +474,8 @@ export function GuidedDeckSiteVisit({
   const [optionalJobsiteNotes, setOptionalJobsiteNotes] = useState<
     Record<string, string>
   >({});
+  const [applicabilityAnalysisProgress, setApplicabilityAnalysisProgress] =
+    useState<{ current: number; total: number } | null>(null);
 
   const loadIntakeEvidence = useCallback(async (visitId: string) => {
     setHumanAccepted(false);
@@ -463,6 +489,8 @@ export function GuidedDeckSiteVisit({
       if (!response.ok) throw new Error("Intake evidence could not be loaded.");
       const body = (await response.json()) as {
         attempts?: { id?: unknown; state?: unknown }[];
+        reviews?: Record<string, unknown>[];
+        applicabilityFindings?: Record<string, unknown>[];
         assignments?: Record<string, unknown>[];
       };
       setIntakeEvidence({
@@ -795,24 +823,75 @@ export function GuidedDeckSiteVisit({
         item.state === "pending" &&
         !["access_demolition", "utilities_obstructions"].includes(item.itemKey),
     ) ?? [];
-  function itemHasFullIntakeCoverage(item: VisitItem) {
-    const declared = GUIDED_VISIBLE_FACT_CRITERIA[item.itemKey] ?? [];
-    return (
-      declared.length > 0 && intakeCoverageForItem(item).length === declared.length
-    );
-  }
   function effectiveConsolidatedCondition(item: VisitItem) {
     const chosen = consolidatedDrafts[item.id]?.condition;
     if (chosen) return chosen;
-    return item.requirement.mode === "conditional" &&
-      itemHasFullIntakeCoverage(item)
+    const finding = effectiveApplicabilityFinding(item, "item_applies");
+    return finding?.finding === "present"
       ? "yes"
-      : "";
+      : finding?.finding === "absent"
+        ? "no"
+        : "";
+  }
+  function effectiveApplicabilityFinding(item: VisitItem, findingKey: string) {
+    if (intakeEvidence.status !== "ready") return null;
+    const groundedAttemptIds = new Set(
+      intakeCoverageForItem(item).map((entry) => entry.assignment.intakeAttemptId),
+    );
+    const latestByAttempt = new Map<string, IntakeApplicabilityFinding>();
+    intakeEvidence.snapshot.applicabilityFindings
+      .filter(
+        (finding) =>
+          finding.visitItemId === item.id &&
+          finding.findingKey === findingKey &&
+          groundedAttemptIds.has(finding.intakeAttemptId),
+      )
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .forEach((finding) => latestByAttempt.set(finding.intakeAttemptId, finding));
+    const findings = [...latestByAttempt.values()].map((finding) =>
+      finding.finding !== "unclear" && finding.confidence < 0.85
+        ? { ...finding, finding: "unclear" as const }
+        : finding,
+    );
+    if (!findings.length) return null;
+    if (findings.some((finding) => finding.finding === "unclear"))
+      return { ...findings.at(-1)!, finding: "unclear" as const };
+    const explicit = new Set(
+      findings.map((finding) => finding.finding),
+    );
+    if (explicit.size > 1)
+      return { ...findings.at(-1)!, finding: "unclear" as const };
+    return (
+      findings.at(-1) ?? null
+    );
+  }
+  function effectiveFieldApplicability(item: VisitItem, findingKey: string) {
+    const chosen = consolidatedDrafts[item.id]?.applicability[findingKey];
+    if (chosen) return chosen;
+    const finding = effectiveApplicabilityFinding(item, findingKey);
+    return finding?.finding === "present"
+      ? "yes"
+      : finding?.finding === "absent"
+        ? "no"
+        : "";
+  }
+  function measurementFieldsForItem(item: VisitItem) {
+    return (item.requirement.fields ?? []).filter(
+      (field) =>
+        field !== "landing_dimensions" ||
+        effectiveFieldApplicability(item, "landing_present") === "yes",
+    );
   }
   const conditionalDecisionsNeeded = pendingRequiredItems.filter(
     (item) =>
       item.requirement.mode === "conditional" &&
       !effectiveConsolidatedCondition(item),
+  );
+  const fieldApplicabilityDecisionsNeeded = pendingRequiredItems.filter(
+    (item) =>
+      item.itemKey === "stairs_landings" &&
+      effectiveConsolidatedCondition(item) === "yes" &&
+      !effectiveFieldApplicability(item, "landing_present"),
   );
   const intakeExceptions = pendingRequiredItems.flatMap((item) => {
     const effectiveCondition = effectiveConsolidatedCondition(item);
@@ -833,6 +912,45 @@ export function GuidedDeckSiteVisit({
         item.state === "pending" &&
         ["access_demolition", "utilities_obstructions"].includes(item.itemKey),
     ) ?? [];
+  const effectiveIntakeAttemptIds = new Set(
+    intakeEvidence.status === "ready"
+      ? intakeEvidence.snapshot.assignments.flatMap((assignment) =>
+          assignment.decision !== "excluded" &&
+          intakeEvidence.snapshot.confirmedAttemptIds.has(
+            assignment.intakeAttemptId,
+          ) &&
+          !intakeEvidence.snapshot.assignments.some(
+            (later) => later.supersedesAssignmentEventId === assignment.id,
+          )
+            ? [assignment.intakeAttemptId]
+            : [],
+        )
+      : [],
+  );
+  const applicabilityAnalysisCandidates =
+    intakeEvidence.status === "ready"
+      ? [...effectiveIntakeAttemptIds].filter((attemptId) => {
+          const latest = intakeEvidence.snapshot.reviews
+            .filter((review) => review.intakeAttemptId === attemptId)
+            .sort(
+              (a, b) =>
+                b.createdAt.localeCompare(a.createdAt) ||
+                b.id.localeCompare(a.id),
+            )[0];
+          const hasApplicabilityResult =
+            intakeEvidence.snapshot.applicabilityFindings.some(
+              (finding) =>
+                finding.intakeAttemptId === attemptId &&
+                finding.classificationReviewId === latest?.id,
+            );
+          return (
+            !latest ||
+            latest.schemaVersion !== "guided-deck-intake-classification-v2" ||
+            latest.diagnosticClass !== "classified" ||
+            !hasApplicabilityResult
+          );
+        })
+      : [];
   const requiresFields =
     current?.requirement.mode === "required_measurements" ||
     (current?.requirement.mode === "conditional" && condition === "yes");
@@ -1571,15 +1689,28 @@ export function GuidedDeckSiteVisit({
   function consolidatedObservation(item: VisitItem) {
     const draft = consolidatedDrafts[item.id] ?? {
       condition: "",
+      applicability: {},
       measurements: {},
     };
-    const names = item.requirement.fields ?? [];
+    const names = measurementFieldsForItem(item);
     const stored = serializeMeasurements(names, draft.measurements);
     if (item.requirement.mode === "photo_only") return {};
     if (item.requirement.mode === "required_measurements")
       return { measurements: stored };
     return effectiveConsolidatedCondition(item) === "yes"
-      ? { conditionStatus: "applies", measurements: stored }
+      ? {
+          conditionStatus: "applies",
+          measurements: stored,
+          ...(item.itemKey === "stairs_landings"
+            ? {
+                applicability: {
+                  landingPresent:
+                    effectiveFieldApplicability(item, "landing_present") ===
+                    "yes",
+                },
+              }
+            : {}),
+        }
       : {
           conditionStatus: "not_applicable",
           ...(item.requirement.otherwise
@@ -1596,7 +1727,12 @@ export function GuidedDeckSiteVisit({
       return false;
     if (item.requirement.mode === "conditional" && effectiveCondition === "no")
       return true;
-    return (item.requirement.fields ?? []).every((field) =>
+    if (
+      item.itemKey === "stairs_landings" &&
+      !effectiveFieldApplicability(item, "landing_present")
+    )
+      return false;
+    return measurementFieldsForItem(item).every((field) =>
       measurementComplete(field, draft?.measurements[field]),
     );
   }
@@ -1693,6 +1829,40 @@ export function GuidedDeckSiteVisit({
       );
     } finally {
       setConsolidatedProgress(null);
+      setBusy(false);
+    }
+  }
+
+  async function analyzeExistingPhotoApplicability() {
+    if (!visit || busy || !applicabilityAnalysisCandidates.length) return;
+    setBusy(true);
+    setError("");
+    let completed = 0;
+    try {
+      for (const attemptId of applicabilityAnalysisCandidates) {
+        setApplicabilityAnalysisProgress({
+          current: completed + 1,
+          total: applicabilityAnalysisCandidates.length,
+        });
+        await jsonRequest(
+          `/api/guided-site-visits/${visit.id}/intake-photos/${attemptId}/classification-reviews`,
+          "POST",
+          {
+            idempotencyKey: `guided-visit-applicability:${attemptId}:${crypto.randomUUID()}`,
+          },
+        );
+        completed += 1;
+      }
+      await loadIntakeEvidence(visit.id);
+    } catch (requestError) {
+      await loadIntakeEvidence(visit.id).catch(() => undefined);
+      setError(
+        requestError instanceof Error
+          ? `${requestError.message} ${completed} of ${applicabilityAnalysisCandidates.length} saved photos were analyzed. Retry to continue with the remaining photos.`
+          : "Saved photos could not all be analyzed. Completed reviews remain saved; retry the remaining photos.",
+      );
+    } finally {
+      setApplicabilityAnalysisProgress(null);
       setBusy(false);
     }
   }
@@ -1947,6 +2117,38 @@ export function GuidedDeckSiteVisit({
             Back to Photo Inbox
           </button>
 
+          {applicabilityAnalysisCandidates.length ? (
+            <section className="mt-5 rounded-xl border border-blue-300 bg-blue-50 p-4 text-blue-950">
+              <h3 className="font-black">Let photo review answer what it can</h3>
+              <p className="mt-1 text-sm leading-6">
+                Analyze {applicabilityAnalysisCandidates.length} already-saved,
+                approved evidence{" "}
+                {applicabilityAnalysisCandidates.length === 1
+                  ? "photo"
+                  : "photos"}{" "}
+                for stairs, landings, railings, ledger, and visible framing
+                conditions. This does not upload anything again and never
+                fills in dimensions.
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void analyzeExistingPhotoApplicability()}
+                className={`mt-3 ${primary}`}
+              >
+                {applicabilityAnalysisProgress
+                  ? `Analyzing photo ${applicabilityAnalysisProgress.current} of ${applicabilityAnalysisProgress.total}…`
+                  : "Analyze saved photos"}
+              </button>
+              {applicabilityAnalysisProgress ? (
+                <p role="status" aria-live="polite" className="mt-2 text-sm font-bold">
+                  Completed reviews stay saved if a later photo cannot be
+                  analyzed. You can retry the remaining photos.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+
           {intakeExceptions.length ? (
             <section className="mt-5 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-amber-950">
               <h3 className="font-black">Photo exceptions to resolve</h3>
@@ -1977,10 +2179,19 @@ export function GuidedDeckSiteVisit({
             </section>
           ) : null}
 
-          {conditionalDecisionsNeeded.length ? (
+          {conditionalDecisionsNeeded.length +
+            fieldApplicabilityDecisionsNeeded.length ? (
             <p className="mt-4 rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-950">
-              Choose Yes or No for {conditionalDecisionsNeeded.length}{" "}
-              applicable field {conditionalDecisionsNeeded.length === 1 ? "question" : "questions"} below.
+              Choose Yes or No for{" "}
+              {conditionalDecisionsNeeded.length +
+                fieldApplicabilityDecisionsNeeded.length}{" "}
+              applicability{" "}
+              {conditionalDecisionsNeeded.length +
+                fieldApplicabilityDecisionsNeeded.length ===
+              1
+                ? "question"
+                : "questions"}{" "}
+              below.
               Unanswered applicability is not treated as missing photo evidence.
             </p>
           ) : null}
@@ -2000,15 +2211,34 @@ export function GuidedDeckSiteVisit({
                   {items.map((item) => {
                     const draft = consolidatedDrafts[item.id] ?? {
                       condition: "" as const,
+                      applicability: {},
                       measurements: {},
                     };
                     const conditional =
                       item.requirement.mode === "conditional";
                     const effectiveCondition =
                       effectiveConsolidatedCondition(item);
+                    const conditionFinding = effectiveApplicabilityFinding(
+                      item,
+                      "item_applies",
+                    );
+                    const photoDeterminedCondition =
+                      !draft.condition &&
+                      ["present", "absent"].includes(
+                        conditionFinding?.finding ?? "",
+                      );
+                    const landingFinding = effectiveApplicabilityFinding(
+                      item,
+                      "landing_present",
+                    );
+                    const effectiveLanding = effectiveFieldApplicability(
+                      item,
+                      "landing_present",
+                    );
                     const showFields =
                       item.requirement.mode === "required_measurements" ||
                       (conditional && effectiveCondition === "yes");
+                    const fields = measurementFieldsForItem(item);
                     return (
                       <div
                         key={item.id}
@@ -2020,52 +2250,152 @@ export function GuidedDeckSiteVisit({
                             Photo evidence ready · no field dimensions required.
                           </p>
                         ) : null}
-                        {conditional ? (
+                        {conditional && photoDeterminedCondition ? (
+                          <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950">
+                            <p className="font-bold">
+                              Photo review: {effectiveCondition === "yes"
+                                ? (CONDITIONS[item.requirement.when ?? ""]
+                                    ?.yes ?? "This applies")
+                                : (CONDITIONS[item.requirement.when ?? ""]
+                                    ?.no ?? "This does not apply")}
+                            </p>
+                            <p className="mt-1 text-xs leading-5">
+                              AI made this finding from a photo you approved as
+                              evidence for this checklist item. Your photo
+                              approval did not approve this AI conclusion. No
+                              dimension was inferred. {conditionFinding?.reason}
+                            </p>
+                            <details className="mt-2">
+                              <summary className="min-h-11 cursor-pointer py-3 font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700">
+                                Change this finding
+                              </summary>
+                              <ApplicabilityChoices
+                                name={`consolidated-condition-${item.id}`}
+                                value={effectiveCondition}
+                                yesLabel={
+                                  CONDITIONS[item.requirement.when ?? ""]?.yes ??
+                                  "Yes"
+                                }
+                                noLabel={
+                                  CONDITIONS[item.requirement.when ?? ""]?.no ??
+                                  "No"
+                                }
+                                onChange={(value) =>
+                                  setConsolidatedDrafts((current) => ({
+                                    ...current,
+                                    [item.id]: { ...draft, condition: value },
+                                  }))
+                                }
+                              />
+                            </details>
+                          </div>
+                        ) : conditional ? (
                           <fieldset className="mt-3">
                             <legend className="text-sm font-bold">
                               {CONDITIONS[item.requirement.when ?? ""]?.prompt ??
                                 "Does this condition apply?"}
                             </legend>
-                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                              {(["yes", "no"] as const).map((value) => (
-                                <label
-                                  key={value}
-                                  className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 p-3 text-sm font-semibold"
-                                >
-                                  <input
-                                    type="radio"
-                                    name={`consolidated-condition-${item.id}`}
-                                    checked={effectiveCondition === value}
-                                    onChange={() =>
-                                      setConsolidatedDrafts((current) => ({
-                                        ...current,
-                                        [item.id]: {
-                                          ...draft,
-                                          condition: value,
-                                        },
-                                      }))
-                                    }
-                                  />
-                                  {value === "yes"
-                                    ? (CONDITIONS[item.requirement.when ?? ""]
-                                        ?.yes ?? "Yes")
-                                    : (CONDITIONS[item.requirement.when ?? ""]
-                                        ?.no ?? "No")}
-                                </label>
-                              ))}
-                            </div>
-                            {!draft.condition &&
-                            effectiveCondition === "yes" ? (
-                              <p className="mt-2 text-xs font-bold text-emerald-800">
-                                Approved photos show this applies. Choose No if
-                                your field check says it does not.
+                            <ApplicabilityChoices
+                              name={`consolidated-condition-${item.id}`}
+                              value={effectiveCondition}
+                              yesLabel={
+                                CONDITIONS[item.requirement.when ?? ""]?.yes ??
+                                "Yes"
+                              }
+                              noLabel={
+                                CONDITIONS[item.requirement.when ?? ""]?.no ??
+                                "No"
+                              }
+                              onChange={(value) =>
+                                setConsolidatedDrafts((current) => ({
+                                  ...current,
+                                  [item.id]: { ...draft, condition: value },
+                                }))
+                              }
+                            />
+                            {!conditionFinding ? (
+                              <p className="mt-2 text-xs text-slate-600">
+                                The photo review did not make this decision.
+                                Missing findings are never treated as No.
                               </p>
                             ) : null}
                           </fieldset>
                         ) : null}
                         {showFields ? (
                           <div className="mt-4 grid gap-4">
-                            {(item.requirement.fields ?? []).map((field) => (
+                            {item.itemKey === "stairs_landings" ? (
+                              landingFinding?.finding === "present" &&
+                              !draft.applicability.landing_present ? (
+                                <PhotoApplicabilitySummary
+                                  text="Photo review: a stair landing is present."
+                                  reason={landingFinding.reason}
+                                  onChange={(value) =>
+                                    setConsolidatedDrafts((current) => ({
+                                      ...current,
+                                      [item.id]: {
+                                        ...draft,
+                                        applicability: {
+                                          ...draft.applicability,
+                                          landing_present: value,
+                                        },
+                                      },
+                                    }))
+                                  }
+                                  value={effectiveLanding}
+                                  name={`landing-present-${item.id}`}
+                                />
+                              ) : landingFinding?.finding === "absent" &&
+                                !draft.applicability.landing_present ? (
+                                <PhotoApplicabilitySummary
+                                  text="Photo review: no stair landing is shown."
+                                  reason={landingFinding.reason}
+                                  onChange={(value) =>
+                                    setConsolidatedDrafts((current) => ({
+                                      ...current,
+                                      [item.id]: {
+                                        ...draft,
+                                        applicability: {
+                                          ...draft.applicability,
+                                          landing_present: value,
+                                        },
+                                      },
+                                    }))
+                                  }
+                                  value={effectiveLanding}
+                                  name={`landing-present-${item.id}`}
+                                />
+                              ) : (
+                                <fieldset>
+                                  <legend className="text-sm font-bold">
+                                    Is there a stair landing?
+                                  </legend>
+                                  <ApplicabilityChoices
+                                    name={`landing-present-${item.id}`}
+                                    value={effectiveLanding}
+                                    yesLabel="Yes, a landing is present"
+                                    noLabel="No landing is present"
+                                    onChange={(value) =>
+                                      setConsolidatedDrafts((current) => ({
+                                        ...current,
+                                        [item.id]: {
+                                          ...draft,
+                                          applicability: {
+                                            ...draft.applicability,
+                                            landing_present: value,
+                                          },
+                                        },
+                                      }))
+                                    }
+                                  />
+                                  <p className="mt-2 text-xs text-slate-600">
+                                    {landingFinding?.finding === "unclear"
+                                      ? "The photo review could not determine this. Check the site and choose Yes or No."
+                                      : "No explicit landing finding was saved. Missing photo findings are not treated as absence."}
+                                  </p>
+                                </fieldset>
+                              )
+                            ) : null}
+                            {fields.map((field) => (
                               <MeasurementField
                                 key={field}
                                 field={field}
@@ -3370,6 +3700,75 @@ function ManualConfirmation({
   );
 }
 
+function ApplicabilityChoices({
+  name,
+  value,
+  yesLabel,
+  noLabel,
+  onChange,
+}: {
+  name: string;
+  value: "" | "yes" | "no";
+  yesLabel: string;
+  noLabel: string;
+  onChange: (value: "yes" | "no") => void;
+}) {
+  return (
+    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      {(["yes", "no"] as const).map((choice) => (
+        <label
+          key={choice}
+          className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white p-3 text-sm font-semibold"
+        >
+          <input
+            type="radio"
+            name={name}
+            checked={value === choice}
+            onChange={() => onChange(choice)}
+          />
+          {choice === "yes" ? yesLabel : noLabel}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function PhotoApplicabilitySummary({
+  text,
+  reason,
+  name,
+  value,
+  onChange,
+}: {
+  text: string;
+  reason: string;
+  name: string;
+  value: "" | "yes" | "no";
+  onChange: (value: "yes" | "no") => void;
+}) {
+  return (
+    <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950">
+      <p className="font-bold">{text}</p>
+      <p className="mt-1 text-xs leading-5">
+        AI made this finding from a photo you approved as evidence for this
+        item. Your photo approval did not approve this AI conclusion. {reason}
+      </p>
+      <details className="mt-2">
+        <summary className="min-h-11 cursor-pointer py-3 font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700">
+          Change this finding
+        </summary>
+        <ApplicabilityChoices
+          name={name}
+          value={value}
+          yesLabel="Yes"
+          noLabel="No"
+          onChange={onChange}
+        />
+      </details>
+    </div>
+  );
+}
+
 function MeasurementField({
   field,
   draft,
@@ -3876,8 +4275,29 @@ function normalizeVisit(raw: Record<string, unknown>): Visit {
 
 function normalizeIntakeEvidence(raw: {
   attempts?: { id?: unknown; state?: unknown }[];
+  reviews?: Record<string, unknown>[];
+  applicabilityFindings?: Record<string, unknown>[];
   assignments?: Record<string, unknown>[];
 }): IntakeEvidenceSnapshot {
+  const reviews = new Map(
+    (raw.reviews ?? []).flatMap((review) =>
+      typeof review.id === "string"
+        ? [
+            [
+              review.id,
+              {
+                provider:
+                  typeof review.provider === "string" ? review.provider : "",
+                modelVersion:
+                  typeof review.model_version === "string"
+                    ? review.model_version
+                    : "",
+              },
+            ] as const,
+          ]
+        : [],
+    ),
+  );
   return {
     confirmedAttemptIds: new Set(
       (raw.attempts ?? []).flatMap((attempt) =>
@@ -3885,6 +4305,64 @@ function normalizeIntakeEvidence(raw: {
           ? [attempt.id]
           : [],
       ),
+    ),
+    reviews: (raw.reviews ?? []).flatMap((review) =>
+      typeof review.id === "string" &&
+      typeof review.intake_attempt_id === "string"
+        ? [
+            {
+              id: review.id,
+              intakeAttemptId: review.intake_attempt_id,
+              diagnosticClass:
+                typeof review.diagnostic_class === "string"
+                  ? review.diagnostic_class
+                  : "",
+              schemaVersion:
+                typeof review.schema_version === "string"
+                  ? review.schema_version
+                  : "",
+              createdAt:
+                typeof review.created_at === "string" ? review.created_at : "",
+            },
+          ]
+        : [],
+    ),
+    applicabilityFindings: (raw.applicabilityFindings ?? []).flatMap(
+      (finding) => {
+        const review =
+          typeof finding.classification_review_id === "string"
+            ? reviews.get(finding.classification_review_id)
+            : undefined;
+        if (
+          typeof finding.id !== "string" ||
+          typeof finding.intake_attempt_id !== "string" ||
+          typeof finding.classification_review_id !== "string" ||
+          typeof finding.visit_item_id !== "string" ||
+          typeof finding.finding_key !== "string" ||
+          !["present", "absent", "unclear"].includes(
+            String(finding.finding),
+          ) ||
+          typeof finding.reason !== "string" ||
+          !review
+        )
+          return [];
+        return [
+          {
+            id: finding.id,
+            intakeAttemptId: finding.intake_attempt_id,
+            classificationReviewId: finding.classification_review_id,
+            visitItemId: finding.visit_item_id,
+            findingKey: finding.finding_key,
+            finding: finding.finding as IntakeApplicabilityFinding["finding"],
+            confidence: Number(finding.confidence),
+            reason: finding.reason,
+            provider: review.provider,
+            modelVersion: review.modelVersion,
+            createdAt:
+              typeof finding.created_at === "string" ? finding.created_at : "",
+          },
+        ];
+      },
     ),
     assignments: (raw.assignments ?? []).flatMap((assignment) => {
       const decision = assignment.decision;

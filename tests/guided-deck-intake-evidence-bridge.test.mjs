@@ -211,15 +211,17 @@ test("conditional No uses a valid generic confirmation without fake evidence", (
   assert.match(consolidatedFieldFormMigration, /state='confirmed'/);
 });
 
-test("approved full coverage defaults applicability to Yes but remains overrideable", () => {
+test("only an explicit grounded photo finding defaults applicability and remains overrideable", () => {
   assert.match(
     component,
-    /item\.requirement\.mode === "conditional" &&\s*itemHasFullIntakeCoverage\(item\)\s*\? "yes"/,
+    /const finding = effectiveApplicabilityFinding\(item, "item_applies"\)/,
   );
-  assert.match(component, /Approved photos show this applies/);
-  assert.match(component, /Choose No if\s+your field check says it does not/);
+  assert.match(component, /finding\?\.finding === "present"/);
+  assert.match(component, /finding\?\.finding === "absent"/);
+  assert.match(component, /Missing findings are never treated as No/);
+  assert.match(component, /Change this finding/);
   assert.match(component, /condition: value/);
-  assert.doesNotMatch(component, /missing.*\? "no"/i);
+  assert.doesNotMatch(component, /itemHasFullIntakeCoverage/);
 });
 
 test("optional notes and blank Skip save in the same final sequence", () => {

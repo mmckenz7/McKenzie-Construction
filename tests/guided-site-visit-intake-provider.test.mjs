@@ -64,6 +64,7 @@ test("usable classification accepts zero-many exact Deck item/criterion proposal
               usabilityVerdict: "usable",
               issueCodes: [],
               proposals: [],
+              applicabilityFindings: [],
             }),
           }),
           { status: 200 },
@@ -107,6 +108,7 @@ test("accepts structured text from the nested Responses API output", async () =>
                       usabilityVerdict: "usable",
                       issueCodes: [],
                       proposals: [],
+                      applicabilityFindings: [],
                     }),
                   },
                 ],
@@ -118,6 +120,48 @@ test("accepts structured text from the nested Responses API output", async () =>
     });
     assert.equal(result.usabilityVerdict, "usable");
     assert.equal(result.proposals.length, 0);
+  } finally {
+    if (prior === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = prior;
+  }
+});
+test("returns only explicit photo-grounded applicability findings and never dimensions", async () => {
+  const prior = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-only";
+  try {
+    const item = {
+      id: "11111111-1111-4111-8111-111111111111",
+      itemKey: "stairs_landings",
+      title: "Stairs and landings",
+    };
+    const result = await runOpenAiIntakeClassification({
+      bytes: new Uint8Array([1]).buffer,
+      mimeType: "image/jpeg",
+      idempotencyKey: "applicability",
+      items: [item],
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            output_text: JSON.stringify({
+              usabilityVerdict: "usable",
+              issueCodes: [],
+              proposals: [],
+              applicabilityFindings: [
+                {
+                  visitItemId: item.id,
+                  findingKey: "landing_present",
+                  finding: "absent",
+                  confidence: 0.91,
+                  reason: "The full stair run ends directly at grade.",
+                },
+              ],
+            }),
+          }),
+          { status: 200 },
+        ),
+    });
+    assert.equal(result.applicabilityFindings[0].finding, "absent");
+    assert.equal("value" in result.applicabilityFindings[0], false);
   } finally {
     if (prior === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = prior;
@@ -148,6 +192,7 @@ test("retake and unavailable outcomes cannot contain proposals", async () => {
               usabilityVerdict: "retake_recommended",
               issueCodes: ["blurry"],
               proposals: [],
+              applicabilityFindings: [],
             }),
           }),
           { status: 200 },
@@ -169,6 +214,7 @@ test("retake and unavailable outcomes cannot contain proposals", async () => {
                     criterionKey: "house_elevation",
                   },
                 ],
+                applicabilityFindings: [],
               }),
             }),
             { status: 200 },
@@ -234,6 +280,7 @@ test("focused recheck preserves full-photo classification while emphasizing one 
               usabilityVerdict: "usable",
               issueCodes: [],
               proposals: [],
+              applicabilityFindings: [],
             }),
           }),
           { status: 200 },

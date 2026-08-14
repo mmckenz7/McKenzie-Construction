@@ -56,9 +56,10 @@ export async function GET(
       );
     const items = await db
       .from("guided_site_visit_items")
-      .select("state")
+      .select("item_key,title,ordinal,state,observation")
       .eq("company_id", auth.authorization!.companyId)
-      .eq("visit_id", selectedVisit.id);
+      .eq("visit_id", selectedVisit.id)
+      .order("ordinal", { ascending: true });
     if (items.error)
       return NextResponse.json(
         {
@@ -77,6 +78,13 @@ export async function GET(
       completionOutcome: selectedVisit.completion_outcome,
       completedItems: rows.filter((item) => item.state !== "pending").length,
       totalItems: rows.length,
+      items: rows.map((item) => ({
+        itemKey: item.item_key,
+        title: item.title,
+        ordinal: item.ordinal,
+        state: item.state,
+        observation: item.observation,
+      })),
     };
     return NextResponse.json(
       {

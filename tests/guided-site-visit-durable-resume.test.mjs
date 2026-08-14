@@ -33,12 +33,13 @@ test("active visit lookup is authenticated, tenant scoped, and read only", () =>
   );
 });
 
-test("lookup returns only durable visit identity and progress metadata", () => {
+test("lookup returns bounded durable progress and completed field observations", () => {
   const get =
     lookup.match(
       /export async function GET[\s\S]*?export async function POST/,
     )?.[0] ?? "";
-  assert.match(get, /activeVisit:\s*\{/);
+  assert.match(get, /const summary = \{/);
+  assert.match(get, /activeVisit: visit\.data \? summary : null/);
   for (const field of [
     "id",
     "status",
@@ -47,16 +48,21 @@ test("lookup returns only durable visit identity and progress metadata", () => {
     "updatedAt",
     "completedItems",
     "totalItems",
+    "items",
+    "itemKey",
+    "observation",
   ]) {
     assert.match(get, new RegExp(`${field}:`));
   }
   assert.doesNotMatch(get, /asset_id|photo_attempt|mime_type|storage/);
+  assert.match(get, /\.select\("item_key,title,ordinal,state,observation"\)/);
+  assert.match(get, /latestCompletedVisit/);
 });
 
 test("guided component discovers unfinished visits from the server on every device", () => {
   assert.match(
     component,
-    /fetch\(`\/api\/estimates\/\$\{encodeURIComponent\(estimateId\)\}\/guided-site-visits`/,
+    /fetch\(\s*`\/api\/estimates\/\$\{encodeURIComponent\(estimateId\)\}\/guided-site-visits`/,
   );
   assert.match(component, /await loadVisit\(visitId\)/);
   assert.match(component, /Checking for an unfinished site visit/);

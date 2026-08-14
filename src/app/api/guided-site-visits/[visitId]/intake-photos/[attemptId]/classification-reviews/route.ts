@@ -9,6 +9,8 @@ import {
   INTAKE_CLASSIFICATION_PROVIDER,
   INTAKE_CLASSIFICATION_SCHEMA_VERSION,
   IntakeClassificationError,
+  intakeApplicabilityTargets,
+  type IntakeApplicabilityFinding,
   runOpenAiIntakeClassification,
 } from "@/lib/guided-site-visits/ai-intake-classification";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -76,7 +78,7 @@ export async function POST(
     const previousReview = focusItemId
       ? await db
           .from("guided_site_visit_intake_classification_reviews")
-          .select("proposals")
+          .select("id,proposals")
           .eq("intake_attempt_id", attemptId)
           .eq("visit_id", visitId)
           .eq("company_id", auth.authorization!.companyId)
@@ -87,6 +89,17 @@ export async function POST(
       : null;
     if (previousReview?.error)
       throw new Error("Earlier photo review could not be loaded.");
+    const previousApplicability =
+      focusItemId && previousReview?.data?.id
+        ? await db
+            .from("guided_site_visit_intake_applicability_findings")
+            .select("visit_item_id,finding_key,finding,confidence,reason")
+            .eq("classification_review_id", previousReview.data.id)
+            .eq("visit_id", visitId)
+            .eq("company_id", auth.authorization!.companyId)
+        : null;
+    if (previousApplicability?.error)
+      throw new Error("Earlier applicability findings could not be loaded.");
     const linked = attempt.data as unknown as {
         asset_id: string;
         ai_estimator_assets: {
@@ -103,6 +116,7 @@ export async function POST(
         | "review_unavailable" = "classified",
       issueCodes: string[] = [],
       proposals: { visitItemId: string; criterionKey: string }[] = [],
+      applicabilityFindings: IntakeApplicabilityFinding[] = [],
       requestSha256 = "",
       responseSha256 = "",
       safeDiagnostic: string | undefined;
@@ -125,15 +139,16 @@ export async function POST(
           { status: 409 },
         );
       try {
+        const classificationItems = (items.data ?? []).map((i) => ({
+          id: i.id,
+          itemKey: i.item_key,
+          title: i.title,
+        }));
         const result = await runOpenAiIntakeClassification({
           bytes: await download.data.arrayBuffer(),
           mimeType: asset.mime_type,
           idempotencyKey: `${auth.authorization!.companyId}:${key}`,
-          items: (items.data ?? []).map((i) => ({
-            id: i.id,
-            itemKey: i.item_key,
-            title: i.title,
-          })),
+          items: classificationItems,
           ...(focusItem && focusCriterion
             ? {
                 focus: {
@@ -146,6 +161,34 @@ export async function POST(
         });
         const focusedProposals =
           result.usabilityVerdict === "usable" ? result.proposals : [];
+        applicabilityFindings =
+          result.usabilityVerdict === "usable"
+            ? result.applicabilityFindings
+            : [];
+        if (result.usabilityVerdict === "usable" && !focusItem) {
+          const returnedKeys = new Set(
+            applicabilityFindings.map(
+              (finding) => `${finding.visitItemId}\u001f${finding.findingKey}`,
+            ),
+          );
+          applicabilityFindings = [
+            ...applicabilityFindings,
+            ...intakeApplicabilityTargets(classificationItems).flatMap((target) =>
+              returnedKeys.has(`${target.visitItemId}\u001f${target.findingKey}`)
+                ? []
+                : [
+                    {
+                      visitItemId: target.visitItemId,
+                      findingKey: target.findingKey,
+                      finding: "unclear" as const,
+                      confidence: 0,
+                      reason:
+                        "The photo review did not provide an explicit determination.",
+                    },
+                  ],
+            ),
+          ];
+        }
         if (focusItem && focusCriterion && previousReview?.data) {
           const prior = Array.isArray(previousReview.data.proposals)
             ? (previousReview.data.proposals as {
@@ -164,6 +207,34 @@ export async function POST(
                 proposal.visitItemId === focusItem.id &&
                 proposal.criterionKey === focusCriterion.key,
             ),
+          ];
+          const currentKeys = new Set(
+            applicabilityFindings.map(
+              (finding) => `${finding.visitItemId}\u001f${finding.findingKey}`,
+            ),
+          );
+          applicabilityFindings = [
+            ...(previousApplicability?.data ?? []).flatMap((finding) => {
+              const normalized = {
+                visitItemId: finding.visit_item_id,
+                findingKey: finding.finding_key,
+                finding: finding.finding,
+                confidence: Number(finding.confidence),
+                reason: finding.reason,
+              };
+              return typeof normalized.visitItemId === "string" &&
+                typeof normalized.findingKey === "string" &&
+                ["present", "absent", "unclear"].includes(
+                  String(normalized.finding),
+                ) &&
+                typeof normalized.reason === "string" &&
+                !currentKeys.has(
+                  `${normalized.visitItemId}\u001f${normalized.findingKey}`,
+                )
+                ? [normalized as IntakeApplicabilityFinding]
+                : [];
+            }),
+            ...applicabilityFindings,
           ];
           diagnostic = "classified";
           issueCodes = [];
@@ -197,7 +268,7 @@ export async function POST(
       }
     }
     const saved = await db.rpc(
-      "record_guided_site_visit_intake_classification",
+      "record_guided_site_visit_intake_classification_v2",
       {
         requested_auth_user_id: auth.authorization!.authUserId,
         requested_visit_id: visitId,
@@ -218,6 +289,7 @@ export async function POST(
         requested_diagnostic_class: diagnostic,
         requested_issue_codes: issueCodes,
         requested_proposals: proposals,
+        requested_applicability_findings: applicabilityFindings,
       },
     );
     if (saved.error) {
@@ -240,6 +312,7 @@ export async function POST(
         diagnosticClass: diagnostic,
         issueCodes,
         proposals,
+        applicabilityFindings,
         idempotentReplay: row.idempotent_replay,
         ...(safeDiagnostic ? { safeDiagnostic } : null),
       },
