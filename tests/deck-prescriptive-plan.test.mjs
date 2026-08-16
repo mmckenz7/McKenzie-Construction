@@ -206,7 +206,15 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(ui, /Space posts evenly/);
   assert.match(ui, /There is intentionally no AI instruction box/);
   assert.match(ui, /Free draw outline/);
-  assert.match(ui, /Add outline dot/);
+  assert.match(ui, /Add outward step/);
+  assert.match(ui, /Add inward notch/);
+  assert.match(ui, /Choose an outline edge/);
+  assert.match(ui, /Selected outline edge/);
+  assert.match(ui, /data-edit-handle=\{`outline-edge-/);
+  assert.match(ui, /selectedOutlineEdge === index/);
+  assert.match(ui, /const addOutlineStep = \(direction: "out" \| "in"\)/);
+  assert.match(ui, /direction === "in" \? stepDepth : -stepDepth/);
+  assert.match(ui, /Math\.round\(value \* 12\) \/ 12/);
   assert.match(ui, /Edge measurements update as you draw/);
   assert.match(ui, /activeDrawingDrag\.type === "corner"/);
   assert.match(ui, /activeDrawingDrag\.type === "stair"/);
@@ -224,6 +232,10 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(ui, /snapToStructuralLine/);
   assert.match(ui, /postPositions\.map/);
   assert.match(ui, /260 \* position/);
+  assert.match(ui, /fill="#dbeafe"/);
+  assert.match(ui, /stroke=\{selected \? "#ea580c" : "#2563eb"\}/);
+  assert.match(ui, /fill="#22d3ee"/);
+  assert.match(ui, /border-2 border-slate-950 bg-white/);
   assert.match(planner, /framingPlanEvidence\.inputs\.lengthFeet/);
 });
 

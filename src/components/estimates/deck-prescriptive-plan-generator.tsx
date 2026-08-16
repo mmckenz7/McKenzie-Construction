@@ -191,6 +191,7 @@ export function DeckPrescriptivePlanGenerator({
     { x: lengthFeet, y: widthFeet },
     { x: 0, y: widthFeet },
   ]);
+  const [selectedOutlineEdge, setSelectedOutlineEdge] = useState(0);
   const [proposedLengthFeet, setProposedLengthFeet] = useState(lengthFeet);
   const [proposedWidthFeet, setProposedWidthFeet] = useState(widthFeet);
   const svgTitleId = useId();
@@ -430,16 +431,19 @@ export function DeckPrescriptivePlanGenerator({
     if (!activeDrawingDrag || !drawingRef.current) return;
     const bounds = drawingRef.current.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
-    const drawingX = ((clientX - bounds.left) * 320) / bounds.width;
-    const drawingY = ((clientY - bounds.top) * 210) / bounds.height;
+    const drawingX = -10 + ((clientX - bounds.left) * 340) / bounds.width;
+    const drawingY = -10 + ((clientY - bounds.top) * 230) / bounds.height;
     if (activeDrawingDrag.type === "corner") {
+      const gridFeet = Number(draft.postSnapInches) / 12;
+      const rawX = ((drawingX - 30) * proposedLengthFeet) / 260;
+      const rawY = ((drawingY - 20) * proposedWidthFeet) / 150;
       const x = Math.min(
-        proposedLengthFeet,
-        Math.max(0, ((drawingX - 30) * proposedLengthFeet) / 260),
+        proposedLengthFeet + 2,
+        Math.max(-2, Math.round(rawX / gridFeet) * gridFeet),
       );
       const y = Math.min(
-        proposedWidthFeet,
-        Math.max(0, ((drawingY - 20) * proposedWidthFeet) / 150),
+        proposedWidthFeet + 2,
+        Math.max(-2, Math.round(rawY / gridFeet) * gridFeet),
       );
       setOutlinePoints((current) =>
         current.map((point, index) =>
@@ -527,23 +531,64 @@ export function DeckPrescriptivePlanGenerator({
         `${30 + (260 * point.x) / Math.max(0.1, proposedLengthFeet)},${20 + (150 * point.y) / Math.max(0.1, proposedWidthFeet)}`,
     )
     .join(" ");
-  const addOutlineCorner = () =>
+  const selectedEdgeStart =
+    outlinePoints[Math.min(selectedOutlineEdge, outlinePoints.length - 1)];
+  const selectedEdgeEnd =
+    outlinePoints[(selectedOutlineEdge + 1) % outlinePoints.length];
+  const selectedOutlineEdgeLength = Math.hypot(
+    selectedEdgeEnd.x - selectedEdgeStart.x,
+    selectedEdgeEnd.y - selectedEdgeStart.y,
+  );
+  const markCustomOutline = () => {
+    setOutlineMode("freeform");
+    setDraft((current) => ({ ...current, unusualGeometry: true }));
+    setDirty(true);
+    setApproved(false);
+  };
+  const addOutlineStep = (direction: "out" | "in") =>
     setOutlinePoints((current) => {
-      let edge = 0;
-      let longest = -1;
-      current.forEach((point, index) => {
-        const next = current[(index + 1) % current.length];
-        const length = Math.hypot(next.x - point.x, next.y - point.y);
-        if (length > longest) {
-          longest = length;
-          edge = index;
-        }
-      });
+      if (current.length > 12) return current;
+      const edge = Math.min(selectedOutlineEdge, current.length - 1);
       const start = current[edge];
       const end = current[(edge + 1) % current.length];
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const edgeLength = Math.hypot(dx, dy);
+      if (edgeLength < 2) return current;
+      const stepWidth = Math.min(4, Math.max(1, edgeLength / 3));
+      const stepDepth = Math.min(2, Math.max(1, Math.min(proposedLengthFeet, proposedWidthFeet) / 6));
+      const alongX = dx / edgeLength;
+      const alongY = dy / edgeLength;
+      const signedArea = current.reduce((sum, point, index) => {
+        const next = current[(index + 1) % current.length];
+        return sum + point.x * next.y - next.x * point.y;
+      }, 0);
+      const interiorX = signedArea >= 0 ? -alongY : alongY;
+      const interiorY = signedArea >= 0 ? alongX : -alongX;
+      const normalScale = direction === "in" ? stepDepth : -stepDepth;
+      const midpointX = (start.x + end.x) / 2;
+      const midpointY = (start.y + end.y) / 2;
+      const snap = (value: number) => Math.round(value * 12) / 12;
+      const before = {
+        x: snap(midpointX - (alongX * stepWidth) / 2),
+        y: snap(midpointY - (alongY * stepWidth) / 2),
+      };
+      const after = {
+        x: snap(midpointX + (alongX * stepWidth) / 2),
+        y: snap(midpointY + (alongY * stepWidth) / 2),
+      };
       return [
         ...current.slice(0, edge + 1),
-        { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 },
+        before,
+        {
+          x: snap(before.x + interiorX * normalScale),
+          y: snap(before.y + interiorY * normalScale),
+        },
+        {
+          x: snap(after.x + interiorX * normalScale),
+          y: snap(after.y + interiorY * normalScale),
+        },
+        after,
         ...current.slice(edge + 1),
       ];
     });
@@ -1129,16 +1174,16 @@ export function DeckPrescriptivePlanGenerator({
       ) : null}
       {generated && step === 4 ? (
         <div className="mt-3">
-          <div className="overflow-x-auto rounded border bg-slate-50">
+          <div className="overflow-x-auto rounded-lg border-2 border-slate-950 bg-white shadow-sm">
             <svg
               ref={drawingRef}
-              viewBox="0 0 320 210"
+              viewBox="-10 -10 340 230"
               role="img"
               aria-labelledby={`${svgTitleId} ${svgDescriptionId}`}
               className={
                 drawingExpanded
-                  ? "min-w-[720px] w-full"
-                  : "min-w-[320px] w-full"
+                  ? "min-w-[720px] w-full bg-white"
+                  : "min-w-[320px] w-full bg-white"
               }
               style={layoutEditorOpen ? { touchAction: "none" } : undefined}
               onPointerMove={(event) =>
@@ -1161,9 +1206,9 @@ export function DeckPrescriptivePlanGenerator({
               </desc>
               <polygon
                 points={outlineSvgPoints}
-                fill="white"
-                stroke={outlineMode === "rectangle" ? "#334155" : "#d97706"}
-                strokeWidth={outlineMode === "rectangle" ? "2" : "3"}
+                fill="#dbeafe"
+                stroke="#0f172a"
+                strokeWidth="3"
                 strokeDasharray={
                   outlineMode === "rectangle" ? undefined : "6 4"
                 }
@@ -1177,7 +1222,7 @@ export function DeckPrescriptivePlanGenerator({
                   x2={30 + (i * 260) / (Math.min(joists, 30) - 1)}
                   y1="20"
                   y2="170"
-                  stroke="#94a3b8"
+                  stroke="#475569"
                   opacity={outlineMode === "rectangle" ? 1 : 0}
                 />
               ))}
@@ -1233,7 +1278,7 @@ export function DeckPrescriptivePlanGenerator({
                         ? beamY
                         : 20 + ((i + 1) * 150) / (beamLines + 1)
                     }
-                    stroke="#7c3aed"
+                    stroke="#6d28d9"
                     strokeWidth="4"
                     pointerEvents="none"
                   />
@@ -1275,7 +1320,9 @@ export function DeckPrescriptivePlanGenerator({
                         Math.max(0.1, proposedWidthFeet)
                     }
                     r={layoutEditorOpen ? "11" : "7"}
-                    fill="#c4b5fd"
+                    fill="#fef08a"
+                    stroke="#0f172a"
+                    strokeWidth="1.5"
                   />
                   <rect
                     data-plan-member="post"
@@ -1289,7 +1336,7 @@ export function DeckPrescriptivePlanGenerator({
                     }
                     width="8"
                     height="8"
-                    fill="#4c1d95"
+                    fill="#6d28d9"
                   />
                 </g>
               ))}
@@ -1305,6 +1352,85 @@ export function DeckPrescriptivePlanGenerator({
                 strokeWidth="6"
                 opacity={outlineMode === "rectangle" ? 1 : 0}
               />
+              {layoutEditorOpen
+                ? outlinePoints.map((point, index) => {
+                    const next =
+                      outlinePoints[(index + 1) % outlinePoints.length];
+                    const x1 =
+                      30 +
+                      (260 * point.x) / Math.max(0.1, proposedLengthFeet);
+                    const y1 =
+                      20 +
+                      (150 * point.y) / Math.max(0.1, proposedWidthFeet);
+                    const x2 =
+                      30 +
+                      (260 * next.x) / Math.max(0.1, proposedLengthFeet);
+                    const y2 =
+                      20 +
+                      (150 * next.y) / Math.max(0.1, proposedWidthFeet);
+                    const selected = selectedOutlineEdge === index;
+                    return (
+                      <g
+                        key={`outline-edge-${index}`}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Select outline edge ${index + 1}`}
+                        data-edit-handle={`outline-edge-${index + 1}`}
+                        className="cursor-pointer focus:outline-none"
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                          setSelectedOutlineEdge(index);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelectedOutlineEdge(index);
+                          }
+                        }}
+                      >
+                        <line
+                          x1={x1}
+                          y1={y1}
+                          x2={x2}
+                          y2={y2}
+                          stroke="transparent"
+                          strokeWidth="18"
+                        />
+                        <line
+                          x1={x1}
+                          y1={y1}
+                          x2={x2}
+                          y2={y2}
+                          stroke={selected ? "#ea580c" : "#2563eb"}
+                          strokeWidth={selected ? "6" : "3"}
+                          strokeDasharray={selected ? undefined : "4 3"}
+                          pointerEvents="none"
+                        />
+                        <circle
+                          cx={(x1 + x2) / 2}
+                          cy={(y1 + y2) / 2}
+                          r={selected ? "9" : "7"}
+                          fill={selected ? "#ea580c" : "#2563eb"}
+                          stroke="white"
+                          strokeWidth="2"
+                          pointerEvents="none"
+                        />
+                        <text
+                          x={(x1 + x2) / 2}
+                          y={(y1 + y2) / 2 + 3}
+                          textAnchor="middle"
+                          fontSize="10"
+                          fontWeight="900"
+                          fill="white"
+                          pointerEvents="none"
+                          aria-hidden="true"
+                        >
+                          +
+                        </text>
+                      </g>
+                    );
+                  })
+                : null}
               {layoutEditorOpen
                 ? outlinePoints.map((point, index) => (
                     <g
@@ -1327,9 +1453,9 @@ export function DeckPrescriptivePlanGenerator({
                           (150 * point.y) / Math.max(0.1, proposedWidthFeet)
                         }
                         r="9"
-                        fill="#f59e0b"
-                        stroke="white"
-                        strokeWidth="2"
+                        fill="#22d3ee"
+                        stroke="#0f172a"
+                        strokeWidth="2.5"
                       />
                       <text
                         x={
@@ -1343,7 +1469,7 @@ export function DeckPrescriptivePlanGenerator({
                         textAnchor="middle"
                         fontSize="8"
                         fontWeight="800"
-                        fill="#451a03"
+                        fill="#0f172a"
                       >
                         {index + 1}
                       </text>
@@ -1523,26 +1649,26 @@ export function DeckPrescriptivePlanGenerator({
           </div>
           {layoutEditorOpen ? (
             <section
-              className="mt-3 rounded-lg border-2 border-violet-500 bg-violet-50 p-3"
+              className="mt-3 rounded-lg border-2 border-slate-950 bg-white p-3 text-slate-950 shadow-sm"
               aria-labelledby="simple-deck-editor-heading"
             >
               <h5
                 id="simple-deck-editor-heading"
-                className="font-black text-violet-950"
+                className="font-black text-slate-950"
               >
                 Measured deck drawing
               </h5>
-              <p className="mt-1 text-sm text-violet-900">
-                Drag the numbered outline dots to draw the deck. Drag posts in
-                either direction in free-placement mode. Drag the stair box
-                directly along the deck perimeter.
+              <p className="mt-1 text-sm font-medium text-slate-800">
+                The blue outline and bright corner dots are editable. Tap a
+                blue edge, then add an outward step or inward notch. Drag posts
+                or stairs directly on the drawing.
               </p>
               <fieldset className="mt-3">
-                <legend className="text-sm font-black text-violet-950">
+                <legend className="text-sm font-black text-slate-950">
                   Deck outline mode
                 </legend>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-violet-400 bg-white p-3 text-sm font-bold">
+                  <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-blue-700 bg-blue-50 p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-600">
                     <input
                       type="radio"
                       name="outline-mode"
@@ -1555,12 +1681,13 @@ export function DeckPrescriptivePlanGenerator({
                           { x: proposedLengthFeet, y: proposedWidthFeet },
                           { x: 0, y: proposedWidthFeet },
                         ]);
+                        setSelectedOutlineEdge(0);
                         set("unusualGeometry", false);
                       }}
                     />
                     Square/snap outline
                   </label>
-                  <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-amber-500 bg-white p-3 text-sm font-bold">
+                  <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-orange-600 bg-orange-50 p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-orange-600">
                     <input
                       type="radio"
                       name="outline-mode"
@@ -1574,44 +1701,75 @@ export function DeckPrescriptivePlanGenerator({
                   </label>
                 </div>
               </fieldset>
-              {outlineMode === "freeform" ? (
-                <div className="mt-3 rounded-md border-2 border-amber-500 bg-amber-50 p-3">
-                  <p className="text-sm font-bold text-amber-950">
-                    Drag the numbered dots. Add a dot when the deck has another
-                    corner. Edge measurements update as you draw. Custom-shape
-                    calculations remain paused until a reviewed custom takeoff
-                    is available.
+              <div className="mt-3 rounded-md border-2 border-orange-700 bg-orange-50 p-3">
+                  <p className="text-sm font-bold text-slate-950">
+                    Selected edge: {selectedOutlineEdge + 1}. The orange edge
+                    is where the next step will be added. New corners snap to
+                    one-inch measurements and can be dragged afterward.
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <label className="mt-3 block text-sm font-black text-slate-950">
+                    Choose an outline edge
+                    <select
+                      className="mt-1 min-h-11 w-full rounded-md border-2 border-slate-700 bg-white px-3 text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                      aria-label="Selected outline edge"
+                      value={selectedOutlineEdge}
+                      onChange={(event) =>
+                        setSelectedOutlineEdge(Number(event.target.value))
+                      }
+                    >
+                      {outlinePoints.map((point, index) => {
+                        const next =
+                          outlinePoints[(index + 1) % outlinePoints.length];
+                        return (
+                          <option key={index} value={index}>
+                            Edge {index + 1} — {Math.hypot(next.x - point.x, next.y - point.y).toFixed(1)} ft
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <button
                       type="button"
-                      className={button}
-                      onClick={addOutlineCorner}
-                      disabled={outlinePoints.length >= 12}
+                      className="min-h-12 rounded-md bg-blue-700 px-4 py-3 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-50"
+                      onClick={() => {
+                        markCustomOutline();
+                        addOutlineStep("out");
+                      }}
+                      disabled={
+                        outlinePoints.length > 12 ||
+                        selectedOutlineEdgeLength < 2
+                      }
                     >
-                      Add outline dot
+                      Add outward step
                     </button>
                     <button
                       type="button"
-                      className="min-h-11 rounded-md border-2 border-amber-700 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50"
-                      onClick={() =>
-                        setOutlinePoints((current) =>
-                          current.length > 3 ? current.slice(0, -1) : current,
-                        )
+                      className="min-h-12 rounded-md bg-orange-700 px-4 py-3 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600 disabled:opacity-50"
+                      onClick={() => {
+                        markCustomOutline();
+                        addOutlineStep("in");
+                      }}
+                      disabled={
+                        outlinePoints.length > 12 ||
+                        selectedOutlineEdgeLength < 2
                       }
-                      disabled={outlinePoints.length <= 3}
                     >
-                      Remove last dot
+                      Add inward notch
                     </button>
                   </div>
-                </div>
-              ) : null}
+                  <p className="mt-3 text-sm font-medium text-slate-800">
+                    Edge measurements update as you draw. Automatic structural
+                    quantities pause for a custom shape until its takeoff is
+                    reviewed.
+                  </p>
+              </div>
               <fieldset className="mt-3">
-                <legend className="text-sm font-black text-violet-950">
+                <legend className="text-sm font-black text-slate-950">
                   Post placement mode
                 </legend>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-violet-400 bg-white p-3 text-sm font-bold">
+                  <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-blue-700 bg-blue-50 p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-600">
                     <input
                       type="radio"
                       name="post-placement-mode"
