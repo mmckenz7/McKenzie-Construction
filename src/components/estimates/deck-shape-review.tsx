@@ -292,15 +292,15 @@ export function DeckShapeReview({
         {gridX.map((value) => {
           const x = toSvg({ x: value, y: 0 }).x;
           const major = Number.isInteger(value);
-          return <line key={`grid-x-${value}`} x1={x} y1={drawingOriginY} x2={x} y2={drawingOriginY + maxY * drawingScale} stroke={major ? "#94a3b8" : "#cbd5e1"} strokeWidth={major ? "0.8" : "0.45"} />;
+          return <line key={`grid-x-${value}`} x1={x} y1="24" x2={x} y2="198" stroke={major ? "#64748b" : "#94a3b8"} strokeWidth={major ? "1.1" : "0.7"} vectorEffect="non-scaling-stroke" />;
         })}
         {gridY.map((value) => {
           const y = toSvg({ x: 0, y: value }).y;
           const major = Number.isInteger(value);
-          return <line key={`grid-y-${value}`} x1={drawingOriginX} y1={y} x2={drawingOriginX + maxX * drawingScale} y2={y} stroke={major ? "#94a3b8" : "#cbd5e1"} strokeWidth={major ? "0.8" : "0.45"} />;
+          return <line key={`grid-y-${value}`} x1="16" y1={y} x2="304" y2={y} stroke={major ? "#64748b" : "#94a3b8"} strokeWidth={major ? "1.1" : "0.7"} vectorEffect="non-scaling-stroke" />;
         })}
         <text x="160" y="18" textAnchor="middle" fontSize="10" fontWeight="800" fill="#334155">HOUSE / BUILDING SIDE</text>
-        <polygon points={polygon} fill="#dbeafe" stroke="#0f172a" strokeWidth="3" />
+        <polygon points={polygon} fill="#bfdbfe" fillOpacity="0.58" stroke="#0f172a" strokeWidth="3" />
         {outline.map((point, index) => {
           const start = points[index];
           const end = points[(index + 1) % points.length];
@@ -323,7 +323,7 @@ export function DeckShapeReview({
               setFeedback(`Moving corner ${index + 1}.`);
             }}
           />
-          <circle cx={point.x} cy={point.y} r="7" fill="#f97316" stroke="#7c2d12" strokeWidth="2" pointerEvents="none" />
+          <circle cx={point.x} cy={point.y} r="3.5" fill="#ea580c" stroke="#7c2d12" strokeWidth="1" pointerEvents="none" />
         </g>)}
         {stairsPresent ? <g aria-label="Stairs are present"><rect x="130" y="181" width="60" height="22" fill="#fef3c7" stroke="#92400e" strokeWidth="2" /><text x="160" y="196" textAnchor="middle" fontSize="10" fontWeight="900" fill="#78350f">STAIRS</text></g> : null}
       </svg>

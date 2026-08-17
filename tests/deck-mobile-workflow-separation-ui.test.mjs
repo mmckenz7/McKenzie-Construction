@@ -30,6 +30,15 @@ test("shape review contains footprint decisions but no structural or pricing wor
   assert.doesNotMatch(shape, /joist|beam|footing|Lowe's|unit cost|OH&amp;P/i);
 });
 
+test("shape grid stays visible while corner dots stay small without shrinking touch targets", () => {
+  assert.match(shape, /fillOpacity="0\.58"/);
+  assert.match(shape, /stroke=\{major \? "#64748b" : "#94a3b8"\}/);
+  assert.match(shape, /r="3\.5" fill="#ea580c"/);
+  assert.match(shape, /r="22"\s+fill="transparent"/);
+  assert.match(shape, /x1="16" y1=\{y\} x2="304"/);
+  assert.match(shape, /y1="24" x2=\{x\} y2="198"/);
+});
+
 test("approved shape feeds structure while pricing controls remain in takeoff", () => {
   assert.match(builder, /approvedShape=\{finalizedDeckShape\}/);
   assert.match(planner, /approvedOutline=\{approvedShape\?\.outline\}/);
