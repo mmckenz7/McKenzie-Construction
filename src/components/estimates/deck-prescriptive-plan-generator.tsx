@@ -1433,10 +1433,13 @@ export function DeckPrescriptivePlanGenerator({
                           return;
                         }
                         if (outlineDrawingActive) return;
-                        drawingRef.current?.setPointerCapture(event.pointerId);
+                        event.preventDefault();
+                        event.stopPropagation();
+                        event.currentTarget.setPointerCapture(event.pointerId);
                         setOutlineMode("freeform");
                         setActiveDrawingDrag({ type: "corner", index });
                       }}
+                      onLostPointerCapture={() => setActiveDrawingDrag(null)}
                     >
                       <circle
                         cx={

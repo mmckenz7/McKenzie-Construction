@@ -655,6 +655,8 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(ui, /data-plan-member="drawing-background"/);
   assert.match(ui, /data-edit-handle="outline-click-surface"/);
   assert.match(ui, /fill="#f97316"/);
+  assert.match(ui, /event\.currentTarget\.setPointerCapture/);
+  assert.match(ui, /onLostPointerCapture/);
   assert.match(ui, /colorScheme: "light"/);
   assert.match(ui, />ft<\/span>/);
   assert.match(ui, /Framing markers — optional for later/);
