@@ -54,13 +54,23 @@ export async function GET(
         { success: true, activeVisit: null, latestCompletedVisit: null },
         { headers: { "Cache-Control": "private, no-store" } },
       );
-    const items = await db
-      .from("guided_site_visit_items")
-      .select("item_key,title,ordinal,state,observation")
-      .eq("company_id", auth.authorization!.companyId)
-      .eq("visit_id", selectedVisit.id)
-      .order("ordinal", { ascending: true });
-    if (items.error)
+    const [items, shape] = await Promise.all([
+      db
+        .from("guided_site_visit_items")
+        .select("item_key,title,ordinal,state,observation")
+        .eq("company_id", auth.authorization!.companyId)
+        .eq("visit_id", selectedVisit.id)
+        .order("ordinal", { ascending: true }),
+      db
+        .from("guided_deck_shape_revisions")
+        .select("id,shape_revision,project_kind,outline,stairs_present,source,source_visit_revision,approved_at")
+        .eq("company_id", auth.authorization!.companyId)
+        .eq("visit_id", selectedVisit.id)
+        .order("shape_revision", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (items.error || shape.error)
       return NextResponse.json(
         {
           success: false,
@@ -76,6 +86,18 @@ export async function GET(
       startedAt: selectedVisit.started_at,
       updatedAt: selectedVisit.updated_at,
       completionOutcome: selectedVisit.completion_outcome,
+      latestApprovedShape: shape.data
+        ? {
+            id: shape.data.id,
+            shapeRevision: shape.data.shape_revision,
+            projectKind: shape.data.project_kind,
+            outline: shape.data.outline,
+            stairsPresent: shape.data.stairs_present,
+            source: shape.data.source,
+            sourceVisitRevision: shape.data.source_visit_revision,
+            approvedAt: shape.data.approved_at,
+          }
+        : null,
       completedItems: rows.filter((item) => item.state !== "pending").length,
       totalItems: rows.length,
       items: rows.map((item) => ({

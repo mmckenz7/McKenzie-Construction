@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DeckPrescriptivePlanGenerator } from "@/components/estimates/deck-prescriptive-plan-generator";
+import type { FinalizedDeckShape } from "@/components/estimates/deck-shape-review";
 import type { EstimateBuilderEnvelope } from "@/lib/estimate-builder-client";
 import type { DeckPrescriptivePlan } from "@/lib/deck-prescriptive-plan";
 import {
@@ -270,7 +271,10 @@ export function DeckTakeoffPlanner({
   calculationRevision,
   takeoffApplied,
   disabled,
+  workflowPhase,
+  approvedShape,
   onApplied,
+  onStructureReady,
 }: {
   estimateId: string;
   visitId: string;
@@ -279,7 +283,10 @@ export function DeckTakeoffPlanner({
   calculationRevision: number;
   takeoffApplied: boolean;
   disabled: boolean;
+  workflowPhase: "structure" | "takeoff";
+  approvedShape: FinalizedDeckShape | null;
   onApplied: (state: EstimateBuilderEnvelope) => void;
+  onStructureReady: () => void;
 }) {
   const [plan, setPlan] = useState<DeckTakeoffPlan>(defaultPlan);
   const [catalog, setCatalog] = useState<CatalogMaterial[]>([]);
@@ -303,12 +310,21 @@ export function DeckTakeoffPlanner({
     () => deckFieldDimensions(visitItems),
     [visitItems],
   );
+  const approvedShapeDimensions = useMemo(() => {
+    if (!approvedShape?.outline.length) return null;
+    const xs = approvedShape.outline.map((point) => point.x);
+    const ys = approvedShape.outline.map((point) => point.y);
+    return {
+      lengthFeet: Math.max(...xs) - Math.min(...xs),
+      widthFeet: Math.max(...ys) - Math.min(...ys),
+    };
+  }, [approvedShape]);
   const dimensions = plan.framingPlanEvidence
     ? {
         lengthFeet: plan.framingPlanEvidence.inputs.lengthFeet,
         widthFeet: plan.framingPlanEvidence.inputs.widthFeet,
       }
-    : fieldDimensions;
+    : approvedShapeDimensions ?? fieldDimensions;
   const railingGeometry = useMemo(
     () =>
       deckRailingGeometry(
@@ -318,14 +334,15 @@ export function DeckTakeoffPlanner({
               lengthFeet: plan.framingPlanEvidence.inputs.lengthFeet,
               widthFeet: plan.framingPlanEvidence.inputs.widthFeet,
             }
-          : null,
+          : approvedShapeDimensions,
       ),
-    [plan.framingPlanEvidence, visitItems],
+    [approvedShapeDimensions, plan.framingPlanEvidence, visitItems],
   );
   const blueprintVisitSeed = useMemo(
     () => deckBlueprintVisitSeed(visitItems),
     [visitItems],
   );
+  const approvedStairsPresent = approvedShape?.stairsPresent ?? railingGeometry.stairsPresent;
 
   function productLengthFeet(description: string) {
     const matches = [
@@ -588,8 +605,8 @@ export function DeckTakeoffPlanner({
     }
     const stairsIncluded = approvedPlan.inputs.draft.stairsIncluded === "yes";
     if (
-      railingGeometry.stairsPresent !== null &&
-      stairsIncluded !== railingGeometry.stairsPresent
+      approvedStairsPresent !== null &&
+      stairsIncluded !== approvedStairsPresent
     ) {
       setError(
         "The framing draft stair choice does not match the approved blueprint. Correct the blueprint or framing draft before using it.",
@@ -698,11 +715,14 @@ export function DeckTakeoffPlanner({
     }));
     setPreview(null);
     setError("");
-    setNotice(
-      approvedPlan.unresolvedPackages.includes("stairs")
-        ? "Main deck framing was added. Stair detail and connector schedule still need reviewed quantities, costs, and sources."
-        : "Main deck framing was added. The connector schedule still needs reviewed quantities, costs, and sources.",
-    );
+    if (approvedPlan.unresolvedPackages.length) {
+      setNotice(
+        `Main framing is saved, but the structural step is not finished. Complete: ${approvedPlan.unresolvedPackages.join(", ").replaceAll("_", " ")}.`,
+      );
+      return;
+    }
+    setNotice("The complete structural plan is approved. Continue to takeoff and pricing.");
+    onStructureReady();
   }
 
   async function findLowesProducts() {
@@ -1429,6 +1449,69 @@ export function DeckTakeoffPlanner({
     </section>
   );
 
+  const structuralDesigner = dimensions.lengthFeet && dimensions.widthFeet ? (
+    <DeckPrescriptivePlanGenerator
+      lengthFeet={dimensions.lengthFeet}
+      widthFeet={dimensions.widthFeet}
+      blueprintAttachment={
+        railingGeometry.attached === null
+          ? null
+          : railingGeometry.attached
+            ? "ledger"
+            : "freestanding"
+      }
+      blueprintStairs={approvedStairsPresent}
+      blueprintRailings={railingGeometry.railingsPresent}
+      stairPlacementConfirmed={plan.stairPlacementConfirmed}
+      visitSeed={blueprintVisitSeed}
+      stairEdge={plan.stairEdge}
+      stairPosition={plan.stairPosition}
+      stairOffsetFeet={plan.stairOffsetFeet}
+      approvedOutline={approvedShape?.outline}
+      disabled={disabled}
+      onStairPlacementChange={(edge, offsetFeet) => {
+        setPlan((current) => ({
+          ...current,
+          stairEdge: edge,
+          stairOffsetFeet: String(offsetFeet),
+          stairPlacementConfirmed: false,
+        }));
+        setPreview(null);
+      }}
+      onEditStairPlacement={() => {
+        if (layoutDetailsRef.current) {
+          layoutDetailsRef.current.open = true;
+          layoutDetailsRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }
+      }}
+      onApprove={usePrescriptivePlan}
+    />
+  ) : (
+    <div className="mt-5 grid min-h-44 place-items-center rounded-xl border-2 border-amber-400 bg-amber-50 p-5 text-center text-sm font-bold text-amber-950">
+      Enter the deck length and width in Field Measurements before generating
+      the structural plan.
+    </div>
+  );
+
+  if (workflowPhase === "structure")
+    return (
+      <section className="mt-5 rounded-xl border-2 border-violet-700 bg-violet-50 p-4 sm:p-5">
+        <p className="text-xs font-black uppercase tracking-[.16em] text-violet-800">
+          Structural design only
+        </p>
+        <h3 className="mt-1 text-xl font-black text-slate-950">
+          Build one complete structural plan
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-slate-700">
+          Work through framing, supports, footings, stairs, railing and attachment here. Material shopping, quantities, Lowe&apos;s products and prices begin only after this plan is approved.
+        </p>
+        {structuralDesigner}
+      </section>
+    );
+
   if (takeoffApplied)
     return (
       <section className="mt-5 rounded-xl border-2 border-emerald-700 bg-emerald-50 p-5">
@@ -1460,52 +1543,6 @@ export function DeckTakeoffPlanner({
         member, footing, connector, stair, labor, and logistics quantity must
         come from your named build plan.
       </p>
-
-      {dimensions.lengthFeet && dimensions.widthFeet ? (
-        <DeckPrescriptivePlanGenerator
-          lengthFeet={dimensions.lengthFeet}
-          widthFeet={dimensions.widthFeet}
-          blueprintAttachment={
-            railingGeometry.attached === null
-              ? null
-              : railingGeometry.attached
-                ? "ledger"
-                : "freestanding"
-          }
-          blueprintStairs={railingGeometry.stairsPresent}
-          blueprintRailings={railingGeometry.railingsPresent}
-          stairPlacementConfirmed={plan.stairPlacementConfirmed}
-          visitSeed={blueprintVisitSeed}
-          stairEdge={plan.stairEdge}
-          stairPosition={plan.stairPosition}
-          stairOffsetFeet={plan.stairOffsetFeet}
-          disabled={disabled}
-          onStairPlacementChange={(edge, offsetFeet) => {
-            setPlan((current) => ({
-              ...current,
-              stairEdge: edge,
-              stairOffsetFeet: String(offsetFeet),
-              stairPlacementConfirmed: false,
-            }));
-            setPreview(null);
-          }}
-          onEditStairPlacement={() => {
-            if (layoutDetailsRef.current) {
-              layoutDetailsRef.current.open = true;
-              layoutDetailsRef.current.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              });
-            }
-          }}
-          onApprove={usePrescriptivePlan}
-        />
-      ) : (
-        <div className="mt-5 grid min-h-44 place-items-center rounded-xl border-2 border-amber-400 bg-amber-50 p-5 text-center text-sm font-bold text-amber-950">
-          Enter the deck length and width in Field Measurements before
-          generating the framing blueprint.
-        </div>
-      )}
 
       <details
         ref={layoutDetailsRef}
@@ -1559,7 +1596,7 @@ export function DeckTakeoffPlanner({
               ))}
             </div>
           </fieldset>
-          {railingGeometry.stairsPresent ? (
+          {approvedStairsPresent ? (
             <fieldset className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
               <legend className="px-1 text-sm font-black text-slate-900">
                 Place the stairs on the drawing

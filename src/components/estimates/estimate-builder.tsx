@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ContractPreparationCard } from "@/components/estimates/contract-preparation";
 import { GuidedDeckSiteVisit } from "@/components/estimates/guided-deck-site-visit";
 import { DeckTakeoffPlanner } from "@/components/estimates/deck-takeoff-planner";
+import { DeckShapeReview, type FinalizedDeckShape } from "@/components/estimates/deck-shape-review";
 import { EstimateProposalCard } from "@/components/estimates/estimate-proposal-card";
 import { FenceEstimateWorkflow } from "@/components/estimates/fence-estimate-workflow";
 
@@ -71,8 +72,9 @@ type DeckVisitSummary = {
   status: string;
   revision: number;
   items: DeckVisitItemSummary[];
+  latestApprovedShape: FinalizedDeckShape | null;
 };
-type DeckWorkspaceStage = "site_visit" | "estimate" | "proposal";
+type DeckWorkspaceStage = "site_visit" | "shape" | "structure" | "takeoff" | "proposal";
 
 const button = "rounded-md px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
 const primary = `${button} bg-slate-950 text-white hover:bg-slate-800`;
@@ -155,6 +157,8 @@ export function EstimateBuilder({
   const [deckVisitStatus, setDeckVisitStatus] = useState<"checking" | "unavailable" | "not_started" | "in_progress" | "completed">("checking");
   const [deckVisitSummary, setDeckVisitSummary] = useState<DeckVisitSummary | null>(null);
   const [deckWorkspaceStage, setDeckWorkspaceStage] = useState<DeckWorkspaceStage>("site_visit");
+  const [finalizedDeckShape, setFinalizedDeckShape] = useState<FinalizedDeckShape | null>(null);
+  const [deckStructureReady, setDeckStructureReady] = useState(false);
 
   const loadDeckVisitStatus = useCallback(async () => {
     if (!showDeckWorkflow) return;
@@ -164,6 +168,7 @@ export function EstimateBuilder({
       if (!response.ok) throw new Error("Deck site visit status could not be loaded.");
       const summary = body.latestCompletedVisit ?? body.activeVisit ?? null;
       setDeckVisitSummary(summary);
+      setFinalizedDeckShape(summary?.latestApprovedShape ?? null);
       setDeckVisitStatus(body.latestCompletedVisit?.status === "completed" ? "completed" : body.activeVisit ? "in_progress" : "not_started");
     } catch {
       setDeckVisitSummary(null);
@@ -190,10 +195,10 @@ export function EstimateBuilder({
     if (deckVisitStatus === "completed") {
       const lifecycleStatus = String(state?.estimate.status ?? "draft");
       const issuedOrResponded = lifecycleStatus !== "draft";
-      setDeckWorkspaceStage((current) => issuedOrResponded ? "proposal" : current === "site_visit" ? "estimate" : current);
+      setDeckWorkspaceStage((current) => issuedOrResponded ? "proposal" : current === "site_visit" ? finalizedDeckShape ? "structure" : "shape" : current);
     } else if (deckVisitStatus !== "checking")
       setDeckWorkspaceStage("site_visit");
-  }, [deckVisitStatus, showDeckWorkflow, state?.estimate.status]);
+  }, [deckVisitStatus, finalizedDeckShape, showDeckWorkflow, state?.estimate.status]);
   const handleDeckVisitStatusChanged = useCallback((status: "checking" | "unavailable" | "not_started" | "in_progress" | "completed") => {
     setDeckVisitStatus(status);
     if (status === "completed") void loadDeckVisitStatus();
@@ -377,15 +382,9 @@ export function EstimateBuilder({
 
   function beginDeckTakeoff() {
     if (!state || !canMutate) return;
-    setDeckWorkspaceStage("estimate");
-    if (!state.sections.length && !sectionForm)
-      setSectionForm({
-        ...sectionDraft(undefined, 0),
-        name: "Deck construction",
-        customerDescription: "Deck construction scope",
-      });
+    setDeckWorkspaceStage("shape");
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const target = document.getElementById("deck-takeoff-workspace");
+      const target = document.getElementById("deck-stage-shape");
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -397,11 +396,13 @@ export function EstimateBuilder({
   }
 
   function openDeckWorkspaceStage(stage: DeckWorkspaceStage) {
-    if (stage === "estimate" && deckVisitStatus !== "completed") return;
+    if (stage === "shape" && deckVisitStatus !== "completed") return;
+    if (stage === "structure" && !finalizedDeckShape) return;
+    if (stage === "takeoff" && !deckStructureReady) return;
     if (stage === "proposal" && !deckProposalReady) return;
     setDeckWorkspaceStage(stage);
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const target = document.getElementById(stage === "estimate" ? "deck-takeoff-workspace" : `deck-stage-${stage}`);
+      const target = document.getElementById(stage === "structure" || stage === "takeoff" ? "deck-takeoff-workspace" : `deck-stage-${stage}`);
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
@@ -446,6 +447,8 @@ export function EstimateBuilder({
     {showDeckWorkflow ? <DeckJobStageHeader
       activeStage={deckWorkspaceStage}
       visitStatus={deckVisitStatus}
+      shapeReady={Boolean(finalizedDeckShape)}
+      structureReady={deckStructureReady}
       takeoffStarted={deckTakeoffStarted}
       trueCostLineCount={deckTrueCostLineCount}
       proposalReady={deckProposalReady}
@@ -454,7 +457,20 @@ export function EstimateBuilder({
 
     {showDeckWorkflow && deckWorkspaceStage === "site_visit" ? <section id="deck-stage-site_visit" tabIndex={-1} className="scroll-mt-24 focus-visible:outline-none"><GuidedDeckSiteVisit estimateId={estimateId} onVisitStatusChanged={handleDeckVisitStatusChanged} onContinueToEstimate={beginDeckTakeoff} /></section> : null}
 
-    {showDeckWorkflow && deckWorkspaceStage === "estimate" ? <DeckTakeoffWorkspace
+    {showDeckWorkflow && deckWorkspaceStage === "shape" && deckVisitSummary ? <section id="deck-stage-shape" tabIndex={-1} className="scroll-mt-24 focus-visible:outline-none"><DeckShapeReview
+      visitItems={deckVisitSummary.items}
+      visitId={deckVisitSummary.id}
+      visitRevision={deckVisitSummary.revision}
+      initialShape={finalizedDeckShape}
+      disabled={controlsDisabled}
+      onFinalize={(shape) => {
+        setFinalizedDeckShape(shape);
+        setDeckStructureReady(false);
+        setDeckWorkspaceStage("structure");
+      }}
+    /></section> : null}
+
+    {showDeckWorkflow && (deckWorkspaceStage === "structure" || deckWorkspaceStage === "takeoff") ? <DeckTakeoffWorkspace
       estimateId={estimateId}
       calculationRevision={state.calculationRevision}
       visitStatus={deckVisitStatus}
@@ -465,15 +481,18 @@ export function EstimateBuilder({
       takeoffApplied={deckReviewedTakeoffApplied}
       canEdit={canCreateStandard}
       disabled={controlsDisabled}
+      workflowPhase={deckWorkspaceStage}
+      approvedShape={finalizedDeckShape}
       onCreateSection={beginDeckTakeoff}
       onAddCostLine={beginDeckCostLine}
       onTakeoffApplied={(nextState) => { setState(nextState); setNotice("Reviewed Deck takeoff added. Review the true-cost lines, then continue to OH&P."); }}
+      onStructureReady={() => { setDeckStructureReady(true); setDeckWorkspaceStage("takeoff"); }}
       onContinuePricing={() => document.getElementById("deck-pricing-workspace")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}
     /> : null}
 
-    {(!showDeckWorkflow || deckWorkspaceStage === "estimate") && (canMutate ? <div id={showDeckWorkflow ? undefined : "deck-takeoff-workspace"} className="flex scroll-mt-24 flex-wrap gap-3"><button disabled={controlsDisabled} className={primary} onClick={() => setSectionForm(sectionDraft(undefined, state.sections.length ? Math.max(...state.sections.map((section) => section.sortOrder)) + 10 : 0))}>Add section</button>{state.capabilities.canViewProfit ? <button disabled={controlsDisabled} className={secondary} onClick={() => setSetupForm(estimateSetupDraft(state))}>Edit estimate details</button> : null}{pending ? <span className="self-center text-sm font-semibold text-slate-600">Saving…</span> : null}</div> : !reloadRequirement ? <p className="border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{state.estimate.status !== "draft" ? `This estimate is ${humanizeStatus(state.estimate.status)} and can no longer be edited.` : "You can review this estimate, but you do not have permission to change pricing or structure."}</p> : null)}
+    {(!showDeckWorkflow || deckWorkspaceStage === "takeoff") && (canMutate ? <div id={showDeckWorkflow ? undefined : "deck-takeoff-workspace"} className="flex scroll-mt-24 flex-wrap gap-3"><button disabled={controlsDisabled} className={primary} onClick={() => setSectionForm(sectionDraft(undefined, state.sections.length ? Math.max(...state.sections.map((section) => section.sortOrder)) + 10 : 0))}>Add section</button>{state.capabilities.canViewProfit ? <button disabled={controlsDisabled} className={secondary} onClick={() => setSetupForm(estimateSetupDraft(state))}>Edit estimate details</button> : null}{pending ? <span className="self-center text-sm font-semibold text-slate-600">Saving…</span> : null}</div> : !reloadRequirement ? <p className="border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{state.estimate.status !== "draft" ? `This estimate is ${humanizeStatus(state.estimate.status)} and can no longer be edited.` : "You can review this estimate, but you do not have permission to change pricing or structure."}</p> : null)}
 
-    {(!showDeckWorkflow || deckWorkspaceStage === "estimate") && setupForm ? <form onSubmit={submitSetup} className="estimate-editor-panel rounded-xl border p-5">
+    {(!showDeckWorkflow || deckWorkspaceStage === "takeoff") && setupForm ? <form onSubmit={submitSetup} className="estimate-editor-panel rounded-xl border p-5">
       <h2 className="font-bold">Estimate details</h2>
       <p className="mt-1 text-sm text-slate-600">Add the customer-facing project details that appear on the printable estimate.</p>
       <div className="mt-4 grid gap-4 md:grid-cols-2"><Field label="Estimate title"><input autoFocus className={input} value={setupForm.title} onChange={(event) => setSetupForm({ ...setupForm, title: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Valid until"><input type="date" className={input} value={setupForm.validUntil} onChange={(event) => setSetupForm({ ...setupForm, validUntil: event.target.value })} disabled={controlsDisabled} /></Field></div>
@@ -483,9 +502,9 @@ export function EstimateBuilder({
       <div className="mt-4 flex gap-3"><button className={primary} disabled={controlsDisabled}>{pending ? "Saving…" : "Save details"}</button><button type="button" className={secondary} disabled={pending} onClick={() => setSetupForm(null)}>Cancel</button></div>
     </form> : null}
 
-    {(!showDeckWorkflow || deckWorkspaceStage === "estimate") && sectionForm ? <form onSubmit={submitSection} className="estimate-editor-panel rounded-xl border p-5"><h2 className="font-bold">{sectionForm.id ? "Edit section" : "New section"}</h2><div className="mt-4 grid gap-4 md:grid-cols-2"><Field label="Section name"><input autoFocus className={input} value={sectionForm.name} onChange={(event) => setSectionForm({ ...sectionForm, name: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Position"><input inputMode="numeric" className={input} value={sectionForm.sortOrder} onChange={(event) => setSectionForm({ ...sectionForm, sortOrder: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Customer description"><textarea className={input} value={sectionForm.customerDescription} onChange={(event) => setSectionForm({ ...sectionForm, customerDescription: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Internal notes"><textarea className={input} value={sectionForm.internalNotes} onChange={(event) => setSectionForm({ ...sectionForm, internalNotes: event.target.value })} disabled={controlsDisabled} /></Field></div><div className="mt-4 flex gap-3"><button className={primary} disabled={controlsDisabled}>Save section</button><button type="button" className={secondary} disabled={pending} onClick={() => setSectionForm(null)}>Cancel</button></div></form> : null}
+    {(!showDeckWorkflow || deckWorkspaceStage === "takeoff") && sectionForm ? <form onSubmit={submitSection} className="estimate-editor-panel rounded-xl border p-5"><h2 className="font-bold">{sectionForm.id ? "Edit section" : "New section"}</h2><div className="mt-4 grid gap-4 md:grid-cols-2"><Field label="Section name"><input autoFocus className={input} value={sectionForm.name} onChange={(event) => setSectionForm({ ...sectionForm, name: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Position"><input inputMode="numeric" className={input} value={sectionForm.sortOrder} onChange={(event) => setSectionForm({ ...sectionForm, sortOrder: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Customer description"><textarea className={input} value={sectionForm.customerDescription} onChange={(event) => setSectionForm({ ...sectionForm, customerDescription: event.target.value })} disabled={controlsDisabled} /></Field><Field label="Internal notes"><textarea className={input} value={sectionForm.internalNotes} onChange={(event) => setSectionForm({ ...sectionForm, internalNotes: event.target.value })} disabled={controlsDisabled} /></Field></div><div className="mt-4 flex gap-3"><button className={primary} disabled={controlsDisabled}>Save section</button><button type="button" className={secondary} disabled={pending} onClick={() => setSectionForm(null)}>Cancel</button></div></form> : null}
 
-    {(!showDeckWorkflow || deckWorkspaceStage === "estimate") ? <div className="space-y-5">{state.sections.map((section) => {
+    {(!showDeckWorkflow || deckWorkspaceStage === "takeoff") ? <div className="space-y-5">{state.sections.map((section) => {
       const items = state.items.filter((item) => item.sectionId === section.id);
       const nextSort = items.length ? Math.max(...items.map((item) => item.sortOrder)) + 10 : 0;
       const addingHere = itemForm?.sectionId === section.id && itemForm.id === null;
@@ -497,8 +516,8 @@ export function EstimateBuilder({
         {addingHere ? <div className="border-t border-slate-200 p-4"><ItemEditor draft={itemForm} pending={controlsDisabled} onChange={setItemForm} onCancel={() => setItemForm(null)} onSubmit={submitItem} /></div> : null}
       </section>;
     })}</div> : null}
-    {(!showDeckWorkflow || deckWorkspaceStage === "estimate") && !state.sections.length ? <div className="border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">Add a section to begin organizing the estimate.</div> : null}
-    {(!showDeckWorkflow || deckWorkspaceStage === "estimate") && state.capabilities.canViewProfit && presentationDraft ? <section id={showDeckWorkflow ? "deck-pricing-workspace" : undefined} className={`scroll-mt-24 rounded-2xl border-2 bg-white p-6 shadow-sm ${showDeckWorkflow && !deckPricingReady ? "border-slate-300 opacity-75" : "border-emerald-700"}`}>
+    {(!showDeckWorkflow || deckWorkspaceStage === "takeoff") && !state.sections.length ? <div className="border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">Add a section to begin organizing the estimate.</div> : null}
+    {(!showDeckWorkflow || deckWorkspaceStage === "takeoff") && state.capabilities.canViewProfit && presentationDraft ? <section id={showDeckWorkflow ? "deck-pricing-workspace" : undefined} className={`scroll-mt-24 rounded-2xl border-2 bg-white p-6 shadow-sm ${showDeckWorkflow && !deckPricingReady ? "border-slate-300 opacity-75" : "border-emerald-700"}`}>
       <form onSubmit={submitPricing}>
         <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-700">Bottom-line pricing</p><h2 className="mt-2 text-2xl font-bold text-slate-950">Set the job price</h2><p className="mt-1 text-sm text-slate-600">Set OH&amp;P only after verified field work and positive true-cost lines, then choose how the finished price appears to the customer.</p></div><div className="grid grid-cols-3 gap-3 text-right"><Summary label="Raw costs" value={formatCents(directCostCents)} /><Summary label="OH&P" value={formatCents(ohpPreview)} /><Summary label="Customer price" value={formatCents(customerPricePreview)} /></div></div>
         {showDeckWorkflow && !deckPricingReady ? <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950">OH&amp;P is locked until the Deck visit is completed and at least one positive true-cost line is saved.</p> : null}
@@ -528,9 +547,11 @@ export function EstimateBuilder({
   </div>;
 }
 
-function DeckJobStageHeader({ activeStage, visitStatus, takeoffStarted, trueCostLineCount, proposalReady, onOpenStage }: {
+function DeckJobStageHeader({ activeStage, visitStatus, shapeReady, structureReady, takeoffStarted, trueCostLineCount, proposalReady, onOpenStage }: {
   activeStage: DeckWorkspaceStage;
   visitStatus: "checking" | "unavailable" | "not_started" | "in_progress" | "completed";
+  shapeReady: boolean;
+  structureReady: boolean;
   takeoffStarted: boolean;
   trueCostLineCount: number;
   proposalReady: boolean;
@@ -540,13 +561,21 @@ function DeckJobStageHeader({ activeStage, visitStatus, takeoffStarted, trueCost
   const stageContent: Record<DeckWorkspaceStage, { title: string; instruction: string }> = {
     site_visit: {
       title: "Site visit",
-      instruction: "Review the photos, resolve only the exceptions, enter the field measurements, and finish the visit.",
+      instruction: "Confirm the job type, capture the photos, and finish only the field information needed to describe the existing site.",
     },
-    estimate: {
-      title: "Build the estimate",
+    shape: {
+      title: "Deck shape",
+      instruction: "Check the bird's-eye footprint. Drag corners, add bump-ins or bump-outs, and enter exact edge dimensions. Nothing structural is decided here.",
+    },
+    structure: {
+      title: "Structural plan",
+      instruction: "With the footprint locked, complete the framing, footing, stair, railing and hardware plan together against the selected code profile.",
+    },
+    takeoff: {
+      title: "Takeoff and price",
       instruction: trueCostLineCount
         ? "Review the saved true costs, set OH&P, and prepare the customer view."
-        : "Use the saved field information to enter takeoff quantities and true-cost lines.",
+        : "Use the approved structural plan to calculate materials, choose products and add true costs.",
     },
     proposal: {
       title: "Review and send",
@@ -555,7 +584,9 @@ function DeckJobStageHeader({ activeStage, visitStatus, takeoffStarted, trueCost
   };
   const stages: { key: DeckWorkspaceStage; title: string; status: string; enabled: boolean }[] = [
     { key: "site_visit", title: "Site visit", status: fieldComplete ? "Complete" : visitStatus === "in_progress" ? "In progress" : visitStatus === "checking" ? "Checking" : visitStatus === "unavailable" ? "Needs attention" : "Not started", enabled: true },
-    { key: "estimate", title: "Estimate", status: trueCostLineCount ? `${trueCostLineCount} costs saved` : takeoffStarted ? "In progress" : fieldComplete ? "Ready" : "Waiting", enabled: fieldComplete },
+    { key: "shape", title: "Shape", status: shapeReady ? "Approved" : fieldComplete ? "Ready" : "Waiting", enabled: fieldComplete },
+    { key: "structure", title: "Structure", status: structureReady ? "Approved" : shapeReady ? "Ready" : "Waiting", enabled: shapeReady },
+    { key: "takeoff", title: "Takeoff", status: trueCostLineCount ? `${trueCostLineCount} costs saved` : takeoffStarted ? "In progress" : structureReady ? "Ready" : "Waiting", enabled: structureReady },
     { key: "proposal", title: "Proposal", status: proposalReady ? "Ready" : "Waiting", enabled: proposalReady },
   ];
   const current = stageContent[activeStage];
@@ -564,14 +595,14 @@ function DeckJobStageHeader({ activeStage, visitStatus, takeoffStarted, trueCost
       <div><p className="text-xs font-black uppercase tracking-[.16em] text-blue-700">Deck job</p><h2 id="deck-job-stage-title" className="mt-1 text-xl font-black text-slate-950">Current step: {current.title}</h2></div>
       <p className="max-w-2xl text-sm leading-6 text-slate-700">{current.instruction}</p>
     </div>
-    <ol className="mt-4 grid grid-cols-3 gap-2">{stages.map((stage, index) => <li key={stage.key}><button
+    <ol className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">{stages.map((stage, index) => <li key={stage.key}><button
       type="button"
       aria-current={activeStage === stage.key ? "step" : undefined}
       disabled={!stage.enabled}
       onClick={() => onOpenStage(stage.key)}
       className={`min-h-16 w-full rounded-lg border p-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 disabled:cursor-not-allowed disabled:opacity-50 ${activeStage === stage.key ? "border-blue-700 bg-blue-50" : "border-slate-300 bg-white hover:border-blue-500"}`}
     ><span className="block text-xs font-black uppercase tracking-wide text-slate-500">{index + 1}. {stage.title}</span><span className="mt-1 block text-xs font-bold text-slate-950">{stage.status}</span></button></li>)}</ol>
-    <p className="mt-3 text-xs font-semibold text-slate-600">Photos never become dimensions, quantities, prices, or engineering decisions. The workflow only carries verified information into the next step.</p>
+    <p className="mt-3 text-xs font-semibold text-slate-600">Photos may suggest a starting outline, but only the approved shape moves into structural design. Structure must be approved before quantities or prices begin.</p>
   </section>;
 }
 
@@ -611,9 +642,12 @@ function DeckTakeoffWorkspace({
   takeoffApplied,
   canEdit,
   disabled,
+  workflowPhase,
+  approvedShape,
   onCreateSection,
   onAddCostLine,
   onTakeoffApplied,
+  onStructureReady,
   onContinuePricing,
 }: {
   estimateId: string;
@@ -626,9 +660,12 @@ function DeckTakeoffWorkspace({
   takeoffApplied: boolean;
   canEdit: boolean;
   disabled: boolean;
+  workflowPhase: "structure" | "takeoff";
+  approvedShape: FinalizedDeckShape | null;
   onCreateSection: () => void;
   onAddCostLine: (category: EstimateCostCategory) => void;
   onTakeoffApplied: (state: EstimateBuilderEnvelope) => void;
+  onStructureReady: () => void;
   onContinuePricing: () => void;
 }) {
   const categories: { key: EstimateCostCategory; label: string; help: string }[] = [
@@ -648,10 +685,10 @@ function DeckTakeoffWorkspace({
     aria-labelledby="deck-takeoff-title"
     className="scroll-mt-24 rounded-xl border-2 border-emerald-700 bg-white p-5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 sm:p-6"
   >
-    <p className="text-xs font-black uppercase tracking-[.16em] text-emerald-700">Next: build the real cost</p>
-    <h2 id="deck-takeoff-title" className="mt-1 text-2xl font-black text-slate-950">Deck takeoff and true-cost workspace</h2>
+    <p className="text-xs font-black uppercase tracking-[.16em] text-emerald-700">{workflowPhase === "structure" ? "Step 3 · Design the structure" : "Step 4 · Calculate and price"}</p>
+    <h2 id="deck-takeoff-title" className="mt-1 text-2xl font-black text-slate-950">{workflowPhase === "structure" ? "Structural plan" : "Takeoff and true-cost workspace"}</h2>
     {visitStatus !== "completed" ? <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950">Finish the field form before building the Deck estimate.</p> : <>
-      <p className="mt-2 text-sm leading-6 text-slate-700">Use the saved field measurements as your reference. Enter the actual quantity and unit cost for each cost line. The app does not turn a photo into a material quantity or price.</p>
+      <p className="mt-2 text-sm leading-6 text-slate-700">{workflowPhase === "structure" ? "The deck shape is set. Complete the framing, supports, footings, stairs, railing and attachment plan together. Materials and prices stay out of this step." : "The shape and structural plan are approved. Now calculate material quantities, choose products and enter verified true costs."}</p>
       <details className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-4">
         <summary className="min-h-11 cursor-pointer font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">Saved field measurements and notes</summary>
         {measuredItems.length ? <div className="mt-3 grid gap-3 md:grid-cols-2">{measuredItems.map((item) => <section key={item.itemKey} className="rounded-lg bg-white p-3"><h3 className="font-bold text-slate-950">{item.title}</h3><dl className="mt-2 space-y-2 text-sm">{item.rows.map((row) => <div key={`${item.itemKey}-${row.label}`} className="flex items-start justify-between gap-4"><dt className="text-slate-600">{row.label}</dt><dd className="text-right font-bold text-slate-950">{row.value}</dd></div>)}</dl></section>)}</div> : <p className="mt-3 text-sm text-slate-600">No field measurements were returned. Reload the visit before entering quantities.</p>}
@@ -664,10 +701,15 @@ function DeckTakeoffWorkspace({
         calculationRevision={calculationRevision}
         takeoffApplied={takeoffApplied}
         disabled={disabled || !canEdit}
+        workflowPhase={workflowPhase}
+        approvedShape={approvedShape}
         onApplied={onTakeoffApplied}
+        onStructureReady={onStructureReady}
       /> : null}
-      <details className="mt-5 rounded-lg border border-slate-300 bg-slate-50 p-4"><summary className="min-h-11 cursor-pointer font-bold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">Manual cost-line fallback</summary>{!hasSection ? <div className="mt-3"><p className="text-sm text-slate-700">Use this only when you need to build the estimate without the reviewed takeoff.</p><button type="button" disabled={disabled} className={`mt-3 ${primary}`} onClick={onCreateSection}>Create Deck construction section</button></div> : <div className="mt-3"><p className="text-sm text-slate-600">Choose a cost type, then enter its verified quantity and unit cost.</p><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{categories.map((category) => <button key={category.key} type="button" disabled={disabled || !canEdit} onClick={() => onAddCostLine(category.key)} className="min-h-24 rounded-lg border border-slate-300 bg-white p-3 text-left transition hover:border-emerald-600 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"><strong className="block text-slate-950">Add {category.label}</strong><span className="mt-1 block text-xs leading-5 text-slate-600">{category.help}</span></button>)}</div></div>}</details>
-      <div className="mt-5 rounded-lg border border-slate-300 p-4"><h3 className="font-black text-slate-950">2. Review true costs</h3><p className="mt-1 text-sm text-slate-700">{trueCostLineCount ? `${trueCostLineCount} positive true-cost ${trueCostLineCount === 1 ? "line" : "lines"} saved · ${directCost} current direct cost.` : "No positive true-cost lines are saved yet."}</p>{trueCostLineCount ? <button type="button" className={`mt-3 ${primary}`} onClick={onContinuePricing}>Continue to OH&amp;P</button> : null}</div>
+      {workflowPhase === "takeoff" ? <>
+        <details className="mt-5 rounded-lg border border-slate-300 bg-slate-50 p-4"><summary className="min-h-11 cursor-pointer font-bold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">Manual cost-line fallback</summary>{!hasSection ? <div className="mt-3"><p className="text-sm text-slate-700">Use this only when you need to build the estimate without the reviewed takeoff.</p><button type="button" disabled={disabled} className={`mt-3 ${primary}`} onClick={onCreateSection}>Create Deck construction section</button></div> : <div className="mt-3"><p className="text-sm text-slate-600">Choose a cost type, then enter its verified quantity and unit cost.</p><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{categories.map((category) => <button key={category.key} type="button" disabled={disabled || !canEdit} onClick={() => onAddCostLine(category.key)} className="min-h-24 rounded-lg border border-slate-300 bg-white p-3 text-left transition hover:border-emerald-600 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"><strong className="block text-slate-950">Add {category.label}</strong><span className="mt-1 block text-xs leading-5 text-slate-600">{category.help}</span></button>)}</div></div>}</details>
+        <div className="mt-5 rounded-lg border border-slate-300 p-4"><h3 className="font-black text-slate-950">Review true costs</h3><p className="mt-1 text-sm text-slate-700">{trueCostLineCount ? `${trueCostLineCount} positive true-cost ${trueCostLineCount === 1 ? "line" : "lines"} saved · ${directCost} current direct cost.` : "No positive true-cost lines are saved yet."}</p>{trueCostLineCount ? <button type="button" className={`mt-3 ${primary}`} onClick={onContinuePricing}>Continue to OH&amp;P</button> : null}</div>
+      </> : null}
     </>}
   </section>;
 }

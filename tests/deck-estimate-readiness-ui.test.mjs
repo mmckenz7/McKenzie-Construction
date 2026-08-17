@@ -40,15 +40,19 @@ test("shows one focused Deck stage at a time with a truthful next action", () =>
   for (const copy of [
     "Current step:",
     "Site visit",
-    "Estimate",
+    "Deck shape",
+    "Structural plan",
+    "Takeoff and price",
     "Proposal",
     "Review and send estimate",
-    "Photos never become dimensions, quantities, prices, or engineering decisions",
+    "only the approved shape moves into structural design",
     "Nothing is sent automatically",
   ]) assert.match(builder, new RegExp(copy, "i"));
   assert.match(guidedVisit, /Continue to human takeoff/);
   assert.match(builder, /deckWorkspaceStage === "site_visit"/);
-  assert.match(builder, /deckWorkspaceStage === "estimate"/);
+  assert.match(builder, /deckWorkspaceStage === "shape"/);
+  assert.match(builder, /deckWorkspaceStage === "structure"/);
+  assert.match(builder, /deckWorkspaceStage === "takeoff"/);
   assert.match(builder, /deckWorkspaceStage === "proposal"/);
   assert.match(builder, /aria-current=\{activeStage === stage\.key \? "step"/);
   assert.match(builder, /disabled=\{!stage\.enabled\}/);
@@ -85,7 +89,7 @@ test("gates Deck OH&P and customer-link creation on real readiness", () => {
 
 test("completed field work opens a Deck-specific true-cost workspace", () => {
   for (const copy of [
-    "Deck takeoff and true-cost workspace",
+    "Takeoff and true-cost workspace",
     "Saved field measurements and notes",
     "Create Deck construction section",
   ]) assert.match(builder, new RegExp(copy, "i"));

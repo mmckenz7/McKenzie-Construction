@@ -13,6 +13,7 @@ import {
   parseDeckPostPositions,
   recommendedPrescriptiveDraft,
   type DeckPrescriptiveDraft,
+  type DeckOutlinePoint,
   type DeckPrescriptivePlan,
 } from "@/lib/deck-prescriptive-plan";
 import type { DeckBlueprintVisitSeed } from "@/lib/deck-takeoff-v0";
@@ -43,6 +44,13 @@ type BlueprintCallout = Readonly<{
   markerY: number;
   kind: "input" | "exception" | "package";
 }>;
+
+function isAxisAlignedRectangle(points: readonly DeckOutlinePoint[]) {
+  if (points.length !== 4) return false;
+  const xs = [...new Set(points.map((point) => point.x))];
+  const ys = [...new Set(points.map((point) => point.y))];
+  return xs.length === 2 && ys.length === 2 && points.every((point) => xs.includes(point.x) && ys.includes(point.y));
+}
 
 function draftForFacts(
   facts: BlueprintFacts,
@@ -130,6 +138,7 @@ export function DeckPrescriptivePlanGenerator({
   stairEdge = "yard",
   stairPosition = "center",
   stairOffsetFeet = "",
+  approvedOutline,
   disabled,
   onApprove,
   onEditStairPlacement,
@@ -145,6 +154,7 @@ export function DeckPrescriptivePlanGenerator({
   stairEdge?: "left" | "right" | "yard" | "top";
   stairPosition?: "start" | "center" | "end";
   stairOffsetFeet?: string;
+  approvedOutline?: readonly DeckOutlinePoint[];
   disabled: boolean;
   onApprove: (plan: DeckPrescriptivePlan) => void;
   onEditStairPlacement: () => void;
@@ -162,9 +172,13 @@ export function DeckPrescriptivePlanGenerator({
     [blueprintAttachment, blueprintStairs, blueprintRailings],
   );
   const seedSignature = JSON.stringify(visitSeed);
-  const factsSignature = `${lengthFeet}:${widthFeet}:${blueprintAttachment ?? "unknown"}:${blueprintStairs ?? "unknown"}:${blueprintRailings ?? "unknown"}:${stairPlacementConfirmed}:${seedSignature}`;
+  const approvedOutlineSignature = JSON.stringify(approvedOutline ?? null);
+  const factsSignature = `${lengthFeet}:${widthFeet}:${blueprintAttachment ?? "unknown"}:${blueprintStairs ?? "unknown"}:${blueprintRailings ?? "unknown"}:${stairPlacementConfirmed}:${seedSignature}:${approvedOutlineSignature}`;
   const [draft, setDraft] = useState<DeckPrescriptiveDraft>(() =>
-    draftForFacts(facts, lengthFeet, widthFeet, visitSeed),
+    ({
+      ...draftForFacts(facts, lengthFeet, widthFeet, visitSeed),
+      unusualGeometry: approvedOutline ? !isAxisAlignedRectangle(approvedOutline) : false,
+    }),
   );
   const [step, setStep] = useState(0);
   const [generated, setGenerated] = useState(false);
@@ -188,14 +202,14 @@ export function DeckPrescriptivePlanGenerator({
     | { type: "corner"; index: number }
   > | null>(null);
   const [outlineMode, setOutlineMode] = useState<"rectangle" | "freeform">(
-    "rectangle",
+    approvedOutline && !isAxisAlignedRectangle(approvedOutline) ? "freeform" : "rectangle",
   );
-  const [outlinePoints, setOutlinePoints] = useState(() => [
-    { x: 0, y: 0 },
-    { x: lengthFeet, y: 0 },
-    { x: lengthFeet, y: widthFeet },
-    { x: 0, y: widthFeet },
-  ]);
+  const [outlinePoints, setOutlinePoints] = useState(() => approvedOutline?.map((point) => ({ ...point })) ?? [
+      { x: 0, y: 0 },
+      { x: lengthFeet, y: 0 },
+      { x: lengthFeet, y: widthFeet },
+      { x: 0, y: widthFeet },
+    ]);
   const [outlineDrawingActive, setOutlineDrawingActive] = useState(false);
   const [outlinePointAddingActive, setOutlinePointAddingActive] =
     useState(false);
@@ -223,9 +237,16 @@ export function DeckPrescriptivePlanGenerator({
     } else {
       setProposedLengthFeet(lengthFeet);
       setProposedWidthFeet(widthFeet);
-      setDraft(draftForFacts(facts, lengthFeet, widthFeet, visitSeed));
+      setDraft({
+        ...draftForFacts(facts, lengthFeet, widthFeet, visitSeed),
+        unusualGeometry: approvedOutline ? !isAxisAlignedRectangle(approvedOutline) : false,
+      });
+      if (approvedOutline) {
+        setOutlinePoints(approvedOutline.map((point) => ({ ...point })));
+        setOutlineMode(isAxisAlignedRectangle(approvedOutline) ? "rectangle" : "freeform");
+      }
     }
-  }, [dirty, facts, factsSignature, lengthFeet, visitSeed, widthFeet]);
+  }, [approvedOutline, dirty, facts, factsSignature, lengthFeet, visitSeed, widthFeet]);
   const plan = useMemo(
     () =>
       buildPrescriptiveDeckPlan({
