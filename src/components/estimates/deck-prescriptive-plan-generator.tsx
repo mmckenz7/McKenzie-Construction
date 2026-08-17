@@ -5,6 +5,8 @@ import {
   buildPrescriptiveDeckPlan,
   deckEstimatingImmediateIssueIds,
   KNOXVILLE_2024_DECK_PROFILE,
+  insertOutlinePointOnNearestEdge,
+  isValidDeckOutline,
   parseDeckPostDistances,
   parseDeckPostPositions,
   recommendedPrescriptiveDraft,
@@ -192,6 +194,15 @@ export function DeckPrescriptivePlanGenerator({
     { x: 0, y: widthFeet },
   ]);
   const [outlineDrawingActive, setOutlineDrawingActive] = useState(false);
+  const [outlinePointAddingActive, setOutlinePointAddingActive] =
+    useState(false);
+  const [outlinePointFeedback, setOutlinePointFeedback] = useState("");
+  const [selectedOutlinePoint, setSelectedOutlinePoint] = useState<
+    number | null
+  >(null);
+  const [outlineBeforeLastAdd, setOutlineBeforeLastAdd] = useState<
+    { x: number; y: number }[] | null
+  >(null);
   const [outlineClosed, setOutlineClosed] = useState(true);
   const [proposedLengthFeet, setProposedLengthFeet] = useState(lengthFeet);
   const [proposedWidthFeet, setProposedWidthFeet] = useState(widthFeet);
@@ -446,13 +457,21 @@ export function DeckPrescriptivePlanGenerator({
         proposedWidthFeet + 2,
         Math.max(-2, Math.round(rawY / gridFeet) * gridFeet),
       );
-      setOutlinePoints((current) =>
-        current.map((point, index) =>
+      setOutlinePoints((current) => {
+        const moved = current.map((point, index) =>
           index === activeDrawingDrag.index
             ? { x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) }
             : point,
-        ),
-      );
+        );
+        if (!isValidDeckOutline(moved)) {
+          setOutlinePointFeedback(
+            "That move would cross or collapse the deck outline, so it was not applied.",
+          );
+          return current;
+        }
+        setOutlinePointFeedback(`Corner ${activeDrawingDrag.index + 1} moved.`);
+        return moved;
+      });
       setDraft((current) => ({ ...current, unusualGeometry: true }));
       setDirty(true);
       setApproved(false);
@@ -541,6 +560,10 @@ export function DeckPrescriptivePlanGenerator({
   const resetRectangleOutline = () => {
     setOutlineMode("rectangle");
     setOutlineDrawingActive(false);
+    setOutlinePointAddingActive(false);
+    setSelectedOutlinePoint(null);
+    setOutlineBeforeLastAdd(null);
+    setOutlinePointFeedback("Saved rectangular outline restored.");
     setOutlineClosed(true);
     setOutlinePoints([
       { x: 0, y: 0 },
@@ -555,15 +578,32 @@ export function DeckPrescriptivePlanGenerator({
     setOutlinePoints([]);
     setOutlineClosed(false);
     setOutlineDrawingActive(true);
+    setOutlinePointAddingActive(false);
+    setSelectedOutlinePoint(null);
+    setOutlineBeforeLastAdd(null);
+    setOutlinePointFeedback("Click each corner in order.");
   };
   const finishOutlineDrawing = () => {
-    if (outlinePoints.length < 3) return;
+    if (!isValidDeckOutline(outlinePoints)) {
+      setOutlinePointFeedback(
+        "The outline must have at least three clear edges and cannot cross itself.",
+      );
+      return;
+    }
     markCustomOutline();
     setOutlineClosed(true);
     setOutlineDrawingActive(false);
+    setOutlinePointAddingActive(false);
+    setOutlinePointFeedback("Custom deck outline completed.");
   };
   const addOutlinePointFromDrawing = (clientX: number, clientY: number) => {
     if (!outlineDrawingActive || !drawingRef.current) return;
+    if (outlinePoints.length >= 24) {
+      setOutlinePointFeedback(
+        "This sketch already has the maximum 24 corner points.",
+      );
+      return;
+    }
     const bounds = drawingRef.current.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
     const drawingX = -10 + ((clientX - bounds.left) * 340) / bounds.width;
@@ -582,6 +622,80 @@ export function DeckPrescriptivePlanGenerator({
       if (Math.hypot(x - previous.x, y - previous.y) < 0.25) return;
     }
     setOutlinePoints((current) => [...current, { x, y }]);
+  };
+  const insertOutlinePointFromDrawing = (clientX: number, clientY: number) => {
+    if (!outlinePointAddingActive || !drawingRef.current) return;
+    const bounds = drawingRef.current.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    const drawingX = -10 + ((clientX - bounds.left) * 340) / bounds.width;
+    const drawingY = -10 + ((clientY - bounds.top) * 230) / bounds.height;
+    const candidate = {
+      x: ((drawingX - 30) * proposedLengthFeet) / 260,
+      y: ((drawingY - 20) * proposedWidthFeet) / 150,
+    };
+    const next = insertOutlinePointOnNearestEdge(
+      outlinePoints,
+      candidate,
+      Number(draft.postSnapInches),
+    );
+    if (next === outlinePoints) {
+      setOutlinePointFeedback(
+        "No point added. Tap closer to an existing deck edge and away from a corner.",
+      );
+      return;
+    }
+    setOutlineBeforeLastAdd(outlinePoints.map((point) => ({ ...point })));
+    const addedIndex = next.findIndex(
+      (point) =>
+        !outlinePoints.some(
+          (existing) =>
+            Math.abs(existing.x - point.x) < 0.0001 &&
+            Math.abs(existing.y - point.y) < 0.0001,
+        ),
+    );
+    setSelectedOutlinePoint(addedIndex >= 0 ? addedIndex : null);
+    setOutlinePointFeedback(
+      `Corner point ${addedIndex >= 0 ? addedIndex + 1 : ""} added.`,
+    );
+    setOutlinePoints([...next]);
+    markCustomOutline();
+  };
+  const moveSelectedOutlinePoint = (dx: number, dy: number) => {
+    if (selectedOutlinePoint === null) return;
+    const gridFeet = Math.max(1, Number(draft.postSnapInches)) / 12;
+    setOutlinePoints((current) => {
+      const moved = current.map((point, index) =>
+        index === selectedOutlinePoint
+          ? {
+              x: Number((point.x + dx * gridFeet).toFixed(4)),
+              y: Number((point.y + dy * gridFeet).toFixed(4)),
+            }
+          : point,
+      );
+      if (!isValidDeckOutline(moved)) {
+        setOutlinePointFeedback(
+          "That move would cross or collapse the outline, so it was not applied.",
+        );
+        return current;
+      }
+      setOutlinePointFeedback(`Corner ${selectedOutlinePoint + 1} moved.`);
+      return moved;
+    });
+    markCustomOutline();
+  };
+  const removeSelectedOutlinePoint = () => {
+    if (selectedOutlinePoint === null || outlinePoints.length <= 3) return;
+    const next = outlinePoints.filter(
+      (_, index) => index !== selectedOutlinePoint,
+    );
+    if (!isValidDeckOutline(next)) {
+      setOutlinePointFeedback("That corner cannot be removed from this shape.");
+      return;
+    }
+    setOutlinePoints(next);
+    setSelectedOutlinePoint(null);
+    setOutlinePointFeedback("Corner removed.");
+    markCustomOutline();
   };
   const resizeOutlineEdge = (index: number, requestedLength: number) =>
     setOutlinePoints((current) => {
@@ -606,7 +720,7 @@ export function DeckPrescriptivePlanGenerator({
       const editedVertical = Math.abs(dx) < 0.05;
       const followingVertical = Math.abs(following.x - end.x) < 0.05;
       const followingHorizontal = Math.abs(following.y - end.y) < 0.05;
-      return current.map((point, pointIndex) => {
+      const resized = current.map((point, pointIndex) => {
         if (pointIndex === nextIndex) return nextPoint;
         if (pointIndex !== followingIndex) return point;
         if (editedHorizontal && followingVertical)
@@ -615,6 +729,14 @@ export function DeckPrescriptivePlanGenerator({
           return { ...point, y: nextPoint.y };
         return point;
       });
+      if (!isValidDeckOutline(resized)) {
+        setOutlinePointFeedback(
+          "That measurement would cross or collapse the outline, so it was not applied.",
+        );
+        return current;
+      }
+      setOutlinePointFeedback(`Edge ${index + 1} measurement updated.`);
+      return resized;
     });
   const unresolvedLabels = plan.unresolvedPackages.map((item) =>
     item === "stairs"
@@ -1400,7 +1522,7 @@ export function DeckPrescriptivePlanGenerator({
                 strokeWidth="6"
                 opacity={outlineMode === "rectangle" ? 1 : 0}
               />
-              {outlineDrawingActive ? (
+              {outlineDrawingActive || outlinePointAddingActive ? (
                 <rect
                   x="-10"
                   y="-10"
@@ -1412,7 +1534,13 @@ export function DeckPrescriptivePlanGenerator({
                   data-edit-handle="outline-click-surface"
                   onPointerDown={(event) => {
                     event.stopPropagation();
-                    addOutlinePointFromDrawing(event.clientX, event.clientY);
+                    if (outlineDrawingActive)
+                      addOutlinePointFromDrawing(event.clientX, event.clientY);
+                    else
+                      insertOutlinePointFromDrawing(
+                        event.clientX,
+                        event.clientY,
+                      );
                   }}
                 />
               ) : null}
@@ -1422,6 +1550,17 @@ export function DeckPrescriptivePlanGenerator({
                       key={`outline-point-${index}`}
                       data-edit-handle={`outline-point-${index + 1}`}
                       className="cursor-move"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Select deck corner ${index + 1}`}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        setSelectedOutlinePoint(index);
+                        setOutlinePointFeedback(
+                          `Corner ${index + 1} selected.`,
+                        );
+                      }}
                       onPointerDown={(event) => {
                         if (
                           outlineDrawingActive &&
@@ -1432,10 +1571,12 @@ export function DeckPrescriptivePlanGenerator({
                           finishOutlineDrawing();
                           return;
                         }
-                        if (outlineDrawingActive) return;
+                        if (outlineDrawingActive || outlinePointAddingActive)
+                          return;
                         event.preventDefault();
                         event.stopPropagation();
                         event.currentTarget.setPointerCapture(event.pointerId);
+                        setSelectedOutlinePoint(index);
                         setOutlineMode("freeform");
                         setActiveDrawingDrag({ type: "corner", index });
                       }}
@@ -1450,8 +1591,23 @@ export function DeckPrescriptivePlanGenerator({
                           20 +
                           (150 * point.y) / Math.max(0.1, proposedWidthFeet)
                         }
+                        r="24"
+                        fill="transparent"
+                        stroke="transparent"
+                      />
+                      <circle
+                        cx={
+                          30 +
+                          (260 * point.x) / Math.max(0.1, proposedLengthFeet)
+                        }
+                        cy={
+                          20 +
+                          (150 * point.y) / Math.max(0.1, proposedWidthFeet)
+                        }
                         r="9"
-                        fill="#f97316"
+                        fill={
+                          selectedOutlinePoint === index ? "#facc15" : "#f97316"
+                        }
                         stroke="#0f172a"
                         strokeWidth="2.5"
                       />
@@ -1731,6 +1887,110 @@ export function DeckPrescriptivePlanGenerator({
                     Reset to saved rectangle
                   </button>
                 </div>
+                <button
+                  type="button"
+                  className={
+                    outlinePointAddingActive
+                      ? "mt-2 min-h-12 w-full rounded-md border-2 border-orange-300 bg-orange-500 px-4 py-3 text-sm font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
+                      : "mt-2 min-h-12 w-full rounded-md border-2 border-orange-300 bg-slate-800 px-4 py-3 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
+                  }
+                  aria-pressed={outlinePointAddingActive}
+                  disabled={outlineDrawingActive || !outlineClosed}
+                  onClick={() => {
+                    setOutlinePointAddingActive((current) => !current);
+                    setOutlinePointFeedback(
+                      outlinePointAddingActive
+                        ? "Point-adding mode finished. Select or drag a corner to shape the notch or bump-out."
+                        : "Point-adding mode started. Tap close to an existing deck edge.",
+                    );
+                  }}
+                >
+                  {outlinePointAddingActive
+                    ? "Done adding corner points"
+                    : "Add corner points for a bump-out or notch"}
+                </button>
+                {outlinePointAddingActive ? (
+                  <p className="mt-2 rounded-md border-2 border-orange-400 bg-orange-950 p-3 text-sm font-black text-white">
+                    Tap an existing deck edge to add a numbered orange point.
+                    Add two points for the sides of a bump-out or notch, then
+                    turn this mode off and drag those points inward or outward.
+                  </p>
+                ) : null}
+                <p
+                  className="mt-2 text-sm font-bold text-slate-100"
+                  aria-live="polite"
+                >
+                  {outlinePointFeedback}
+                </p>
+                {outlineBeforeLastAdd ? (
+                  <button
+                    type="button"
+                    className="mt-2 min-h-11 w-full rounded-md border-2 border-slate-300 bg-slate-700 px-4 py-2 text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    onClick={() => {
+                      setOutlinePoints(outlineBeforeLastAdd);
+                      setOutlineBeforeLastAdd(null);
+                      setSelectedOutlinePoint(null);
+                      setOutlinePointFeedback("Last added corner undone.");
+                    }}
+                  >
+                    Undo last added corner
+                  </button>
+                ) : null}
+                {!outlineDrawingActive && selectedOutlinePoint !== null ? (
+                  <div className="mt-3 rounded-md border-2 border-yellow-300 bg-slate-950 p-3 text-white">
+                    <p className="text-sm font-black">
+                      Corner {selectedOutlinePoint + 1} selected
+                    </p>
+                    <p className="mt-1 text-xs text-slate-200">
+                      Move it one snap increment at a time or remove it. These
+                      controls also work when dragging is difficult on a phone.
+                    </p>
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                      <span />
+                      <button
+                        type="button"
+                        className="min-h-11 rounded bg-slate-700 font-black text-white"
+                        aria-label="Move selected corner up"
+                        onClick={() => moveSelectedOutlinePoint(0, -1)}
+                      >
+                        ↑
+                      </button>
+                      <span />
+                      <button
+                        type="button"
+                        className="min-h-11 rounded bg-slate-700 font-black text-white"
+                        aria-label="Move selected corner left"
+                        onClick={() => moveSelectedOutlinePoint(-1, 0)}
+                      >
+                        ←
+                      </button>
+                      <button
+                        type="button"
+                        className="min-h-11 rounded bg-slate-700 font-black text-white"
+                        aria-label="Move selected corner down"
+                        onClick={() => moveSelectedOutlinePoint(0, 1)}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="min-h-11 rounded bg-slate-700 font-black text-white"
+                        aria-label="Move selected corner right"
+                        onClick={() => moveSelectedOutlinePoint(1, 0)}
+                      >
+                        →
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className="mt-2 min-h-11 w-full rounded border-2 border-red-300 bg-red-950 px-3 py-2 text-sm font-black text-white disabled:opacity-50"
+                      disabled={outlinePoints.length <= 3}
+                      onClick={removeSelectedOutlinePoint}
+                    >
+                      Remove selected corner
+                    </button>
+                  </div>
+                ) : null}
                 {outlineDrawingActive ? (
                   <div
                     className="mt-3 rounded-md border-2 border-orange-400 bg-orange-950 p-3 text-white"
@@ -1769,6 +2029,14 @@ export function DeckPrescriptivePlanGenerator({
                     adjust the general shape.
                   </p>
                 )}
+                <p
+                  className="mt-2 text-xs font-bold text-slate-200"
+                  style={{ color: "#e2e8f0" }}
+                >
+                  A custom outline is an estimating sketch on this screen. It
+                  pauses automatic structural quantities until a reviewed custom
+                  framing plan is attached; it is not a permit drawing.
+                </p>
                 <p
                   className="mt-2 text-xs font-bold text-slate-200"
                   style={{ color: "#e2e8f0" }}

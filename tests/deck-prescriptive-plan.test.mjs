@@ -6,6 +6,8 @@ import {
   buildPrescriptiveDeckPlan,
   deckEstimatingImmediateIssueIds,
   isCanonicalFramingEvidence,
+  insertOutlinePointOnNearestEdge,
+  isValidDeckOutline,
   KNOXVILLE_2024_DECK_PROFILE,
   parseDeckPostPositions,
   recommendedPrescriptiveDraft,
@@ -252,6 +254,87 @@ test("current 14x12 job produces preliminary quantities while readiness assumpti
 });
 
 test("simple editor geometry preserves exact post locations and uses the largest real beam span", () => {
+  const rectangle = [
+    { x: 0, y: 0 },
+    { x: 14, y: 0 },
+    { x: 14, y: 12 },
+    { x: 0, y: 12 },
+  ];
+  assert.deepEqual(
+    insertOutlinePointOnNearestEdge(rectangle, { x: 5, y: 0.5 }),
+    [
+      { x: 0, y: 0 },
+      { x: 5, y: 0 },
+      { x: 14, y: 0 },
+      { x: 14, y: 12 },
+      { x: 0, y: 12 },
+    ],
+  );
+  assert.deepEqual(
+    insertOutlinePointOnNearestEdge(rectangle, { x: 13.5, y: 4 }),
+    [
+      { x: 0, y: 0 },
+      { x: 14, y: 0 },
+      { x: 14, y: 4 },
+      { x: 14, y: 12 },
+      { x: 0, y: 12 },
+    ],
+  );
+  assert.equal(
+    insertOutlinePointOnNearestEdge(rectangle, { x: 0.05, y: 0.05 }),
+    rectangle,
+  );
+  assert.equal(
+    insertOutlinePointOnNearestEdge(rectangle, { x: 7, y: 6 }),
+    rectangle,
+  );
+  const diagonal = [
+    { x: 0, y: 0 },
+    { x: 10, y: 10 },
+    { x: 0, y: 10 },
+  ];
+  const diagonalInsert = insertOutlinePointOnNearestEdge(
+    diagonal,
+    { x: 5.2, y: 4.9 },
+    1,
+  );
+  assert.ok(Math.abs(diagonalInsert[1].x - diagonalInsert[1].y) < 0.0001);
+  assert.equal(isValidDeckOutline(rectangle), true);
+  assert.equal(
+    isValidDeckOutline([
+      { x: 0, y: 0 },
+      { x: 10, y: 10 },
+      { x: 0, y: 10 },
+      { x: 10, y: 0 },
+    ]),
+    false,
+  );
+  assert.equal(
+    isValidDeckOutline([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 5, y: 0 },
+      { x: 5, y: 5 },
+    ]),
+    false,
+  );
+  assert.equal(
+    isValidDeckOutline([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 5, y: 0 },
+      { x: 0, y: 10 },
+    ]),
+    false,
+  );
+  assert.equal(
+    isValidDeckOutline([
+      { x: 0, y: 0 },
+      { x: Number.NaN, y: 0 },
+      { x: 0, y: 10 },
+    ]),
+    false,
+  );
   assert.deepEqual(parseDeckPostPositions("0,4,14", 14), [0, 4, 14]);
   assert.equal(parseDeckPostPositions("0,14,4", 14)?.join(","), "0,4,14");
   assert.equal(parseDeckPostPositions("0,14,14", 14), null);
@@ -654,9 +737,25 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(ui, /<foreignObject/);
   assert.match(ui, /data-plan-member="drawing-background"/);
   assert.match(ui, /data-edit-handle="outline-click-surface"/);
-  assert.match(ui, /fill="#f97316"/);
+  assert.match(ui, /selectedOutlinePoint === index \? "#facc15" : "#f97316"/);
   assert.match(ui, /event\.currentTarget\.setPointerCapture/);
   assert.match(ui, /onLostPointerCapture/);
+  assert.match(ui, /Add corner points for a bump-out or notch/);
+  assert.match(ui, /Done adding corner points/);
+  assert.match(ui, /insertOutlinePointFromDrawing/);
+  assert.match(ui, /No point added\. Tap closer to an existing deck edge/);
+  assert.match(ui, /Undo last added corner/);
+  assert.match(ui, /Remove selected corner/);
+  assert.match(ui, /isValidDeckOutline\(moved\)/);
+  assert.match(ui, /outlineDrawingActive \|\| outlinePointAddingActive/);
+  assert.match(ui, /r="24"/);
+  assert.match(ui, /outlinePoints\.length >= 24/);
+  assert.match(
+    ui,
+    /if \(next === outlinePoints\)[\s\S]*?return;[\s\S]*?setOutlinePoints\(\[\.\.\.next\]\);[\s\S]*?markCustomOutline\(\)/,
+  );
+  assert.match(ui, /aria-label={`Select deck corner \${index \+ 1}`}/);
+  assert.match(ui, /pauses automatic structural quantities/);
   assert.match(ui, /colorScheme: "light"/);
   assert.match(ui, />ft<\/span>/);
   assert.match(ui, /Framing markers — optional for later/);
