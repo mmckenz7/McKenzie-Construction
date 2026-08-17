@@ -647,11 +647,13 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(ui, /Edge \$\{index \+ 1\} length in feet/);
   assert.match(
     ui,
-    /resizeOutlineEdge\(index, Number\(event\.target\.value\)\)/,
+    /resizeOutlineEdge\(\s*index,\s*Number\(event\.target\.value\),?\s*\)/,
   );
   assert.match(ui, /editedHorizontal && followingVertical/);
   assert.match(ui, /editedVertical && followingHorizontal/);
   assert.match(ui, /<foreignObject/);
+  assert.match(ui, /colorScheme: "light"/);
+  assert.match(ui, />ft<\/span>/);
   assert.match(ui, /Framing markers — optional for later/);
   assert.match(ui, /activeDrawingDrag\.type === "corner"/);
   assert.match(ui, /activeDrawingDrag\.type === "stair"/);

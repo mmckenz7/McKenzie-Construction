@@ -1466,29 +1466,45 @@ export function DeckPrescriptivePlanGenerator({
                   return (
                     <foreignObject
                       key={`dimension-input-${index}-${length.toFixed(3)}`}
-                      x={midpointX - 29}
+                      x={midpointX - 36}
                       y={midpointY - 13}
-                      width="58"
+                      width="72"
                       height="28"
                       data-edit-handle={`edge-dimension-${index + 1}`}
                     >
-                      <input
-                        aria-label={`Edge ${index + 1} length in feet`}
-                        title={`Edge ${index + 1} length in feet`}
-                        type="number"
-                        min="0.25"
-                        step="0.083333"
-                        defaultValue={length.toFixed(2)}
-                        className="h-7 w-full rounded border-2 border-slate-950 bg-white px-1 text-center text-[10px] font-black text-slate-950 shadow"
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") event.currentTarget.blur();
-                        }}
-                        onBlur={(event) => {
-                          resizeOutlineEdge(index, Number(event.target.value));
-                          markCustomOutline();
-                        }}
-                      />
+                      <div
+                        xmlns="http://www.w3.org/1999/xhtml"
+                        className="flex h-7 items-center rounded border-2 border-slate-950 bg-white px-1 shadow"
+                        style={{ backgroundColor: "#ffffff", color: "#0f172a" }}
+                      >
+                        <input
+                          aria-label={`Edge ${index + 1} length in feet`}
+                          title={`Edge ${index + 1} length in feet`}
+                          type="number"
+                          min="0.25"
+                          step="0.083333"
+                          defaultValue={length.toFixed(2)}
+                          className="h-6 min-w-0 flex-1 border-0 bg-white px-0.5 text-center text-[10px] font-black text-slate-950 outline-none"
+                          style={{
+                            backgroundColor: "#ffffff",
+                            color: "#0f172a",
+                            colorScheme: "light",
+                          }}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter")
+                              event.currentTarget.blur();
+                          }}
+                          onBlur={(event) => {
+                            resizeOutlineEdge(
+                              index,
+                              Number(event.target.value),
+                            );
+                            markCustomOutline();
+                          }}
+                        />
+                        <span className="pl-0.5 text-[9px] font-black">ft</span>
+                      </div>
                     </foreignObject>
                   );
                 }
