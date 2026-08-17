@@ -191,7 +191,8 @@ export function DeckPrescriptivePlanGenerator({
     { x: lengthFeet, y: widthFeet },
     { x: 0, y: widthFeet },
   ]);
-  const [selectedOutlineEdge, setSelectedOutlineEdge] = useState(0);
+  const [outlineDrawingActive, setOutlineDrawingActive] = useState(false);
+  const [outlineClosed, setOutlineClosed] = useState(true);
   const [proposedLengthFeet, setProposedLengthFeet] = useState(lengthFeet);
   const [proposedWidthFeet, setProposedWidthFeet] = useState(widthFeet);
   const svgTitleId = useId();
@@ -531,66 +532,89 @@ export function DeckPrescriptivePlanGenerator({
         `${30 + (260 * point.x) / Math.max(0.1, proposedLengthFeet)},${20 + (150 * point.y) / Math.max(0.1, proposedWidthFeet)}`,
     )
     .join(" ");
-  const selectedEdgeStart =
-    outlinePoints[Math.min(selectedOutlineEdge, outlinePoints.length - 1)];
-  const selectedEdgeEnd =
-    outlinePoints[(selectedOutlineEdge + 1) % outlinePoints.length];
-  const selectedOutlineEdgeLength = Math.hypot(
-    selectedEdgeEnd.x - selectedEdgeStart.x,
-    selectedEdgeEnd.y - selectedEdgeStart.y,
-  );
   const markCustomOutline = () => {
     setOutlineMode("freeform");
     setDraft((current) => ({ ...current, unusualGeometry: true }));
     setDirty(true);
     setApproved(false);
   };
-  const addOutlineStep = (direction: "out" | "in") =>
+  const resetRectangleOutline = () => {
+    setOutlineMode("rectangle");
+    setOutlineDrawingActive(false);
+    setOutlineClosed(true);
+    setOutlinePoints([
+      { x: 0, y: 0 },
+      { x: proposedLengthFeet, y: 0 },
+      { x: proposedLengthFeet, y: proposedWidthFeet },
+      { x: 0, y: proposedWidthFeet },
+    ]);
+    set("unusualGeometry", false);
+  };
+  const beginOutlineDrawing = () => {
+    markCustomOutline();
+    setOutlinePoints([]);
+    setOutlineClosed(false);
+    setOutlineDrawingActive(true);
+  };
+  const finishOutlineDrawing = () => {
+    if (outlinePoints.length < 3) return;
+    markCustomOutline();
+    setOutlineClosed(true);
+    setOutlineDrawingActive(false);
+  };
+  const addOutlinePointFromDrawing = (clientX: number, clientY: number) => {
+    if (!outlineDrawingActive || !drawingRef.current) return;
+    const bounds = drawingRef.current.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    const drawingX = -10 + ((clientX - bounds.left) * 340) / bounds.width;
+    const drawingY = -10 + ((clientY - bounds.top) * 230) / bounds.height;
+    const snap = (value: number) => Math.round(value * 12) / 12;
+    let x = snap(((drawingX - 30) * proposedLengthFeet) / 260);
+    let y = snap(((drawingY - 20) * proposedWidthFeet) / 150);
+    const previous = outlinePoints.at(-1);
+    if (previous) {
+      const xDistance = Math.abs(x - previous.x);
+      const yDistance = Math.abs(y - previous.y);
+      if (xDistance <= 0.5 || yDistance <= 0.5) {
+        if (xDistance < yDistance) x = previous.x;
+        else y = previous.y;
+      }
+      if (Math.hypot(x - previous.x, y - previous.y) < 0.25) return;
+    }
+    setOutlinePoints((current) => [...current, { x, y }]);
+  };
+  const resizeOutlineEdge = (index: number, requestedLength: number) =>
     setOutlinePoints((current) => {
-      if (current.length > 12) return current;
-      const edge = Math.min(selectedOutlineEdge, current.length - 1);
-      const start = current[edge];
-      const end = current[(edge + 1) % current.length];
+      if (!Number.isFinite(requestedLength) || requestedLength < 0.25)
+        return current;
+      const start = current[index];
+      const nextIndex = (index + 1) % current.length;
+      const end = current[nextIndex];
       const dx = end.x - start.x;
       const dy = end.y - start.y;
       const edgeLength = Math.hypot(dx, dy);
-      if (edgeLength < 2) return current;
-      const stepWidth = Math.min(4, Math.max(1, edgeLength / 3));
-      const stepDepth = Math.min(2, Math.max(1, Math.min(proposedLengthFeet, proposedWidthFeet) / 6));
-      const alongX = dx / edgeLength;
-      const alongY = dy / edgeLength;
-      const signedArea = current.reduce((sum, point, index) => {
-        const next = current[(index + 1) % current.length];
-        return sum + point.x * next.y - next.x * point.y;
-      }, 0);
-      const interiorX = signedArea >= 0 ? -alongY : alongY;
-      const interiorY = signedArea >= 0 ? alongX : -alongX;
-      const normalScale = direction === "in" ? stepDepth : -stepDepth;
-      const midpointX = (start.x + end.x) / 2;
-      const midpointY = (start.y + end.y) / 2;
-      const snap = (value: number) => Math.round(value * 12) / 12;
-      const before = {
-        x: snap(midpointX - (alongX * stepWidth) / 2),
-        y: snap(midpointY - (alongY * stepWidth) / 2),
+      if (edgeLength < 0.01) return current;
+      const nextPoint = {
+        x:
+          Math.round((start.x + (dx / edgeLength) * requestedLength) * 12) / 12,
+        y:
+          Math.round((start.y + (dy / edgeLength) * requestedLength) * 12) / 12,
       };
-      const after = {
-        x: snap(midpointX + (alongX * stepWidth) / 2),
-        y: snap(midpointY + (alongY * stepWidth) / 2),
-      };
-      return [
-        ...current.slice(0, edge + 1),
-        before,
-        {
-          x: snap(before.x + interiorX * normalScale),
-          y: snap(before.y + interiorY * normalScale),
-        },
-        {
-          x: snap(after.x + interiorX * normalScale),
-          y: snap(after.y + interiorY * normalScale),
-        },
-        after,
-        ...current.slice(edge + 1),
-      ];
+      const followingIndex = (nextIndex + 1) % current.length;
+      const following = current[followingIndex];
+      const editedHorizontal = Math.abs(dy) < 0.05;
+      const editedVertical = Math.abs(dx) < 0.05;
+      const followingVertical = Math.abs(following.x - end.x) < 0.05;
+      const followingHorizontal = Math.abs(following.y - end.y) < 0.05;
+      return current.map((point, pointIndex) => {
+        if (pointIndex === nextIndex) return nextPoint;
+        if (pointIndex !== followingIndex) return point;
+        if (editedHorizontal && followingVertical)
+          return { ...point, x: nextPoint.x };
+        if (editedVertical && followingHorizontal)
+          return { ...point, y: nextPoint.y };
+        return point;
+      });
     });
   const unresolvedLabels = plan.unresolvedPackages.map((item) =>
     item === "stairs"
@@ -1186,6 +1210,12 @@ export function DeckPrescriptivePlanGenerator({
                   : "min-w-[320px] w-full bg-white"
               }
               style={layoutEditorOpen ? { touchAction: "none" } : undefined}
+              onPointerDown={(event) => {
+                if (!outlineDrawingActive) return;
+                const target = event.target as Element;
+                if (target.closest("[data-edit-handle]")) return;
+                addOutlinePointFromDrawing(event.clientX, event.clientY);
+              }}
               onPointerMove={(event) =>
                 moveDrawingMember(event.clientX, event.clientY)
               }
@@ -1200,20 +1230,30 @@ export function DeckPrescriptivePlanGenerator({
                 Prescriptive estimating draft framing blueprint
               </title>
               <desc id={svgDescriptionId}>
-                Main deck framing drawing with joists, beams, posts, footings,
-                attachment edge, stair opening when applicable, and numbered
-                callouts for missing or unresolved work.
+                Editable deck outline. Click points to draw the general shape,
+                then type the measured distance directly on each edge. Framing
+                markers and unresolved-work callouts remain secondary.
               </desc>
-              <polygon
-                points={outlineSvgPoints}
-                fill="#dbeafe"
-                stroke="#0f172a"
-                strokeWidth="3"
-                strokeDasharray={
-                  outlineMode === "rectangle" ? undefined : "6 4"
-                }
-                data-plan-member="deck-outline"
-              />
+              {outlineClosed ? (
+                <polygon
+                  points={outlineSvgPoints}
+                  fill="#dbeafe"
+                  stroke="#0f172a"
+                  strokeWidth="3"
+                  strokeDasharray={
+                    outlineMode === "rectangle" ? undefined : "6 4"
+                  }
+                  data-plan-member="deck-outline"
+                />
+              ) : (
+                <polyline
+                  points={outlineSvgPoints}
+                  fill="none"
+                  stroke="#2563eb"
+                  strokeWidth="4"
+                  data-plan-member="deck-outline-in-progress"
+                />
+              )}
               {Array.from({ length: Math.min(joists, 30) }, (_, i) => (
                 <line
                   data-plan-member="joist"
@@ -1353,91 +1393,22 @@ export function DeckPrescriptivePlanGenerator({
                 opacity={outlineMode === "rectangle" ? 1 : 0}
               />
               {layoutEditorOpen
-                ? outlinePoints.map((point, index) => {
-                    const next =
-                      outlinePoints[(index + 1) % outlinePoints.length];
-                    const x1 =
-                      30 +
-                      (260 * point.x) / Math.max(0.1, proposedLengthFeet);
-                    const y1 =
-                      20 +
-                      (150 * point.y) / Math.max(0.1, proposedWidthFeet);
-                    const x2 =
-                      30 +
-                      (260 * next.x) / Math.max(0.1, proposedLengthFeet);
-                    const y2 =
-                      20 +
-                      (150 * next.y) / Math.max(0.1, proposedWidthFeet);
-                    const selected = selectedOutlineEdge === index;
-                    return (
-                      <g
-                        key={`outline-edge-${index}`}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`Select outline edge ${index + 1}`}
-                        data-edit-handle={`outline-edge-${index + 1}`}
-                        className="cursor-pointer focus:outline-none"
-                        onPointerDown={(event) => {
-                          event.stopPropagation();
-                          setSelectedOutlineEdge(index);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            setSelectedOutlineEdge(index);
-                          }
-                        }}
-                      >
-                        <line
-                          x1={x1}
-                          y1={y1}
-                          x2={x2}
-                          y2={y2}
-                          stroke="transparent"
-                          strokeWidth="18"
-                        />
-                        <line
-                          x1={x1}
-                          y1={y1}
-                          x2={x2}
-                          y2={y2}
-                          stroke={selected ? "#ea580c" : "#2563eb"}
-                          strokeWidth={selected ? "6" : "3"}
-                          strokeDasharray={selected ? undefined : "4 3"}
-                          pointerEvents="none"
-                        />
-                        <circle
-                          cx={(x1 + x2) / 2}
-                          cy={(y1 + y2) / 2}
-                          r={selected ? "9" : "7"}
-                          fill={selected ? "#ea580c" : "#2563eb"}
-                          stroke="white"
-                          strokeWidth="2"
-                          pointerEvents="none"
-                        />
-                        <text
-                          x={(x1 + x2) / 2}
-                          y={(y1 + y2) / 2 + 3}
-                          textAnchor="middle"
-                          fontSize="10"
-                          fontWeight="900"
-                          fill="white"
-                          pointerEvents="none"
-                          aria-hidden="true"
-                        >
-                          +
-                        </text>
-                      </g>
-                    );
-                  })
-                : null}
-              {layoutEditorOpen
                 ? outlinePoints.map((point, index) => (
                     <g
                       key={`outline-point-${index}`}
                       data-edit-handle={`outline-point-${index + 1}`}
                       className="cursor-move"
                       onPointerDown={(event) => {
+                        if (
+                          outlineDrawingActive &&
+                          index === 0 &&
+                          outlinePoints.length >= 3
+                        ) {
+                          event.stopPropagation();
+                          finishOutlineDrawing();
+                          return;
+                        }
+                        if (outlineDrawingActive) return;
                         drawingRef.current?.setPointerCapture(event.pointerId);
                         setOutlineMode("freeform");
                         setActiveDrawingDrag({ type: "corner", index });
@@ -1477,23 +1448,55 @@ export function DeckPrescriptivePlanGenerator({
                   ))
                 : null}
               {outlinePoints.map((point, index) => {
+                if (!outlineClosed && index === outlinePoints.length - 1)
+                  return null;
                 const next = outlinePoints[(index + 1) % outlinePoints.length];
                 const length = Math.hypot(next.x - point.x, next.y - point.y);
+                const midpointX =
+                  30 +
+                  (260 * (point.x + next.x)) /
+                    2 /
+                    Math.max(0.1, proposedLengthFeet);
+                const midpointY =
+                  20 +
+                  (150 * (point.y + next.y)) /
+                    2 /
+                    Math.max(0.1, proposedWidthFeet);
+                if (layoutEditorOpen && outlineClosed) {
+                  return (
+                    <foreignObject
+                      key={`dimension-input-${index}-${length.toFixed(3)}`}
+                      x={midpointX - 29}
+                      y={midpointY - 13}
+                      width="58"
+                      height="28"
+                      data-edit-handle={`edge-dimension-${index + 1}`}
+                    >
+                      <input
+                        aria-label={`Edge ${index + 1} length in feet`}
+                        title={`Edge ${index + 1} length in feet`}
+                        type="number"
+                        min="0.25"
+                        step="0.083333"
+                        defaultValue={length.toFixed(2)}
+                        className="h-7 w-full rounded border-2 border-slate-950 bg-white px-1 text-center text-[10px] font-black text-slate-950 shadow"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") event.currentTarget.blur();
+                        }}
+                        onBlur={(event) => {
+                          resizeOutlineEdge(index, Number(event.target.value));
+                          markCustomOutline();
+                        }}
+                      />
+                    </foreignObject>
+                  );
+                }
                 return (
                   <text
                     key={`dimension-${index}`}
-                    x={
-                      30 +
-                      (260 * (point.x + next.x)) /
-                        2 /
-                        Math.max(0.1, proposedLengthFeet)
-                    }
-                    y={
-                      16 +
-                      (150 * (point.y + next.y)) /
-                        2 /
-                        Math.max(0.1, proposedWidthFeet)
-                    }
+                    x={midpointX}
+                    y={midpointY - 4}
                     textAnchor="middle"
                     fontSize="7"
                     fontWeight="800"
@@ -1503,7 +1506,7 @@ export function DeckPrescriptivePlanGenerator({
                   </text>
                 );
               })}
-              {draft.stairsIncluded === "yes" ? (
+              {draft.stairsIncluded === "yes" && !outlineDrawingActive ? (
                 <g
                   data-edit-handle={layoutEditorOpen ? "stairs" : undefined}
                   className={layoutEditorOpen ? "cursor-move" : undefined}
@@ -1659,221 +1662,216 @@ export function DeckPrescriptivePlanGenerator({
                 Measured deck drawing
               </h5>
               <p className="mt-1 text-sm font-medium text-slate-800">
-                The blue outline and bright corner dots are editable. Tap a
-                blue edge, then add an outward step or inward notch. Drag posts
-                or stairs directly on the drawing.
+                Click each corner of the deck in order. Finish the shape, then
+                type the real distance into the white box shown on each edge.
               </p>
-              <fieldset className="mt-3">
-                <legend className="text-sm font-black text-slate-950">
-                  Deck outline mode
-                </legend>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-blue-700 bg-blue-50 p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-600">
-                    <input
-                      type="radio"
-                      name="outline-mode"
-                      checked={outlineMode === "rectangle"}
-                      onChange={() => {
-                        setOutlineMode("rectangle");
-                        setOutlinePoints([
-                          { x: 0, y: 0 },
-                          { x: proposedLengthFeet, y: 0 },
-                          { x: proposedLengthFeet, y: proposedWidthFeet },
-                          { x: 0, y: proposedWidthFeet },
-                        ]);
-                        setSelectedOutlineEdge(0);
-                        set("unusualGeometry", false);
-                      }}
-                    />
-                    Square/snap outline
-                  </label>
-                  <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-orange-600 bg-orange-50 p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-orange-600">
-                    <input
-                      type="radio"
-                      name="outline-mode"
-                      checked={outlineMode === "freeform"}
-                      onChange={() => {
-                        setOutlineMode("freeform");
-                        set("unusualGeometry", true);
-                      }}
-                    />
-                    Free draw outline
-                  </label>
+              <div className="mt-3 rounded-md border-2 border-blue-700 bg-blue-50 p-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    className="min-h-12 rounded-md bg-blue-700 px-4 py-3 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                    onClick={beginOutlineDrawing}
+                  >
+                    Draw a new shape
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-12 rounded-md border-2 border-slate-950 bg-white px-4 py-3 text-sm font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                    onClick={resetRectangleOutline}
+                  >
+                    Reset to saved rectangle
+                  </button>
                 </div>
-              </fieldset>
-              <div className="mt-3 rounded-md border-2 border-orange-700 bg-orange-50 p-3">
-                  <p className="text-sm font-bold text-slate-950">
-                    Selected edge: {selectedOutlineEdge + 1}. The orange edge
-                    is where the next step will be added. New corners snap to
-                    one-inch measurements and can be dragged afterward.
-                  </p>
-                  <label className="mt-3 block text-sm font-black text-slate-950">
-                    Choose an outline edge
-                    <select
-                      className="mt-1 min-h-11 w-full rounded-md border-2 border-slate-700 bg-white px-3 text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                      aria-label="Selected outline edge"
-                      value={selectedOutlineEdge}
-                      onChange={(event) =>
-                        setSelectedOutlineEdge(Number(event.target.value))
-                      }
-                    >
-                      {outlinePoints.map((point, index) => {
-                        const next =
-                          outlinePoints[(index + 1) % outlinePoints.length];
-                        return (
-                          <option key={index} value={index}>
-                            Edge {index + 1} — {Math.hypot(next.x - point.x, next.y - point.y).toFixed(1)} ft
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </label>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      className="min-h-12 rounded-md bg-blue-700 px-4 py-3 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-50"
-                      onClick={() => {
-                        markCustomOutline();
-                        addOutlineStep("out");
-                      }}
-                      disabled={
-                        outlinePoints.length > 12 ||
-                        selectedOutlineEdgeLength < 2
-                      }
-                    >
-                      Add outward step
-                    </button>
-                    <button
-                      type="button"
-                      className="min-h-12 rounded-md bg-orange-700 px-4 py-3 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600 disabled:opacity-50"
-                      onClick={() => {
-                        markCustomOutline();
-                        addOutlineStep("in");
-                      }}
-                      disabled={
-                        outlinePoints.length > 12 ||
-                        selectedOutlineEdgeLength < 2
-                      }
-                    >
-                      Add inward notch
-                    </button>
+                {outlineDrawingActive ? (
+                  <div className="mt-3 rounded-md border-2 border-orange-700 bg-orange-50 p-3">
+                    <p className="text-sm font-black text-slate-950">
+                      Drawing now: click corner {outlinePoints.length + 1} on
+                      the white drawing. Points snap to one-inch measurements
+                      and nearby horizontal or vertical lines.
+                    </p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        className="min-h-11 rounded-md bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50"
+                        disabled={outlinePoints.length < 3}
+                        onClick={finishOutlineDrawing}
+                      >
+                        Finish shape
+                      </button>
+                      <button
+                        type="button"
+                        className="min-h-11 rounded-md border-2 border-slate-700 bg-white px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50"
+                        disabled={!outlinePoints.length}
+                        onClick={() =>
+                          setOutlinePoints((current) => current.slice(0, -1))
+                        }
+                      >
+                        Undo last point
+                      </button>
+                    </div>
                   </div>
-                  <p className="mt-3 text-sm font-medium text-slate-800">
-                    Edge measurements update as you draw. Automatic structural
-                    quantities pause for a custom shape until its takeoff is
-                    reviewed.
+                ) : (
+                  <p className="mt-3 text-sm font-bold text-slate-900">
+                    Type over any white edge-distance box on the drawing to set
+                    the exact length. Drag a corner dot only when you need to
+                    adjust the general shape.
                   </p>
+                )}
+                <p className="mt-2 text-xs font-bold text-slate-700">
+                  Automatic structural quantities pause for a custom shape until
+                  its takeoff is reviewed.
+                </p>
               </div>
-              <fieldset className="mt-3">
-                <legend className="text-sm font-black text-slate-950">
-                  Post placement mode
-                </legend>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-blue-700 bg-blue-50 p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-600">
+              <details className="mt-3 rounded-md border border-slate-400 bg-slate-50 p-3">
+                <summary className="min-h-11 cursor-pointer py-2 text-sm font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                  Framing markers — optional for later
+                </summary>
+                <fieldset className="mt-3">
+                  <legend className="text-sm font-black text-slate-950">
+                    Post placement mode
+                  </legend>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-blue-700 bg-blue-50 p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-600">
+                      <input
+                        type="radio"
+                        name="post-placement-mode"
+                        checked={draft.postPlacementMode === "aligned"}
+                        onChange={() => {
+                          setDraft((current) => ({
+                            ...current,
+                            postPlacementMode: "aligned",
+                            postDistancesFromHouseFeet: Array.from(
+                              { length: posts },
+                              () => current.beamDistanceFromHouseFeet,
+                            ).join(","),
+                          }));
+                          setDirty(true);
+                          setApproved(false);
+                        }}
+                      />
+                      Snap to structural lines (recommended)
+                    </label>
+                    <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-amber-500 bg-white p-3 text-sm font-bold">
+                      <input
+                        type="radio"
+                        name="post-placement-mode"
+                        checked={draft.postPlacementMode === "free"}
+                        onChange={() => set("postPlacementMode", "free")}
+                      />
+                      Free placement
+                    </label>
+                  </div>
+                </fieldset>
+                {draft.postPlacementMode === "aligned" ? (
+                  <>
+                    <p className="mt-3 rounded-md bg-white p-3 text-sm font-bold text-violet-950">
+                      Posts stay on the selected beam. Beams and end posts
+                      dragged within 6 inches of a perimeter snap exactly onto
+                      that perimeter so an accidental offset cannot create a
+                      false extra beam line.
+                    </p>
+                    <Field label="Measurement snap spacing">
+                      <select
+                        className={control}
+                        value={draft.postSnapInches}
+                        onChange={(event) =>
+                          set(
+                            "postSnapInches",
+                            event.target
+                              .value as DeckPrescriptiveDraft["postSnapInches"],
+                          )
+                        }
+                      >
+                        <option value="1">1 inch (recommended)</option>
+                        <option value="3">3 inches</option>
+                        <option value="6">6 inches</option>
+                        <option value="12">12 inches</option>
+                      </select>
+                    </Field>
+                  </>
+                ) : (
+                  <p
+                    role="alert"
+                    className="mt-3 rounded-md border-2 border-amber-500 bg-amber-50 p-3 text-sm font-bold text-amber-950"
+                  >
+                    Free placement is for recording an unusual existing layout.
+                    Automatic structural quantities pause until a reviewed
+                    custom support plan is supplied.
+                  </p>
+                )}
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <Field label="Deck length (feet)">
                     <input
-                      type="radio"
-                      name="post-placement-mode"
-                      checked={draft.postPlacementMode === "aligned"}
-                      onChange={() => {
+                      className={control}
+                      type="number"
+                      min="1"
+                      max="40"
+                      step="0.25"
+                      value={proposedLengthFeet}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (!Number.isFinite(value)) return;
+                        setProposedLengthFeet(value);
+                        resetPostsEvenly(posts, value);
+                      }}
+                    />
+                  </Field>
+                  <Field label="Deck depth from house (feet)">
+                    <input
+                      className={control}
+                      type="number"
+                      min="1"
+                      max="18"
+                      step="0.25"
+                      value={proposedWidthFeet}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (!Number.isFinite(value)) return;
+                        setProposedWidthFeet(value);
                         setDraft((current) => ({
                           ...current,
-                          postPlacementMode: "aligned",
-                          postDistancesFromHouseFeet: Array.from(
-                            { length: posts },
-                            () => current.beamDistanceFromHouseFeet,
-                          ).join(","),
+                          beamDistanceFromHouseFeet: String(value),
+                          postDistancesFromHouseFeet:
+                            current.postPlacementMode === "aligned"
+                              ? Array.from({ length: posts }, () =>
+                                  String(value),
+                                ).join(",")
+                              : current.postDistancesFromHouseFeet,
                         }));
                         setDirty(true);
                         setApproved(false);
                       }}
                     />
-                    Snap to structural lines (recommended)
-                  </label>
-                  <label className="flex min-h-11 items-center gap-2 rounded-md border-2 border-amber-500 bg-white p-3 text-sm font-bold">
-                    <input
-                      type="radio"
-                      name="post-placement-mode"
-                      checked={draft.postPlacementMode === "free"}
-                      onChange={() => set("postPlacementMode", "free")}
-                    />
-                    Free placement
-                  </label>
-                </div>
-              </fieldset>
-              {draft.postPlacementMode === "aligned" ? (
-                <>
-                  <p className="mt-3 rounded-md bg-white p-3 text-sm font-bold text-violet-950">
-                    Posts stay on the selected beam. Beams and end posts dragged
-                    within 6 inches of a perimeter snap exactly onto that
-                    perimeter so an accidental offset cannot create a false
-                    extra beam line.
-                  </p>
-                  <Field label="Measurement snap spacing">
-                    <select
-                      className={control}
-                      value={draft.postSnapInches}
-                      onChange={(event) =>
-                        set(
-                          "postSnapInches",
-                          event.target
-                            .value as DeckPrescriptiveDraft["postSnapInches"],
-                        )
-                      }
-                    >
-                      <option value="1">1 inch (recommended)</option>
-                      <option value="3">3 inches</option>
-                      <option value="6">6 inches</option>
-                      <option value="12">12 inches</option>
-                    </select>
                   </Field>
-                </>
-              ) : (
-                <p
-                  role="alert"
-                  className="mt-3 rounded-md border-2 border-amber-500 bg-amber-50 p-3 text-sm font-bold text-amber-950"
+                </div>
+                <Field
+                  label={`Support beam distance from house: ${Number.isFinite(beamDistance) ? beamDistance : "?"} ft`}
+                  help="Drag the support line toward or away from the house. In snap mode, a beam within 6 inches of the outside edge becomes the outside beam instead of creating a second near-parallel line."
                 >
-                  Free placement is for recording an unusual existing layout.
-                  Automatic structural quantities pause until a reviewed custom
-                  support plan is supplied.
-                </p>
-              )}
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <Field label="Deck length (feet)">
                   <input
-                    className={control}
-                    type="number"
+                    className="mt-2 w-full accent-violet-700"
+                    type="range"
                     min="1"
-                    max="40"
-                    step="0.25"
-                    value={proposedLengthFeet}
+                    max={Math.max(1, proposedWidthFeet)}
+                    step={Number(draft.postSnapInches) / 12}
+                    value={Math.min(
+                      proposedWidthFeet,
+                      Math.max(1, beamDistance || proposedWidthFeet),
+                    )}
                     onChange={(event) => {
-                      const value = Number(event.target.value);
-                      if (!Number.isFinite(value)) return;
-                      setProposedLengthFeet(value);
-                      resetPostsEvenly(posts, value);
-                    }}
-                  />
-                </Field>
-                <Field label="Deck depth from house (feet)">
-                  <input
-                    className={control}
-                    type="number"
-                    min="1"
-                    max="18"
-                    step="0.25"
-                    value={proposedWidthFeet}
-                    onChange={(event) => {
-                      const value = Number(event.target.value);
-                      if (!Number.isFinite(value)) return;
-                      setProposedWidthFeet(value);
+                      const snapped = snapToStructuralLine(
+                        Number(event.target.value),
+                        proposedWidthFeet,
+                      );
+                      const value = String(snapped);
                       setDraft((current) => ({
                         ...current,
-                        beamDistanceFromHouseFeet: String(value),
+                        beamDistanceFromHouseFeet: value,
                         postDistancesFromHouseFeet:
                           current.postPlacementMode === "aligned"
-                            ? Array.from({ length: posts }, () =>
-                                String(value),
-                              ).join(",")
+                            ? Array.from({ length: posts }, () => value).join(
+                                ",",
+                              )
                             : current.postDistancesFromHouseFeet,
                       }));
                       setDirty(true);
@@ -1881,114 +1879,86 @@ export function DeckPrescriptivePlanGenerator({
                     }}
                   />
                 </Field>
-              </div>
-              <Field
-                label={`Support beam distance from house: ${Number.isFinite(beamDistance) ? beamDistance : "?"} ft`}
-                help="Drag the support line toward or away from the house. In snap mode, a beam within 6 inches of the outside edge becomes the outside beam instead of creating a second near-parallel line."
-              >
-                <input
-                  className="mt-2 w-full accent-violet-700"
-                  type="range"
-                  min="1"
-                  max={Math.max(1, proposedWidthFeet)}
-                  step={Number(draft.postSnapInches) / 12}
-                  value={Math.min(
-                    proposedWidthFeet,
-                    Math.max(1, beamDistance || proposedWidthFeet),
-                  )}
-                  onChange={(event) => {
-                    const snapped = snapToStructuralLine(
-                      Number(event.target.value),
-                      proposedWidthFeet,
-                    );
-                    const value = String(snapped);
-                    setDraft((current) => ({
-                      ...current,
-                      beamDistanceFromHouseFeet: value,
-                      postDistancesFromHouseFeet:
-                        current.postPlacementMode === "aligned"
-                          ? Array.from({ length: posts }, () => value).join(",")
-                          : current.postDistancesFromHouseFeet,
-                    }));
-                    setDirty(true);
-                    setApproved(false);
-                  }}
-                />
-              </Field>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className={button}
-                  onClick={() => resetPostsEvenly(posts + 1)}
-                  disabled={posts >= 20}
-                >
-                  Add post
-                </button>
-                <button
-                  type="button"
-                  className="min-h-11 rounded-md border-2 border-slate-500 bg-white px-4 py-2 text-sm font-bold text-slate-900 disabled:opacity-50"
-                  onClick={() => resetPostsEvenly(posts - 1)}
-                  disabled={posts <= 2}
-                >
-                  Remove post
-                </button>
-                <button
-                  type="button"
-                  className="min-h-11 rounded-md border-2 border-violet-600 bg-white px-4 py-2 text-sm font-bold text-violet-950"
-                  onClick={() => resetPostsEvenly(posts)}
-                >
-                  Space posts evenly
-                </button>
-              </div>
-              <div className="mt-3 space-y-3">
-                {postPositions.map((position, index) => (
-                  <div
-                    key={`post-control-${index}`}
-                    className="rounded-md border border-violet-200 bg-white p-3"
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={button}
+                    onClick={() => resetPostsEvenly(posts + 1)}
+                    disabled={posts >= 20}
                   >
-                    <Field
-                      label={`Post ${index + 1}: ${position.toFixed(2)} ft from the left edge`}
+                    Add post
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-md border-2 border-slate-500 bg-white px-4 py-2 text-sm font-bold text-slate-900 disabled:opacity-50"
+                    onClick={() => resetPostsEvenly(posts - 1)}
+                    disabled={posts <= 2}
+                  >
+                    Remove post
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-md border-2 border-violet-600 bg-white px-4 py-2 text-sm font-bold text-violet-950"
+                    onClick={() => resetPostsEvenly(posts)}
+                  >
+                    Space posts evenly
+                  </button>
+                </div>
+                <div className="mt-3 space-y-3">
+                  {postPositions.map((position, index) => (
+                    <div
+                      key={`post-control-${index}`}
+                      className="rounded-md border border-violet-200 bg-white p-3"
                     >
-                      <input
-                        className="mt-2 w-full accent-violet-700"
-                        type="range"
-                        min={index === 0 ? 0 : postPositions[index - 1] + 0.25}
-                        max={
-                          index === postPositions.length - 1
-                            ? proposedLengthFeet
-                            : postPositions[index + 1] - 0.25
-                        }
-                        step={
-                          draft.postPlacementMode === "aligned"
-                            ? Number(draft.postSnapInches) / 12
-                            : 0.01
-                        }
-                        value={position}
-                        onChange={(event) =>
-                          movePost(index, Number(event.target.value))
-                        }
-                      />
-                    </Field>
-                    {draft.postPlacementMode === "free" ? (
                       <Field
-                        label={`${postDistances[index].toFixed(2)} ft from house`}
+                        label={`Post ${index + 1}: ${position.toFixed(2)} ft from the left edge`}
                       >
                         <input
-                          className="mt-2 w-full accent-amber-700"
+                          className="mt-2 w-full accent-violet-700"
                           type="range"
-                          min="0"
-                          max={proposedWidthFeet}
-                          step="0.01"
-                          value={postDistances[index]}
+                          min={
+                            index === 0 ? 0 : postPositions[index - 1] + 0.25
+                          }
+                          max={
+                            index === postPositions.length - 1
+                              ? proposedLengthFeet
+                              : postPositions[index + 1] - 0.25
+                          }
+                          step={
+                            draft.postPlacementMode === "aligned"
+                              ? Number(draft.postSnapInches) / 12
+                              : 0.01
+                          }
+                          value={position}
                           onChange={(event) =>
-                            movePostDistance(index, Number(event.target.value))
+                            movePost(index, Number(event.target.value))
                           }
                         />
                       </Field>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
+                      {draft.postPlacementMode === "free" ? (
+                        <Field
+                          label={`${postDistances[index].toFixed(2)} ft from house`}
+                        >
+                          <input
+                            className="mt-2 w-full accent-amber-700"
+                            type="range"
+                            min="0"
+                            max={proposedWidthFeet}
+                            step="0.01"
+                            value={postDistances[index]}
+                            onChange={(event) =>
+                              movePostDistance(
+                                index,
+                                Number(event.target.value),
+                              )
+                            }
+                          />
+                        </Field>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </details>
               <p className="mt-3 rounded-md bg-white p-3 text-xs font-bold text-violet-950">
                 There is intentionally no AI instruction box. What you place on
                 this editor is what the estimating drawing records.
