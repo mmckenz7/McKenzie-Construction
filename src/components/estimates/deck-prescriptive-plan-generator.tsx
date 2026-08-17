@@ -4,9 +4,11 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   buildPrescriptiveDeckPlan,
   deckEstimatingImmediateIssueIds,
+  drawingClientToDeckPoint,
   KNOXVILLE_2024_DECK_PROFILE,
   insertOutlinePointOnNearestEdge,
   isValidDeckOutline,
+  nextDeckDrawingZoom,
   parseDeckPostDistances,
   parseDeckPostPositions,
   recommendedPrescriptiveDraft,
@@ -176,7 +178,8 @@ export function DeckPrescriptivePlanGenerator({
   >(null);
   const packagePanelRef = useRef<HTMLDivElement>(null);
   const drawingRef = useRef<SVGSVGElement>(null);
-  const [drawingExpanded, setDrawingExpanded] = useState(false);
+  const drawingViewportRef = useRef<HTMLDivElement>(null);
+  const [drawingZoom, setDrawingZoom] = useState(100);
   const [layoutEditorOpen, setLayoutEditorOpen] = useState(false);
   const [activeDrawingDrag, setActiveDrawingDrag] = useState<Readonly<
     | { type: "beam" }
@@ -208,6 +211,7 @@ export function DeckPrescriptivePlanGenerator({
   const [proposedWidthFeet, setProposedWidthFeet] = useState(widthFeet);
   const svgTitleId = useId();
   const svgDescriptionId = useId();
+  const drawingZoomInputId = useId();
   const lastFactsSignature = useRef(factsSignature);
   useEffect(() => {
     if (lastFactsSignature.current === factsSignature) return;
@@ -238,6 +242,12 @@ export function DeckPrescriptivePlanGenerator({
     setDraft((current) => ({ ...current, [key]: value }));
     setDirty(true);
     setApproved(false);
+  };
+  const fitDrawingToViewport = () => {
+    setDrawingZoom(100);
+    requestAnimationFrame(() => {
+      if (drawingViewportRef.current) drawingViewportRef.current.scrollLeft = 0;
+    });
   };
   const joists =
     plan.quantities?.joists ??
@@ -606,11 +616,15 @@ export function DeckPrescriptivePlanGenerator({
     }
     const bounds = drawingRef.current.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
-    const drawingX = -10 + ((clientX - bounds.left) * 340) / bounds.width;
-    const drawingY = -10 + ((clientY - bounds.top) * 230) / bounds.height;
     const snap = (value: number) => Math.round(value * 12) / 12;
-    let x = snap(((drawingX - 30) * proposedLengthFeet) / 260);
-    let y = snap(((drawingY - 20) * proposedWidthFeet) / 150);
+    const deckPoint = drawingClientToDeckPoint(
+      { x: clientX, y: clientY },
+      bounds,
+      { lengthFeet: proposedLengthFeet, widthFeet: proposedWidthFeet },
+    );
+    if (!deckPoint) return;
+    let x = snap(deckPoint.x);
+    let y = snap(deckPoint.y);
     const previous = outlinePoints.at(-1);
     if (previous) {
       const xDistance = Math.abs(x - previous.x);
@@ -627,12 +641,12 @@ export function DeckPrescriptivePlanGenerator({
     if (!outlinePointAddingActive || !drawingRef.current) return;
     const bounds = drawingRef.current.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
-    const drawingX = -10 + ((clientX - bounds.left) * 340) / bounds.width;
-    const drawingY = -10 + ((clientY - bounds.top) * 230) / bounds.height;
-    const candidate = {
-      x: ((drawingX - 30) * proposedLengthFeet) / 260,
-      y: ((drawingY - 20) * proposedWidthFeet) / 150,
-    };
+    const candidate = drawingClientToDeckPoint(
+      { x: clientX, y: clientY },
+      bounds,
+      { lengthFeet: proposedLengthFeet, widthFeet: proposedWidthFeet },
+    );
+    if (!candidate) return;
     const next = insertOutlinePointOnNearestEdge(
       outlinePoints,
       candidate,
@@ -1320,18 +1334,87 @@ export function DeckPrescriptivePlanGenerator({
       ) : null}
       {generated && step === 4 ? (
         <div className="mt-3">
-          <div className="overflow-x-auto rounded-lg border-2 border-slate-950 bg-white shadow-sm">
+          <div className="mb-2 rounded-lg border-2 border-slate-700 bg-slate-950 p-3 text-white">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <label
+                  htmlFor={drawingZoomInputId}
+                  className="text-sm font-black"
+                >
+                  Drawing view
+                </label>
+                <output
+                  className="ml-2 text-sm font-black text-blue-200"
+                  htmlFor={drawingZoomInputId}
+                  aria-live="polite"
+                >
+                  {drawingZoom}%{drawingZoom < 100 ? " · view only" : ""}
+                </output>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  className="min-h-11 min-w-11 rounded-md border-2 border-slate-400 bg-slate-800 px-3 font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-40"
+                  aria-label="Zoom drawing out"
+                  disabled={drawingZoom <= (layoutEditorOpen ? 100 : 50)}
+                  onClick={() =>
+                    setDrawingZoom((current) =>
+                      nextDeckDrawingZoom(current, -25, layoutEditorOpen),
+                    )
+                  }
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  className="min-h-11 rounded-md bg-blue-700 px-4 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                  onClick={fitDrawingToViewport}
+                >
+                  Fit whole drawing
+                </button>
+                <button
+                  type="button"
+                  className="min-h-11 min-w-11 rounded-md border-2 border-slate-400 bg-slate-800 px-3 font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-40"
+                  aria-label="Zoom drawing in"
+                  disabled={drawingZoom >= 200}
+                  onClick={() =>
+                    setDrawingZoom((current) =>
+                      nextDeckDrawingZoom(current, 25, layoutEditorOpen),
+                    )
+                  }
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <input
+              id={drawingZoomInputId}
+              className="mt-3 w-full accent-blue-500"
+              type="range"
+              min={layoutEditorOpen ? 100 : 50}
+              max="200"
+              step="25"
+              value={drawingZoom}
+              aria-label="Drawing zoom percentage"
+              aria-valuetext={`${drawingZoom} percent${drawingZoom < 100 ? ", view only" : ""}`}
+              onChange={(event) => setDrawingZoom(Number(event.target.value))}
+            />
+          </div>
+          <div
+            ref={drawingViewportRef}
+            className="overflow-x-auto rounded-lg border-2 border-slate-950 bg-white shadow-sm"
+          >
             <svg
               ref={drawingRef}
               viewBox="-10 -10 340 230"
               role="img"
               aria-labelledby={`${svgTitleId} ${svgDescriptionId}`}
-              className={
-                drawingExpanded
-                  ? "min-w-[720px] w-full bg-white"
-                  : "min-w-[320px] w-full bg-white"
-              }
-              style={layoutEditorOpen ? { touchAction: "none" } : undefined}
+              className="mx-auto block max-w-none bg-white"
+              style={{
+                width: `${drawingZoom}%`,
+                minWidth: drawingZoom === 100 ? 0 : undefined,
+                ...(layoutEditorOpen ? { touchAction: "none" } : {}),
+              }}
               onPointerDown={(event) => {
                 if (!outlineDrawingActive) return;
                 const target = event.target as Element;
@@ -1826,23 +1909,22 @@ export function DeckPrescriptivePlanGenerator({
               type="button"
               className="min-h-11 rounded-md bg-violet-700 px-4 py-2 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600"
               aria-expanded={layoutEditorOpen}
-              onClick={() => setLayoutEditorOpen((value) => !value)}
+              onClick={() => {
+                if (!layoutEditorOpen && drawingZoom < 100)
+                  fitDrawingToViewport();
+                setLayoutEditorOpen((value) => !value);
+              }}
             >
               {layoutEditorOpen ? "Close layout editor" : "Edit this drawing"}
-            </button>
-            <button
-              type="button"
-              className="min-h-11 rounded-md border-2 border-slate-400 bg-white px-4 py-2 text-sm font-bold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600"
-              aria-pressed={drawingExpanded}
-              onClick={() => setDrawingExpanded((value) => !value)}
-            >
-              {drawingExpanded ? "Fit drawing to screen" : "Expand drawing"}
             </button>
             {draft.stairsIncluded === "yes" ? (
               <button
                 type="button"
                 className="min-h-11 rounded-md border-2 border-amber-300 bg-amber-400 px-4 py-2 text-sm font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
-                onClick={() => setLayoutEditorOpen(true)}
+                onClick={() => {
+                  if (drawingZoom < 100) fitDrawingToViewport();
+                  setLayoutEditorOpen(true);
+                }}
               >
                 Drag stairs on drawing
               </button>

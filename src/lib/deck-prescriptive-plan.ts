@@ -211,6 +211,34 @@ export function parseDeckPostDistances(
 
 export type DeckOutlinePoint = Readonly<{ x: number; y: number }>;
 
+export function nextDeckDrawingZoom(
+  current: number,
+  change: number,
+  editing = false,
+) {
+  const minimum = editing ? 100 : 50;
+  return Math.min(200, Math.max(minimum, current + change));
+}
+
+export function drawingClientToDeckPoint(
+  client: Readonly<{ x: number; y: number }>,
+  bounds: Readonly<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  }>,
+  deck: Readonly<{ lengthFeet: number; widthFeet: number }>,
+) {
+  if (bounds.width <= 0 || bounds.height <= 0) return null;
+  const drawingX = -10 + ((client.x - bounds.left) * 340) / bounds.width;
+  const drawingY = -10 + ((client.y - bounds.top) * 230) / bounds.height;
+  return Object.freeze({
+    x: ((drawingX - 30) * deck.lengthFeet) / 260,
+    y: ((drawingY - 20) * deck.widthFeet) / 150,
+  });
+}
+
 export function insertOutlinePointOnNearestEdge(
   points: readonly DeckOutlinePoint[],
   candidate: DeckOutlinePoint,

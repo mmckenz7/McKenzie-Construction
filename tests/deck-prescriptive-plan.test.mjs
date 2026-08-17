@@ -5,10 +5,12 @@ import {
   assertPartialFramingEvidenceBinding,
   buildPrescriptiveDeckPlan,
   deckEstimatingImmediateIssueIds,
+  drawingClientToDeckPoint,
   isCanonicalFramingEvidence,
   insertOutlinePointOnNearestEdge,
   isValidDeckOutline,
   KNOXVILLE_2024_DECK_PROFILE,
+  nextDeckDrawingZoom,
   parseDeckPostPositions,
   recommendedPrescriptiveDraft,
 } from "../src/lib/deck-prescriptive-plan.ts";
@@ -369,6 +371,26 @@ test("simple editor geometry preserves exact post locations and uses the largest
     free.exceptions.join(" "),
     /reviewed custom beam\/support plan/i,
   );
+});
+
+test("drawing zoom preserves fit boundaries and pointer geometry", () => {
+  assert.equal(nextDeckDrawingZoom(50, -25, false), 50);
+  assert.equal(nextDeckDrawingZoom(75, -25, false), 50);
+  assert.equal(nextDeckDrawingZoom(100, -25, true), 100);
+  assert.equal(nextDeckDrawingZoom(175, 25, true), 200);
+  assert.equal(nextDeckDrawingZoom(200, 25, false), 200);
+  for (const zoom of [50, 100, 200]) {
+    const width = 340 * (zoom / 100);
+    const height = 230 * (zoom / 100);
+    assert.deepEqual(
+      drawingClientToDeckPoint(
+        { x: width / 2, y: (105 / 230) * height },
+        { left: 0, top: 0, width, height },
+        { lengthFeet: 14, widthFeet: 12 },
+      ),
+      { x: 7, y: 6 },
+    );
+  }
 });
 
 test("every encoded IRC 2024 Table R507.5(1) 12-and-0 beam cell has an exact at/over boundary", () => {
@@ -756,6 +778,16 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   );
   assert.match(ui, /aria-label={`Select deck corner \${index \+ 1}`}/);
   assert.match(ui, /pauses automatic structural quantities/);
+  assert.match(ui, /Fit whole drawing/);
+  assert.match(ui, /Drawing zoom percentage/);
+  assert.match(ui, /nextDeckDrawingZoom\(current, -25, layoutEditorOpen\)/);
+  assert.match(ui, /nextDeckDrawingZoom\(current, 25, layoutEditorOpen\)/);
+  assert.match(ui, /width: `\$\{drawingZoom\}%`/);
+  assert.match(ui, /drawingViewportRef\.current\.scrollLeft = 0/);
+  assert.match(ui, /drawingZoom < 100 \? " · view only" : ""/);
+  assert.match(ui, /min=\{layoutEditorOpen \? 100 : 50\}/);
+  assert.match(ui, /if \(!layoutEditorOpen && drawingZoom < 100\)/);
+  assert.match(ui, /aria-valuetext=/);
   assert.match(ui, /colorScheme: "light"/);
   assert.match(ui, />ft<\/span>/);
   assert.match(ui, /Framing markers — optional for later/);
