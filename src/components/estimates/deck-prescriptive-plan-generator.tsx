@@ -1473,7 +1473,6 @@ export function DeckPrescriptivePlanGenerator({
                       data-edit-handle={`edge-dimension-${index + 1}`}
                     >
                       <div
-                        xmlns="http://www.w3.org/1999/xhtml"
                         className="flex h-7 items-center rounded border-2 border-slate-950 bg-white px-1 shadow"
                         style={{ backgroundColor: "#ffffff", color: "#0f172a" }}
                       >
