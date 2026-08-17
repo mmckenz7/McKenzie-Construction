@@ -35,7 +35,7 @@ before update or delete on public.guided_deck_shape_revisions
 for each row execute function public.prevent_guided_site_visit_photo_batch_mutation();
 
 create or replace function public.guided_deck_shape_segments_intersect(
-  ax numeric, ay numeric, bx numeric, by numeric,
+  ax numeric, ay numeric, bx numeric, b_y numeric,
   cx numeric, cy numeric, dx numeric, dy numeric
 )
 returns boolean
@@ -43,23 +43,23 @@ language plpgsql immutable
 set search_path=pg_catalog,public
 as $function$
 declare
-  o1 numeric := (bx-ax)*(cy-ay)-(by-ay)*(cx-ax);
-  o2 numeric := (bx-ax)*(dy-ay)-(by-ay)*(dx-ax);
+  o1 numeric := (bx-ax)*(cy-ay)-(b_y-ay)*(cx-ax);
+  o2 numeric := (bx-ax)*(dy-ay)-(b_y-ay)*(dx-ax);
   o3 numeric := (dx-cx)*(ay-cy)-(dy-cy)*(ax-cx);
-  o4 numeric := (dx-cx)*(by-cy)-(dy-cy)*(bx-cx);
+  o4 numeric := (dx-cx)*(b_y-cy)-(dy-cy)*(bx-cx);
 begin
   if ((o1 > 0 and o2 < 0) or (o1 < 0 and o2 > 0))
     and ((o3 > 0 and o4 < 0) or (o3 < 0 and o4 > 0)) then
     return true;
   end if;
   if o1=0 and cx between least(ax,bx) and greatest(ax,bx)
-    and cy between least(ay,by) and greatest(ay,by) then return true; end if;
+    and cy between least(ay,b_y) and greatest(ay,b_y) then return true; end if;
   if o2=0 and dx between least(ax,bx) and greatest(ax,bx)
-    and dy between least(ay,by) and greatest(ay,by) then return true; end if;
+    and dy between least(ay,b_y) and greatest(ay,b_y) then return true; end if;
   if o3=0 and ax between least(cx,dx) and greatest(cx,dx)
     and ay between least(cy,dy) and greatest(cy,dy) then return true; end if;
   if o4=0 and bx between least(cx,dx) and greatest(cx,dx)
-    and by between least(cy,dy) and greatest(cy,dy) then return true; end if;
+    and b_y between least(cy,dy) and greatest(cy,dy) then return true; end if;
   return false;
 end
 $function$;
@@ -80,7 +80,7 @@ declare
   ax numeric;
   ay numeric;
   bx numeric;
-  by numeric;
+  b_y numeric;
   area_twice numeric := 0;
 begin
   if jsonb_typeof(requested_outline) <> 'array' then return false; end if;
@@ -98,10 +98,10 @@ begin
     ax := (a->>'x')::numeric;
     ay := (a->>'y')::numeric;
     bx := (b->>'x')::numeric;
-    by := (b->>'y')::numeric;
+    b_y := (b->>'y')::numeric;
     if ax < 0 or ay < 0 or ax > 200 or ay > 200
-      or (ax=bx and ay=by) then return false; end if;
-    area_twice := area_twice + ax*by-bx*ay;
+      or (ax=bx and ay=b_y) then return false; end if;
+    area_twice := area_twice + ax*b_y-bx*ay;
   end loop;
   if abs(area_twice) < 2 or abs(area_twice) > 20000 then return false; end if;
 
