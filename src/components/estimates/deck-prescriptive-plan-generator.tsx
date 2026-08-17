@@ -1234,6 +1234,14 @@ export function DeckPrescriptivePlanGenerator({
                 then type the measured distance directly on each edge. Framing
                 markers and unresolved-work callouts remain secondary.
               </desc>
+              <rect
+                x="-10"
+                y="-10"
+                width="340"
+                height="230"
+                fill="#f8fafc"
+                data-plan-member="drawing-background"
+              />
               {outlineClosed ? (
                 <polygon
                   points={outlineSvgPoints}
@@ -1392,6 +1400,22 @@ export function DeckPrescriptivePlanGenerator({
                 strokeWidth="6"
                 opacity={outlineMode === "rectangle" ? 1 : 0}
               />
+              {outlineDrawingActive ? (
+                <rect
+                  x="-10"
+                  y="-10"
+                  width="340"
+                  height="230"
+                  fill="transparent"
+                  pointerEvents="all"
+                  className="cursor-crosshair"
+                  data-edit-handle="outline-click-surface"
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    addOutlinePointFromDrawing(event.clientX, event.clientY);
+                  }}
+                />
+              ) : null}
               {layoutEditorOpen
                 ? outlinePoints.map((point, index) => (
                     <g
@@ -1424,7 +1448,7 @@ export function DeckPrescriptivePlanGenerator({
                           (150 * point.y) / Math.max(0.1, proposedWidthFeet)
                         }
                         r="9"
-                        fill="#22d3ee"
+                        fill="#f97316"
                         stroke="#0f172a"
                         strokeWidth="2.5"
                       />
@@ -1440,7 +1464,7 @@ export function DeckPrescriptivePlanGenerator({
                         textAnchor="middle"
                         fontSize="8"
                         fontWeight="800"
-                        fill="#0f172a"
+                        fill="#ffffff"
                       >
                         {index + 1}
                       </text>
@@ -1667,7 +1691,8 @@ export function DeckPrescriptivePlanGenerator({
           </div>
           {layoutEditorOpen ? (
             <section
-              className="mt-3 rounded-lg border-2 border-slate-950 bg-white p-3 text-slate-950 shadow-sm"
+              className="mt-3 rounded-lg border-2 border-slate-950 bg-slate-50 p-3 text-slate-950 shadow-sm"
+              style={{ backgroundColor: "#f8fafc", color: "#0f172a" }}
               aria-labelledby="simple-deck-editor-heading"
             >
               <h5
@@ -1676,11 +1701,17 @@ export function DeckPrescriptivePlanGenerator({
               >
                 Measured deck drawing
               </h5>
-              <p className="mt-1 text-sm font-medium text-slate-800">
+              <p
+                className="mt-1 text-sm font-medium text-slate-800"
+                style={{ color: "#1e293b" }}
+              >
                 Click each corner of the deck in order. Finish the shape, then
                 type the real distance into the white box shown on each edge.
               </p>
-              <div className="mt-3 rounded-md border-2 border-blue-700 bg-blue-50 p-3">
+              <div
+                className="mt-3 rounded-md border-2 border-blue-700 bg-white p-3"
+                style={{ backgroundColor: "#ffffff", color: "#0f172a" }}
+              >
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button
                     type="button"
@@ -1732,12 +1763,18 @@ export function DeckPrescriptivePlanGenerator({
                     adjust the general shape.
                   </p>
                 )}
-                <p className="mt-2 text-xs font-bold text-slate-700">
+                <p
+                  className="mt-2 text-xs font-bold text-slate-700"
+                  style={{ color: "#334155" }}
+                >
                   Automatic structural quantities pause for a custom shape until
                   its takeoff is reviewed.
                 </p>
               </div>
-              <details className="mt-3 rounded-md border border-slate-400 bg-slate-50 p-3">
+              <details
+                className="mt-3 rounded-md border border-slate-400 bg-white p-3"
+                style={{ backgroundColor: "#ffffff", color: "#0f172a" }}
+              >
                 <summary className="min-h-11 cursor-pointer py-2 text-sm font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
                   Framing markers — optional for later
                 </summary>

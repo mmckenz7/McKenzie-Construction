@@ -652,6 +652,9 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(ui, /editedHorizontal && followingVertical/);
   assert.match(ui, /editedVertical && followingHorizontal/);
   assert.match(ui, /<foreignObject/);
+  assert.match(ui, /data-plan-member="drawing-background"/);
+  assert.match(ui, /data-edit-handle="outline-click-surface"/);
+  assert.match(ui, /fill="#f97316"/);
   assert.match(ui, /colorScheme: "light"/);
   assert.match(ui, />ft<\/span>/);
   assert.match(ui, /Framing markers — optional for later/);
@@ -677,7 +680,7 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(ui, /fill="#dbeafe"/);
   assert.match(ui, /stroke="#0f172a"/);
   assert.doesNotMatch(ui, /selectedOutlineEdge/);
-  assert.match(ui, /fill="#22d3ee"/);
+  assert.doesNotMatch(ui, /fill="#22d3ee"/);
   assert.match(ui, /border-2 border-slate-950 bg-white/);
   assert.match(planner, /framingPlanEvidence\.inputs\.lengthFeet/);
 });
