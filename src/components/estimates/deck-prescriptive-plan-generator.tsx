@@ -1682,7 +1682,7 @@ export function DeckPrescriptivePlanGenerator({
             {draft.stairsIncluded === "yes" ? (
               <button
                 type="button"
-                className="min-h-11 rounded-md border-2 border-amber-600 bg-white px-4 py-2 text-sm font-bold text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                className="min-h-11 rounded-md border-2 border-amber-300 bg-amber-400 px-4 py-2 text-sm font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
                 onClick={() => setLayoutEditorOpen(true)}
               >
                 Drag stairs on drawing
@@ -1691,26 +1691,26 @@ export function DeckPrescriptivePlanGenerator({
           </div>
           {layoutEditorOpen ? (
             <section
-              className="mt-3 rounded-lg border-2 border-slate-950 bg-slate-50 p-3 text-slate-950 shadow-sm"
-              style={{ backgroundColor: "#f8fafc", color: "#0f172a" }}
+              className="mt-3 rounded-lg border-2 border-blue-400 bg-slate-950 p-3 text-white shadow-sm"
+              style={{ backgroundColor: "#0f172a", color: "#ffffff" }}
               aria-labelledby="simple-deck-editor-heading"
             >
               <h5
                 id="simple-deck-editor-heading"
-                className="font-black text-slate-950"
+                className="font-black text-white"
               >
                 Measured deck drawing
               </h5>
               <p
-                className="mt-1 text-sm font-medium text-slate-800"
-                style={{ color: "#1e293b" }}
+                className="mt-1 text-sm font-medium text-slate-200"
+                style={{ color: "#e2e8f0" }}
               >
                 Click each corner of the deck in order. Finish the shape, then
                 type the real distance into the white box shown on each edge.
               </p>
               <div
-                className="mt-3 rounded-md border-2 border-blue-700 bg-white p-3"
-                style={{ backgroundColor: "#ffffff", color: "#0f172a" }}
+                className="mt-3 rounded-md border-2 border-blue-400 bg-slate-900 p-3 text-white"
+                style={{ backgroundColor: "#1e293b", color: "#ffffff" }}
               >
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button
@@ -1722,15 +1722,18 @@ export function DeckPrescriptivePlanGenerator({
                   </button>
                   <button
                     type="button"
-                    className="min-h-12 rounded-md border-2 border-slate-950 bg-white px-4 py-3 text-sm font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                    className="min-h-12 rounded-md border-2 border-slate-300 bg-slate-700 px-4 py-3 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     onClick={resetRectangleOutline}
                   >
                     Reset to saved rectangle
                   </button>
                 </div>
                 {outlineDrawingActive ? (
-                  <div className="mt-3 rounded-md border-2 border-orange-700 bg-orange-50 p-3">
-                    <p className="text-sm font-black text-slate-950">
+                  <div
+                    className="mt-3 rounded-md border-2 border-orange-400 bg-orange-950 p-3 text-white"
+                    style={{ backgroundColor: "#431407", color: "#ffffff" }}
+                  >
+                    <p className="text-sm font-black text-white">
                       Drawing now: click corner {outlinePoints.length + 1} on
                       the white drawing. Points snap to one-inch measurements
                       and nearby horizontal or vertical lines.
@@ -1746,7 +1749,7 @@ export function DeckPrescriptivePlanGenerator({
                       </button>
                       <button
                         type="button"
-                        className="min-h-11 rounded-md border-2 border-slate-700 bg-white px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50"
+                        className="min-h-11 rounded-md border-2 border-slate-300 bg-slate-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                         disabled={!outlinePoints.length}
                         onClick={() =>
                           setOutlinePoints((current) => current.slice(0, -1))
@@ -1757,25 +1760,25 @@ export function DeckPrescriptivePlanGenerator({
                     </div>
                   </div>
                 ) : (
-                  <p className="mt-3 text-sm font-bold text-slate-900">
+                  <p className="mt-3 text-sm font-bold text-slate-100">
                     Type over any white edge-distance box on the drawing to set
                     the exact length. Drag a corner dot only when you need to
                     adjust the general shape.
                   </p>
                 )}
                 <p
-                  className="mt-2 text-xs font-bold text-slate-700"
-                  style={{ color: "#334155" }}
+                  className="mt-2 text-xs font-bold text-slate-200"
+                  style={{ color: "#e2e8f0" }}
                 >
                   Automatic structural quantities pause for a custom shape until
                   its takeoff is reviewed.
                 </p>
               </div>
               <details
-                className="mt-3 rounded-md border border-slate-400 bg-white p-3"
-                style={{ backgroundColor: "#ffffff", color: "#0f172a" }}
+                className="mt-3 rounded-md border border-slate-500 bg-slate-900 p-3 text-white [&_label]:text-white [&_legend]:text-white [&_p]:text-slate-200"
+                style={{ backgroundColor: "#1e293b", color: "#ffffff" }}
               >
-                <summary className="min-h-11 cursor-pointer py-2 text-sm font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                <summary className="min-h-11 cursor-pointer py-2 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                   Framing markers — optional for later
                 </summary>
                 <fieldset className="mt-3">
@@ -2011,7 +2014,10 @@ export function DeckPrescriptivePlanGenerator({
                   ))}
                 </div>
               </details>
-              <p className="mt-3 rounded-md bg-white p-3 text-xs font-bold text-violet-950">
+              <p
+                className="mt-3 rounded-md border border-violet-400 bg-violet-950 p-3 text-xs font-bold text-violet-100"
+                style={{ backgroundColor: "#2e1065", color: "#ede9fe" }}
+              >
                 There is intentionally no AI instruction box. What you place on
                 this editor is what the estimating drawing records.
               </p>
