@@ -37,6 +37,8 @@ test("shape suggestion reads only tenant-scoped completed-visit private photos",
 });
 
 test("field measurements scale the sketch and every uncertain result falls back safely", () => {
+  assert.match(route, /Math\.round\(point\.x \* length \* 2\) \/ 2/);
+  assert.match(route, /Math\.round\(point\.y \* width \* 2\) \/ 2/);
   assert.match(route, /deckFieldDimensions\(observations\)/);
   assert.match(route, /point\.x \* length/);
   assert.match(route, /point\.y \* width/);

@@ -13,6 +13,7 @@ import {
   nextDeckDrawingZoom,
   parseDeckPostPositions,
   recommendedPrescriptiveDraft,
+  snapDeckOutlinePoint,
 } from "../src/lib/deck-prescriptive-plan.ts";
 import {
   buildDeckTakeoffPreview,
@@ -370,6 +371,27 @@ test("simple editor geometry preserves exact post locations and uses the largest
   assert.match(
     free.exceptions.join(" "),
     /reviewed custom beam\/support plan/i,
+  );
+});
+
+test("shape editor snaps corners to the grid and 45 or 90 degree lines", () => {
+  assert.deepEqual(
+    snapDeckOutlinePoint(
+      { x: 10.2, y: 7.7 },
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+    ),
+    { x: 10, y: 10 },
+  );
+  const diagonalCorner = snapDeckOutlinePoint(
+    { x: 5.1, y: 5.2 },
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+  );
+  assert.equal(Math.abs(diagonalCorner.x - diagonalCorner.y) < 0.0001, true);
+  assert.equal(
+    Math.abs((10 - diagonalCorner.x) - diagonalCorner.y) < 0.0001,
+    true,
   );
 });
 

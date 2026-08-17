@@ -10,6 +10,7 @@ import {
 import {
   insertOutlinePointOnNearestEdge,
   isValidDeckOutline,
+  snapDeckOutlinePoint,
   type DeckOutlinePoint,
 } from "@/lib/deck-prescriptive-plan";
 
@@ -76,6 +77,7 @@ export function DeckShapeReview({
   const [suggesting, setSuggesting] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [addPointMode, setAddPointMode] = useState(false);
+  const [snapMode, setSnapMode] = useState<"angle" | "free">("angle");
   const [selectedEdge, setSelectedEdge] = useState<number | null>(null);
   const [edgeDraft, setEdgeDraft] = useState("");
   const [feedback, setFeedback] = useState(initialShape ? `Saved shape revision ${initialShape.shapeRevision} loaded.` : "Starting outline loaded from the completed site visit.");
@@ -85,12 +87,17 @@ export function DeckShapeReview({
   const descriptionId = useId();
   const maxX = Math.max(...outline.map((point) => point.x), length * 1.25, 1);
   const maxY = Math.max(...outline.map((point) => point.y), width * 1.25, 1);
+  const drawingScale = Math.min(264 / maxX, 154 / maxY);
+  const drawingOriginX = 28 + (264 - maxX * drawingScale) / 2;
+  const drawingOriginY = 28 + (154 - maxY * drawingScale) / 2;
   const toSvg = (point: DeckOutlinePoint) => ({
-    x: 28 + (point.x / maxX) * 264,
-    y: 28 + (point.y / maxY) * 154,
+    x: drawingOriginX + point.x * drawingScale,
+    y: drawingOriginY + point.y * drawingScale,
   });
   const points = outline.map(toSvg);
   const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const gridX = Array.from({ length: Math.floor(maxX * 2) + 1 }, (_, index) => index / 2);
+  const gridY = Array.from({ length: Math.floor(maxY * 2) + 1 }, (_, index) => index / 2);
 
   async function loadPhotoSuggestion() {
     if (suggesting || initialShape || projectKind !== "replacement") return;
@@ -137,16 +144,27 @@ export function DeckShapeReview({
     const drawingX = ((event.clientX - bounds.left) / bounds.width) * 320;
     const drawingY = ((event.clientY - bounds.top) / bounds.height) * 210;
     return {
-      x: Math.max(0, Math.min(maxX, Math.round((((drawingX - 28) / 264) * maxX) * 12) / 12)),
-      y: Math.max(0, Math.min(maxY, Math.round((((drawingY - 28) / 154) * maxY) * 12) / 12)),
+      x: Math.max(0, Math.min(maxX, (drawingX - drawingOriginX) / drawingScale)),
+      y: Math.max(0, Math.min(maxY, (drawingY - drawingOriginY) / drawingScale)),
     };
   }
 
   function movePoint(event: ReactPointerEvent<SVGSVGElement>) {
     if (dragIndex === null || addPointMode) return;
-    const nextPoint = clientPoint(event);
-    if (!nextPoint) return;
+    const candidate = clientPoint(event);
+    if (!candidate) return;
     setOutline((current) => {
+      const nextPoint = snapMode === "angle"
+        ? snapDeckOutlinePoint(
+          candidate,
+          current[(dragIndex - 1 + current.length) % current.length],
+          current[(dragIndex + 1) % current.length],
+          0.5,
+        )
+        : {
+          x: Math.round(candidate.x * 12) / 12,
+          y: Math.round(candidate.y * 12) / 12,
+        };
       const next = current.map((point, index) => index === dragIndex ? nextPoint : point);
       return isValidDeckOutline(next) ? next : current;
     });
@@ -156,13 +174,13 @@ export function DeckShapeReview({
     if (!addPointMode) return;
     const candidate = clientPoint(event);
     if (!candidate) return;
-    const next = insertOutlinePointOnNearestEdge(outline, candidate, 1.25);
+    const next = insertOutlinePointOnNearestEdge(outline, candidate, snapMode === "angle" ? 6 : 1);
     if (next === outline) {
       setFeedback("Tap closer to an outside edge to add a corner.");
       return;
     }
     setOutline([...next]);
-    setFeedback("Corner added. Drag it into position or tap another edge.");
+    setFeedback(`Corner added. ${snapMode === "angle" ? "It will snap to the 6-inch grid and 45°/90° lines when moved." : "Free placement is on."}`);
   }
 
   function applyEdgeLength() {
@@ -269,8 +287,18 @@ export function DeckShapeReview({
         onPointerDown={addPoint}
       >
         <title id={titleId}>Editable bird&apos;s-eye deck outline</title>
-        <desc id={descriptionId}>A top view of the proposed deck footprint with draggable corner points and measured edges.</desc>
+        <desc id={descriptionId}>A top view of the proposed deck footprint with a six-inch grid, draggable corner points, measured edges, and default 45-degree and 90-degree snapping.</desc>
         <rect x="0" y="0" width="320" height="210" fill="#f8fafc" />
+        {gridX.map((value) => {
+          const x = toSvg({ x: value, y: 0 }).x;
+          const major = Number.isInteger(value);
+          return <line key={`grid-x-${value}`} x1={x} y1={drawingOriginY} x2={x} y2={drawingOriginY + maxY * drawingScale} stroke={major ? "#94a3b8" : "#cbd5e1"} strokeWidth={major ? "0.8" : "0.45"} />;
+        })}
+        {gridY.map((value) => {
+          const y = toSvg({ x: 0, y: value }).y;
+          const major = Number.isInteger(value);
+          return <line key={`grid-y-${value}`} x1={drawingOriginX} y1={y} x2={drawingOriginX + maxX * drawingScale} y2={y} stroke={major ? "#94a3b8" : "#cbd5e1"} strokeWidth={major ? "0.8" : "0.45"} />;
+        })}
         <text x="160" y="18" textAnchor="middle" fontSize="10" fontWeight="800" fill="#334155">HOUSE / BUILDING SIDE</text>
         <polygon points={polygon} fill="#dbeafe" stroke="#0f172a" strokeWidth="3" />
         {outline.map((point, index) => {
@@ -300,6 +328,15 @@ export function DeckShapeReview({
         {stairsPresent ? <g aria-label="Stairs are present"><rect x="130" y="181" width="60" height="22" fill="#fef3c7" stroke="#92400e" strokeWidth="2" /><text x="160" y="196" textAnchor="middle" fontSize="10" fontWeight="900" fill="#78350f">STAIRS</text></g> : null}
       </svg>
     </div>
+
+    <fieldset className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3">
+      <legend className="px-1 text-sm font-black text-slate-950">Corner movement</legend>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button type="button" className={snapMode === "angle" ? primary : secondary} aria-pressed={snapMode === "angle"} onClick={() => { setSnapMode("angle"); setFeedback("Snap is on: corners follow the 6-inch grid and 45°/90° lines."); }}>Snap 45° / 90°</button>
+        <button type="button" className={snapMode === "free" ? primary : secondary} aria-pressed={snapMode === "free"} onClick={() => { setSnapMode("free"); setFeedback("Free placement is on. Corners move in one-inch increments."); }}>Free placement</button>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-slate-700">Snap mode is the default so nearby corners stay square or diagonal. Use Free placement only for an unusual angle.</p>
+    </fieldset>
 
     <div className="mt-3 grid grid-cols-2 gap-2">
       <button type="button" className={addPointMode ? primary : secondary} aria-pressed={addPointMode} onClick={() => { setAddPointMode((current) => !current); setFeedback(addPointMode ? "Corner adding turned off." : "Tap an outside edge to add a bump-in or bump-out corner."); }}>{addPointMode ? "Done adding points" : "Add a corner"}</button>

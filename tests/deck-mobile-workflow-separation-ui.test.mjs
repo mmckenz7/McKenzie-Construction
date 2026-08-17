@@ -22,6 +22,9 @@ test("shape review contains footprint decisions but no structural or pricing wor
   assert.match(shape, /New deck/);
   assert.match(shape, /Add a corner/);
   assert.match(shape, /Enter an exact edge measurement/);
+  assert.match(shape, /Snap 45° \/ 90°/);
+  assert.match(shape, /Free placement/);
+  assert.match(shape, /six-inch grid/);
   assert.match(shape, /Does this deck have stairs\?/);
   assert.match(shape, /Framing, code, materials and pricing come later/);
   assert.doesNotMatch(shape, /joist|beam|footing|Lowe's|unit cost|OH&amp;P/i);

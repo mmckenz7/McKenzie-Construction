@@ -211,6 +211,73 @@ export function parseDeckPostDistances(
 
 export type DeckOutlinePoint = Readonly<{ x: number; y: number }>;
 
+const FORTY_FIVE_DIRECTIONS = Object.freeze([
+  Object.freeze({ x: 1, y: 0 }),
+  Object.freeze({ x: 1, y: 1 }),
+  Object.freeze({ x: 0, y: 1 }),
+  Object.freeze({ x: -1, y: 1 }),
+  Object.freeze({ x: -1, y: 0 }),
+  Object.freeze({ x: -1, y: -1 }),
+  Object.freeze({ x: 0, y: -1 }),
+  Object.freeze({ x: 1, y: -1 }),
+]);
+
+export function snapDeckOutlinePoint(
+  candidate: DeckOutlinePoint,
+  previous: DeckOutlinePoint,
+  next: DeckOutlinePoint,
+  gridFeet = 0.5,
+) {
+  const step = Math.max(1 / 12, gridFeet);
+  const gridCandidate = {
+    x: Math.round(candidate.x / step) * step,
+    y: Math.round(candidate.y / step) * step,
+  };
+  const choices: DeckOutlinePoint[] = [];
+
+  for (const fromPrevious of FORTY_FIVE_DIRECTIONS) {
+    for (const fromNext of FORTY_FIVE_DIRECTIONS) {
+      const determinant =
+        fromPrevious.x * fromNext.y - fromPrevious.y * fromNext.x;
+      if (Math.abs(determinant) < 0.000001) continue;
+      const deltaX = next.x - previous.x;
+      const deltaY = next.y - previous.y;
+      const distanceFromPrevious =
+        (deltaX * fromNext.y - deltaY * fromNext.x) / determinant;
+      choices.push({
+        x: previous.x + distanceFromPrevious * fromPrevious.x,
+        y: previous.y + distanceFromPrevious * fromPrevious.y,
+      });
+    }
+  }
+
+  const nearest = choices
+    .filter(
+      (point) =>
+        Number.isFinite(point.x) &&
+        Number.isFinite(point.y) &&
+        point.x >= 0 &&
+        point.y >= 0 &&
+        point.x <= 200 &&
+        point.y <= 200 &&
+        Math.abs(point.x / step - Math.round(point.x / step)) < 0.0001 &&
+        Math.abs(point.y / step - Math.round(point.y / step)) < 0.0001 &&
+        Math.hypot(point.x - previous.x, point.y - previous.y) >= 0.25 &&
+        Math.hypot(point.x - next.x, point.y - next.y) >= 0.25,
+    )
+    .sort(
+      (first, second) =>
+        Math.hypot(first.x - gridCandidate.x, first.y - gridCandidate.y) -
+        Math.hypot(second.x - gridCandidate.x, second.y - gridCandidate.y),
+    )[0];
+
+  if (!nearest) return Object.freeze(gridCandidate);
+  return Object.freeze({
+    x: Number(nearest.x.toFixed(4)),
+    y: Number(nearest.y.toFixed(4)),
+  });
+}
+
 export function nextDeckDrawingZoom(
   current: number,
   change: number,

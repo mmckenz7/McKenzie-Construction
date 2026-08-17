@@ -122,8 +122,8 @@ export async function POST(
         idempotencyKey: `${auth.authorization!.companyId}:${visitId}:${idempotencyKey}`,
       });
       const scaled = suggestion.points.map((point) => ({
-        x: Number((point.x * length).toFixed(4)),
-        y: Number((point.y * width).toFixed(4)),
+        x: Math.round(point.x * length * 2) / 2,
+        y: Math.round(point.y * width * 2) / 2,
       }));
       if (suggestion.result !== "suggested" || suggestion.confidence < 0.55 || !isValidDeckOutline(scaled))
         return NextResponse.json({
