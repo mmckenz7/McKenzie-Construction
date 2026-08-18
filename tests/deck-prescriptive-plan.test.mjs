@@ -7,6 +7,7 @@ import {
   buildPrescriptiveDeckPlan,
   closeDeckOutlineWithMeasuredWall,
   deckEstimatingImmediateIssueIds,
+  deckWallDirectionTemplate,
   drawingClientToDeckPoint,
   isCanonicalFramingEvidence,
   insertOutlinePointOnNearestEdge,
@@ -15,6 +16,7 @@ import {
   nextDeckDrawingZoom,
   parseDeckPostPositions,
   recommendedPrescriptiveDraft,
+  rebuildDeckOutlineFromWallMeasurements,
   snapDeckOutlinePoint,
   moveDeckOutlineEdge,
   nearestDeckStairPlacement,
@@ -496,6 +498,39 @@ test("ordered wall measurements rebuild the rough perimeter instead of preservin
   ]);
   assert.equal(shape[6].x, 12);
   assert.equal(shape[6].y, 15);
+});
+
+test("rough sketch becomes a snapped turn template and exact lengths become the geometry", () => {
+  const rough = [
+    { x: 0, y: 0 },
+    { x: 0.1, y: 4 },
+    { x: 6.1, y: 4.1 },
+    { x: 6.2, y: 8.1 },
+    { x: 0.2, y: 8.2 },
+    { x: 0.1, y: 12.2 },
+    { x: 12, y: 12 },
+    { x: 12, y: 0 },
+  ];
+  const directions = deckWallDirectionTemplate(rough);
+  assert.ok(directions);
+  assert.deepEqual(
+    directions.slice(1, 5).map((direction) => [direction.turn, Math.round(direction.turnDegrees), direction.snapped]),
+    [["left", 90, true], ["right", 90, true], ["right", 90, true], ["left", 90, true]],
+  );
+  const rebuilt = rebuildDeckOutlineFromWallMeasurements(
+    rough,
+    directions,
+    [5, 7, 5, 7, 5, null, null, null],
+  );
+  assert.ok(rebuilt);
+  assert.deepEqual(rebuilt.slice(0, 6), [
+    { x: 0, y: 0 },
+    { x: 0, y: 5 },
+    { x: 7, y: 5 },
+    { x: 7, y: 10 },
+    { x: 0, y: 10 },
+    { x: 0, y: 15 },
+  ]);
 });
 
 test("drawing zoom preserves fit boundaries and pointer geometry", () => {

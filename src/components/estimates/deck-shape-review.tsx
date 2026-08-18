@@ -9,16 +9,18 @@ import {
   type DeckObservationItem,
 } from "@/lib/deck-takeoff-v0";
 import {
-  applyDeckWallMeasurementInSequence,
+  deckWallDirectionTemplate,
   insertOutlinePointOnNearestEdge,
   isValidDeckOutline,
   moveDeckOutlineEdge,
   nearestDeckStairPlacement,
+  rebuildDeckOutlineFromWallMeasurements,
   snapDeckOutlinePoint,
   steadyGradeHeightAtPoint,
   type DeckGradeHeights,
   type DeckOutlinePoint,
   type DeckStairPlacement,
+  type DeckWallDirection,
 } from "@/lib/deck-prescriptive-plan";
 
 export type FinalizedDeckShape = Readonly<{
@@ -109,6 +111,9 @@ export function DeckShapeReview({
   const [edgeDraft, setEdgeDraft] = useState("");
   const [perimeterPoints, setPerimeterPoints] = useState<DeckOutlinePoint[] | null>(null);
   const [measurementStep, setMeasurementStep] = useState<number | null>(null);
+  const [roughMeasurementOutline, setRoughMeasurementOutline] = useState<DeckOutlinePoint[] | null>(null);
+  const [measurementTemplate, setMeasurementTemplate] = useState<readonly DeckWallDirection[] | null>(null);
+  const [measuredWallLengths, setMeasuredWallLengths] = useState<(number | null)[] | null>(null);
   const [advancedEditing, setAdvancedEditing] = useState(false);
   const [feedback, setFeedback] = useState(initialShape ? `Saved shape revision ${initialShape.shapeRevision} loaded.` : "Starting outline loaded from the completed site visit.");
   const svgRef = useRef<SVGSVGElement>(null);
@@ -335,12 +340,8 @@ export function DeckShapeReview({
           return;
         }
         const completed = perimeterPoints.map((point) => ({ ...point }));
-        setOutline(completed);
         setPerimeterPoints(null);
-        setMeasurementStep(0);
-        setSelectedEdge(0);
-        setEdgeDraft(edgeLength(completed[0], completed[1]).toFixed(2));
-        setFeedback("Perimeter closed. Now enter each wall measurement in order.");
+        beginMeasurementSequence(completed);
         return;
       }
       if (perimeterPoints.length >= 24) {
@@ -395,13 +396,41 @@ export function DeckShapeReview({
 
   function selectExactEdge(index: number) {
     setSelectedEdge(index);
-    setEdgeDraft(edgeLength(outline[index], outline[(index + 1) % outline.length]).toFixed(2));
-    setFeedback(`${edgeName(index)} selected. Enter its exact length below the drawing.`);
+    setEdgeDraft(String(measuredWallLengths?.[index] ?? edgeLength(outline[index], outline[(index + 1) % outline.length]).toFixed(2)));
+    setFeedback(`${edgeName(index)} selected. Enter its exact length on the drawing.`);
+  }
+
+  function beginMeasurementSequence(roughOutline: readonly DeckOutlinePoint[]) {
+    const template = deckWallDirectionTemplate(roughOutline);
+    if (!template) {
+      setFeedback("That rough perimeter cannot be converted into an ordered wall path. Adjust the last corner and try again.");
+      return;
+    }
+    const startingOutline = roughOutline.map((point) => ({ ...point }));
+    setOutline(startingOutline);
+    setRoughMeasurementOutline(startingOutline);
+    setMeasurementTemplate(template);
+    setMeasuredWallLengths(Array.from({ length: startingOutline.length }, () => null));
+    setMeasurementStep(0);
+    setSelectedEdge(0);
+    setEdgeDraft(edgeLength(startingOutline[0], startingOutline[1]).toFixed(2));
+    setAdvancedEditing(false);
+    setFeedback(`Rough shape converted into ${startingOutline.length} ordered walls. The rough dots now control direction only; exact measurements rebuild the corners.`);
+  }
+
+  function turnInstruction(direction: DeckWallDirection | null | undefined) {
+    if (!direction || direction.turn === "start") return "Starting wall";
+    if (direction.turn === "straight") return "Continue straight";
+    const degrees = Math.round(direction.turnDegrees);
+    return `Turn ${direction.turn} ${degrees}°${direction.snapped ? " (snapped)" : ""}`;
   }
 
   function startPerimeterWalk() {
     setPerimeterPoints([{ x: 0, y: 0 }]);
     setMeasurementStep(null);
+    setRoughMeasurementOutline(null);
+    setMeasurementTemplate(null);
+    setMeasuredWallLengths(null);
     setSelectedEdge(null);
     setAdvancedEditing(false);
     setFeedback("Starting at the left house corner. Walk clockwise and tap every outside corner. Tap the green starting point when you get back to the house.");
@@ -409,9 +438,7 @@ export function DeckShapeReview({
 
   function useStartingOutline() {
     setPerimeterPoints(null);
-    setMeasurementStep(0);
-    selectExactEdge(0);
-    setFeedback("Starting outline selected. Enter each wall measurement in order.");
+    beginMeasurementSequence(outline);
   }
 
   function updateGradeHeight(key: keyof DeckGradeHeights, raw: string) {
@@ -449,16 +476,32 @@ export function DeckShapeReview({
       return;
     }
 
-    const rebuilt = applyDeckWallMeasurementInSequence(current, selectedEdge, value);
+    if (!roughMeasurementOutline || !measurementTemplate || !measuredWallLengths) {
+      setFeedback("Restart the measurement sequence so the rough wall directions can be read again.");
+      return;
+    }
+    const updatedLengths = measuredWallLengths.map((length, index) => index === selectedEdge ? value : length);
+    const rebuilt = rebuildDeckOutlineFromWallMeasurements(
+      roughMeasurementOutline,
+      measurementTemplate,
+      updatedLengths,
+    );
     if (!rebuilt) {
-      setFeedback(selectedEdge === current.length - 1
-        ? "Those wall lengths cannot meet at the house corner. Recheck the last two measurements or adjust the rough corner direction."
-        : "That measurement would cross or collapse the outline. Check the rough wall direction.");
+      setFeedback("That measurement would cross or collapse the traced perimeter. Recheck this length or its rough turn direction.");
       return;
     }
     const next = [...rebuilt];
+    if (selectedEdge === current.length - 1) {
+      const actualClosingLength = edgeLength(next[next.length - 1], next[0]);
+      const gap = actualClosingLength - value;
+      if (Math.abs(gap) > 1 / 12) {
+        setFeedback(`The measured path does not close. The final wall reaches ${actualClosingLength.toFixed(2)} ft, which is ${Math.abs(gap).toFixed(2)} ft ${gap > 0 ? "longer" : "shorter"} than the entered ${value.toFixed(2)} ft. Correct a wall length or turn; the app did not distort the drawing.`);
+        return;
+      }
+    }
     setOutline(next);
-    const nextStep = measurementStep === null ? null : measurementStep + 1;
+    setMeasuredWallLengths(updatedLengths);
+    const nextStep = selectedEdge + 1;
     if (nextStep !== null && nextStep < next.length) {
       setMeasurementStep(nextStep);
       setSelectedEdge(nextStep);
@@ -468,6 +511,9 @@ export function DeckShapeReview({
       setMeasurementStep(null);
       setSelectedEdge(null);
       setEdgeDraft("");
+      setRoughMeasurementOutline(null);
+      setMeasurementTemplate(null);
+      setMeasuredWallLengths(null);
       setFeedback("All wall measurements are entered. Review the shape and stairs, then save it.");
     }
   }
@@ -592,7 +638,26 @@ export function DeckShapeReview({
         <text x="160" y="18" textAnchor="middle" fontSize="8" fontWeight="700" letterSpacing="0.8" fill="#475569">HOUSE / BUILDING SIDE</text>
         {perimeterPoints
           ? <polyline points={polygon} fill="none" stroke="#334155" strokeWidth="2" strokeDasharray="5 3" />
-          : <polygon points={polygon} fill="#dbeafe" fillOpacity="0.5" stroke="#334155" strokeWidth="2" />}
+          : measurementStep !== null && measuredWallLengths
+            ? <>
+              <polygon points={polygon} fill="#dbeafe" fillOpacity="0.38" stroke="none" />
+              {points.map((point, index) => {
+                const end = points[(index + 1) % points.length];
+                const measured = measuredWallLengths[index] !== null;
+                const current = measurementStep === index;
+                return <line
+                  key={`measurement-path-${index}`}
+                  x1={point.x}
+                  y1={point.y}
+                  x2={end.x}
+                  y2={end.y}
+                  stroke={measured ? "#2563eb" : current ? "#0f172a" : "#94a3b8"}
+                  strokeWidth={measured || current ? "2.4" : "1.4"}
+                  strokeDasharray={measured ? undefined : "5 3"}
+                />;
+              })}
+            </>
+            : <polygon points={polygon} fill="#dbeafe" fillOpacity="0.5" stroke="#334155" strokeWidth="2" />}
         {!perimeterPoints ? outline.map((point, index) => {
           const start = points[index];
           const end = points[(index + 1) % points.length];
@@ -732,7 +797,8 @@ export function DeckShapeReview({
     {measurementStep !== null && selectedEdge !== null ? <div className="mt-3 rounded-xl border-2 border-emerald-700 bg-emerald-50 p-4">
       <p className="text-xs font-black uppercase tracking-[.14em] text-emerald-800">Wall {measurementStep + 1} of {outline.length}</p>
       <h3 className="mt-1 text-lg font-black text-slate-950">Measure {edgeName(selectedEdge)}</h3>
-      <p className="mt-1 text-sm text-slate-700">Edit the green measurement box directly on the drawing, then save this wall.</p>
+      <p className="mt-1 inline-flex rounded-full border border-emerald-300 bg-white px-2.5 py-1 text-xs font-black text-emerald-900">{turnInstruction(measurementTemplate?.[selectedEdge])}</p>
+      <p className="mt-2 text-sm text-slate-700">The rough sketch controls this wall&apos;s direction only. Edit its measurement on the drawing; every unfinished corner will rebuild from the confirmed length.</p>
       <button type="button" className={`mt-3 w-full ${primary}`} onClick={applyEdgeLength}>{measurementStep + 1 === outline.length ? "Save final wall" : "Save and measure next wall"}</button>
     </div> : null}
 

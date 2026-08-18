@@ -70,7 +70,7 @@ test("wall measurements are editable directly inside the drawing", () => {
   assert.match(shape, /w-\[68px\]/);
   assert.match(shape, /autoFocus/);
   assert.match(shape, /Tap any measurement box on the drawing/);
-  assert.match(shape, /Edit the green measurement box directly on the drawing/);
+  assert.match(shape, /The rough sketch controls this wall&apos;s direction only/);
   assert.match(shape, /onBlur=\{\(\) => \{ if \(measurementStep === null\) applyEdgeLength\(\); \}\}/);
 });
 
@@ -93,6 +93,11 @@ test("simple perimeter walk begins at the house and validates before exact measu
   assert.match(shape, /setMeasurementStep\(0\)/);
   assert.match(shape, /Wall \{measurementStep \+ 1\} of \{outline\.length\}/);
   assert.match(shape, /Save and measure next wall/);
+  assert.match(shape, /deckWallDirectionTemplate/);
+  assert.match(shape, /rebuildDeckOutlineFromWallMeasurements/);
+  assert.match(shape, /rough dots now control direction only/);
+  assert.match(shape, /The measured path does not close/);
+  assert.match(shape, /strokeDasharray=\{measured \? undefined : "5 3"\}/);
   assert.match(shape, /!perimeterPoints && measurementStep === null/);
 });
 

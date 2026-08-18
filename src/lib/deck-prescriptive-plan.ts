@@ -637,6 +637,80 @@ export function applyDeckWallMeasurementInSequence(
     : null;
 }
 
+export type DeckWallDirection = Readonly<{
+  x: number;
+  y: number;
+  turn: "start" | "straight" | "left" | "right";
+  turnDegrees: number;
+  snapped: boolean;
+}>;
+
+export function deckWallDirectionTemplate(points: readonly DeckOutlinePoint[]) {
+  if (!isValidDeckOutline(points)) return null;
+  const directions = points.map((point, index) => {
+    const next = points[(index + 1) % points.length];
+    const dx = next.x - point.x;
+    const dy = next.y - point.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 0.000001) return null;
+    const rawAngle = Math.atan2(dy, dx);
+    const angleStep = Math.PI / 4;
+    const snappedAngle = Math.round(rawAngle / angleStep) * angleStep;
+    const difference = Math.abs(Math.atan2(
+      Math.sin(rawAngle - snappedAngle),
+      Math.cos(rawAngle - snappedAngle),
+    ));
+    const useSnap = difference <= (12 * Math.PI) / 180;
+    const angle = useSnap ? snappedAngle : rawAngle;
+    return { x: Math.cos(angle), y: Math.sin(angle), snapped: useSnap };
+  });
+  if (directions.some((direction) => !direction)) return null;
+  return Object.freeze(directions.map((direction, index) => {
+    const current = direction!;
+    if (index === 0)
+      return Object.freeze({ ...current, turn: "start" as const, turnDegrees: 0 });
+    const previous = directions[index - 1]!;
+    const dot = Math.max(-1, Math.min(1, previous.x * current.x + previous.y * current.y));
+    const degrees = Number((Math.acos(dot) * 180 / Math.PI).toFixed(1));
+    const cross = previous.x * current.y - previous.y * current.x;
+    return Object.freeze({
+      ...current,
+      turn: degrees < 1 ? "straight" as const : cross > 0 ? "right" as const : "left" as const,
+      turnDegrees: degrees,
+    });
+  }));
+}
+
+export function rebuildDeckOutlineFromWallMeasurements(
+  roughOutline: readonly DeckOutlinePoint[],
+  directions: readonly DeckWallDirection[],
+  measuredLengths: readonly (number | null)[],
+) {
+  if (
+    !isValidDeckOutline(roughOutline) ||
+    directions.length !== roughOutline.length ||
+    measuredLengths.length !== roughOutline.length
+  )
+    return null;
+  const rebuilt: DeckOutlinePoint[] = [{ ...roughOutline[0] }];
+  for (let index = 0; index < roughOutline.length - 1; index += 1) {
+    const roughLength = Math.hypot(
+      roughOutline[index + 1].x - roughOutline[index].x,
+      roughOutline[index + 1].y - roughOutline[index].y,
+    );
+    const length = measuredLengths[index] ?? roughLength;
+    if (!Number.isFinite(length) || length <= 0) return null;
+    const start = rebuilt[index];
+    rebuilt.push({
+      x: Number((start.x + directions[index].x * length).toFixed(4)),
+      y: Number((start.y + directions[index].y * length).toFixed(4)),
+    });
+  }
+  return isValidDeckOutline(rebuilt)
+    ? Object.freeze(rebuilt.map((point) => Object.freeze({ ...point })))
+    : null;
+}
+
 function defaultPostPositions(lengthFeet: number, count = 3) {
   return Array.from({ length: count }, (_, index) =>
     String((lengthFeet * index) / Math.max(1, count - 1)),
