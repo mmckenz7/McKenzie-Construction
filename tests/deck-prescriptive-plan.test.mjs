@@ -1173,7 +1173,7 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(planner, /customFinishPrices/);
   assert.match(
     planner,
-    /Framing products are not[\s\S]*selected on this screen/,
+    /Framing products[\s\S]*are not selected on this screen/,
   );
   assert.match(planner, /customFinishLines\.map/);
   assert.match(

@@ -71,6 +71,11 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "Calculate quantities and costs",
     "Current price per board",
     "Current price per railing section",
+    "How many boards should be purchased",
+    "How many railing sections or kits should be purchased",
+    "This[\\s\\S]*is a purchase count, not square footage",
+    "Correct product details manually",
+    "Open Lowe(?:'|&apos;)s product",
     "Enter .* missing price.* to continue",
     "I reviewed the field dimensions",
     "I reviewed the build-plan quantities",
@@ -87,6 +92,10 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "Equipment and rentals",
     "This estimate replaces the entire deck,[\\s\\S]*including decking, framing,[\\s\\S]*supports, and footings",
   ]) assert.match(ui, new RegExp(copy, "i"));
+  assert.match(ui, /bg-slate-950[\s\S]*Finish selections/);
+  assert.match(ui, /deckingFamily === value[\s\S]*bg-blue-950/);
+  assert.match(ui, /compositeColor === color\.key[\s\S]*bg-blue-950/);
+  assert.match(ui, /railingFamily === value[\s\S]*bg-blue-950/);
   assert.match(ui, /\/api\/material-catalog\?active=true&includePrices=true/);
   assert.match(ui, /Deck blueprint/);
   assert.match(ui, /Place the stairs on the drawing/);

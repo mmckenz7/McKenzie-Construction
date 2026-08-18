@@ -1347,21 +1347,21 @@ export function DeckTakeoffPlanner({
   }
 
   const finishSelectionControls = (
-    <section className="mt-5 rounded-xl border-2 border-blue-700 bg-white p-4 shadow-sm sm:p-5">
-      <p className="text-xs font-black uppercase tracking-[.16em] text-blue-700">
+    <section className="mt-5 rounded-xl border-2 border-blue-500 bg-slate-950 p-4 shadow-sm sm:p-5">
+      <p className="text-xs font-black uppercase tracking-[.16em] text-blue-300">
         Finish selections
       </p>
-      <h4 className="mt-1 text-xl font-black text-slate-950">
+      <h4 className="mt-1 text-xl font-black text-white">
         Choose what the customer will see
       </h4>
-      <p className="mt-1 text-sm leading-6 text-slate-700">
+      <p className="mt-1 text-sm leading-6 text-slate-300">
         Framing quantities stay unchanged. These choices select the decking,
         railing, compatible fasteners, and current product prices used for the
         customer options.
       </p>
 
       <fieldset className="mt-4">
-        <legend className="text-sm font-black text-slate-950">Decking</legend>
+        <legend className="text-sm font-black text-white">Decking</legend>
         <div className="mt-2 grid grid-cols-2 gap-2">
           {(
             [
@@ -1371,7 +1371,7 @@ export function DeckTakeoffPlanner({
           ).map(([value, label, help]) => (
             <label
               key={value}
-              className={`flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border p-3 focus-within:ring-2 focus-within:ring-blue-700 ${deckingFamily === value ? "border-blue-700 bg-blue-50" : "border-slate-300 bg-white"}`}
+              className={`flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border p-3 focus-within:ring-2 focus-within:ring-blue-300 ${deckingFamily === value ? "border-blue-300 bg-blue-950 ring-1 ring-blue-300" : "border-slate-600 bg-slate-900"}`}
             >
               <input
                 type="radio"
@@ -1385,8 +1385,8 @@ export function DeckTakeoffPlanner({
                 }}
               />
               <span>
-                <strong className="block text-sm text-slate-950">{label}</strong>
-                <span className="mt-1 block text-xs leading-5 text-slate-600">{help}</span>
+                <strong className="block text-sm text-white">{label}</strong>
+                <span className="mt-1 block text-xs leading-5 text-slate-300">{help}</span>
               </span>
             </label>
           ))}
@@ -1395,14 +1395,14 @@ export function DeckTakeoffPlanner({
 
       {deckingFamily === "composite" ? (
         <fieldset className="mt-4">
-          <legend className="text-sm font-black text-slate-950">
+          <legend className="text-sm font-black text-white">
             Composite color family
           </legend>
           <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
             {COMPOSITE_COLORS.map((color) => (
               <label
                 key={color.key}
-                className={`cursor-pointer rounded-lg border p-2 text-center focus-within:ring-2 focus-within:ring-blue-700 ${compositeColor === color.key ? "border-blue-700 bg-blue-50" : "border-slate-300 bg-white"}`}
+                className={`cursor-pointer rounded-lg border p-2 text-center focus-within:ring-2 focus-within:ring-blue-300 ${compositeColor === color.key ? "border-blue-300 bg-blue-950 ring-1 ring-blue-300" : "border-slate-600 bg-slate-900"}`}
               >
                 <input
                   type="radio"
@@ -1423,7 +1423,7 @@ export function DeckTakeoffPlanner({
                   className="mx-auto block h-10 w-10 rounded-md border border-slate-400 shadow-inner"
                   style={{ backgroundColor: color.swatch }}
                 />
-                <span className="mt-1 block text-xs font-bold text-slate-900">
+                <span className="mt-1 block text-xs font-bold text-white">
                   {color.label}
                 </span>
               </label>
@@ -1439,7 +1439,7 @@ export function DeckTakeoffPlanner({
         </p>
       ) : (
         <fieldset className="mt-4">
-          <legend className="text-sm font-black text-slate-950">Railing</legend>
+          <legend className="text-sm font-black text-white">Railing</legend>
           <div className="mt-2 grid grid-cols-3 gap-2">
             {(
               [
@@ -1450,7 +1450,7 @@ export function DeckTakeoffPlanner({
             ).map(([value, label, icon]) => (
               <label
                 key={value}
-                className={`cursor-pointer rounded-lg border p-3 text-center focus-within:ring-2 focus-within:ring-blue-700 ${railingFamily === value ? "border-blue-700 bg-blue-50" : "border-slate-300 bg-white"}`}
+                className={`cursor-pointer rounded-lg border p-3 text-center focus-within:ring-2 focus-within:ring-blue-300 ${railingFamily === value ? "border-blue-300 bg-blue-950 ring-1 ring-blue-300" : "border-slate-600 bg-slate-900"}`}
               >
                 <input
                   type="radio"
@@ -1463,10 +1463,10 @@ export function DeckTakeoffPlanner({
                     void findLowesProducts({ railingFamily: value });
                   }}
                 />
-                <span aria-hidden="true" className="block text-3xl leading-none text-slate-800">
+                <span aria-hidden="true" className="block text-3xl leading-none text-slate-200">
                   {icon}
                 </span>
-                <span className="mt-2 block text-sm font-bold text-slate-950">{label}</span>
+                <span className="mt-2 block text-sm font-bold text-white">{label}</span>
               </label>
             ))}
           </div>
@@ -2484,14 +2484,14 @@ export function DeckTakeoffPlanner({
     );
 
   return (
-    <section className="mt-5 rounded-xl border-2 border-blue-700 bg-blue-50 p-4 sm:p-5">
-      <p className="text-xs font-black uppercase tracking-[.16em] text-blue-800">
+    <section className="mt-5 rounded-xl border-2 border-blue-500 bg-slate-950 p-4 sm:p-5">
+      <p className="text-xs font-black uppercase tracking-[.16em] text-blue-300">
         Finish material selections
       </p>
-      <h3 className="mt-1 text-xl font-black text-slate-950">
+      <h3 className="mt-1 text-xl font-black text-white">
         Select decking and railing without cluttering the framing plan
       </h3>
-      <p className="mt-2 text-sm leading-6 text-slate-700">
+      <p className="mt-2 text-sm leading-6 text-slate-300">
         {customApprovedFootprint
           ? "The exact custom footprint, stairs, and preliminary quantities carry forward. Choose only the visible finish families here; unresolved structural work remains tracked separately."
           : "The approved shape and framing quantities carry forward. Choose the visible finish families here, then review the matching products and calculated finish costs."}
@@ -2682,81 +2682,147 @@ export function DeckTakeoffPlanner({
       ) : null}
 
       {customApprovedFootprint ? (
-        <section className="mt-5 rounded-lg border-2 border-blue-300 bg-white p-4">
-          <h4 className="font-black text-slate-950">
+        <section className="mt-5 rounded-lg border-2 border-blue-500 bg-slate-950 p-4">
+          <h4 className="font-black text-white">
             Matching products for the custom footprint
           </h4>
-          <p className="mt-1 text-sm leading-6 text-slate-700">
-            Confirm the products below and enter only the purchase quantities
-            that the reviewed custom layout requires. Framing products are not
-            selected on this screen.
+          <p className="mt-1 text-sm leading-6 text-slate-300">
+            Choose the finishes above. The app fills the matching Lowe&apos;s
+            product and its price source. For this inset footprint, enter only
+            the final purchase count from the reviewed layout. Framing products
+            are not selected on this screen.
           </p>
           <div className="mt-3 space-y-3">
-            {customFinishLines.map((line) => (
-              <article
-                key={line.key}
-                className="rounded-lg border border-slate-300 bg-slate-50 p-3"
-              >
-                <p className="font-black text-slate-950">
-                  {line.key === "custom_decking"
-                    ? "Custom-footprint decking"
-                    : "Custom-footprint railing"}
-                </p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                  <Field label="Product description">
-                    <input
-                      className={input}
-                      value={line.description}
-                      onChange={(event) =>
-                        updateLine(line.key, "description", event.target.value)
+            {customFinishLines.map((line) => {
+              const isDecking = line.key === "custom_decking";
+              const lowesPage =
+                line.sourceReference.startsWith("https://www.lowes.com/") ||
+                line.sourceReference.startsWith("https://lowes.com/");
+              const priceReady = Number(line.unitCost) > 0;
+              return (
+                <article
+                  key={line.key}
+                  className="rounded-lg border border-slate-600 bg-slate-900 p-3"
+                >
+                  <p className="font-black text-white">
+                    {isDecking ? "Decking" : "Railing"}
+                  </p>
+                  <p className="mt-1 text-sm font-bold leading-6 text-slate-200">
+                    {line.description || "Finding a matching product…"}
+                  </p>
+                  {lowesPage ? (
+                    <a
+                      className="mt-2 inline-flex min-h-11 items-center text-sm font-bold text-blue-300 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                      href={line.sourceReference}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open Lowe&apos;s product
+                    </a>
+                  ) : (
+                    <p className="mt-2 text-sm font-bold text-amber-300">
+                      Choose a finish above to find a matching product.
+                    </p>
+                  )}
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <Field
+                      label={
+                        isDecking
+                          ? "How many boards should be purchased?"
+                          : "How many railing sections or kits should be purchased?"
                       }
-                    />
-                  </Field>
-                  <Field label="Reviewed quantity">
-                    <input
-                      className={input}
-                      inputMode="decimal"
-                      value={line.quantity}
-                      onChange={(event) =>
-                        updateLine(line.key, "quantity", event.target.value)
-                      }
-                    />
-                  </Field>
-                  <Field label="Unit">
-                    <input
-                      className={input}
-                      value={line.unit}
-                      onChange={(event) =>
-                        updateLine(line.key, "unit", event.target.value)
-                      }
-                    />
-                  </Field>
-                  <Field label="Unit cost">
-                    <input
-                      className={input}
-                      inputMode="decimal"
-                      value={line.unitCost}
-                      onChange={(event) =>
-                        updateLine(line.key, "unitCost", event.target.value)
-                      }
-                    />
-                  </Field>
-                  <Field label="Price source">
-                    <input
-                      className={input}
-                      value={line.sourceReference}
-                      onChange={(event) =>
-                        updateLine(
-                          line.key,
-                          "sourceReference",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </Field>
-                </div>
-              </article>
-            ))}
+                    >
+                      <input
+                        aria-describedby={`${line.key}-quantity-help`}
+                        className={input}
+                        inputMode="decimal"
+                        value={line.quantity}
+                        onChange={(event) =>
+                          updateLine(line.key, "quantity", event.target.value)
+                        }
+                      />
+                      <span
+                        id={`${line.key}-quantity-help`}
+                        className="mt-1 block text-xs leading-5 text-slate-300"
+                      >
+                        Use the final count from the reviewed custom layout. This
+                        is a purchase count, not square footage.
+                      </span>
+                    </Field>
+                    {priceReady ? (
+                      <div className="rounded-lg border border-emerald-700 bg-emerald-950 p-3 text-sm text-emerald-100">
+                        <p className="font-black">Current product price</p>
+                        <p className="mt-1 text-lg font-black">
+                          ${line.unitCost} per {line.unit || "item"}
+                        </p>
+                        <p className="mt-1 text-xs leading-5">
+                          Verify the current store price before sending the
+                          estimate.
+                        </p>
+                      </div>
+                    ) : (
+                      <Field label="Current Lowe's price per item">
+                        <span className="mt-1 flex items-center rounded-md border border-slate-300 bg-white focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-100">
+                          <span className="pl-3 text-slate-600">$</span>
+                          <input
+                            className="min-h-11 w-full rounded-md bg-transparent px-2 py-2 text-sm text-slate-950 outline-none"
+                            inputMode="decimal"
+                            value={line.unitCost}
+                            onChange={(event) =>
+                              updateLine(line.key, "unitCost", event.target.value)
+                            }
+                          />
+                        </span>
+                      </Field>
+                    )}
+                  </div>
+
+                  <details className="mt-3 rounded-lg border border-slate-700 bg-slate-950 p-3">
+                    <summary className="min-h-11 cursor-pointer py-2 text-sm font-bold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
+                      Correct product details manually
+                    </summary>
+                    <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                      <Field label="Product description">
+                        <input
+                          className={input}
+                          value={line.description}
+                          onChange={(event) =>
+                            updateLine(
+                              line.key,
+                              "description",
+                              event.target.value,
+                            )
+                          }
+                        />
+                      </Field>
+                      <Field label="Purchase unit">
+                        <input
+                          className={input}
+                          value={line.unit}
+                          onChange={(event) =>
+                            updateLine(line.key, "unit", event.target.value)
+                          }
+                        />
+                      </Field>
+                      <Field label="Price source">
+                        <input
+                          className={input}
+                          value={line.sourceReference}
+                          onChange={(event) =>
+                            updateLine(
+                              line.key,
+                              "sourceReference",
+                              event.target.value,
+                            )
+                          }
+                        />
+                      </Field>
+                    </div>
+                  </details>
+                </article>
+              );
+            })}
           </div>
           <button
             type="button"
