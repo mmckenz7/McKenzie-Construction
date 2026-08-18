@@ -76,6 +76,9 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "Estimating retail price per railing section",
     "Calculated boards to purchase",
     "Calculated railing package quantity",
+    "Quantity comes from the approved perimeter and selected",
+    "no individual railing SKU is required",
+    "Estimating material cost per linear foot",
     "approved polygon calculates deck\\s+area, board count, and level-railing length automatically",
     "Correct product details manually",
     "Open Lowe(?:'|&apos;)s product",
@@ -99,6 +102,10 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /deckingFamily === value[\s\S]*bg-blue-950/);
   assert.match(ui, /compositeColor === color\.key[\s\S]*bg-blue-950/);
   assert.match(ui, /railingFamily === value[\s\S]*bg-blue-950/);
+  assert.match(
+    ui,
+    /requestedRailing === "wood"[\s\S]*quantity: woodRailingFeet\.toFixed\(2\)/,
+  );
   assert.match(ui, /\/api\/material-catalog\?active=true&includePrices=true/);
   assert.match(ui, /Deck blueprint/);
   assert.match(ui, /Place the stairs on the drawing/);

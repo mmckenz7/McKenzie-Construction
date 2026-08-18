@@ -1087,6 +1087,8 @@ export function DeckTakeoffPlanner({
             : null;
         const customRailingQuantity = manufacturedPackage
           ? 1
+          : requestedRailing === "wood"
+            ? woodRailingFeet
           : railing?.stockLengthFeet && finishRailingLengthFeet
             ? Math.ceil(finishRailingLengthFeet / railing.stockLengthFeet)
             : finishRailingLengthFeet;
@@ -1100,6 +1102,24 @@ export function DeckTakeoffPlanner({
                   unit: "ea",
                   unitCost: board.unitCost ? String(board.unitCost) : "",
                   sourceReference: board.sourceUrl,
+                  catalogMaterialId: null,
+                };
+              }
+              if (line.key === "custom_railing" && requestedRailing === "wood") {
+                const rate = Number(woodRailingRate);
+                return {
+                  ...line,
+                  description: "Wood railing material allowance",
+                  quantity: woodRailingFeet.toFixed(2),
+                  unit: "ln ft",
+                  unitCost:
+                    Number.isFinite(rate) && rate > 0
+                      ? woodRailingRate
+                      : "",
+                  sourceReference:
+                    Number.isFinite(rate) && rate > 0
+                      ? "McKenzie wood railing per-linear-foot estimating allowance"
+                      : "",
                   catalogMaterialId: null,
                 };
               }
@@ -3139,6 +3159,8 @@ export function DeckTakeoffPlanner({
           <div className="mt-3 space-y-3">
             {customFinishLines.map((line) => {
               const isDecking = line.key === "custom_decking";
+              const isWoodRailing =
+                line.key === "custom_railing" && railingFamily === "wood";
               const lowesPage =
                 line.sourceReference.startsWith("https://www.lowes.com/") ||
                 line.sourceReference.startsWith("https://lowes.com/");
@@ -3152,9 +3174,17 @@ export function DeckTakeoffPlanner({
                     {isDecking ? "Decking" : "Railing"}
                   </p>
                   <p className="mt-1 text-sm font-bold leading-6 text-slate-200">
-                    {line.description || "Finding a matching product…"}
+                    {isWoodRailing
+                      ? "Wood railing material allowance"
+                      : line.description || "Finding a matching product…"}
                   </p>
-                  {lowesPage ? (
+                  {isWoodRailing ? (
+                    <p className="mt-2 text-sm font-bold text-emerald-300">
+                      Quantity comes from the approved perimeter and selected
+                      stair sides. Enter the estimating cost per linear foot
+                      above; no individual railing SKU is required.
+                    </p>
+                  ) : lowesPage ? (
                     <a
                       className="mt-2 inline-flex min-h-11 items-center text-sm font-bold text-blue-300 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                       href={line.sourceReference}
@@ -3185,6 +3215,8 @@ export function DeckTakeoffPlanner({
                         value={
                           isDecking
                             ? customDeckBoardEstimate?.pieces ?? ""
+                            : isWoodRailing
+                              ? woodRailingFeet.toFixed(2)
                             : line.quantity
                         }
                       />
@@ -3211,7 +3243,13 @@ export function DeckTakeoffPlanner({
                         </p>
                       </div>
                     ) : (
-                      <Field label="Estimating Lowe's price per item">
+                      <Field
+                        label={
+                          isWoodRailing
+                            ? "Estimating material cost per linear foot"
+                            : "Estimating Lowe's price per item"
+                        }
+                      >
                         <span className="mt-1 flex items-center rounded-md border border-slate-300 bg-white focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-100">
                           <span className="pl-3 text-slate-600">$</span>
                           <input
