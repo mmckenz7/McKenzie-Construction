@@ -605,18 +605,32 @@ export function DeckShapeReview({
           const svgEdgeSize = Math.hypot(end.x - start.x, end.y - start.y) || 1;
           const normal = { x: -(end.y - start.y) / svgEdgeSize, y: (end.x - start.x) / svgEdgeSize };
           const slider = { x: midpoint.x + normal.x * 10, y: midpoint.y + normal.y * 10 };
+          const measurementLabel = { x: midpoint.x - normal.x * 13, y: midpoint.y - normal.y * 13 };
           return <g key={`edge-${index}`}>
-            <g
-              role="button"
-              tabIndex={0}
-              aria-label={`Edit ${edgeName(index)}, currently ${edgeLength(point, outline[(index + 1) % outline.length]).toFixed(1)} feet`}
-              onPointerDown={(event) => { event.stopPropagation(); selectExactEdge(index); }}
-              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectExactEdge(index); } }}
-            >
-              <rect x={midpoint.x - 34} y={midpoint.y - 18} width="68" height="18" rx="5" fill={selectedEdge === index ? "#dcfce7" : "white"} stroke={selectedEdge === index ? "#047857" : "#0f172a"} strokeWidth={selectedEdge === index ? "2.5" : "1.5"} />
-              <text x={midpoint.x} y={midpoint.y - 10} textAnchor="middle" fontSize="7" fontWeight="800" fill="#334155">{edgeName(index)}</text>
-              <text x={midpoint.x} y={midpoint.y - 3} textAnchor="middle" fontSize="8" fontWeight="950" fill="#020617">{edgeLength(point, outline[(index + 1) % outline.length]).toFixed(1)} ft · tap</text>
-            </g>
+            <foreignObject x={measurementLabel.x - 30} y={measurementLabel.y - 24} width="60" height="48" overflow="visible">
+              <label className="flex h-full w-full cursor-text items-center justify-center" onPointerDown={(event) => event.stopPropagation()}>
+                <span className="sr-only">{edgeName(index)} length in feet</span>
+                <input
+                  aria-label={`${edgeName(index)} length in feet`}
+                  className={`h-8 w-[54px] rounded-md border-2 bg-white px-1 text-center text-[11px] font-black text-slate-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 ${selectedEdge === index ? "border-emerald-700 bg-emerald-50" : "border-slate-900"}`}
+                  inputMode="decimal"
+                  value={selectedEdge === index ? edgeDraft : edgeLength(point, outline[(index + 1) % outline.length]).toFixed(1)}
+                  onFocus={(event) => {
+                    if (measurementStep !== null) setMeasurementStep(index);
+                    selectExactEdge(index);
+                    event.currentTarget.select();
+                  }}
+                  onChange={(event) => setEdgeDraft(event.target.value)}
+                  onBlur={() => { if (measurementStep === null) applyEdgeLength(); }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    if (measurementStep === null) event.currentTarget.blur();
+                    else applyEdgeLength();
+                  }}
+                />
+              </label>
+            </foreignObject>
             {advancedEditing ? <circle
               cx={slider.x}
               cy={slider.y}
@@ -700,16 +714,13 @@ export function DeckShapeReview({
       </svg>
     </div>
 
-    <p className="mt-2 rounded-lg bg-blue-50 p-3 text-sm font-bold text-blue-950">{perimeterPoints ? "Tap the next outside corner. When you return to the house, tap the green START point to close the shape." : "Tap any wall label to edit that exact measurement."}</p>
+    <p className="mt-2 rounded-lg bg-blue-50 p-3 text-sm font-bold text-blue-950">{perimeterPoints ? "Tap the next outside corner. When you return to the house, tap the green START point to close the shape." : "Tap any measurement box on the drawing, type the real wall length, and press Enter."}</p>
 
     {measurementStep !== null && selectedEdge !== null ? <div className="mt-3 rounded-xl border-2 border-emerald-700 bg-emerald-50 p-4">
       <p className="text-xs font-black uppercase tracking-[.14em] text-emerald-800">Wall {measurementStep + 1} of {outline.length}</p>
       <h3 className="mt-1 text-lg font-black text-slate-950">Measure {edgeName(selectedEdge)}</h3>
-      <p className="mt-1 text-sm text-slate-700">Enter the real tape measurement for the highlighted segment.</p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
-        <label className="text-sm font-bold text-slate-950">Exact length (ft)<input autoFocus className="mt-1 min-h-12 w-full rounded-lg border-2 border-emerald-700 bg-white px-3 text-lg font-black" inputMode="decimal" value={edgeDraft} onFocus={(event) => event.currentTarget.select()} onChange={(event) => setEdgeDraft(event.target.value)} /></label>
-        <button type="button" className={`${primary} self-end`} onClick={applyEdgeLength}>{measurementStep + 1 === outline.length ? "Save final wall" : "Save and measure next wall"}</button>
-      </div>
+      <p className="mt-1 text-sm text-slate-700">Edit the green measurement box directly on the drawing, then save this wall.</p>
+      <button type="button" className={`mt-3 w-full ${primary}`} onClick={applyEdgeLength}>{measurementStep + 1 === outline.length ? "Save final wall" : "Save and measure next wall"}</button>
     </div> : null}
 
     {!perimeterPoints && measurementStep === null ? <>

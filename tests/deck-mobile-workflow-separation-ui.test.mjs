@@ -58,13 +58,16 @@ test("stairs and four grade heights are editable in the shape drawing", () => {
   assert.match(shape, /gradeHeights/);
 });
 
-test("wall labels open their exact measurement instead of exposing numbered edges only", () => {
+test("wall measurements are editable directly inside the drawing", () => {
   assert.match(shape, /House wall/);
   assert.match(shape, /Right side/);
   assert.match(shape, /Yard side/);
   assert.match(shape, /Left side/);
-  assert.match(shape, /Edit \$\{edgeName\(index\)\}, currently/);
-  assert.match(shape, /Enter its exact length below the drawing/);
+  assert.match(shape, /<foreignObject/);
+  assert.match(shape, /aria-label=\{`\$\{edgeName\(index\)\} length in feet`\}/);
+  assert.match(shape, /Tap any measurement box on the drawing/);
+  assert.match(shape, /Edit the green measurement box directly on the drawing/);
+  assert.match(shape, /onBlur=\{\(\) => \{ if \(measurementStep === null\) applyEdgeLength\(\); \}\}/);
 });
 
 test("advanced wall sliders remain optional and retain mobile-sized invisible targets", () => {
@@ -85,7 +88,7 @@ test("simple perimeter walk begins at the house and validates before exact measu
   assert.match(shape, /isValidDeckOutline\(perimeterPoints\)/);
   assert.match(shape, /setMeasurementStep\(0\)/);
   assert.match(shape, /Wall \{measurementStep \+ 1\} of \{outline\.length\}/);
-  assert.match(shape, /Exact length \(ft\)/);
+  assert.match(shape, /Save and measure next wall/);
   assert.match(shape, /!perimeterPoints && measurementStep === null/);
 });
 
