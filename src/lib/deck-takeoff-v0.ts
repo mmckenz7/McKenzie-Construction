@@ -229,6 +229,7 @@ export function completeRebuildScopeRequirement(
 }
 
 export type DeckTakeoffPlan = Readonly<{
+  customStructuralPlanRevisionId?: string | null;
   shapeBinding?: Readonly<{
     id: string;
     shapeRevision: number;

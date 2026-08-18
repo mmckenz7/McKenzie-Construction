@@ -6,7 +6,12 @@ import { DeckPrescriptivePlanGenerator } from "@/components/estimates/deck-presc
 import type { FinalizedDeckShape } from "@/components/estimates/deck-shape-review";
 import type { EstimateBuilderEnvelope } from "@/lib/estimate-builder-client";
 import {
+  buildCustomDeckStructuralDraft,
+  customDeckEstimatingConceptJoistLine,
+  deckOutlineOutwardNormal,
   deckShapeStructuralHandoff,
+  type CustomDeckJoistDirection,
+  type CustomDeckEstimatingConcept,
   type DeckPrescriptivePlan,
 } from "@/lib/deck-prescriptive-plan";
 import {
@@ -229,6 +234,7 @@ const INITIAL_SCOPE_DECISIONS = Object.fromEntries(
 
 function defaultPlan(): DeckTakeoffPlan {
   return {
+    customStructuralPlanRevisionId: null,
     shapeBinding: null,
     takeoffScope: "complete_rebuild",
     completeRebuildConfirmed: false,
@@ -312,7 +318,7 @@ export function DeckTakeoffPlanner({
   workflowPhase: "structure" | "takeoff";
   approvedShape: FinalizedDeckShape | null;
   onApplied: (state: EstimateBuilderEnvelope) => void;
-  onStructureReady: () => void;
+  onStructureReady: (readiness: "preliminary_geometry" | "approved_plan") => void;
 }) {
   const [plan, setPlan] = useState<DeckTakeoffPlan>(defaultPlan);
   const [catalog, setCatalog] = useState<CatalogMaterial[]>([]);
@@ -330,6 +336,16 @@ export function DeckTakeoffPlanner({
   const [activeScopeKey, setActiveScopeKey] = useState<CompleteRebuildLineKey>(
     COMPLETE_REBUILD_LINE_KEYS[0],
   );
+  const [customJoistDirection, setCustomJoistDirection] =
+    useState<CustomDeckJoistDirection>("house_to_yard");
+  const [customJoistSpacing, setCustomJoistSpacing] = useState<12 | 16 | 24>(16);
+  const [customPlanRevision, setCustomPlanRevision] = useState(0);
+  const [savedCustomPlan, setSavedCustomPlan] = useState<{
+    id: string;
+    concept: CustomDeckEstimatingConcept;
+  } | null>(null);
+  const [customPlanLoading, setCustomPlanLoading] = useState(false);
+  const customPlanSaveKey = useRef("");
   const appliedDefaults = useRef(false);
   const layoutDetailsRef = useRef<HTMLDetailsElement>(null);
   const fieldDimensions = useMemo(
@@ -380,6 +396,7 @@ export function DeckTakeoffPlanner({
 
   useEffect(() => {
     if (!approvedShape) return;
+    customPlanSaveKey.current = "";
     const nextBinding = {
       id: approvedShape.id,
       shapeRevision: approvedShape.shapeRevision,
@@ -419,6 +436,7 @@ export function DeckTakeoffPlanner({
       ]);
       return {
         ...current,
+        customStructuralPlanRevisionId: null,
         shapeBinding: nextBinding,
         stairEdge: placement?.edge ?? current.stairEdge,
         stairOffsetFeet: placement ? String(placement.offsetFeet) : "",
@@ -444,6 +462,70 @@ export function DeckTakeoffPlanner({
     approvedShapeHandoff,
     approvedShapeStairPlacementConfirmed,
   ]);
+  useEffect(() => {
+    if (!customApprovedFootprint || !approvedShape) {
+      setSavedCustomPlan(null);
+      setCustomPlanRevision(0);
+      return;
+    }
+    let cancelled = false;
+    setCustomPlanLoading(true);
+    fetch(
+      `/api/guided-site-visits/${encodeURIComponent(visitId)}/deck-structural-plan-revisions`,
+      { cache: "no-store" },
+    )
+      .then(async (response) => {
+        const body = (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          staleShape?: boolean;
+          currentPlanRevision?: number;
+          latestPlan?: {
+            id: string;
+            planRevision: number;
+            concept: CustomDeckEstimatingConcept;
+          } | null;
+        };
+        if (!response.ok || !body.success)
+          throw new Error(body.error || "The preliminary Deck plan could not be loaded.");
+        if (cancelled) return;
+        if (body.staleShape) {
+          setSavedCustomPlan(null);
+          setCustomPlanRevision(body.currentPlanRevision ?? 0);
+          setNotice("The saved footprint changed. Generate a new preliminary estimating plan for this revision.");
+          return;
+        }
+        const latest = body.latestPlan ?? null;
+        setCustomPlanRevision(body.currentPlanRevision ?? latest?.planRevision ?? 0);
+        setSavedCustomPlan(latest ? { id: latest.id, concept: latest.concept } : null);
+        if (latest) {
+          setCustomJoistDirection(latest.concept.joistDirection);
+          setCustomJoistSpacing(latest.concept.joistSpacingInches);
+          const line = customDeckEstimatingConceptJoistLine(latest.concept);
+          setPlan((current) => ({
+            ...current,
+            customStructuralPlanRevisionId: latest.id,
+            buildPlanConfirmed: false,
+            framingPlanEvidence: null,
+            additionalLines: current.additionalLines.map((item) =>
+              item.key === "joists"
+                ? { ...item, ...line, unitCost: "", sourceReference: "", catalogMaterialId: null }
+                : item,
+            ),
+          }));
+        }
+      })
+      .catch((caught) => {
+        if (!cancelled)
+          setError(caught instanceof Error ? caught.message : "The preliminary Deck plan could not be loaded.");
+      })
+      .finally(() => {
+        if (!cancelled) setCustomPlanLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [approvedShape, customApprovedFootprint, visitId]);
 
   function productLengthFeet(description: string) {
     const matches = [
@@ -823,7 +905,7 @@ export function DeckTakeoffPlanner({
       return;
     }
     setNotice("The complete structural plan is approved. Continue to takeoff and pricing.");
-    onStructureReady();
+    onStructureReady("approved_plan");
   }
 
   async function findLowesProducts() {
@@ -1576,14 +1658,175 @@ export function DeckTakeoffPlanner({
       ? [plan.additionalLines.find((line) => line.key === "custom_railing")]
       : []),
   ].filter((line): line is FixedLine => Boolean(line));
-  const customStructuralPlanComplete =
-    plan.buildPlanReference.trim().length > 0 &&
-    plan.buildPlanConfirmed &&
-    customStructuralLines.length === customReviewedQuantityKeys.length &&
-    customStructuralLines.every(deckStructuralLineIsComplete);
+  const customStructuralDraft = useMemo(
+    () =>
+      approvedShape
+        ? buildCustomDeckStructuralDraft({
+            outline: approvedShape.outline,
+            joistDirection: customJoistDirection,
+            joistSpacingInches: customJoistSpacing,
+          })
+        : null,
+    [approvedShape, customJoistDirection, customJoistSpacing],
+  );
+  const customDraftReady =
+    savedCustomPlan !== null &&
+    savedCustomPlan.concept.shapeBinding.id === approvedShape?.id &&
+    savedCustomPlan.concept.shapeBinding.shapeRevision === approvedShape?.shapeRevision &&
+    savedCustomPlan.concept.joistDirection === customJoistDirection &&
+    savedCustomPlan.concept.joistSpacingInches === customJoistSpacing;
+  const customDrawing = useMemo(() => {
+    if (!approvedShape?.outline.length) return null;
+    const xs = approvedShape.outline.map((point) => point.x);
+    const ys = approvedShape.outline.map((point) => point.y);
+    const minimumX = Math.min(...xs);
+    const maximumX = Math.max(...xs);
+    const minimumY = Math.min(...ys);
+    const maximumY = Math.max(...ys);
+    const scale = Math.min(
+      260 / Math.max(0.1, maximumX - minimumX),
+      160 / Math.max(0.1, maximumY - minimumY),
+    );
+    const toSvg = (point: { x: number; y: number }) => ({
+      x: 20 + (point.x - minimumX) * scale,
+      y: 20 + (point.y - minimumY) * scale,
+    });
+    const stair = approvedShape.stairPlacement
+      ? (() => {
+          const placement = approvedShape.stairPlacement;
+          const start = approvedShape.outline[placement.edgeIndex];
+          const end =
+            approvedShape.outline[
+              (placement.edgeIndex + 1) % approvedShape.outline.length
+            ];
+          const length = Math.hypot(end.x - start.x, end.y - start.y);
+          const outward = deckOutlineOutwardNormal(
+            approvedShape.outline,
+            placement.edgeIndex,
+          );
+          if (!outward || length <= 0) return null;
+          const tangent = {
+            x: (end.x - start.x) / length,
+            y: (end.y - start.y) / length,
+          };
+          const center = {
+            x: start.x + tangent.x * placement.offsetFeet,
+            y: start.y + tangent.y * placement.offsetFeet,
+          };
+          const nearStart = {
+            x: center.x - tangent.x * placement.widthFeet / 2,
+            y: center.y - tangent.y * placement.widthFeet / 2,
+          };
+          const nearEnd = {
+            x: center.x + tangent.x * placement.widthFeet / 2,
+            y: center.y + tangent.y * placement.widthFeet / 2,
+          };
+          return [
+            nearStart,
+            nearEnd,
+            {
+              x: nearEnd.x + outward.x * placement.projectionFeet,
+              y: nearEnd.y + outward.y * placement.projectionFeet,
+            },
+            {
+              x: nearStart.x + outward.x * placement.projectionFeet,
+              y: nearStart.y + outward.y * placement.projectionFeet,
+            },
+          ].map(toSvg);
+        })()
+      : null;
+    return {
+      outline: approvedShape.outline.map(toSvg),
+      joists: (customStructuralDraft?.joistSegments ?? []).map((segment) => ({
+        start: toSvg(segment.start),
+        end: toSvg(segment.end),
+      })),
+      stair,
+    };
+  }, [approvedShape, customStructuralDraft]);
   const activeCustomStructuralLine = customStructuralLines.find(
     (line) => line.key === activeScopeKey,
   ) ?? customStructuralLines[0];
+  const invalidateCustomDraft = () => {
+    customPlanSaveKey.current = "";
+    setSavedCustomPlan(null);
+    setPlan((current) => ({
+      ...current,
+      customStructuralPlanRevisionId: null,
+      buildPlanConfirmed: false,
+      additionalLines: current.additionalLines.map((line) =>
+        line.key === "joists"
+          ? {
+              ...line,
+              quantity: "",
+              unitCost: "",
+              sourceReference: "",
+              catalogMaterialId: null,
+            }
+          : line,
+      ),
+    }));
+    setPreview(null);
+  };
+  const generateCustomStructuralPlan = async () => {
+    if (
+      !approvedShape ||
+      !customStructuralDraft ||
+      customStructuralDraft.status !== "geometry_ready" ||
+      customStructuralDraft.joistLinearFeet === null
+    )
+      return;
+    setPending(true);
+    setError("");
+    try {
+      if (!customPlanSaveKey.current)
+        customPlanSaveKey.current = crypto.randomUUID();
+      const response = await fetch(
+        `/api/guided-site-visits/${encodeURIComponent(visitId)}/deck-structural-plan-revisions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            expectedPlanRevision: customPlanRevision,
+            idempotencyKey: customPlanSaveKey.current,
+            joistDirection: customJoistDirection,
+            joistSpacingInches: customJoistSpacing,
+          }),
+        },
+      );
+      const body = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+        id?: string;
+        planRevision?: number;
+        concept?: CustomDeckEstimatingConcept;
+      };
+      if (!response.ok || !body.success || !body.id || !body.concept)
+        throw new Error(body.error || "The preliminary estimating plan could not be saved.");
+      const line = customDeckEstimatingConceptJoistLine(body.concept);
+      setSavedCustomPlan({ id: body.id, concept: body.concept });
+      customPlanSaveKey.current = "";
+      setCustomPlanRevision(body.planRevision ?? customPlanRevision + 1);
+      setPlan((current) => ({
+        ...current,
+        customStructuralPlanRevisionId: body.id,
+        buildPlanConfirmed: false,
+        framingPlanEvidence: null,
+        additionalLines: current.additionalLines.map((item) =>
+          item.key === "joists"
+            ? { ...item, ...line, unitCost: "", sourceReference: "", catalogMaterialId: null }
+            : item,
+        ),
+      }));
+      setActiveScopeKey("joists");
+      setNotice("Preliminary custom-footprint estimating plan saved. Review its unresolved packages, then continue to Takeoff.");
+      setPreview(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The preliminary estimating plan could not be saved.");
+    } finally {
+      setPending(false);
+    }
+  };
 
   const customStructuralDesigner = (
     <section className="mt-5 rounded-xl border-2 border-emerald-700 bg-white p-4 sm:p-5">
@@ -1591,15 +1834,191 @@ export function DeckTakeoffPlanner({
         Approved custom footprint
       </p>
       <h4 className="mt-1 text-lg font-black text-slate-950">
-        The inset shape and stair location are saved
+        Generate a preliminary estimating plan
       </h4>
       <p className="mt-2 rounded-lg bg-emerald-50 p-3 text-sm font-bold leading-6 text-emerald-950">
-        You do not need to redraw the deck or place the stairs again. This
-        footprint is nonrectangular, so the rectangular prescriptive table is
-        not being stretched over it. Enter the quantities from a reviewed
-        framing plan that was prepared for this exact saved shape.
+        The drawing starts with saved shape revision {approvedShape?.shapeRevision}
+        and its exact stair placement. The app can total interior joist-run
+        geometry after you choose a direction and spacing. It will not size the
+        structure or invent bearings, beams, posts, footings, connectors, or
+        concealed attachment facts.
       </p>
-      <div className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-3">
+      <div className="relative mt-4 overflow-hidden rounded-lg border-2 border-slate-950 bg-slate-50 p-2">
+        <svg
+          viewBox="0 0 300 220"
+          role="img"
+          aria-label="Exact saved custom deck footprint with preliminary interior joist runs and saved stair placement"
+          className="block w-full"
+        >
+          <rect width="300" height="220" fill="#f8fafc" />
+          {customDrawing ? (
+            <>
+              <polygon
+                points={customDrawing.outline
+                  .map((point) => `${point.x},${point.y}`)
+                  .join(" ")}
+                fill="#dbeafe"
+                stroke="#0f172a"
+                strokeWidth="3"
+              />
+              {customDraftReady
+                ? customDrawing.joists.map((segment, index) => (
+                    <line
+                      key={`custom-joist-${index}`}
+                      x1={segment.start.x}
+                      y1={segment.start.y}
+                      x2={segment.end.x}
+                      y2={segment.end.y}
+                      stroke="#2563eb"
+                      strokeWidth="1.5"
+                      data-plan-member="custom-interior-joist-run"
+                    />
+                  ))
+                : null}
+              {customDrawing.stair ? (
+                <polygon
+                  points={customDrawing.stair
+                    .map((point) => `${point.x},${point.y}`)
+                    .join(" ")}
+                  fill="#fed7aa"
+                  stroke="#c2410c"
+                  strokeWidth="2"
+                  data-plan-member="saved-custom-stair"
+                />
+              ) : null}
+            </>
+          ) : null}
+          <text
+            x="150"
+            y="104"
+            textAnchor="middle"
+            fontSize="13"
+            fontWeight="900"
+            fill="#991b1b"
+            opacity="0.78"
+          >
+            PRELIMINARY ESTIMATING PLAN
+          </text>
+          <text
+            x="150"
+            y="121"
+            textAnchor="middle"
+            fontSize="10"
+            fontWeight="800"
+            fill="#991b1b"
+            opacity="0.78"
+          >
+            NOT FOR CONSTRUCTION — NOT STAMPED
+          </text>
+        </svg>
+      </div>
+      <div className="mt-4 rounded-lg border-2 border-blue-300 bg-blue-50 p-3">
+        <p className="font-black text-slate-950">Joist-run estimating assumptions</p>
+        <p className="mt-1 text-xs leading-5 text-slate-700">
+          These inputs position lines on the saved footprint only. A reviewed
+          plan must still approve member size, species/grade, spans, bearing,
+          doubles, trimmers, and openings.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <Field label="Joist direction">
+            <select
+              className={input}
+              value={customJoistDirection}
+              onChange={(event) => {
+                invalidateCustomDraft();
+                setCustomJoistDirection(
+                  event.target.value as CustomDeckJoistDirection,
+                );
+              }}
+            >
+              <option value="house_to_yard">House toward yard</option>
+              <option value="side_to_side">Side to side</option>
+            </select>
+          </Field>
+          <Field label="Joist spacing (inches on center)">
+            <select
+              className={input}
+              value={customJoistSpacing}
+              onChange={(event) => {
+                invalidateCustomDraft();
+                setCustomJoistSpacing(Number(event.target.value) as 12 | 16 | 24);
+              }}
+            >
+              <option value="12">12 inches on center</option>
+              <option value="16">16 inches on center</option>
+              <option value="24">24 inches on center</option>
+            </select>
+          </Field>
+        </div>
+        {blueprintVisitSeed.estimatingAssumptions.joistSize ? (
+          <p className="mt-3 rounded-md border border-slate-300 bg-white p-3 text-sm leading-6 text-slate-800">
+            <strong>Observed existing deck:</strong>{" "}
+            {blueprintVisitSeed.estimatingAssumptions.joistSize}. This is shown
+            for comparison only and is not being selected for the replacement.
+          </p>
+        ) : null}
+        <button
+          type="button"
+          className={`mt-4 w-full ${primary}`}
+          disabled={
+            disabled ||
+            pending ||
+            customPlanLoading ||
+            customStructuralDraft?.status !== "geometry_ready"
+          }
+          onClick={generateCustomStructuralPlan}
+        >
+          Generate preliminary estimating plan
+        </button>
+        {customStructuralDraft?.status === "unsupported_outline" ? (
+          <p className="mt-2 text-sm font-bold text-red-900">
+            This geometry draft supports simple right-angle custom footprints
+            only. Use an external reviewed plan for this outline.
+          </p>
+        ) : null}
+      </div>
+      {customDraftReady && customStructuralDraft ? (
+        <section className="mt-4 rounded-lg border-2 border-violet-400 bg-violet-50 p-3">
+          <h5 className="font-black text-violet-950">
+            PRELIMINARY ESTIMATING PLAN — NOT FOR CONSTRUCTION
+          </h5>
+          <p className="mt-1 text-sm font-bold text-violet-950">
+            {customStructuralDraft.joistSegmentCount} interior run segments · {customStructuralDraft.joistLinearFeet} linear ft · longest run {customStructuralDraft.longestJoistRunFeet} ft
+          </p>
+          <p className="mt-2 text-xs leading-5 text-violet-900">
+            Only this interior run geometry was generated. The following items
+            still require an external reviewed framing/build plan:
+          </p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm font-bold text-violet-950">
+            {customStructuralDraft.unresolved.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ol>
+          <p className="mt-3 rounded-md border border-amber-400 bg-amber-50 p-3 text-sm font-black text-amber-950">
+            This generated estimating concept is saved as an immutable revision
+            bound to shape revision {approvedShape?.shapeRevision}. It is not a
+            reviewed custom structural plan. Takeoff receives only the polygon
+            geometry and preliminary joist-run quantity; all listed structural,
+            hardware, ordering, and permit packages remain blocked.
+          </p>
+          <button
+            type="button"
+            className={`mt-3 w-full ${primary}`}
+            disabled={disabled || pending || !savedCustomPlan}
+            onClick={() => {
+              setNotice("Preliminary geometry carried into Takeoff. Complete the reviewed structural and hardware packages before pricing or final use.");
+              onStructureReady("preliminary_geometry");
+            }}
+          >
+            Use preliminary geometry in Takeoff
+          </button>
+        </section>
+      ) : null}
+      <details className="mt-4 rounded-lg border border-slate-400 bg-slate-50 p-3">
+        <summary className="min-h-11 cursor-pointer py-2 font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
+          Use an external reviewed framing plan instead
+        </summary>
+      <div className="mt-4 rounded-lg border border-slate-300 bg-white p-3">
         <Field
           label="Reviewed custom framing-plan source"
           help="Name the drawing, engineer detail, manufacturer plan, or building-department-reviewed layout used for this exact inset footprint."
@@ -1619,22 +2038,11 @@ export function DeckTakeoffPlanner({
             }}
           />
         </Field>
-        <label className="mt-3 flex min-h-11 items-start gap-3 rounded-md border border-slate-300 bg-white p-3 text-sm font-bold text-slate-950 focus-within:ring-2 focus-within:ring-emerald-700">
-          <input
-            className="mt-1"
-            type="checkbox"
-            checked={plan.buildPlanConfirmed}
-            onChange={(event) =>
-              setPlan((current) => ({
-                ...current,
-                buildPlanConfirmed: event.target.checked,
-              }))
-            }
-          />
-          I verified that this framing plan matches the saved inset shape and
-          stair location. The app is recording its quantities, not inventing a
-          rectangular substitute.
-        </label>
+        <p className="mt-3 rounded-md border-2 border-amber-400 bg-amber-50 p-3 text-sm font-black leading-6 text-amber-950">
+          A typed source name and checkbox are not proof of a reviewed plan.
+          Approval remains unavailable until the app can save and recheck the
+          reviewed plan as immutable evidence bound to this shape revision.
+        </p>
       </div>
       <div className="mt-4 rounded-lg border border-slate-300 p-3">
         <div className="flex items-center justify-between gap-3">
@@ -1704,79 +2112,21 @@ export function DeckTakeoffPlanner({
                 }
               />
             </Field>
-            <Field
-              label="Unit cost"
-              help="This can be finished in Takeoff after the structural plan is approved."
-            >
-              <input
-                className={input}
-                inputMode="decimal"
-                value={activeCustomStructuralLine.unitCost}
-                onChange={(event) =>
-                  updateLine(
-                    activeCustomStructuralLine.key,
-                    "unitCost",
-                    event.target.value,
-                  )
-                }
-              />
-            </Field>
-            <Field
-              label="Price/source reference"
-              help="Required before the takeoff can become customer-ready."
-            >
-              <input
-                className={input}
-                value={activeCustomStructuralLine.sourceReference}
-                onChange={(event) =>
-                  updateLine(
-                    activeCustomStructuralLine.key,
-                    "sourceReference",
-                    event.target.value,
-                  )
-                }
-              />
-            </Field>
           </div>
         ) : null}
       </div>
       <button
         type="button"
         className={`mt-4 w-full ${primary}`}
-        disabled={disabled || !customStructuralPlanComplete}
-        onClick={() => {
-          setPlan((current) => ({
-            ...current,
-            framingPlanEvidence: null,
-            stairPlacementConfirmed:
-              approvedShapeStairPlacementConfirmed,
-            scopeDecisions: {
-              ...current.scopeDecisions,
-              ...Object.fromEntries(
-                customStructuralKeys.map((key) => [key, "include"]),
-              ),
-              ...(railingGeometry.attached === false
-                ? { ledger_attachment: "not_in_scope" as const }
-                : {}),
-              ...(!approvedStairsPresent
-                ? { stairs: "not_in_scope" as const }
-                : {}),
-            },
-          }));
-          setNotice(
-            "The reviewed custom structural plan is recorded. Continue to takeoff and pricing.",
-          );
-          onStructureReady();
-        }}
+        disabled
       >
-        Approve reviewed structural plan and continue to takeoff
+        Reviewed-plan evidence is required before Takeoff
       </button>
-      {!customStructuralPlanComplete ? (
-        <p className="mt-2 text-sm font-bold text-amber-900">
-          Add the reviewed plan source, confirm it matches this shape, and
-          enter each required structural quantity.
-        </p>
-      ) : null}
+      <p className="mt-2 text-sm font-bold text-amber-900">
+        You may prepare the source and quantities here, but this screen will not
+        treat free text as reviewed structural evidence.
+      </p>
+      </details>
     </section>
   );
 
@@ -1848,10 +2198,14 @@ export function DeckTakeoffPlanner({
           Structural design only
         </p>
         <h3 className="mt-1 text-xl font-black text-slate-950">
-          Build one complete structural plan
+          {customApprovedFootprint
+            ? "Generate the custom-footprint estimating plan"
+            : "Build one complete structural plan"}
         </h3>
         <p className="mt-2 text-sm leading-6 text-slate-700">
-          Work through framing, supports, footings, stairs, railing and attachment here. Material shopping, quantities, Lowe&apos;s products and prices begin only after this plan is approved.
+          {customApprovedFootprint
+            ? "Save the exact footprint and preliminary run geometry here. The drawing is not a reviewed structural plan; sizing, supports, foundations, attachment, stairs, guards and hardware remain later blockers."
+            : "Work through framing, supports, footings, stairs, railing and attachment here. Material shopping, quantities, Lowe's products and prices begin only after this plan is approved."}
         </p>
         {customApprovedFootprint ? customStructuralDesigner : structuralDesigner}
       </section>
@@ -1883,7 +2237,7 @@ export function DeckTakeoffPlanner({
       </h3>
       <p className="mt-2 text-sm leading-6 text-slate-700">
         {customApprovedFootprint
-          ? "This is a complete-rebuild takeoff for the exact saved custom footprint. Its reviewed decking and railing quantities are priced below; rectangular board and railing calculators do not apply."
+          ? "This takeoff is bound to the exact saved custom footprint and its preliminary estimating-plan revision. Polygon geometry, saved stairs, and selected joist-run topology carry forward; they do not approve member sizing or structural details. Reviewed decking, railing, structure, hardware, pricing, order, and permit inputs remain required below."
           : "This is a complete-rebuild takeoff: old decking, framing, supports, and footings are not being reused. The app can calculate deck area, decking layout, and a reviewed rectangular railing perimeter. Every structural member, footing, connector, stair, labor, and logistics quantity must come from your named build plan."}
       </p>
 

@@ -75,6 +75,7 @@ type DeckVisitSummary = {
   latestApprovedShape: FinalizedDeckShape | null;
 };
 type DeckWorkspaceStage = "site_visit" | "shape" | "structure" | "takeoff" | "proposal";
+type DeckStructureReadiness = "not_ready" | "preliminary_geometry" | "approved_plan";
 
 const button = "rounded-md px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
 const primary = `${button} bg-slate-950 text-white hover:bg-slate-800`;
@@ -158,7 +159,7 @@ export function EstimateBuilder({
   const [deckVisitSummary, setDeckVisitSummary] = useState<DeckVisitSummary | null>(null);
   const [deckWorkspaceStage, setDeckWorkspaceStage] = useState<DeckWorkspaceStage>("site_visit");
   const [finalizedDeckShape, setFinalizedDeckShape] = useState<FinalizedDeckShape | null>(null);
-  const [deckStructureReady, setDeckStructureReady] = useState(false);
+  const [deckStructureReadiness, setDeckStructureReadiness] = useState<DeckStructureReadiness>("not_ready");
 
   const loadDeckVisitStatus = useCallback(async () => {
     if (!showDeckWorkflow) return;
@@ -398,7 +399,7 @@ export function EstimateBuilder({
   function openDeckWorkspaceStage(stage: DeckWorkspaceStage) {
     if (stage === "shape" && deckVisitStatus !== "completed") return;
     if (stage === "structure" && !finalizedDeckShape) return;
-    if (stage === "takeoff" && !deckStructureReady) return;
+    if (stage === "takeoff" && deckStructureReadiness === "not_ready") return;
     if (stage === "proposal" && !deckProposalReady) return;
     setDeckWorkspaceStage(stage);
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -448,7 +449,7 @@ export function EstimateBuilder({
       activeStage={deckWorkspaceStage}
       visitStatus={deckVisitStatus}
       shapeReady={Boolean(finalizedDeckShape)}
-      structureReady={deckStructureReady}
+      structureReadiness={deckStructureReadiness}
       takeoffStarted={deckTakeoffStarted}
       trueCostLineCount={deckTrueCostLineCount}
       proposalReady={deckProposalReady}
@@ -465,7 +466,7 @@ export function EstimateBuilder({
       disabled={controlsDisabled}
       onFinalize={(shape) => {
         setFinalizedDeckShape(shape);
-        setDeckStructureReady(false);
+        setDeckStructureReadiness("not_ready");
         setDeckWorkspaceStage("structure");
       }}
     /></section> : null}
@@ -482,11 +483,12 @@ export function EstimateBuilder({
       canEdit={canCreateStandard}
       disabled={controlsDisabled}
       workflowPhase={deckWorkspaceStage}
+      structureReadiness={deckStructureReadiness}
       approvedShape={finalizedDeckShape}
       onCreateSection={beginDeckTakeoff}
       onAddCostLine={beginDeckCostLine}
       onTakeoffApplied={(nextState) => { setState(nextState); setNotice("Reviewed Deck takeoff added. Review the true-cost lines, then continue to OH&P."); }}
-      onStructureReady={() => { setDeckStructureReady(true); setDeckWorkspaceStage("takeoff"); }}
+      onStructureReady={(readiness) => { setDeckStructureReadiness(readiness); setDeckWorkspaceStage("takeoff"); }}
       onContinuePricing={() => document.getElementById("deck-pricing-workspace")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}
     /> : null}
 
@@ -547,11 +549,11 @@ export function EstimateBuilder({
   </div>;
 }
 
-function DeckJobStageHeader({ activeStage, visitStatus, shapeReady, structureReady, takeoffStarted, trueCostLineCount, proposalReady, onOpenStage }: {
+function DeckJobStageHeader({ activeStage, visitStatus, shapeReady, structureReadiness, takeoffStarted, trueCostLineCount, proposalReady, onOpenStage }: {
   activeStage: DeckWorkspaceStage;
   visitStatus: "checking" | "unavailable" | "not_started" | "in_progress" | "completed";
   shapeReady: boolean;
-  structureReady: boolean;
+  structureReadiness: DeckStructureReadiness;
   takeoffStarted: boolean;
   trueCostLineCount: number;
   proposalReady: boolean;
@@ -575,7 +577,9 @@ function DeckJobStageHeader({ activeStage, visitStatus, shapeReady, structureRea
       title: "Takeoff and price",
       instruction: trueCostLineCount
         ? "Review the saved true costs, set OH&P, and prepare the customer view."
-        : "Use the approved structural plan to calculate materials, choose products and add true costs.",
+        : structureReadiness === "preliminary_geometry"
+          ? "Use the saved preliminary footprint geometry for early quantities. Structural review, products, hardware, ordering and permit readiness are still required."
+          : "Use the approved structural plan to calculate materials, choose products and add true costs.",
     },
     proposal: {
       title: "Review and send",
@@ -585,8 +589,8 @@ function DeckJobStageHeader({ activeStage, visitStatus, shapeReady, structureRea
   const stages: { key: DeckWorkspaceStage; title: string; status: string; enabled: boolean }[] = [
     { key: "site_visit", title: "Site visit", status: fieldComplete ? "Complete" : visitStatus === "in_progress" ? "In progress" : visitStatus === "checking" ? "Checking" : visitStatus === "unavailable" ? "Needs attention" : "Not started", enabled: true },
     { key: "shape", title: "Shape", status: shapeReady ? "Approved" : fieldComplete ? "Ready" : "Waiting", enabled: fieldComplete },
-    { key: "structure", title: "Structure", status: structureReady ? "Approved" : shapeReady ? "Ready" : "Waiting", enabled: shapeReady },
-    { key: "takeoff", title: "Takeoff", status: trueCostLineCount ? `${trueCostLineCount} costs saved` : takeoffStarted ? "In progress" : structureReady ? "Ready" : "Waiting", enabled: structureReady },
+    { key: "structure", title: "Structure", status: structureReadiness === "approved_plan" ? "Approved" : structureReadiness === "preliminary_geometry" ? "Preliminary" : shapeReady ? "Ready" : "Waiting", enabled: shapeReady },
+    { key: "takeoff", title: "Takeoff", status: trueCostLineCount ? `${trueCostLineCount} costs saved` : takeoffStarted ? "In progress" : structureReadiness === "preliminary_geometry" ? "Geometry ready" : structureReadiness === "approved_plan" ? "Ready" : "Waiting", enabled: structureReadiness !== "not_ready" },
     { key: "proposal", title: "Proposal", status: proposalReady ? "Ready" : "Waiting", enabled: proposalReady },
   ];
   const current = stageContent[activeStage];
@@ -602,7 +606,7 @@ function DeckJobStageHeader({ activeStage, visitStatus, shapeReady, structureRea
       onClick={() => onOpenStage(stage.key)}
       className={`min-h-16 w-full rounded-lg border p-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 disabled:cursor-not-allowed disabled:opacity-50 ${activeStage === stage.key ? "border-blue-700 bg-blue-50" : "border-slate-300 bg-white hover:border-blue-500"}`}
     ><span className="block text-xs font-black uppercase tracking-wide text-slate-500">{index + 1}. {stage.title}</span><span className="mt-1 block text-xs font-bold text-slate-950">{stage.status}</span></button></li>)}</ol>
-    <p className="mt-3 text-xs font-semibold text-slate-600">Photos may suggest a starting outline, but only the approved shape moves into structural design. Structure must be approved before quantities or prices begin.</p>
+    <p className="mt-3 text-xs font-semibold text-slate-600">Photos may suggest a starting outline, but only the approved shape moves into structural design. A saved preliminary concept may open geometry review in Takeoff; structural, product, ordering and permit readiness remain blocked until reviewed evidence is complete.</p>
   </section>;
 }
 
@@ -643,6 +647,7 @@ function DeckTakeoffWorkspace({
   canEdit,
   disabled,
   workflowPhase,
+  structureReadiness,
   approvedShape,
   onCreateSection,
   onAddCostLine,
@@ -661,11 +666,12 @@ function DeckTakeoffWorkspace({
   canEdit: boolean;
   disabled: boolean;
   workflowPhase: "structure" | "takeoff";
+  structureReadiness: DeckStructureReadiness;
   approvedShape: FinalizedDeckShape | null;
   onCreateSection: () => void;
   onAddCostLine: (category: EstimateCostCategory) => void;
   onTakeoffApplied: (state: EstimateBuilderEnvelope) => void;
-  onStructureReady: () => void;
+  onStructureReady: (readiness: Exclude<DeckStructureReadiness, "not_ready">) => void;
   onContinuePricing: () => void;
 }) {
   const categories: { key: EstimateCostCategory; label: string; help: string }[] = [
@@ -688,7 +694,7 @@ function DeckTakeoffWorkspace({
     <p className="text-xs font-black uppercase tracking-[.16em] text-emerald-700">{workflowPhase === "structure" ? "Step 3 · Design the structure" : "Step 4 · Calculate and price"}</p>
     <h2 id="deck-takeoff-title" className="mt-1 text-2xl font-black text-slate-950">{workflowPhase === "structure" ? "Structural plan" : "Takeoff and true-cost workspace"}</h2>
     {visitStatus !== "completed" ? <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950">Finish the field form before building the Deck estimate.</p> : <>
-      <p className="mt-2 text-sm leading-6 text-slate-700">{workflowPhase === "structure" ? "The deck shape is set. Complete the framing, supports, footings, stairs, railing and attachment plan together. Materials and prices stay out of this step." : "The shape and structural plan are approved. Now calculate material quantities, choose products and enter verified true costs."}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-700">{workflowPhase === "structure" ? "The deck shape is set. Complete the framing, supports, footings, stairs, railing and attachment plan together. Materials and prices stay out of this step." : structureReadiness === "preliminary_geometry" ? "The exact footprint and preliminary geometry are saved. Use them for early quantities while structural review, hardware, ordering and permit readiness remain blocked." : "The shape and structural plan are approved. Now calculate material quantities, choose products and enter verified true costs."}</p>
       <details className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-4">
         <summary className="min-h-11 cursor-pointer font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">Saved field measurements and notes</summary>
         {measuredItems.length ? <div className="mt-3 grid gap-3 md:grid-cols-2">{measuredItems.map((item) => <section key={item.itemKey} className="rounded-lg bg-white p-3"><h3 className="font-bold text-slate-950">{item.title}</h3><dl className="mt-2 space-y-2 text-sm">{item.rows.map((row) => <div key={`${item.itemKey}-${row.label}`} className="flex items-start justify-between gap-4"><dt className="text-slate-600">{row.label}</dt><dd className="text-right font-bold text-slate-950">{row.value}</dd></div>)}</dl></section>)}</div> : <p className="mt-3 text-sm text-slate-600">No field measurements were returned. Reload the visit before entering quantities.</p>}

@@ -31,6 +31,9 @@ import {
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import {
   assertPartialFramingEvidenceBinding,
+  customDeckEstimatingConceptJoistLine,
+  customDeckStructuralPlanBindingMatches,
+  isCanonicalCustomDeckEstimatingConcept,
   isCanonicalFramingEvidence,
   isValidDeckOutline,
   type DeckOutlinePoint,
@@ -81,6 +84,10 @@ const SHAPE_EVIDENCE_PLAN_KEYS = new Set([
 const SHAPE_HARDWARE_PLAN_KEYS = new Set([
   ...HARDWARE_EVIDENCE_PLAN_KEYS,
   "shapeBinding",
+]);
+const CUSTOM_STRUCTURAL_PLAN_KEYS = new Set([
+  ...SHAPE_HARDWARE_PLAN_KEYS,
+  "customStructuralPlanRevisionId",
 ]);
 const SHAPE_BINDING_KEYS = new Set([
   "id",
@@ -267,7 +274,8 @@ function parsePlan(value: unknown): DeckTakeoffPlan {
     exactFields(plan, HARDWARE_EVIDENCE_PLAN_KEYS) ||
     exactFields(plan, SHAPE_PLAN_KEYS) ||
     exactFields(plan, SHAPE_EVIDENCE_PLAN_KEYS) ||
-    exactFields(plan, SHAPE_HARDWARE_PLAN_KEYS);
+    exactFields(plan, SHAPE_HARDWARE_PLAN_KEYS) ||
+    exactFields(plan, CUSTOM_STRUCTURAL_PLAN_KEYS);
   if (!legacyPlan && !preRebuildPlan && !rebuildPlan)
     throw new TypeError("The Deck takeoff plan is invalid.");
   if (!Array.isArray(plan.additionalLines) || plan.additionalLines.length > 14)
@@ -367,6 +375,10 @@ function parsePlan(value: unknown): DeckTakeoffPlan {
     }
   }
   const parsed: DeckTakeoffPlan = {
+    customStructuralPlanRevisionId:
+      rebuildPlan && "customStructuralPlanRevisionId" in plan
+        ? nullableUuid(plan.customStructuralPlanRevisionId)
+        : null,
     shapeBinding:
       rebuildPlan && "shapeBinding" in plan
         ? plan.shapeBinding === null
@@ -535,7 +547,7 @@ async function loadVisitAndCatalog(
   {
     const shape = await supabase
       .from("guided_deck_shape_revisions")
-      .select("id,shape_revision,outline,stairs_present,stair_placement")
+      .select("id,shape_revision,outline,stairs_present,stair_placement,request_sha256")
       .eq("company_id", companyId)
       .eq("visit_id", visitId)
       .order("shape_revision", { ascending: false })
@@ -560,6 +572,59 @@ async function loadVisitAndCatalog(
         !deckShapeBindingMatches(latest, plan.shapeBinding))
     )
       return { code: "stale_shape_revision" as const };
+    const structural =
+      latest && plan.shapeBinding
+        ? await supabase
+            .from("guided_deck_structural_plan_revisions")
+            .select("id,shape_revision_id,shape_revision,shape_digest,source_type,concept_payload,status")
+            .eq("company_id", companyId)
+            .eq("visit_id", visitId)
+            .order("plan_revision", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : null;
+    if (structural?.error)
+      throw new Error("The preliminary structural plan could not be loaded.");
+    if (
+      latest &&
+      !customDeckStructuralPlanBindingMatches({
+        shape: latest,
+        requestedRevisionId: plan.customStructuralPlanRevisionId,
+        latestRevisionId: structural?.data?.id,
+      })
+    )
+      return { code: "invalid_application" as const };
+    if (
+      latest &&
+      plan.customStructuralPlanRevisionId &&
+      (plan.buildPlanConfirmed || plan.framingPlanEvidence !== null)
+    )
+      return { code: "invalid_application" as const };
+    if (plan.customStructuralPlanRevisionId) {
+      if (!latest)
+        return { code: "stale_shape_revision" as const };
+      const row = structural?.data;
+      if (
+        !row ||
+        row.id !== plan.customStructuralPlanRevisionId ||
+        row.shape_revision_id !== latest.id ||
+        row.shape_revision !== latest.shapeRevision ||
+        row.shape_digest !== shape.data?.request_sha256 ||
+        row.source_type !== "generated_estimating_concept" ||
+        row.status !== "generated_estimating_concept" ||
+        !isCanonicalCustomDeckEstimatingConcept(row.concept_payload, latest)
+      )
+        return { code: "stale_shape_revision" as const };
+      const expected = customDeckEstimatingConceptJoistLine(row.concept_payload);
+      const joists = plan.additionalLines.find((line) => line.key === "joists");
+      if (
+        !joists ||
+        joists.description !== expected.description ||
+        joists.quantity !== expected.quantity ||
+        joists.unit !== expected.unit
+      )
+        return { code: "invalid_application" as const };
+    }
   }
   const itemResult = await supabase
     .from("guided_site_visit_items")

@@ -237,6 +237,288 @@ export function deckOutlineAreaSquareFeet(
   );
 }
 
+export type CustomDeckJoistDirection = "house_to_yard" | "side_to_side";
+
+export type CustomDeckJoistSegment = Readonly<{
+  stationFeet: number;
+  start: DeckOutlinePoint;
+  end: DeckOutlinePoint;
+  lengthFeet: number;
+}>;
+
+export type CustomDeckStructuralDraft = Readonly<{
+  version: "custom-deck-structure-geometry-v1";
+  status: "geometry_ready" | "unsupported_outline";
+  joistDirection: CustomDeckJoistDirection;
+  joistSpacingInches: 12 | 16 | 24;
+  areaSquareFeet: number | null;
+  perimeterFeet: number | null;
+  joistSegments: readonly CustomDeckJoistSegment[];
+  joistSegmentCount: number;
+  joistLinearFeet: number | null;
+  longestJoistRunFeet: number | null;
+  unresolved: readonly string[];
+}>;
+
+export type CustomDeckEstimatingConcept = Readonly<{
+  version: "custom-deck-generated-estimating-concept-v1";
+  sourceType: "generated_estimating_concept";
+  status: "generated_estimating_concept";
+  shapeBinding: Readonly<{ id: string; shapeRevision: number }>;
+  joistDirection: CustomDeckJoistDirection;
+  joistSpacingInches: 12 | 16 | 24;
+  areaSquareFeet: number;
+  perimeterFeet: number;
+  joistSegments: readonly CustomDeckJoistSegment[];
+  joistSegmentCount: number;
+  joistLinearFeet: number;
+  longestJoistRunFeet: number;
+  stairsPresent: boolean;
+  stairPlacement: DeckStairPlacement | null;
+  unresolvedPackages: readonly string[];
+}>;
+
+export const CUSTOM_DECK_ESTIMATING_UNRESOLVED_PACKAGES = Object.freeze([
+  "joist_member_and_bearing_detail",
+  "beam_support_plan",
+  "post_foundation_plan",
+  "ledger_attachment_detail",
+  "blocking_bracing_detail",
+  "stair_structural_detail",
+  "guard_attachment_detail",
+  "hardware_connector_schedule",
+] as const);
+
+export function buildCustomDeckStructuralDraft(args: Readonly<{
+  outline: readonly DeckOutlinePoint[];
+  joistDirection: CustomDeckJoistDirection;
+  joistSpacingInches: 12 | 16 | 24;
+}>): CustomDeckStructuralDraft {
+  const unresolved = Object.freeze([
+    "Reviewed joist size/species/grade and every bearing, doubled, trimmer, and opening member",
+    "Reviewed beam/support lines and beam member schedule",
+    "Reviewed post/support and footing/foundation schedule",
+    "Reviewed blocking, bracing, ledger/attachment, and connector schedule",
+    "Reviewed stair and guard framing details where applicable",
+  ]);
+  const valid = isValidDeckOutline(args.outline);
+  const orthogonal =
+    valid &&
+    args.outline.every((point, index) => {
+      const next = args.outline[(index + 1) % args.outline.length];
+      return (
+        Math.abs(point.x - next.x) <= 0.0001 ||
+        Math.abs(point.y - next.y) <= 0.0001
+      );
+    });
+  if (!orthogonal) {
+    return Object.freeze({
+      version: "custom-deck-structure-geometry-v1",
+      status: "unsupported_outline",
+      joistDirection: args.joistDirection,
+      joistSpacingInches: args.joistSpacingInches,
+      areaSquareFeet: null,
+      perimeterFeet: null,
+      joistSegments: Object.freeze([]),
+      joistSegmentCount: 0,
+      joistLinearFeet: null,
+      longestJoistRunFeet: null,
+      unresolved,
+    });
+  }
+
+  const xs = args.outline.map((point) => point.x);
+  const ys = args.outline.map((point) => point.y);
+  const stationMinimum =
+    args.joistDirection === "house_to_yard" ? Math.min(...xs) : Math.min(...ys);
+  const stationMaximum =
+    args.joistDirection === "house_to_yard" ? Math.max(...xs) : Math.max(...ys);
+  const spacingFeet = args.joistSpacingInches / 12;
+  const segments: CustomDeckJoistSegment[] = [];
+
+  for (
+    let station = stationMinimum + spacingFeet;
+    station < stationMaximum - 0.0001;
+    station += spacingFeet
+  ) {
+    const intersections: number[] = [];
+    for (let index = 0; index < args.outline.length; index += 1) {
+      const start = args.outline[index];
+      const end = args.outline[(index + 1) % args.outline.length];
+      if (args.joistDirection === "house_to_yard") {
+        if (Math.abs(start.y - end.y) > 0.0001) continue;
+        const lower = Math.min(start.x, end.x);
+        const upper = Math.max(start.x, end.x);
+        if (station >= lower && station < upper) intersections.push(start.y);
+      } else {
+        if (Math.abs(start.x - end.x) > 0.0001) continue;
+        const lower = Math.min(start.y, end.y);
+        const upper = Math.max(start.y, end.y);
+        if (station >= lower && station < upper) intersections.push(start.x);
+      }
+    }
+    intersections.sort((left, right) => left - right);
+    for (let index = 0; index + 1 < intersections.length; index += 2) {
+      const beginning = intersections[index];
+      const ending = intersections[index + 1];
+      const lengthFeet = ending - beginning;
+      if (lengthFeet < 0.25) continue;
+      segments.push(
+        Object.freeze({
+          stationFeet: Number(station.toFixed(4)),
+          start:
+            args.joistDirection === "house_to_yard"
+              ? Object.freeze({ x: station, y: beginning })
+              : Object.freeze({ x: beginning, y: station }),
+          end:
+            args.joistDirection === "house_to_yard"
+              ? Object.freeze({ x: station, y: ending })
+              : Object.freeze({ x: ending, y: station }),
+          lengthFeet: Number(lengthFeet.toFixed(4)),
+        }),
+      );
+    }
+  }
+  const perimeterFeet = args.outline.reduce((sum, point, index) => {
+    const next = args.outline[(index + 1) % args.outline.length];
+    return sum + Math.hypot(next.x - point.x, next.y - point.y);
+  }, 0);
+  const joistLinearFeet = segments.reduce(
+    (sum, segment) => sum + segment.lengthFeet,
+    0,
+  );
+  return Object.freeze({
+    version: "custom-deck-structure-geometry-v1",
+    status: "geometry_ready",
+    joistDirection: args.joistDirection,
+    joistSpacingInches: args.joistSpacingInches,
+    areaSquareFeet: Number((deckOutlineAreaSquareFeet(args.outline) ?? 0).toFixed(3)),
+    perimeterFeet: Number(perimeterFeet.toFixed(3)),
+    joistSegments: Object.freeze(segments),
+    joistSegmentCount: segments.length,
+    joistLinearFeet: Number(joistLinearFeet.toFixed(3)),
+    longestJoistRunFeet: segments.length
+      ? Number(Math.max(...segments.map((segment) => segment.lengthFeet)).toFixed(3))
+      : 0,
+    unresolved,
+  });
+}
+
+export function buildCustomDeckEstimatingConcept(args: Readonly<{
+  shapeRevisionId: string;
+  shapeRevision: number;
+  outline: readonly DeckOutlinePoint[];
+  stairsPresent: boolean;
+  stairPlacement: DeckStairPlacement | null;
+  joistDirection: CustomDeckJoistDirection;
+  joistSpacingInches: 12 | 16 | 24;
+}>): CustomDeckEstimatingConcept | null {
+  const draft = buildCustomDeckStructuralDraft(args);
+  if (
+    draft.status !== "geometry_ready" ||
+    draft.areaSquareFeet === null ||
+    draft.perimeterFeet === null ||
+    draft.joistLinearFeet === null ||
+    draft.longestJoistRunFeet === null
+  )
+    return null;
+  return Object.freeze({
+    version: "custom-deck-generated-estimating-concept-v1",
+    sourceType: "generated_estimating_concept",
+    status: "generated_estimating_concept",
+    shapeBinding: Object.freeze({
+      id: args.shapeRevisionId,
+      shapeRevision: args.shapeRevision,
+    }),
+    joistDirection: args.joistDirection,
+    joistSpacingInches: args.joistSpacingInches,
+    areaSquareFeet: draft.areaSquareFeet,
+    perimeterFeet: draft.perimeterFeet,
+    joistSegments: draft.joistSegments,
+    joistSegmentCount: draft.joistSegmentCount,
+    joistLinearFeet: draft.joistLinearFeet,
+    longestJoistRunFeet: draft.longestJoistRunFeet,
+    stairsPresent: args.stairsPresent,
+    stairPlacement: args.stairPlacement,
+    unresolvedPackages: CUSTOM_DECK_ESTIMATING_UNRESOLVED_PACKAGES,
+  });
+}
+
+export function customDeckEstimatingConceptJoistLine(
+  concept: CustomDeckEstimatingConcept,
+) {
+  return Object.freeze({
+    description: `Preliminary interior joist-run geometry: ${concept.joistSegmentCount} unspliced run segments at ${concept.joistSpacingInches} inches on center, ${concept.longestJoistRunFeet} ft longest. Member size/species/grade, rim members, doubles/trimmers, openings, bearing changes, and structural approval remain unresolved.`,
+    quantity: String(concept.joistLinearFeet),
+    unit: "ln ft",
+  });
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export function isCanonicalCustomDeckEstimatingConcept(
+  value: unknown,
+  shape: Readonly<{
+    id: string;
+    shapeRevision: number;
+    outline: readonly DeckOutlinePoint[];
+    stairsPresent: boolean;
+    stairPlacement: DeckStairPlacement | null;
+  }>,
+): value is CustomDeckEstimatingConcept {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (
+    record.joistDirection !== "house_to_yard" &&
+    record.joistDirection !== "side_to_side"
+  )
+    return false;
+  if (
+    record.joistSpacingInches !== 12 &&
+    record.joistSpacingInches !== 16 &&
+    record.joistSpacingInches !== 24
+  )
+    return false;
+  const rebuilt = buildCustomDeckEstimatingConcept({
+    shapeRevisionId: shape.id,
+    shapeRevision: shape.shapeRevision,
+    outline: shape.outline,
+    stairsPresent: shape.stairsPresent,
+    stairPlacement: shape.stairPlacement,
+    joistDirection: record.joistDirection,
+    joistSpacingInches: record.joistSpacingInches,
+  });
+  return rebuilt !== null && canonicalJson(rebuilt) === canonicalJson(value);
+}
+
+export function customDeckStructuralPlanBindingMatches(args: Readonly<{
+  shape: Readonly<{
+    outline: readonly DeckOutlinePoint[];
+    stairsPresent: boolean;
+    stairPlacement: DeckStairPlacement | null;
+  }>;
+  requestedRevisionId: string | null | undefined;
+  latestRevisionId: string | null | undefined;
+}>) {
+  if (deckShapeStructuralHandoff(args.shape).footprintMode !== "reviewed_custom_plan")
+    return true;
+  return (
+    typeof args.requestedRevisionId === "string" &&
+    typeof args.latestRevisionId === "string" &&
+    args.requestedRevisionId === args.latestRevisionId
+  );
+}
+
 export function deckShapeStructuralHandoff(
   shape: Readonly<{
     outline: readonly DeckOutlinePoint[];

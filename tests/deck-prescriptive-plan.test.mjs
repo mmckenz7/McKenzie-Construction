@@ -4,6 +4,9 @@ import test from "node:test";
 import {
   applyDeckWallMeasurementInSequence,
   assertPartialFramingEvidenceBinding,
+  buildCustomDeckStructuralDraft,
+  buildCustomDeckEstimatingConcept,
+  customDeckStructuralPlanBindingMatches,
   buildPrescriptiveDeckPlan,
   closeDeckOutlineWithMeasuredWall,
   deckEstimatingImmediateIssueIds,
@@ -11,6 +14,7 @@ import {
   deckWallDirectionTemplate,
   drawingClientToDeckPoint,
   isCanonicalFramingEvidence,
+  isCanonicalCustomDeckEstimatingConcept,
   insertOutlinePointOnNearestEdge,
   isValidDeckOutline,
   KNOXVILLE_2024_DECK_PROFILE,
@@ -29,6 +33,112 @@ import {
   deckShapeBindingMatches,
   deckStructuralLineIsComplete,
 } from "../src/lib/deck-takeoff-v0.ts";
+
+test("custom estimating concept derives only exact orthogonal footprint geometry", () => {
+  const outline = [
+    { x: 0, y: 0 },
+    { x: 19, y: 0 },
+    { x: 19, y: 15 },
+    { x: 0, y: 15 },
+    { x: 0, y: 10 },
+    { x: 7, y: 10 },
+    { x: 7, y: 5 },
+    { x: 0, y: 5 },
+  ];
+  const houseToYard = buildCustomDeckStructuralDraft({
+    outline,
+    joistDirection: "house_to_yard",
+    joistSpacingInches: 16,
+  });
+  assert.equal(houseToYard.status, "geometry_ready");
+  assert.equal(houseToYard.areaSquareFeet, 250);
+  assert.equal(houseToYard.perimeterFeet, 82);
+  assert.equal(houseToYard.joistSegmentCount, 19);
+  assert.equal(houseToYard.joistLinearFeet, 185);
+  assert.equal(houseToYard.longestJoistRunFeet, 15);
+  assert.ok(houseToYard.unresolved.some((item) => /beam\/support/i.test(item)));
+  assert.ok(houseToYard.unresolved.some((item) => /footing/i.test(item)));
+  assert.equal("joistSize" in houseToYard, false);
+
+  const sideToSide = buildCustomDeckStructuralDraft({
+    outline,
+    joistDirection: "side_to_side",
+    joistSpacingInches: 16,
+  });
+  assert.equal(sideToSide.joistSegmentCount, 11);
+  assert.equal(sideToSide.joistLinearFeet, 181);
+  assert.equal(sideToSide.longestJoistRunFeet, 19);
+});
+
+test("custom estimating concept fails closed for unsupported nonorthogonal geometry", () => {
+  const draft = buildCustomDeckStructuralDraft({
+    outline: [
+      { x: 0, y: 0 },
+      { x: 14, y: 0 },
+      { x: 12, y: 10 },
+      { x: 0, y: 10 },
+    ],
+    joistDirection: "house_to_yard",
+    joistSpacingInches: 16,
+  });
+  assert.equal(draft.status, "unsupported_outline");
+  assert.equal(draft.joistLinearFeet, null);
+  assert.deepEqual(draft.joistSegments, []);
+});
+
+test("custom estimating concept is canonical, shape-bound, and rejects quantity tampering", () => {
+  const shape = {
+    id: "11111111-1111-4111-8111-111111111111",
+    shapeRevision: 7,
+    outline: [
+      { x: 0, y: 0 }, { x: 19, y: 0 }, { x: 19, y: 15 },
+      { x: 0, y: 15 }, { x: 0, y: 10 }, { x: 7, y: 10 },
+      { x: 7, y: 5 }, { x: 0, y: 5 },
+    ],
+    stairsPresent: true,
+    stairPlacement: { edgeIndex: 2, offsetFeet: 8, widthFeet: 3, projectionFeet: 4 },
+  };
+  const concept = buildCustomDeckEstimatingConcept({
+    shapeRevisionId: shape.id,
+    shapeRevision: shape.shapeRevision,
+    outline: shape.outline,
+    stairsPresent: shape.stairsPresent,
+    stairPlacement: shape.stairPlacement,
+    joistDirection: "house_to_yard",
+    joistSpacingInches: 16,
+  });
+  assert.ok(concept);
+  assert.equal(concept.status, "generated_estimating_concept");
+  assert.equal(concept.areaSquareFeet, 250);
+  assert.equal(isCanonicalCustomDeckEstimatingConcept(concept, shape), true);
+  assert.equal(
+    isCanonicalCustomDeckEstimatingConcept(
+      { ...concept, joistLinearFeet: concept.joistLinearFeet - 1 },
+      shape,
+    ),
+    false,
+  );
+  assert.equal(
+    isCanonicalCustomDeckEstimatingConcept(concept, { ...shape, shapeRevision: 8 }),
+    false,
+  );
+});
+
+test("custom structural revision binding rejects omission and mismatch but accepts the latest exact revision", () => {
+  const shape = {
+    outline: [
+      { x: 0, y: 0 }, { x: 19, y: 0 }, { x: 19, y: 15 },
+      { x: 0, y: 15 }, { x: 0, y: 10 }, { x: 7, y: 10 },
+      { x: 7, y: 5 }, { x: 0, y: 5 },
+    ],
+    stairsPresent: false,
+    stairPlacement: null,
+  };
+  const latest = "22222222-2222-4222-8222-222222222222";
+  assert.equal(customDeckStructuralPlanBindingMatches({ shape, requestedRevisionId: null, latestRevisionId: latest }), false);
+  assert.equal(customDeckStructuralPlanBindingMatches({ shape, requestedRevisionId: "11111111-1111-4111-8111-111111111111", latestRevisionId: latest }), false);
+  assert.equal(customDeckStructuralPlanBindingMatches({ shape, requestedRevisionId: latest, latestRevisionId: latest }), true);
+});
 
 const verified = {
   ...recommendedPrescriptiveDraft("ledger", false, 14, 12),
@@ -1031,11 +1141,29 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(planner, /approvedStairProjectionFeet=/);
   assert.match(route, /guided_deck_shape_revisions/);
   assert.match(route, /stale_shape_revision/);
-  assert.match(planner, /The inset shape and stair location are saved/);
+  assert.match(planner, /Generate a preliminary estimating plan/);
   assert.match(
     planner,
-    /The app is recording its quantities, not inventing a[\s\S]*rectangular substitute/,
+    /PRELIMINARY ESTIMATING PLAN — NOT FOR CONSTRUCTION/,
   );
+  assert.match(planner, /not a\s+reviewed custom structural plan/);
+  assert.match(planner, /A typed source name and checkbox are not proof/);
+  assert.match(planner, /Reviewed-plan evidence is required before Takeoff/);
+  assert.doesNotMatch(planner, /Approve reviewed structural plan and continue/);
+  const customStructureStart = planner.indexOf(
+    "const customStructuralDesigner =",
+  );
+  const standardStructureStart = planner.indexOf(
+    "const structuralDesigner =",
+  );
+  const customStructure = planner.slice(
+    customStructureStart,
+    standardStructureStart,
+  );
+  assert.ok(customStructureStart > -1 && standardStructureStart > customStructureStart);
+  assert.doesNotMatch(customStructure, /label="Unit cost"/);
+  assert.doesNotMatch(customStructure, /label="Price\/source reference"/);
+  assert.match(customStructure, /Observed existing deck/);
   assert.match(
     planner,
     /customApprovedFootprint \? customStructuralDesigner : structuralDesigner/,

@@ -10,7 +10,7 @@ const structural = readFileSync("src/components/estimates/deck-prescriptive-plan
 test("deck work advances through five explicit gated mobile stages", () => {
   assert.match(builder, /"site_visit" \| "shape" \| "structure" \| "takeoff" \| "proposal"/);
   assert.match(builder, /stage === "structure" && !finalizedDeckShape/);
-  assert.match(builder, /stage === "takeoff" && !deckStructureReady/);
+  assert.match(builder, /stage === "takeoff" && deckStructureReadiness === "not_ready"/);
   assert.match(builder, /setDeckWorkspaceStage\("shape"\)/);
   assert.match(builder, /setDeckWorkspaceStage\("structure"\)/);
   assert.match(builder, /setDeckWorkspaceStage\("takeoff"\)/);
@@ -107,7 +107,7 @@ test("approved shape feeds structure while pricing controls remain in takeoff", 
   assert.match(structural, /approvedOutline\?: readonly DeckOutlinePoint\[\]/);
   assert.match(planner, /workflowPhase === "structure"/);
   assert.match(planner, /Structural design only/);
-  assert.match(planner, /Material shopping, quantities, Lowe&apos;s products and prices begin only after this plan is approved/);
+  assert.match(planner, /Material shopping, quantities, Lowe(?:'|&apos;)s products and prices begin only after this plan is approved/);
   assert.match(planner, /if \(approvedPlan\.unresolvedPackages\.length\)/);
   assert.match(planner, /the structural step is not finished/i);
   assert.match(planner, /The complete structural plan is approved/);
