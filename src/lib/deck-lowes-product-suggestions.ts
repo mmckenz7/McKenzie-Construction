@@ -10,6 +10,8 @@ export type DeckLowesSuggestion = Readonly<{
   sourceUrl: string;
   stockLengthFeet: number | null;
   coverageSquareFeetPerPack: number | null;
+  manufacturer: string | null;
+  productLine: string | null;
   reason: string;
 }>;
 
@@ -47,10 +49,35 @@ function exactLowesProductUrl(value: unknown) {
   }
 }
 
+function matchesRequestedFinish(
+  kind: DeckLowesSuggestion["kind"],
+  description: string,
+  deckingFamily: "wood" | "composite",
+  railingFamily: "wood" | "metal" | "cable" | "none",
+) {
+  const text = description.toLowerCase();
+  if (kind === "deck_board")
+    return deckingFamily === "composite"
+      ? /composite|trex|timbertech|deckorators/.test(text)
+      : /wood|lumber|pressure.?treated|yellow pine|cedar/.test(text) &&
+          !/composite|pvc/.test(text);
+  if (kind === "railing_section") {
+    if (railingFamily === "none") return false;
+    if (railingFamily === "cable") return /cable/.test(text);
+    if (railingFamily === "metal") return /aluminum|metal|steel/.test(text);
+    return /wood|lumber|pressure.?treated|yellow pine|cedar/.test(text) &&
+      !/cable|aluminum|metal|steel/.test(text);
+  }
+  return true;
+}
+
 export async function findDeckLowesDefaults(args: Readonly<{
   deckLengthFeet: number;
   deckWidthFeet: number;
   railingLengthFeet: number | null;
+  deckingFamily: "wood" | "composite";
+  compositeColor: "brown" | "gray" | "cedar" | "redwood" | "coastal" | null;
+  railingFamily: "wood" | "metal" | "cable" | "none";
   idempotencyKey: string;
   fetchImpl?: typeof fetch;
 }>) {
@@ -68,10 +95,17 @@ export async function findDeckLowesDefaults(args: Readonly<{
     tool_choice: "auto",
     store: false,
     input: [
-      "Find practical default Lowe's products for a pressure-treated wood replacement deck in Knoxville, Tennessee.",
+      `Find practical Lowe's finish products for a ${args.deckingFamily === "wood" ? "pressure-treated wood" : `${args.compositeColor ?? "brown"} composite`} replacement deck in Knoxville, Tennessee.`,
       `Verified rectangular deck: ${args.deckLengthFeet} ft board run by ${args.deckWidthFeet} ft wide.`,
       args.railingLengthFeet === null ? "Railing footage is not yet resolved." : `Calculated railing footage: ${args.railingLengthFeet} linear ft.`,
-      "Return up to three current Lowe's deck-board choices, one exterior deck-fastener choice, and up to three compatible railing-system choices so a customer can compare combinations.",
+      `Decking family is ${args.deckingFamily}${args.deckingFamily === "composite" ? ` with a ${args.compositeColor} color family` : ""}. Return only matching deck-board products and a compatible manufacturer-approved fastening product.`,
+      args.railingFamily === "none"
+        ? "No railing product is required."
+        : `Railing family is ${args.railingFamily}. Return only matching ${args.railingFamily} railing-system products and do not substitute another railing family.`,
+      args.railingFamily === "metal" || args.railingFamily === "cable"
+        ? "Every manufactured railing choice must be one coherent system from one manufacturer and one named product line. Do not mix rails, posts, brackets, panels, cable, gates, caps, or fasteners across manufacturers or product lines. Return manufacturer and productLine only when the Lowe's product page clearly establishes both; otherwise omit that railing choice."
+        : "Do not claim manufactured railing-system compatibility unless the public product page supports it.",
+      "Return up to three current matching Lowe's deck-board choices, one compatible deck-fastener choice, and—when required—up to three compatible railing-system choices so a customer can compare combinations.",
       "For deck boards, prefer the shortest sold stock length that spans the full board run without a joint. If no sold length spans it, prefer a length that reaches at least half the run for a perimeter picture-frame plus center-divider layout.",
       "Use only exact lowes.com /pd/ product pages. Copy a public price only when the page clearly supports it; otherwise return null. Never invent availability, price, dimensions, package coverage, compatibility, or manufacturer guidance.",
       "Return JSON only with the requested schema.",
@@ -97,9 +131,11 @@ export async function findDeckLowesDefaults(args: Readonly<{
                 sourceUrl: { type: "string", minLength: 1, maxLength: 1000 },
                 stockLengthFeet: { type: ["number", "null"], minimum: 0 },
                 coverageSquareFeetPerPack: { type: ["number", "null"], minimum: 0 },
+                manufacturer: { type: ["string", "null"], minLength: 1, maxLength: 120 },
+                productLine: { type: ["string", "null"], minLength: 1, maxLength: 120 },
                 reason: { type: "string", minLength: 1, maxLength: 500 },
               },
-              required: ["kind", "description", "unitCost", "sourceUrl", "stockLengthFeet", "coverageSquareFeetPerPack", "reason"],
+              required: ["kind", "description", "unitCost", "sourceUrl", "stockLengthFeet", "coverageSquareFeetPerPack", "manufacturer", "productLine", "reason"],
             },
           },
         },
@@ -144,6 +180,21 @@ export async function findDeckLowesDefaults(args: Readonly<{
     const limit = kind === "deck_fastener" ? 1 : 3;
     if ((counts.get(String(kind)) ?? 0) >= limit) continue;
     if (typeof item.description !== "string" || typeof item.reason !== "string") continue;
+    if (!matchesRequestedFinish(
+      kind as DeckLowesSuggestion["kind"],
+      item.description,
+      args.deckingFamily,
+      args.railingFamily,
+    )) continue;
+    const manufacturer = typeof item.manufacturer === "string"
+      ? item.manufacturer.trim().slice(0, 120)
+      : null;
+    const productLine = typeof item.productLine === "string"
+      ? item.productLine.trim().slice(0, 120)
+      : null;
+    const manufacturedRailing = kind === "railing_section" &&
+      (args.railingFamily === "metal" || args.railingFamily === "cable");
+    if (manufacturedRailing && (!manufacturer || !productLine)) continue;
     const unitCost = item.unitCost === null ? null : Number(item.unitCost);
     const stockLengthFeet = item.stockLengthFeet === null ? null : Number(item.stockLengthFeet);
     const coverageSquareFeetPerPack = item.coverageSquareFeetPerPack === null ? null : Number(item.coverageSquareFeetPerPack);
@@ -158,6 +209,8 @@ export async function findDeckLowesDefaults(args: Readonly<{
       sourceUrl,
       stockLengthFeet,
       coverageSquareFeetPerPack,
+      manufacturer,
+      productLine,
       reason: item.reason.slice(0, 500),
     });
   }

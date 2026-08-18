@@ -50,8 +50,26 @@ type LowesSuggestion = {
   sourceUrl: string;
   stockLengthFeet: number | null;
   coverageSquareFeetPerPack: number | null;
+  manufacturer: string | null;
+  productLine: string | null;
   reason: string;
 };
+
+type DeckingFamily = "wood" | "composite";
+type CompositeColor = "brown" | "gray" | "cedar" | "redwood" | "coastal";
+type RailingFamily = "wood" | "metal" | "cable" | "none";
+
+const COMPOSITE_COLORS: readonly {
+  key: CompositeColor;
+  label: string;
+  swatch: string;
+}[] = [
+  { key: "brown", label: "Brown", swatch: "#765341" },
+  { key: "gray", label: "Gray", swatch: "#64748b" },
+  { key: "cedar", label: "Cedar", swatch: "#b77948" },
+  { key: "redwood", label: "Redwood", swatch: "#8f4638" },
+  { key: "coastal", label: "Coastal", swatch: "#9ba8a5" },
+] as const;
 
 const input =
   "mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100";
@@ -333,6 +351,10 @@ export function DeckTakeoffPlanner({
   });
   const [suggestions, setSuggestions] = useState<LowesSuggestion[]>([]);
   const [findingProducts, setFindingProducts] = useState(false);
+  const [deckingFamily, setDeckingFamily] = useState<DeckingFamily>("wood");
+  const [compositeColor, setCompositeColor] =
+    useState<CompositeColor>("brown");
+  const [railingFamily, setRailingFamily] = useState<RailingFamily>("wood");
   const [activeScopeKey, setActiveScopeKey] = useState<CompleteRebuildLineKey>(
     COMPLETE_REBUILD_LINE_KEYS[0],
   );
@@ -346,6 +368,7 @@ export function DeckTakeoffPlanner({
   } | null>(null);
   const [customPlanLoading, setCustomPlanLoading] = useState(false);
   const customPlanSaveKey = useRef("");
+  const productRequestSequence = useRef(0);
   const appliedDefaults = useRef(false);
   const layoutDetailsRef = useRef<HTMLDetailsElement>(null);
   const fieldDimensions = useMemo(
@@ -380,6 +403,10 @@ export function DeckTakeoffPlanner({
       ),
     [approvedShapeDimensions, plan.framingPlanEvidence, visitItems],
   );
+  useEffect(() => {
+    if (railingGeometry.railingsPresent === false) setRailingFamily("none");
+    else if (railingFamily === "none") setRailingFamily("wood");
+  }, [railingGeometry.railingsPresent, railingFamily]);
   const blueprintVisitSeed = useMemo(
     () => deckBlueprintVisitSeed(visitItems),
     [visitItems],
@@ -908,7 +935,18 @@ export function DeckTakeoffPlanner({
     onStructureReady("approved_plan");
   }
 
-  async function findLowesProducts() {
+  async function findLowesProducts(
+    overrides?: Partial<{
+      deckingFamily: DeckingFamily;
+      compositeColor: CompositeColor;
+      railingFamily: RailingFamily;
+    }>,
+  ) {
+    const requestSequence = productRequestSequence.current + 1;
+    productRequestSequence.current = requestSequence;
+    const requestedDecking = overrides?.deckingFamily ?? deckingFamily;
+    const requestedColor = overrides?.compositeColor ?? compositeColor;
+    const requestedRailing = overrides?.railingFamily ?? railingFamily;
     setFindingProducts(true);
     setError("");
     setNotice("");
@@ -922,6 +960,13 @@ export function DeckTakeoffPlanner({
             visitId,
             expectedVisitRevision: visitRevision,
             boardRunDirection: plan.boardRunDirection,
+            deckingFamily: requestedDecking,
+            compositeColor:
+              requestedDecking === "composite" ? requestedColor : null,
+            railingFamily:
+              railingGeometry.railingsPresent === false
+                ? "none"
+                : requestedRailing,
           }),
         },
       );
@@ -932,6 +977,7 @@ export function DeckTakeoffPlanner({
       };
       if (!response.ok || !body.success || !body.products?.length)
         throw new Error(body.error || "Lowe's defaults could not be found.");
+      if (productRequestSequence.current !== requestSequence) return;
       setSuggestions(body.products);
       const board = body.products.find((item) => item.kind === "deck_board");
       const screw = body.products.find((item) => item.kind === "deck_fastener");
@@ -939,8 +985,34 @@ export function DeckTakeoffPlanner({
         (item) => item.kind === "railing_section",
       );
       setPlan((current) => {
+        const customFinishPrices = customApprovedFootprint
+          ? current.additionalLines.map((line) => {
+              if (line.key === "custom_decking" && board) {
+                return {
+                  ...line,
+                  description: board.description,
+                  unit: "ea",
+                  unitCost: board.unitCost ? String(board.unitCost) : "",
+                  sourceReference: board.sourceUrl,
+                  catalogMaterialId: null,
+                };
+              }
+              if (line.key === "custom_railing" && railing) {
+                return {
+                  ...line,
+                  description: railing.description,
+                  unit: "ea",
+                  unitCost: railing.unitCost ? String(railing.unitCost) : "",
+                  sourceReference: railing.sourceUrl,
+                  catalogMaterialId: null,
+                };
+              }
+              return line;
+            })
+          : current.additionalLines;
         return {
           ...current,
+          additionalLines: customFinishPrices,
           ...(board
             ? {
                 boardCatalogMaterialId: null,
@@ -985,16 +1057,20 @@ export function DeckTakeoffPlanner({
       setNotice(
         missingPrices.length
           ? `Products found. Enter the current Lowe's ${missingPrices.join(" and ")} price${missingPrices.length === 1 ? "" : "s"} shown on the linked product page, then continue.`
-          : "Products and required prices are ready. Continue to calculate quantities and costs.",
+          : customApprovedFootprint
+            ? `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are filled in. Confirm the reviewed custom-shape quantities next.`
+            : `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are ready. Review the calculated finish quantities next.`,
       );
     } catch (caught) {
+      if (productRequestSequence.current !== requestSequence) return;
       setError(
         caught instanceof Error
           ? caught.message
           : "Lowe's defaults could not be found.",
       );
     } finally {
-      setFindingProducts(false);
+      if (productRequestSequence.current === requestSequence)
+        setFindingProducts(false);
     }
   }
 
@@ -1024,6 +1100,14 @@ export function DeckTakeoffPlanner({
       setChecks({ dimensions: false, quantities: false, prices: false });
       if (body.status === "ready")
         setNotice("Draft takeoff is ready for your review.");
+      else if (body.lines.length)
+        setNotice(
+          "Known costs are calculated below. They stay in the draft until the remaining required takeoff inputs are completed.",
+        );
+      else
+        setNotice(
+          "No priced lines are ready yet. Add a product price, quantity, and source to calculate costs.",
+        );
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -1227,6 +1311,178 @@ export function DeckTakeoffPlanner({
     .filter((option) =>
       option.optionPreview.lines.some((line) => line.key === "decking"),
     );
+
+  function clearFinishProducts() {
+    setSuggestions([]);
+    setPlan((current) => ({
+      ...current,
+      boardCatalogMaterialId: null,
+      boardStockLengthFeet: "",
+      boardUnitCost: "",
+      boardSourceReference: "",
+      screwCatalogMaterialId: null,
+      screwCoverageSquareFeetPerPack: "",
+      screwPackUnitCost: "",
+      screwSourceReference: "",
+      railingCatalogMaterialId: null,
+      railingSectionLengthFeet: "",
+      railingUnitCost: "",
+      railingSourceReference: "",
+      additionalLines: current.additionalLines.map((line) =>
+        line.key === "custom_decking" || line.key === "custom_railing"
+          ? {
+              ...line,
+              description:
+                line.key === "custom_decking"
+                  ? "Decking for the approved custom footprint"
+                  : "Railing for the approved custom footprint",
+              unitCost: "",
+              sourceReference: "",
+              catalogMaterialId: null,
+            }
+          : line,
+      ),
+    }));
+    setPreview(null);
+  }
+
+  const finishSelectionControls = (
+    <section className="mt-5 rounded-xl border-2 border-blue-700 bg-white p-4 shadow-sm sm:p-5">
+      <p className="text-xs font-black uppercase tracking-[.16em] text-blue-700">
+        Finish selections
+      </p>
+      <h4 className="mt-1 text-xl font-black text-slate-950">
+        Choose what the customer will see
+      </h4>
+      <p className="mt-1 text-sm leading-6 text-slate-700">
+        Framing quantities stay unchanged. These choices select the decking,
+        railing, compatible fasteners, and current product prices used for the
+        customer options.
+      </p>
+
+      <fieldset className="mt-4">
+        <legend className="text-sm font-black text-slate-950">Decking</legend>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {(
+            [
+              ["wood", "Wood decking", "Pressure-treated deck boards"],
+              ["composite", "Composite decking", "Choose a color family next"],
+            ] as const
+          ).map(([value, label, help]) => (
+            <label
+              key={value}
+              className={`flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border p-3 focus-within:ring-2 focus-within:ring-blue-700 ${deckingFamily === value ? "border-blue-700 bg-blue-50" : "border-slate-300 bg-white"}`}
+            >
+              <input
+                type="radio"
+                name="decking-family"
+                className="mt-1"
+                checked={deckingFamily === value}
+                onChange={() => {
+                  setDeckingFamily(value);
+                  clearFinishProducts();
+                  void findLowesProducts({ deckingFamily: value });
+                }}
+              />
+              <span>
+                <strong className="block text-sm text-slate-950">{label}</strong>
+                <span className="mt-1 block text-xs leading-5 text-slate-600">{help}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      {deckingFamily === "composite" ? (
+        <fieldset className="mt-4">
+          <legend className="text-sm font-black text-slate-950">
+            Composite color family
+          </legend>
+          <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {COMPOSITE_COLORS.map((color) => (
+              <label
+                key={color.key}
+                className={`cursor-pointer rounded-lg border p-2 text-center focus-within:ring-2 focus-within:ring-blue-700 ${compositeColor === color.key ? "border-blue-700 bg-blue-50" : "border-slate-300 bg-white"}`}
+              >
+                <input
+                  type="radio"
+                  name="composite-color"
+                  className="sr-only"
+                  checked={compositeColor === color.key}
+                  onChange={() => {
+                    setCompositeColor(color.key);
+                    clearFinishProducts();
+                    void findLowesProducts({
+                      deckingFamily: "composite",
+                      compositeColor: color.key,
+                    });
+                  }}
+                />
+                <span
+                  aria-hidden="true"
+                  className="mx-auto block h-10 w-10 rounded-md border border-slate-400 shadow-inner"
+                  style={{ backgroundColor: color.swatch }}
+                />
+                <span className="mt-1 block text-xs font-bold text-slate-900">
+                  {color.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+
+      {railingGeometry.railingsPresent === false ? (
+        <p className="mt-4 rounded-lg bg-slate-100 p-3 text-sm font-bold text-slate-800">
+          No railing was included in the approved field facts, so no railing
+          product is being selected.
+        </p>
+      ) : (
+        <fieldset className="mt-4">
+          <legend className="text-sm font-black text-slate-950">Railing</legend>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {(
+              [
+                ["wood", "Wood", "▥"],
+                ["metal", "Metal", "▦"],
+                ["cable", "Cable", "≡"],
+              ] as const
+            ).map(([value, label, icon]) => (
+              <label
+                key={value}
+                className={`cursor-pointer rounded-lg border p-3 text-center focus-within:ring-2 focus-within:ring-blue-700 ${railingFamily === value ? "border-blue-700 bg-blue-50" : "border-slate-300 bg-white"}`}
+              >
+                <input
+                  type="radio"
+                  name="railing-family"
+                  className="sr-only"
+                  checked={railingFamily === value}
+                  onChange={() => {
+                    setRailingFamily(value);
+                    clearFinishProducts();
+                    void findLowesProducts({ railingFamily: value });
+                  }}
+                />
+                <span aria-hidden="true" className="block text-3xl leading-none text-slate-800">
+                  {icon}
+                </span>
+                <span className="mt-2 block text-sm font-bold text-slate-950">{label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
+      <button
+        type="button"
+        className={`mt-5 w-full ${primary}`}
+        disabled={disabled || findingProducts}
+        onClick={() => void findLowesProducts()}
+      >
+        {findingProducts ? "Finding matching products…" : "Find matching Lowe's products"}
+      </button>
+    </section>
+  );
 
   const activeScopeIndex = COMPLETE_REBUILD_LINE_KEYS.indexOf(activeScopeKey);
   const activeScopeLine =
@@ -2230,16 +2486,18 @@ export function DeckTakeoffPlanner({
   return (
     <section className="mt-5 rounded-xl border-2 border-blue-700 bg-blue-50 p-4 sm:p-5">
       <p className="text-xs font-black uppercase tracking-[.16em] text-blue-800">
-        Draft material takeoff
+        Finish material selections
       </p>
       <h3 className="mt-1 text-xl font-black text-slate-950">
-        Turn field measurements into reviewed true costs
+        Select decking and railing without cluttering the framing plan
       </h3>
       <p className="mt-2 text-sm leading-6 text-slate-700">
         {customApprovedFootprint
-          ? "This takeoff is bound to the exact saved custom footprint and its preliminary estimating-plan revision. Polygon geometry, saved stairs, and selected joist-run topology carry forward; they do not approve member sizing or structural details. Reviewed decking, railing, structure, hardware, pricing, order, and permit inputs remain required below."
-          : "This is a complete-rebuild takeoff: old decking, framing, supports, and footings are not being reused. The app can calculate deck area, decking layout, and a reviewed rectangular railing perimeter. Every structural member, footing, connector, stair, labor, and logistics quantity must come from your named build plan."}
+          ? "The exact custom footprint, stairs, and preliminary quantities carry forward. Choose only the visible finish families here; unresolved structural work remains tracked separately."
+          : "The approved shape and framing quantities carry forward. Choose the visible finish families here, then review the matching products and calculated finish costs."}
       </p>
+
+      {finishSelectionControls}
 
       {!customApprovedFootprint ? (
         <details
@@ -2423,18 +2681,15 @@ export function DeckTakeoffPlanner({
         </details>
       ) : null}
 
-      {completeRebuildScope}
-
       {customApprovedFootprint ? (
         <section className="mt-5 rounded-lg border-2 border-blue-300 bg-white p-4">
           <h4 className="font-black text-slate-950">
-            Price the reviewed custom-footprint finishes
+            Matching products for the custom footprint
           </h4>
           <p className="mt-1 text-sm leading-6 text-slate-700">
-            These quantities came from the reviewed custom plan. Add the exact
-            product description, current unit cost, and traceable price source.
-            The app will not substitute a rectangular deck-board or railing
-            calculation.
+            Confirm the products below and enter only the purchase quantities
+            that the reviewed custom layout requires. Framing products are not
+            selected on this screen.
           </p>
           <div className="mt-3 space-y-3">
             {customFinishLines.map((line) => (
@@ -2517,21 +2772,13 @@ export function DeckTakeoffPlanner({
       {!customApprovedFootprint ? (
         <section className="mt-5 rounded-lg border border-blue-200 bg-white p-4">
         <h4 className="font-black text-slate-950">
-          Recommended Lowe&apos;s package
+          Matching Lowe&apos;s product package
         </h4>
         <p className="mt-1 text-sm text-slate-600">
-          The shortest full-length board wins. If no board spans the run, the
-          only automatic fallback is a perimeter picture frame with a center
-          divider.
+          These results match the selected finish families. Board lengths are
+          optimized to avoid joints; when a joint is unavoidable, the takeoff
+          uses the approved picture-frame and divider layout.
         </p>
-        <button
-          type="button"
-          className={`mt-3 w-full ${primary}`}
-          disabled={disabled || findingProducts}
-          onClick={() => void findLowesProducts()}
-        >
-          {findingProducts ? "Searching Lowe's…" : "Find Lowe's defaults"}
-        </button>
         <div className="mt-3 grid gap-3 md:grid-cols-3">
           {recommendedProducts.map((product) => {
             const lowesPage =
@@ -2645,6 +2892,13 @@ export function DeckTakeoffPlanner({
                     {option.railing?.description ??
                       "No railing system required"}
                   </p>
+                  {option.railing?.manufacturer &&
+                  option.railing.productLine ? (
+                    <p className="mt-2 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-950">
+                      Compatible system: {option.railing.manufacturer} ·{" "}
+                      {option.railing.productLine}
+                    </p>
+                  ) : null}
                   <p className="mt-2 text-sm font-black text-slate-950">
                     Known materials:{" "}
                     {option.materialSubtotal > 0
@@ -2671,6 +2925,18 @@ export function DeckTakeoffPlanner({
         ) : null}
         </section>
       ) : null}
+
+      <details className="mt-5 rounded-lg border border-slate-300 bg-white p-4">
+        <summary className="min-h-11 cursor-pointer py-2 font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700">
+          Framing costs and remaining estimate items
+        </summary>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          The framing plan supplied the quantities. Open this only to add
+          structural costs, labor, equipment, delivery, or other required
+          estimate details.
+        </p>
+        {completeRebuildScope}
+      </details>
 
       <details className="mt-4 rounded-lg border border-slate-300 bg-white p-4">
         <summary className="min-h-11 cursor-pointer font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700">
@@ -2963,6 +3229,28 @@ export function DeckTakeoffPlanner({
             <p className="mt-1 text-sm font-bold text-slate-800">
               Calculated railing: {preview.railingLengthFeet} linear ft
             </p>
+          ) : null}
+          {preview.lines.length ? (
+            <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-emerald-950">
+              <p className="text-xs font-black uppercase tracking-wide">
+                Priced so far
+              </p>
+              <p className="mt-1 text-2xl font-black">
+                ${preview.lines
+                  .reduce(
+                    (total, line) =>
+                      total + Number(line.quantity) * Number(line.unitCost),
+                    0,
+                  )
+                  .toFixed(2)}
+              </p>
+              {preview.status !== "ready" ? (
+                <p className="mt-1 text-xs font-semibold">
+                  This is a working subtotal. It is not added to the estimate
+                  until the remaining required takeoff inputs are complete.
+                </p>
+              ) : null}
+            </div>
           ) : null}
           {preview.unresolved.length ? (
             <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">

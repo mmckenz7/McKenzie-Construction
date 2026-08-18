@@ -570,16 +570,16 @@ function DeckJobStageHeader({ activeStage, visitStatus, shapeReady, structureRea
       instruction: "Check the bird's-eye footprint. Drag corners, add bump-ins or bump-outs, and enter exact edge dimensions. Nothing structural is decided here.",
     },
     structure: {
-      title: "Structural plan",
-      instruction: "With the footprint locked, complete the framing, footing, stair, railing and hardware plan together against the selected code profile.",
+      title: "Framing plan",
+      instruction: "With the footprint locked, establish the framing, support, footing and stair plan and carry its quantities forward. Finish-product shopping comes next.",
     },
     takeoff: {
-      title: "Takeoff and price",
+      title: "Material selections",
       instruction: trueCostLineCount
         ? "Review the saved true costs, set OH&P, and prepare the customer view."
         : structureReadiness === "preliminary_geometry"
-          ? "Use the saved preliminary footprint geometry for early quantities. Structural review, products, hardware, ordering and permit readiness are still required."
-          : "Use the approved structural plan to calculate materials, choose products and add true costs.",
+          ? "Choose decking and railing finishes for the saved footprint. Structural review and final framing costs remain clearly separated."
+          : "Choose decking and railing finishes. Matching products, finish quantities and prices are calculated here.",
     },
     proposal: {
       title: "Review and send",
@@ -589,8 +589,8 @@ function DeckJobStageHeader({ activeStage, visitStatus, shapeReady, structureRea
   const stages: { key: DeckWorkspaceStage; title: string; status: string; enabled: boolean }[] = [
     { key: "site_visit", title: "Site visit", status: fieldComplete ? "Complete" : visitStatus === "in_progress" ? "In progress" : visitStatus === "checking" ? "Checking" : visitStatus === "unavailable" ? "Needs attention" : "Not started", enabled: true },
     { key: "shape", title: "Shape", status: shapeReady ? "Approved" : fieldComplete ? "Ready" : "Waiting", enabled: fieldComplete },
-    { key: "structure", title: "Structure", status: structureReadiness === "approved_plan" ? "Approved" : structureReadiness === "preliminary_geometry" ? "Preliminary" : shapeReady ? "Ready" : "Waiting", enabled: shapeReady },
-    { key: "takeoff", title: "Takeoff", status: trueCostLineCount ? `${trueCostLineCount} costs saved` : takeoffStarted ? "In progress" : structureReadiness === "preliminary_geometry" ? "Geometry ready" : structureReadiness === "approved_plan" ? "Ready" : "Waiting", enabled: structureReadiness !== "not_ready" },
+    { key: "structure", title: "Framing", status: structureReadiness === "approved_plan" ? "Approved" : structureReadiness === "preliminary_geometry" ? "Preliminary" : shapeReady ? "Ready" : "Waiting", enabled: shapeReady },
+    { key: "takeoff", title: "Materials", status: trueCostLineCount ? `${trueCostLineCount} costs saved` : takeoffStarted ? "Selecting" : structureReadiness === "preliminary_geometry" ? "Ready for finishes" : structureReadiness === "approved_plan" ? "Ready" : "Waiting", enabled: structureReadiness !== "not_ready" },
     { key: "proposal", title: "Proposal", status: proposalReady ? "Ready" : "Waiting", enabled: proposalReady },
   ];
   const current = stageContent[activeStage];
@@ -606,7 +606,7 @@ function DeckJobStageHeader({ activeStage, visitStatus, shapeReady, structureRea
       onClick={() => onOpenStage(stage.key)}
       className={`min-h-16 w-full rounded-lg border p-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 disabled:cursor-not-allowed disabled:opacity-50 ${activeStage === stage.key ? "border-blue-700 bg-blue-50" : "border-slate-300 bg-white hover:border-blue-500"}`}
     ><span className="block text-xs font-black uppercase tracking-wide text-slate-500">{index + 1}. {stage.title}</span><span className="mt-1 block text-xs font-bold text-slate-950">{stage.status}</span></button></li>)}</ol>
-    <p className="mt-3 text-xs font-semibold text-slate-600">Photos may suggest a starting outline, but only the approved shape moves into structural design. A saved preliminary concept may open geometry review in Takeoff; structural, product, ordering and permit readiness remain blocked until reviewed evidence is complete.</p>
+    <p className="mt-3 text-xs font-semibold text-slate-600">The approved shape feeds the framing plan. Framing quantities are reviewed before the separate finish-material screen chooses decking, railing and matching products.</p>
   </section>;
 }
 
@@ -691,10 +691,10 @@ function DeckTakeoffWorkspace({
     aria-labelledby="deck-takeoff-title"
     className="scroll-mt-24 rounded-xl border-2 border-emerald-700 bg-white p-5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 sm:p-6"
   >
-    <p className="text-xs font-black uppercase tracking-[.16em] text-emerald-700">{workflowPhase === "structure" ? "Step 3 · Design the structure" : "Step 4 · Calculate and price"}</p>
-    <h2 id="deck-takeoff-title" className="mt-1 text-2xl font-black text-slate-950">{workflowPhase === "structure" ? "Structural plan" : "Takeoff and true-cost workspace"}</h2>
+    <p className="text-xs font-black uppercase tracking-[.16em] text-emerald-700">{workflowPhase === "structure" ? "Step 3 · Build the framing plan" : "Step 4 · Choose finish materials"}</p>
+    <h2 id="deck-takeoff-title" className="mt-1 text-2xl font-black text-slate-950">{workflowPhase === "structure" ? "Framing plan and quantities" : "Material selections"}</h2>
     {visitStatus !== "completed" ? <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950">Finish the field form before building the Deck estimate.</p> : <>
-      <p className="mt-2 text-sm leading-6 text-slate-700">{workflowPhase === "structure" ? "The deck shape is set. Complete the framing, supports, footings, stairs, railing and attachment plan together. Materials and prices stay out of this step." : structureReadiness === "preliminary_geometry" ? "The exact footprint and preliminary geometry are saved. Use them for early quantities while structural review, hardware, ordering and permit readiness remain blocked." : "The shape and structural plan are approved. Now calculate material quantities, choose products and enter verified true costs."}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-700">{workflowPhase === "structure" ? "The deck shape is set. Build the framing, supports, footings, stairs and attachment plan, then review its quantities. Finish products and prices stay out of this step." : structureReadiness === "preliminary_geometry" ? "The exact footprint and preliminary quantities are saved. Choose the visible decking and railing finishes here; unresolved structural work remains separate." : "The framing plan supplied the quantities. Now choose decking and railing finishes and match them to current products and prices."}</p>
       <details className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-4">
         <summary className="min-h-11 cursor-pointer font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">Saved field measurements and notes</summary>
         {measuredItems.length ? <div className="mt-3 grid gap-3 md:grid-cols-2">{measuredItems.map((item) => <section key={item.itemKey} className="rounded-lg bg-white p-3"><h3 className="font-bold text-slate-950">{item.title}</h3><dl className="mt-2 space-y-2 text-sm">{item.rows.map((row) => <div key={`${item.itemKey}-${row.label}`} className="flex items-start justify-between gap-4"><dt className="text-slate-600">{row.label}</dt><dd className="text-right font-bold text-slate-950">{row.value}</dd></div>)}</dl></section>)}</div> : <p className="mt-3 text-sm text-slate-600">No field measurements were returned. Reload the visit before entering quantities.</p>}

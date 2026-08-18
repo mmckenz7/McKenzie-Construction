@@ -20,8 +20,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: "Estimate price-edit access is required." }, { status: 403 });
     }
     const body = await request.json() as Record<string, unknown>;
-    if (Object.keys(body).length !== 3 || typeof body.visitId !== "string" || !UUID_PATTERN.test(body.visitId)
+    if (Object.keys(body).length !== 6 || typeof body.visitId !== "string" || !UUID_PATTERN.test(body.visitId)
       || (body.boardRunDirection !== "along_length" && body.boardRunDirection !== "along_width")
+      || (body.deckingFamily !== "wood" && body.deckingFamily !== "composite")
+      || !(["wood", "metal", "cable", "none"] as unknown[]).includes(body.railingFamily)
+      || (body.deckingFamily === "wood" && body.compositeColor !== null)
+      || (body.deckingFamily === "composite" && !(["brown", "gray", "cedar", "redwood", "coastal"] as unknown[]).includes(body.compositeColor))
       || !Number.isSafeInteger(body.expectedVisitRevision) || (body.expectedVisitRevision as number) < 1) {
       throw new TypeError("The completed field visit identity is invalid.");
     }
@@ -52,10 +56,26 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: "Verified deck length and width are required before finding products." }, { status: 409 });
     }
     const railing = deckRailingGeometry(items);
+    if (
+      (railing.railingsPresent === false && body.railingFamily !== "none") ||
+      (railing.railingsPresent !== false && body.railingFamily === "none")
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "The railing selection does not match the completed field facts. Reload the visit before finding products.",
+        },
+        { status: 409 },
+      );
+    }
     const result = await findDeckLowesDefaults({
       deckLengthFeet: body.boardRunDirection === "along_width" ? dimensions.widthFeet : dimensions.lengthFeet,
       deckWidthFeet: body.boardRunDirection === "along_width" ? dimensions.lengthFeet : dimensions.widthFeet,
       railingLengthFeet: railing.railingLengthFeet,
+      deckingFamily: body.deckingFamily as "wood" | "composite",
+      compositeColor: body.compositeColor as "brown" | "gray" | "cedar" | "redwood" | "coastal" | null,
+      railingFamily: body.railingFamily as "wood" | "metal" | "cable" | "none",
       idempotencyKey: randomUUID(),
     });
     return NextResponse.json({ success: true, ...result }, { headers: { "Cache-Control": "private, no-store" } });

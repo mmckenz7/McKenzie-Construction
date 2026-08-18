@@ -1168,7 +1168,13 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
     planner,
     /customApprovedFootprint \? customStructuralDesigner : structuralDesigner/,
   );
-  assert.match(planner, /Price the reviewed custom-footprint finishes/);
+  assert.match(planner, /Matching products for the custom footprint/);
+  assert.match(planner, /Find matching Lowe's products/);
+  assert.match(planner, /customFinishPrices/);
+  assert.match(
+    planner,
+    /Framing products are not[\s\S]*selected on this screen/,
+  );
   assert.match(planner, /customFinishLines\.map/);
   assert.match(
     planner,
@@ -1176,13 +1182,16 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   );
   assert.match(
     planner,
-    /!customApprovedFootprint \? \([\s\S]*Recommended Lowe(?:'|&apos;)s package/,
+    /!customApprovedFootprint \? \([\s\S]*Matching Lowe(?:'|&apos;)s product package/,
   );
   assert.match(
     planner,
     /!customApprovedFootprint \? \([\s\S]*3\. Automatic railing/,
   );
   assert.match(planner, /Calculate custom quantities and costs/);
+  assert.match(planner, /Priced so far/);
+  assert.match(planner, /This is a working subtotal/);
+  assert.match(planner, /Known costs are calculated below/);
   assert.match(
     planner,
     /generatedShapeChanged[\s\S]*framingPlanEvidence:[\s\S]*generatedShapeChanged[\s\S]*\?[\s\S]*null/,

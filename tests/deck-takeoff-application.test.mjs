@@ -59,8 +59,14 @@ test("atomic persistence is tenant-scoped, append-only, idempotent, and revision
 
 test("UI keeps calculation, human plan, price evidence, and customer proposal as separate gates", () => {
   for (const copy of [
-    "Draft material takeoff",
-    "Recommended Lowe(?:'|&apos;)s package",
+    "Finish material selections",
+    "Matching Lowe(?:'|&apos;)s product package",
+    "Choose what the customer will see",
+    "Wood decking",
+    "Composite decking",
+    "Composite color family",
+    "Cable",
+    "Framing costs and remaining estimate items",
     "Change products, costs, or advanced quantities",
     "Calculate quantities and costs",
     "Current price per board",
@@ -118,7 +124,16 @@ test("Lowe's defaults are read-only, tenant-authorized, and bound to exact produ
   assert.match(suggestionRoute, /canEditPrices/);
   assert.match(suggestionRoute, /status !== "completed"/);
   assert.match(suggestionRoute, /expectedVisitRevision/);
+  assert.match(suggestionRoute, /deckingFamily/);
+  assert.match(suggestionRoute, /compositeColor/);
+  assert.match(suggestionRoute, /railingFamily/);
   assert.match(suggestionProvider, /allowed_domains:\s*\["lowes\.com"\]/);
+  assert.match(suggestionProvider, /Return only matching deck-board products/);
+  assert.match(suggestionProvider, /do not substitute another railing family/);
+  assert.match(suggestionProvider, /one coherent system from one manufacturer and one named product line/);
+  assert.match(suggestionProvider, /Do not mix rails, posts, brackets, panels, cable, gates, caps, or fasteners/);
+  assert.match(suggestionProvider, /manufacturedRailing && \(!manufacturer \|\| !productLine\)/);
+  assert.match(ui, /Compatible system:/);
   assert.match(suggestionProvider, /\["lowes\.com", "www\.lowes\.com"\]\.includes\(url\.hostname\.toLowerCase\(\)\)/);
   assert.match(suggestionProvider, /pathname\.startsWith\("\/pd\/"\)/);
   assert.doesNotMatch(suggestionRoute + suggestionProvider, /insert\(|update\(|delete\(/);
