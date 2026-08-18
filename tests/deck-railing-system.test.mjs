@@ -21,7 +21,7 @@ runInNewContext(transformed, {
   URL,
   Math,
 });
-const { buildDefaultAluminumRailingPackage } = testModule.exports;
+const { buildDefaultAluminumRailingPackage, buildDefaultCableRailingPackage } = testModule.exports;
 
 const product = (kind, unitCost, stockLengthFeet = null) => ({
   kind,
@@ -49,15 +49,56 @@ test("builds a complete same-line aluminum package instead of one rail section",
     Array.from(system.lines, (line) => [line.role, line.quantity]),
     [
       ["railing_level_kit", 5],
-      ["railing_level_post", 7],
-      ["railing_stair_kit", 1],
-      ["railing_stair_lower_post", 1],
+    ["railing_level_post", 8],
+    ["railing_stair_kit", 2],
+    ["railing_stair_lower_post", 2],
     ],
   );
-  assert.equal(system.totalCost, 2565);
+  assert.equal(system.totalCost, 3030);
   assert.equal(system.unresolved.length, 0);
   assert.ok(system.lines[0].includedComponents.includes("mounting brackets and bracket hardware"));
   assert.ok(system.lines[1].includedComponents.includes("post cap"));
+});
+
+test("counts one stair kit per panel and both stair sides by default", () => {
+  const system = buildDefaultAluminumRailingPackage({
+    products: [],
+    railingLengthFeet: 0,
+    stairsPresent: true,
+    stairProjectionFeet: 10,
+  });
+  assert.equal(system.lines.find((line) => line.role === "railing_stair_kit")?.quantity, 4);
+  assert.equal(system.lines.find((line) => line.role === "railing_stair_lower_post")?.quantity, 2);
+});
+
+test("builds cable as one same-line component system including cable hardware packs", () => {
+  const cableProduct = (kind, unitCost, stockLengthFeet = null) => ({
+    ...product(kind, unitCost, stockLengthFeet),
+    productLine: "Contemporary Cable",
+  });
+  const system = buildDefaultCableRailingPackage({
+    products: [
+      cableProduct("railing_level_kit", 125, 8),
+      cableProduct("railing_level_post", 121),
+      cableProduct("railing_cable_end_post", 122),
+      cableProduct("railing_cable_pack", 52, 10),
+      cableProduct("railing_stair_kit", 178, 8),
+      cableProduct("railing_stair_lower_post", 145),
+    ],
+    railingLengthFeet: 35,
+    stairsPresent: true,
+    stairProjectionFeet: 10,
+    stairRailSides: 2,
+  });
+  assert.deepEqual(Array.from(system.lines, (line) => [line.role, line.quantity]), [
+    ["railing_level_kit", 5],
+    ["railing_cable_end_post", 2],
+    ["railing_level_post", 6],
+    ["railing_cable_pack", 90],
+    ["railing_stair_kit", 4],
+    ["railing_stair_lower_post", 2],
+  ]);
+  assert.equal(system.unresolved.length, 0);
 });
 
 test("keeps the package incomplete when any required compatible component is missing", () => {

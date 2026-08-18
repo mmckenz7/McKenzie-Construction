@@ -103,15 +103,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
       request: requestFinish,
     });
     const railingKinds: DeckLowesSuggestion["kind"][] =
-      requestFinish.railingFamily === "metal"
+      requestFinish.railingFamily === "metal" || requestFinish.railingFamily === "cable"
         ? [
             "railing_level_kit",
             "railing_level_post",
+            ...(requestFinish.railingFamily === "cable"
+              ? (["railing_cable_pack", "railing_cable_end_post"] as const)
+              : []),
             ...(railing.stairsPresent
               ? (["railing_stair_kit", "railing_stair_lower_post"] as const)
               : []),
           ]
-        : requestFinish.railingFamily === "none"
+        : requestFinish.railingFamily === "none" || requestFinish.railingFamily === "wood"
           ? []
           : ["railing_section"];
     const requiredKinds: DeckLowesSuggestion["kind"][] = [

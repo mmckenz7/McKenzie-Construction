@@ -113,9 +113,11 @@ export async function findDeckLowesDefaults(args: Readonly<{
       args.railingFamily === "metal"
         ? "Use Deckorators Contemporary 36-in matte-black aluminum as the single default system. Return its level rail kit as railing_level_kit, compatible 39-in post kit as railing_level_post, and—when stairs exist—its 6-ft stair rail kit as railing_stair_kit and compatible 48-in lower stair post kit as railing_stair_lower_post. Treat included brackets, bracket hardware, rail supports, post caps, and post skirts as included components rather than separate products. Do not mix another manufacturer or product line."
         : args.railingFamily === "cable"
-          ? "Every manufactured railing choice must be one coherent system from one manufacturer and one named product line. Do not mix rails, posts, brackets, panels, cable, gates, caps, or fasteners across manufacturers or product lines. Return manufacturer and productLine only when the Lowe's product page clearly establishes both; otherwise omit that railing choice."
+          ? "Use Deckorators Contemporary Cable 36-in textured-black as the single default system. Return its 8-ft level top rail kit as railing_level_kit, 39-in line post as railing_level_post, 39-in end post as railing_cable_end_post, 10-ft cable-with-hardware pack as railing_cable_pack, and—when stairs exist—its 8-ft stair top rail kit as railing_stair_kit and compatible lower stair post as railing_stair_lower_post. Do not mix another manufacturer, product line, finish, or height."
         : "Do not claim manufactured railing-system compatibility unless the public product page supports it.",
-      "Return up to three current matching Lowe's deck-board choices, one compatible deck-fastener choice, and all required default railing-system component roles. For wood or cable railing, railing_section remains the comparison product.",
+      "Return up to three current matching Lowe's deck-board choices, one compatible deck-fastener choice, and all required default railing-system component roles. Wood railing is priced locally per linear foot and does not require a railing product.",
+      "Every manufactured railing package must remain one coherent system from one manufacturer and one named product line.",
+      "Do not mix rails, posts, brackets, panels, cable, gates, caps, or fasteners across product lines.",
       "For deck boards, prefer the shortest sold stock length that spans the full board run without a joint. If no sold length spans it, prefer a length that reaches at least half the run for a perimeter picture-frame plus center-divider layout.",
       "Use only exact lowes.com /pd/ product pages. Copy a public price only when the page clearly supports it; otherwise return null. Never invent availability, price, dimensions, package coverage, compatibility, or manufacturer guidance.",
       "Return JSON only with the requested schema.",
@@ -135,7 +137,7 @@ export async function findDeckLowesDefaults(args: Readonly<{
               type: "object",
               additionalProperties: false,
               properties: {
-                kind: { type: "string", enum: ["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post"] },
+                kind: { type: "string", enum: ["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"] },
                 description: { type: "string", minLength: 1, maxLength: 240 },
                 unitCost: { type: ["number", "null"], minimum: 0 },
                 sourceUrl: { type: "string", minLength: 1, maxLength: 1000 },
@@ -186,7 +188,7 @@ export async function findDeckLowesDefaults(args: Readonly<{
     const item = raw as Record<string, unknown>;
     const kind = item.kind;
     const sourceUrl = exactLowesProductUrl(item.sourceUrl);
-    if (!sourceUrl || !["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post"].includes(String(kind))) continue;
+    if (!sourceUrl || !["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"].includes(String(kind))) continue;
     const limit = kind === "deck_board" || kind === "railing_section" ? 3 : 1;
     if ((counts.get(String(kind)) ?? 0) >= limit) continue;
     if (typeof item.description !== "string" || typeof item.reason !== "string") continue;

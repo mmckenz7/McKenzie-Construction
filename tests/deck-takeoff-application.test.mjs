@@ -143,6 +143,13 @@ test("Lowe's defaults are read-only, tenant-authorized, and bound to exact produ
   assert.match(suggestionProvider, /do not substitute another railing family/);
   assert.match(suggestionProvider, /one coherent system from one manufacturer and one named product line/);
   assert.match(suggestionProvider, /Do not mix rails, posts, brackets, panels, cable, gates, caps, or fasteners/);
+  assert.match(ui, /Stair railing coverage/);
+  assert.match(ui, /A stair rail kit is one rail for one side/);
+  assert.match(ui, /One side/);
+  assert.match(ui, /Both sides/);
+  assert.match(ui, /Wood railing allowance/);
+  assert.match(ui, /stairProjectionFeet \* sides/);
+  assert.match(ui, /buildDefaultCableRailingPackage/);
   assert.match(suggestionProvider, /manufacturedRailing && \(!manufacturer \|\| !productLine\)/);
   assert.match(ui, /Compatible system:/);
   assert.match(suggestionRoute, /selectCuratedDeckProducts/);
@@ -153,7 +160,7 @@ test("Lowe's defaults are read-only, tenant-authorized, and bound to exact produ
   assert.doesNotMatch(curatedSuggestions, /price\.price_type === "contract"/);
   assert.match(ui, /No Pro discount is assumed/);
   assert.match(ui, /Reprice the complete[\s\S]*takeoff before purchasing/);
-  assert.match(ui, /Default aluminum system/);
+  assert.match(ui, /Default complete system/);
   assert.match(ui, /Parts already included in a kit are not counted twice/);
   assert.match(ui, /Post anchoring fasteners are not included with the post kits/);
   assert.match(railingSystem, /Deckorators/);
