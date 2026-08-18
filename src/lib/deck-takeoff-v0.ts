@@ -355,6 +355,75 @@ function formatted(value: number, places = 4) {
   return value.toFixed(places).replace(/\.0+$|(?<=\.[0-9]*?)0+$/g, "");
 }
 
+export function customDeckFinishGeometry(args: Readonly<{
+  outline: readonly Readonly<{ x: number; y: number }>[];
+  attached: boolean | null;
+  stairsPresent: boolean | null;
+  stairPlacement: Readonly<{ widthFeet: number }> | null;
+}>) {
+  if (args.outline.length < 3) return null;
+  const edgeLengths = args.outline.map((point, index, outline) => {
+    const next = outline[(index + 1) % outline.length];
+    return Math.hypot(next.x - point.x, next.y - point.y);
+  });
+  const areaSquareFeet = Math.abs(
+    args.outline.reduce((sum, point, index, outline) => {
+      const next = outline[(index + 1) % outline.length];
+      return sum + point.x * next.y - next.x * point.y;
+    }, 0) / 2,
+  );
+  if (!Number.isFinite(areaSquareFeet) || areaSquareFeet <= 0) return null;
+  const perimeterFeet = edgeLengths.reduce((sum, length) => sum + length, 0);
+  const houseEdgeFeet = args.attached === true ? edgeLengths[0] ?? 0 : 0;
+  const stairOpeningFeet =
+    args.stairsPresent === true && args.stairPlacement
+      ? args.stairPlacement.widthFeet
+      : 0;
+  return Object.freeze({
+    areaSquareFeet,
+    perimeterFeet,
+    houseEdgeFeet,
+    stairOpeningFeet,
+    levelRailingFeet:
+      args.attached === null
+        ? null
+        : Math.max(0, perimeterFeet - houseEdgeFeet - stairOpeningFeet),
+  });
+}
+
+export function estimateCustomDeckBoardPieces(args: Readonly<{
+  areaSquareFeet: number;
+  boardActualWidthInches: number;
+  boardGapInches: number;
+  stockLengthFeet: number;
+  wastePercent: number;
+}>) {
+  if (
+    !Number.isFinite(args.areaSquareFeet) ||
+    args.areaSquareFeet <= 0 ||
+    !Number.isFinite(args.boardActualWidthInches) ||
+    args.boardActualWidthInches <= 0 ||
+    !Number.isFinite(args.boardGapInches) ||
+    args.boardGapInches < 0 ||
+    !Number.isFinite(args.stockLengthFeet) ||
+    args.stockLengthFeet <= 0 ||
+    !Number.isFinite(args.wastePercent) ||
+    args.wastePercent < 0 ||
+    args.wastePercent > 50
+  )
+    return null;
+  const coverageSquareFeetPerBoard =
+    args.stockLengthFeet *
+    ((args.boardActualWidthInches + args.boardGapInches) / 12);
+  return Object.freeze({
+    coverageSquareFeetPerBoard,
+    pieces: Math.ceil(
+      (args.areaSquareFeet / coverageSquareFeetPerBoard) *
+        (1 + args.wastePercent / 100),
+    ),
+  });
+}
+
 export function measurementFeet(value: unknown, unit: unknown): number | null {
   if (typeof value !== "string" || typeof unit !== "string") return null;
   const normalized = value.trim().toLowerCase();
@@ -657,6 +726,15 @@ export function buildDeckTakeoffPreview(
     input.items,
     lengthFeet && widthFeet ? { lengthFeet, widthFeet } : null,
   );
+  const customFinishGeometry =
+    customFootprint && input.plan.shapeBinding
+      ? customDeckFinishGeometry({
+          outline: input.plan.shapeBinding.outline,
+          attached: railingGeometry.attached,
+          stairsPresent: input.plan.shapeBinding.stairsPresent,
+          stairPlacement: input.plan.shapeBinding.stairPlacement,
+        })
+      : null;
   const stairPlacementIssue = deckStairPlacementIssue({
     lengthFeet,
     widthFeet,
@@ -723,12 +801,55 @@ export function buildDeckTakeoffPreview(
   );
   if (customFootprint) {
     const reviewedDecking = rebuildLines.get("custom_decking");
-    if (!reviewedDecking || !deckStructuralLineIsComplete(reviewedDecking)) {
+    const customBoardEstimate =
+      customFinishGeometry &&
+      boardWidth &&
+      boardGap !== null &&
+      stockLength &&
+      waste !== null
+        ? estimateCustomDeckBoardPieces({
+            areaSquareFeet: customFinishGeometry.areaSquareFeet,
+            boardActualWidthInches: boardWidth,
+            boardGapInches: boardGap,
+            stockLengthFeet: stockLength,
+            wastePercent: waste,
+          })
+        : null;
+    const customDeckingPrice = reviewedDecking
+      ? resolveCost(
+          reviewedDecking.catalogMaterialId,
+          reviewedDecking.unitCost,
+          reviewedDecking.sourceReference,
+          input.catalog,
+          "ea",
+        )
+      : null;
+    if (!reviewedDecking?.description.trim()) {
       unresolved.push(
-        "The custom footprint needs a reviewed deck-board quantity from the approved layout plan; the app will not substitute its bounding rectangle.",
+        "Choose the deck-board product for the approved custom footprint.",
+      );
+    } else if (!customBoardEstimate) {
+      unresolved.push(
+        "Deck-board width, gap, stock length, and waste are required to calculate the custom-footprint purchase count.",
+      );
+    } else if (!customDeckingPrice) {
+      unresolved.push(
+        "Deck boards need an estimating unit cost and a traceable product source.",
       );
     } else {
       deckingLayout = "reviewed_custom_plan";
+      lines.push({
+        key: "custom_decking",
+        category: "material",
+        customerDescription: reviewedDecking.description.trim(),
+        internalDescription: `${formatted(customFinishGeometry?.areaSquareFeet ?? 0, 2)} sq ft approved polygon divided by ${formatted(customBoardEstimate.coverageSquareFeetPerBoard, 3)} sq ft coverage per board, plus ${formatted(waste ?? 0, 2)}% estimating waste. This is a finish-material estimate, not a board-by-board cut plan.`,
+        quantity: String(customBoardEstimate.pieces),
+        unit: "ea",
+        unitCost: customDeckingPrice.unitCost,
+        catalogMaterialId: customDeckingPrice.catalogMaterialId,
+        sourceReference: customDeckingPrice.sourceReference,
+        formula: `ceil((${formatted(customFinishGeometry?.areaSquareFeet ?? 0, 2)} sq ft ÷ ${formatted(customBoardEstimate.coverageSquareFeetPerBoard, 3)} sq ft/board) × (1 + ${formatted(waste ?? 0, 2)}%)) = ${customBoardEstimate.pieces} boards`,
+      });
     }
   } else if (area !== null && lengthFeet !== null && widthFeet !== null) {
     if (
@@ -836,9 +957,13 @@ export function buildDeckTakeoffPreview(
   );
   if (customFootprint && railingGeometry.railingsPresent) {
     const reviewedRailing = rebuildLines.get("custom_railing");
-    if (!reviewedRailing || !deckStructuralLineIsComplete(reviewedRailing))
+    if (!customFinishGeometry || customFinishGeometry.levelRailingFeet === null)
       unresolved.push(
-        "The custom footprint needs a reviewed railing quantity from the approved layout plan; the app will not use a rectangular perimeter.",
+        "Automatic custom-footprint railing needs the saved house-attachment fact.",
+      );
+    else if (!reviewedRailing || !deckStructuralLineIsComplete(reviewedRailing))
+      unresolved.push(
+        "Choose a railing system so its package can be calculated from the approved custom perimeter.",
       );
   } else if (railingGeometry.railingsPresent) {
     if (stairPlacementIssue) {
@@ -927,6 +1052,13 @@ export function buildDeckTakeoffPreview(
 
   for (const line of input.plan.additionalLines) {
     if (line.key === "railing") continue;
+    if (customFootprint && line.key === "custom_decking") continue;
+    if (
+      customFootprint &&
+      line.key === "custom_railing" &&
+      railingGeometry.railingsPresent === false
+    )
+      continue;
     if (line.key === "structural_connectors" && input.plan.framingPlanEvidence)
       continue;
     const scopeDecision =
@@ -994,16 +1126,28 @@ export function buildDeckTakeoffPreview(
     deckWidthFeet: widthFeet === null ? null : formatted(widthFeet),
     deckAreaSquareFeet: area === null ? null : formatted(area),
     railingLengthFeet:
-      stairPlacementIssue || railingGeometry.railingLengthFeet === null
+      stairPlacementIssue ||
+      (customFootprint
+        ? customFinishGeometry?.levelRailingFeet === null ||
+          customFinishGeometry?.levelRailingFeet === undefined
+        : railingGeometry.railingLengthFeet === null)
         ? null
-        : formatted(railingGeometry.railingLengthFeet),
+        : formatted(
+            customFootprint
+              ? customFinishGeometry?.levelRailingFeet ?? 0
+              : railingGeometry.railingLengthFeet ?? 0,
+          ),
     deckingLayout,
     lines: Object.freeze(lines),
     unresolved: Object.freeze(unresolved),
     disclosures: Object.freeze([
       "Photos document visible conditions; they do not create dimensions, quantities, structural design, or prices.",
-      "Decking quantity uses verified length and width plus the reviewed board width, gap, stock length, and waste; it prefers full-length boards and otherwise requires a picture-frame divider layout.",
-      "Railing length uses the verified rectangular deck perimeter, house attachment, and stair opening; product section count remains reviewable.",
+      customFootprint
+        ? "Custom-footprint decking uses the approved polygon area, selected board coverage, and estimating waste. It is a purchase estimate rather than a board-by-board cut plan."
+        : "Decking quantity uses verified length and width plus the reviewed board width, gap, stock length, and waste; it prefers full-length boards and otherwise requires a picture-frame divider layout.",
+      customFootprint
+        ? "Custom-footprint railing uses the exact approved polygon perimeter, less the saved house edge and stair opening; stair-side rails remain part of the selected railing package."
+        : "Railing length uses the verified rectangular deck perimeter, house attachment, and stair opening; product section count remains reviewable.",
       input.plan.framingPlanEvidence
         ? `The bounded prescriptive profile generated and checked the main-deck structural draft from explicit inputs; ${input.plan.framingPlanEvidence.unresolvedPackages.join(" and ").replaceAll("_", " ")} remain unresolved. Human approval and building-department review remain required.`
         : "The approved rectangle can establish deck area, decking layout, and reviewed railing perimeter only. It does not size or count structural members.",

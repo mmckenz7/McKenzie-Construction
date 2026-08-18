@@ -30,9 +30,37 @@ import {
 import {
   buildDeckTakeoffPreview,
   COMPLETE_REBUILD_LINE_KEYS,
+  customDeckFinishGeometry,
   deckShapeBindingMatches,
   deckStructuralLineIsComplete,
+  estimateCustomDeckBoardPieces,
 } from "../src/lib/deck-takeoff-v0.ts";
+
+test("custom finish geometry calculates polygon boards and open-edge railing", () => {
+  const outline = [
+    { x: 0, y: 0 }, { x: 19, y: 0 }, { x: 19, y: 15 },
+    { x: 0, y: 15 }, { x: 0, y: 10 }, { x: 7, y: 10 },
+    { x: 7, y: 5 }, { x: 0, y: 5 },
+  ];
+  const geometry = customDeckFinishGeometry({
+    outline,
+    attached: true,
+    stairsPresent: true,
+    stairPlacement: { widthFeet: 3 },
+  });
+  assert.equal(geometry.areaSquareFeet, 250);
+  assert.equal(geometry.perimeterFeet, 82);
+  assert.equal(geometry.houseEdgeFeet, 19);
+  assert.equal(geometry.levelRailingFeet, 60);
+  const boards = estimateCustomDeckBoardPieces({
+    areaSquareFeet: geometry.areaSquareFeet,
+    boardActualWidthInches: 5.5,
+    boardGapInches: 0.125,
+    stockLengthFeet: 16,
+    wastePercent: 10,
+  });
+  assert.equal(boards.pieces, 37);
+});
 
 test("custom estimating concept derives only exact orthogonal footprint geometry", () => {
   const outline = [
@@ -394,7 +422,10 @@ test("inset takeoff uses polygon area and reviewed custom quantities, never its 
   assert.equal(preview.deckAreaSquareFeet, "250");
   assert.notEqual(preview.deckAreaSquareFeet, String(19 * 15));
   assert.equal(preview.deckingLayout, "reviewed_custom_plan");
-  assert.ok(preview.lines.some((line) => line.key === "custom_decking"));
+  assert.equal(
+    preview.lines.find((line) => line.key === "custom_decking")?.quantity,
+    "37",
+  );
   assert.ok(preview.lines.some((line) => line.key === "custom_railing"));
   assert.equal(preview.lines.some((line) => line.key === "decking"), false);
   assert.equal(preview.lines.some((line) => line.key === "railing"), false);
@@ -1169,11 +1200,11 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
     /customApprovedFootprint \? customStructuralDesigner : structuralDesigner/,
   );
   assert.match(planner, /Matching products for the custom footprint/);
-  assert.match(planner, /Find matching Lowe's products/);
+  assert.match(planner, /Load products and estimating costs/);
   assert.match(planner, /customFinishPrices/);
   assert.match(
     planner,
-    /Framing products[\s\S]*are not selected on this screen/,
+    /Framing\s+products[\s\S]*are not selected on this screen/,
   );
   assert.match(planner, /customFinishLines\.map/);
   assert.match(

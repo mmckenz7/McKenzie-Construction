@@ -137,7 +137,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     ];
     const refreshKinds = requiredKinds.filter((kind) => {
       const saved = savedProducts.find((product) => product.kind === kind);
-      return !saved?.unitCost;
+      return !saved;
     });
 
     let live = [] as ReturnType<typeof enrichLiveDeckProducts>;

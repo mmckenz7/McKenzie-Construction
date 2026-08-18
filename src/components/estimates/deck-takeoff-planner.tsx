@@ -23,11 +23,13 @@ import {
   buildDeckTakeoffPreview,
   COMPLETE_REBUILD_LINE_KEYS,
   completeRebuildScopeRequirement,
+  customDeckFinishGeometry,
   deckBlueprintVisitSeed,
   deckFieldDimensions,
   deckRailingGeometry,
   deckShapeBindingMatches,
   deckStructuralLineIsComplete,
+  estimateCustomDeckBoardPieces,
   type CompleteRebuildLineKey,
   type DeckObservationItem,
   type DeckTakeoffPlan,
@@ -439,6 +441,37 @@ export function DeckTakeoffPlanner({
     approvedShapeHandoff?.stairPlacementConfirmed ?? false;
   const customApprovedFootprint =
     approvedShapeHandoff?.footprintMode === "reviewed_custom_plan";
+  const customFinishGeometry = useMemo(
+    () =>
+      customApprovedFootprint && approvedShape
+        ? customDeckFinishGeometry({
+            outline: approvedShape.outline,
+            attached: railingGeometry.attached,
+            stairsPresent: approvedShape.stairsPresent,
+            stairPlacement: approvedShape.stairPlacement,
+          })
+        : null,
+    [approvedShape, customApprovedFootprint, railingGeometry.attached],
+  );
+  const finishRailingLengthFeet = customApprovedFootprint
+    ? customFinishGeometry?.levelRailingFeet ?? null
+    : railingGeometry.railingLengthFeet;
+  const customDeckBoardEstimate = useMemo(() => {
+    if (!customFinishGeometry) return null;
+    return estimateCustomDeckBoardPieces({
+      areaSquareFeet: customFinishGeometry.areaSquareFeet,
+      boardActualWidthInches: Number(plan.boardActualWidthInches),
+      boardGapInches: Number(plan.boardGapInches),
+      stockLengthFeet: Number(plan.boardStockLengthFeet),
+      wastePercent: Number(plan.boardWastePercent),
+    });
+  }, [
+    customFinishGeometry,
+    plan.boardActualWidthInches,
+    plan.boardGapInches,
+    plan.boardStockLengthFeet,
+    plan.boardWastePercent,
+  ]);
 
   useEffect(() => {
     if (!approvedShape) return;
@@ -1008,7 +1041,7 @@ export function DeckTakeoffPlanner({
         requestedRailing === "metal"
           ? buildDefaultAluminumRailingPackage({
               products: body.products,
-              railingLengthFeet: railingGeometry.railingLengthFeet,
+              railingLengthFeet: finishRailingLengthFeet,
               stairsPresent: railingGeometry.stairsPresent,
               stairProjectionFeet:
                 plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
@@ -1019,7 +1052,7 @@ export function DeckTakeoffPlanner({
         requestedRailing === "cable"
           ? buildDefaultCableRailingPackage({
               products: body.products,
-              railingLengthFeet: railingGeometry.railingLengthFeet,
+              railingLengthFeet: finishRailingLengthFeet,
               stairsPresent: railingGeometry.stairsPresent,
               stairProjectionFeet:
                 plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
@@ -1042,12 +1075,28 @@ export function DeckTakeoffPlanner({
         ? manufacturedPackage.sourceReference || manufacturedPackage.installationReference
         : railing?.sourceUrl ?? "";
       setPlan((current) => {
+        const boardPieces =
+          board?.stockLengthFeet && customFinishGeometry
+            ? estimateCustomDeckBoardPieces({
+                areaSquareFeet: customFinishGeometry.areaSquareFeet,
+                boardActualWidthInches: Number(current.boardActualWidthInches),
+                boardGapInches: Number(current.boardGapInches),
+                stockLengthFeet: board.stockLengthFeet,
+                wastePercent: Number(current.boardWastePercent),
+              })?.pieces ?? null
+            : null;
+        const customRailingQuantity = manufacturedPackage
+          ? 1
+          : railing?.stockLengthFeet && finishRailingLengthFeet
+            ? Math.ceil(finishRailingLengthFeet / railing.stockLengthFeet)
+            : finishRailingLengthFeet;
         const customFinishPrices = customApprovedFootprint
           ? current.additionalLines.map((line) => {
               if (line.key === "custom_decking" && board) {
                 return {
                   ...line,
                   description: board.description,
+                  quantity: boardPieces ? String(boardPieces) : "",
                   unit: "ea",
                   unitCost: board.unitCost ? String(board.unitCost) : "",
                   sourceReference: board.sourceUrl,
@@ -1058,8 +1107,14 @@ export function DeckTakeoffPlanner({
                 return {
                   ...line,
                   description: railingDescription ?? railing.description,
-                  quantity: "1",
-                  unit: "system",
+                  quantity: customRailingQuantity
+                    ? String(customRailingQuantity)
+                    : "",
+                  unit: manufacturedPackage
+                    ? "system"
+                    : railing.stockLengthFeet
+                      ? "ea"
+                      : "ln ft",
                   unitCost: railingUnitCost ? String(railingUnitCost) : "",
                   sourceReference: railingSource,
                   catalogMaterialId: null,
@@ -1094,8 +1149,8 @@ export function DeckTakeoffPlanner({
           ...(railing
             ? {
                 railingCatalogMaterialId: null,
-                railingSectionLengthFeet: manufacturedPackage && railingGeometry.railingLengthFeet
-                  ? String(railingGeometry.railingLengthFeet)
+                railingSectionLengthFeet: manufacturedPackage && finishRailingLengthFeet
+                  ? String(finishRailingLengthFeet)
                   : railing.stockLengthFeet
                     ? String(railing.stockLengthFeet)
                     : current.railingSectionLengthFeet,
@@ -1124,7 +1179,7 @@ export function DeckTakeoffPlanner({
         missingPrices.length
           ? `Saved products loaded. Enter an estimating Lowe's ${missingPrices.join(" and ")} price${missingPrices.length === 1 ? "" : "s"} from the linked product page, then continue.${partialNotice}${priceNotice}`
           : customApprovedFootprint
-            ? `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are filled in. Confirm the reviewed custom-shape quantities next.${manufacturedPackage?.unresolved.length ? ` The ${manufacturedPackage.manufacturer} ${manufacturedPackage.productLine} package still needs prices for: ${manufacturedPackage.unresolved.map((line) => line.label).join(", ")}.` : ""}${partialNotice}${priceNotice}`
+            ? `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are filled in. The approved polygon now calculates the finish quantities automatically.${manufacturedPackage?.unresolved.length ? ` The ${manufacturedPackage.manufacturer} ${manufacturedPackage.productLine} package still needs prices for: ${manufacturedPackage.unresolved.map((line) => line.label).join(", ")}.` : ""}${partialNotice}${priceNotice}`
             : `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are ready. Review the calculated finish quantities next.${manufacturedPackage?.unresolved.length ? ` The ${manufacturedPackage.manufacturer} ${manufacturedPackage.productLine} package still needs prices for: ${manufacturedPackage.unresolved.map((line) => line.label).join(", ")}.` : ""}${partialNotice}${priceNotice}`,
       );
     } catch (caught) {
@@ -1151,7 +1206,7 @@ export function DeckTakeoffPlanner({
       : buildDefaultAluminumRailingPackage;
     const currentPackage = packageBuilder({
       products: suggestions,
-      railingLengthFeet: railingGeometry.railingLengthFeet,
+      railingLengthFeet: finishRailingLengthFeet,
       stairsPresent: railingGeometry.stairsPresent,
       stairProjectionFeet:
         plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
@@ -1188,7 +1243,7 @@ export function DeckTakeoffPlanner({
     setSuggestions(updatedSuggestions);
     const nextPackage = packageBuilder({
       products: updatedSuggestions,
-      railingLengthFeet: railingGeometry.railingLengthFeet,
+      railingLengthFeet: finishRailingLengthFeet,
       stairsPresent: railingGeometry.stairsPresent,
       stairProjectionFeet:
         plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
@@ -1200,8 +1255,8 @@ export function DeckTakeoffPlanner({
     setPlan((current) => ({
       ...current,
       railingCatalogMaterialId: null,
-      railingSectionLengthFeet: railingGeometry.railingLengthFeet
-        ? String(railingGeometry.railingLengthFeet)
+      railingSectionLengthFeet: finishRailingLengthFeet
+        ? String(finishRailingLengthFeet)
         : current.railingSectionLengthFeet,
       railingUnitCost: nextPackage.totalCost
         ? String(nextPackage.totalCost)
@@ -1350,7 +1405,7 @@ export function DeckTakeoffPlanner({
     railingFamily === "metal"
       ? buildDefaultAluminumRailingPackage({
           products: suggestions,
-          railingLengthFeet: railingGeometry.railingLengthFeet,
+          railingLengthFeet: finishRailingLengthFeet,
           stairsPresent: railingGeometry.stairsPresent,
           stairProjectionFeet:
             plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
@@ -1361,7 +1416,7 @@ export function DeckTakeoffPlanner({
     railingFamily === "cable"
       ? buildDefaultCableRailingPackage({
           products: suggestions,
-          railingLengthFeet: railingGeometry.railingLengthFeet,
+          railingLengthFeet: finishRailingLengthFeet,
           stairsPresent: railingGeometry.stairsPresent,
           stairProjectionFeet:
             plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
@@ -1372,7 +1427,7 @@ export function DeckTakeoffPlanner({
   const stairProjectionFeet = plan.shapeBinding?.stairPlacement?.projectionFeet ?? null;
   const woodRailingFeet = Math.max(
     0,
-    (railingGeometry.railingLengthFeet ?? 0) +
+    (finishRailingLengthFeet ?? 0) +
       (railingGeometry.stairsPresent && stairProjectionFeet
         ? stairProjectionFeet * stairRailSides
         : 0),
@@ -1383,7 +1438,7 @@ export function DeckTakeoffPlanner({
     const rate = Number(value);
     const totalFeet = Math.max(
       0,
-      (railingGeometry.railingLengthFeet ?? 0) +
+      (finishRailingLengthFeet ?? 0) +
         (railingGeometry.stairsPresent && stairProjectionFeet
           ? stairProjectionFeet * sides
           : 0),
@@ -1395,8 +1450,8 @@ export function DeckTakeoffPlanner({
       // The rectangular preview represents this as one reviewed railing
       // allowance; the UI retains and displays the exact per-foot math.
       railingSectionLengthFeet:
-        railingGeometry.railingLengthFeet && railingGeometry.railingLengthFeet > 0
-          ? String(railingGeometry.railingLengthFeet)
+        finishRailingLengthFeet && finishRailingLengthFeet > 0
+          ? String(finishRailingLengthFeet)
           : "1",
       railingUnitCost: totalCost > 0 ? totalCost.toFixed(2) : "",
       railingSourceReference:
@@ -1739,7 +1794,7 @@ export function DeckTakeoffPlanner({
         <section className="mt-4 rounded-lg border border-emerald-500 bg-slate-950 p-3 text-white">
           <p className="text-xs font-black uppercase tracking-[.14em] text-emerald-300">Wood railing allowance</p>
           <p className="mt-1 text-sm leading-6 text-slate-200">
-            {woodRailingFeet.toFixed(1)} total linear ft = {(railingGeometry.railingLengthFeet ?? 0).toFixed(1)} ft level rail{railingGeometry.stairsPresent && stairProjectionFeet ? ` + ${stairProjectionFeet.toFixed(1)} ft × ${stairRailSides} stair side${stairRailSides === 1 ? "" : "s"}` : ""}.
+            {woodRailingFeet.toFixed(1)} total linear ft = {(finishRailingLengthFeet ?? 0).toFixed(1)} ft level rail{railingGeometry.stairsPresent && stairProjectionFeet ? ` + ${stairProjectionFeet.toFixed(1)} ft × ${stairRailSides} stair side${stairRailSides === 1 ? "" : "s"}` : ""}.
           </p>
           <label className="mt-3 block text-sm font-bold text-white">
             Estimating material cost per linear foot
@@ -3055,10 +3110,32 @@ export function DeckTakeoffPlanner({
           </h4>
           <p className="mt-1 text-sm leading-6 text-slate-300">
             Choose the finishes above. The app fills the matching Lowe&apos;s
-            product and its price source. For this inset footprint, enter only
-            the final purchase count from the reviewed layout. Framing products
-            are not selected on this screen.
+            product and its price source. The approved polygon calculates deck
+            area, board count, and level-railing length automatically. Framing
+            products are not selected on this screen.
           </p>
+          {customFinishGeometry ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-blue-700 bg-blue-950 p-3 text-blue-50">
+                <p className="text-xs font-black uppercase tracking-wide text-blue-300">
+                  Approved deck area
+                </p>
+                <p className="mt-1 text-xl font-black">
+                  {customFinishGeometry.areaSquareFeet.toFixed(1)} sq ft
+                </p>
+              </div>
+              <div className="rounded-lg border border-blue-700 bg-blue-950 p-3 text-blue-50">
+                <p className="text-xs font-black uppercase tracking-wide text-blue-300">
+                  Level railing
+                </p>
+                <p className="mt-1 text-xl font-black">
+                  {customFinishGeometry.levelRailingFeet === null
+                    ? "Needs attachment answer"
+                    : `${customFinishGeometry.levelRailingFeet.toFixed(1)} ln ft`}
+                </p>
+              </div>
+            </div>
+          ) : null}
           <div className="mt-3 space-y-3">
             {customFinishLines.map((line) => {
               const isDecking = line.key === "custom_decking";
@@ -3096,25 +3173,30 @@ export function DeckTakeoffPlanner({
                     <Field
                       label={
                         isDecking
-                          ? "How many boards should be purchased?"
-                          : "How many railing sections or kits should be purchased?"
+                          ? "Calculated boards to purchase"
+                          : "Calculated railing package quantity"
                       }
                     >
                       <input
                         aria-describedby={`${line.key}-quantity-help`}
-                        className={input}
+                        className={`${input} cursor-not-allowed bg-slate-800 text-white`}
                         inputMode="decimal"
-                        value={line.quantity}
-                        onChange={(event) =>
-                          updateLine(line.key, "quantity", event.target.value)
+                        readOnly
+                        value={
+                          isDecking
+                            ? customDeckBoardEstimate?.pieces ?? ""
+                            : line.quantity
                         }
                       />
                       <span
                         id={`${line.key}-quantity-help`}
                         className="mt-1 block text-xs leading-5 text-slate-300"
                       >
-                        Use the final count from the reviewed custom layout. This
-                        is a purchase count, not square footage.
+                        {isDecking
+                          ? customDeckBoardEstimate
+                            ? `Calculated from the approved polygon, ${plan.boardStockLengthFeet || "selected-length"}-ft boards, and ${plan.boardWastePercent || "0"}% waste.`
+                            : "Select a board product with a known length to calculate this count."
+                          : "Calculated from the exact open-edge perimeter and selected railing system. Stair-side components are included in the system summary."}
                       </span>
                     </Field>
                     {priceReady ? (

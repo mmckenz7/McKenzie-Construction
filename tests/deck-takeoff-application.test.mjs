@@ -74,9 +74,9 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "Calculate quantities and costs",
     "Estimating retail price per board",
     "Estimating retail price per railing section",
-    "How many boards should be purchased",
-    "How many railing sections or kits should be purchased",
-    "This[\\s\\S]*is a purchase count, not square footage",
+    "Calculated boards to purchase",
+    "Calculated railing package quantity",
+    "approved polygon calculates deck\\s+area, board count, and level-railing length automatically",
     "Correct product details manually",
     "Open Lowe(?:'|&apos;)s product",
     "Enter .* missing price.* to continue",
@@ -160,6 +160,8 @@ test("Lowe's defaults are read-only, tenant-authorized, and bound to exact produ
   assert.match(suggestionRoute, /woodScrewCoverageSquareFeetPerPack/);
   assert.match(suggestionRoute, /liveLookupStatus/);
   assert.match(suggestionRoute, /unpricedKinds/);
+  assert.match(suggestionRoute, /return !saved;/);
+  assert.doesNotMatch(suggestionRoute, /return !saved\?\.unitCost;/);
   assert.match(estimatingDefaults, /Clinton Highway/);
   assert.match(estimatingDefaults, /25\.8/);
   assert.match(ui, /Load products and estimating costs/);
