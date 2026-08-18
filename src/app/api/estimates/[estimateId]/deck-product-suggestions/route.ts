@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { findDeckLowesDefaults, DeckLowesSuggestionError } from "@/lib/deck-lowes-product-suggestions";
+import type { DeckLowesSuggestion } from "@/lib/deck-lowes-product-suggestions";
 import {
   enrichLiveDeckProducts,
   mergeDeckProductSuggestions,
@@ -101,10 +102,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
       prices: (priceResult.data ?? []) as unknown as CuratedDeckPrice[],
       request: requestFinish,
     });
-    const requiredKinds: Array<"deck_board" | "deck_fastener" | "railing_section"> = [
+    const railingKinds: DeckLowesSuggestion["kind"][] =
+      requestFinish.railingFamily === "metal"
+        ? [
+            "railing_level_kit",
+            "railing_level_post",
+            ...(railing.stairsPresent
+              ? (["railing_stair_kit", "railing_stair_lower_post"] as const)
+              : []),
+          ]
+        : requestFinish.railingFamily === "none"
+          ? []
+          : ["railing_section"];
+    const requiredKinds: DeckLowesSuggestion["kind"][] = [
       "deck_board",
       "deck_fastener",
-      ...(requestFinish.railingFamily !== "none" ? (["railing_section"] as const) : []),
+      ...railingKinds,
     ];
     const curatedKinds = new Set(curated.map((product) => product.kind));
     const neededKinds = requiredKinds.filter((kind) => !curatedKinds.has(kind));
@@ -116,6 +129,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           deckLengthFeet: body.boardRunDirection === "along_width" ? dimensions.widthFeet : dimensions.lengthFeet,
           deckWidthFeet: body.boardRunDirection === "along_width" ? dimensions.lengthFeet : dimensions.widthFeet,
           railingLengthFeet: railing.railingLengthFeet,
+          stairsPresent: railing.stairsPresent,
           ...requestFinish,
           idempotencyKey: randomUUID(),
         });

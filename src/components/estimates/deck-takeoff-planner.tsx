@@ -6,6 +6,10 @@ import { DeckPrescriptivePlanGenerator } from "@/components/estimates/deck-presc
 import type { FinalizedDeckShape } from "@/components/estimates/deck-shape-review";
 import type { EstimateBuilderEnvelope } from "@/lib/estimate-builder-client";
 import {
+  buildDefaultAluminumRailingPackage,
+  type DeckRailingProductRole,
+} from "@/lib/deck-railing-system";
+import {
   buildCustomDeckStructuralDraft,
   customDeckEstimatingConceptJoistLine,
   deckOutlineOutwardNormal,
@@ -44,7 +48,7 @@ type CatalogMaterial = {
 
 type FixedLine = DeckTakeoffPlan["additionalLines"][number];
 type LowesSuggestion = {
-  kind: "deck_board" | "deck_fastener" | "railing_section";
+  kind: "deck_board" | "deck_fastener" | DeckRailingProductRole;
   description: string;
   unitCost: number | null;
   sourceUrl: string;
@@ -994,9 +998,30 @@ export function DeckTakeoffPlanner({
       setSuggestions(body.products);
       const board = body.products.find((item) => item.kind === "deck_board");
       const screw = body.products.find((item) => item.kind === "deck_fastener");
-      const railing = body.products.find(
-        (item) => item.kind === "railing_section",
+      const aluminumPackage =
+        requestedRailing === "metal"
+          ? buildDefaultAluminumRailingPackage({
+              products: body.products,
+              railingLengthFeet: railingGeometry.railingLengthFeet,
+              stairsPresent: railingGeometry.stairsPresent,
+              stairProjectionFeet:
+                plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
+            })
+          : null;
+      const railing = body.products.find((item) =>
+        requestedRailing === "metal"
+          ? item.kind === "railing_level_kit"
+          : item.kind === "railing_section",
       );
+      const railingDescription = aluminumPackage
+        ? `${aluminumPackage.manufacturer} ${aluminumPackage.productLine} ${aluminumPackage.railHeightInches}-in aluminum railing system: ${aluminumPackage.lines.map((line) => `${line.quantity} ${line.label}`).join(", ")}. Included kit parts: ${[...new Set(aluminumPackage.lines.flatMap((line) => line.includedComponents))].join(", ")}.`
+        : railing?.description;
+      const railingUnitCost = aluminumPackage
+        ? aluminumPackage.totalCost
+        : railing?.unitCost ?? null;
+      const railingSource = aluminumPackage
+        ? aluminumPackage.sourceReference || aluminumPackage.installationReference
+        : railing?.sourceUrl ?? "";
       setPlan((current) => {
         const customFinishPrices = customApprovedFootprint
           ? current.additionalLines.map((line) => {
@@ -1013,10 +1038,11 @@ export function DeckTakeoffPlanner({
               if (line.key === "custom_railing" && railing) {
                 return {
                   ...line,
-                  description: railing.description,
-                  unit: "ea",
-                  unitCost: railing.unitCost ? String(railing.unitCost) : "",
-                  sourceReference: railing.sourceUrl,
+                  description: railingDescription ?? railing.description,
+                  quantity: "1",
+                  unit: "system",
+                  unitCost: railingUnitCost ? String(railingUnitCost) : "",
+                  sourceReference: railingSource,
                   catalogMaterialId: null,
                 };
               }
@@ -1049,13 +1075,13 @@ export function DeckTakeoffPlanner({
           ...(railing
             ? {
                 railingCatalogMaterialId: null,
-                railingSectionLengthFeet: railing.stockLengthFeet
-                  ? String(railing.stockLengthFeet)
-                  : current.railingSectionLengthFeet,
-                railingUnitCost: railing.unitCost
-                  ? String(railing.unitCost)
-                  : "",
-                railingSourceReference: railing.sourceUrl,
+                railingSectionLengthFeet: aluminumPackage && railingGeometry.railingLengthFeet
+                  ? String(railingGeometry.railingLengthFeet)
+                  : railing.stockLengthFeet
+                    ? String(railing.stockLengthFeet)
+                    : current.railingSectionLengthFeet,
+                railingUnitCost: railingUnitCost ? String(railingUnitCost) : "",
+                railingSourceReference: railingSource,
               }
             : {}),
         };
@@ -1063,7 +1089,7 @@ export function DeckTakeoffPlanner({
       setPreview(null);
       const missingPrices = [
         board && !board.unitCost ? "deck-board" : null,
-        railingGeometry.railingsPresent && railing && !railing.unitCost
+        railingGeometry.railingsPresent && railing && !railingUnitCost
           ? "railing"
           : null,
       ].filter(Boolean);
@@ -1072,8 +1098,8 @@ export function DeckTakeoffPlanner({
         missingPrices.length
           ? `Products found. Enter an estimating Lowe's ${missingPrices.join(" and ")} price${missingPrices.length === 1 ? "" : "s"} from the linked product page, then continue.${priceNotice}`
           : customApprovedFootprint
-            ? `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are filled in. Confirm the reviewed custom-shape quantities next.${priceNotice}`
-            : `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are ready. Review the calculated finish quantities next.${priceNotice}`,
+            ? `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are filled in. Confirm the reviewed custom-shape quantities next.${aluminumPackage?.unresolved.length ? ` The ${aluminumPackage.manufacturer} ${aluminumPackage.productLine} package still needs prices for: ${aluminumPackage.unresolved.map((line) => line.label).join(", ")}.` : ""}${priceNotice}`
+            : `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are ready. Review the calculated finish quantities next.${aluminumPackage?.unresolved.length ? ` The ${aluminumPackage.manufacturer} ${aluminumPackage.productLine} package still needs prices for: ${aluminumPackage.unresolved.map((line) => line.label).join(", ")}.` : ""}${priceNotice}`,
       );
     } catch (caught) {
       if (productRequestSequence.current !== requestSequence) return;
@@ -1086,6 +1112,89 @@ export function DeckTakeoffPlanner({
       if (productRequestSequence.current === requestSequence)
         setFindingProducts(false);
     }
+  }
+
+  function updateAluminumComponentPrice(
+    role: DeckRailingProductRole,
+    value: string,
+  ) {
+    const parsed = Number(value);
+    const unitCost = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    const currentPackage = buildDefaultAluminumRailingPackage({
+      products: suggestions,
+      railingLengthFeet: railingGeometry.railingLengthFeet,
+      stairsPresent: railingGeometry.stairsPresent,
+      stairProjectionFeet:
+        plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
+    });
+    const fallbackProduct = currentPackage.lines.find(
+      (line) => line.role === role,
+    )?.product;
+    if (!fallbackProduct) return;
+    const found = suggestions.some((product) => product.kind === role);
+    const updatedSuggestions: LowesSuggestion[] = found
+      ? suggestions.map((product) =>
+          product.kind === role
+            ? {
+                ...product,
+                unitCost,
+                priceBasis: unitCost ? "catalog_estimate" : "unpriced",
+              }
+            : product,
+        )
+      : [
+          ...suggestions,
+          {
+            ...fallbackProduct,
+            kind: role,
+            unitCost,
+            coverageSquareFeetPerPack: null,
+            reason: "Default Deckorators Contemporary system component",
+            catalogMaterialId: null,
+            priceBasis: unitCost ? "catalog_estimate" : "unpriced",
+            priceCheckedAt: null,
+          },
+        ];
+    setSuggestions(updatedSuggestions);
+    const nextPackage = buildDefaultAluminumRailingPackage({
+      products: updatedSuggestions,
+      railingLengthFeet: railingGeometry.railingLengthFeet,
+      stairsPresent: railingGeometry.stairsPresent,
+      stairProjectionFeet:
+        plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
+    });
+    const description = `${nextPackage.manufacturer} ${nextPackage.productLine} ${nextPackage.railHeightInches}-in aluminum railing system: ${nextPackage.lines.map((line) => `${line.quantity} ${line.label}`).join(", ")}. Included kit parts: ${[...new Set(nextPackage.lines.flatMap((line) => line.includedComponents))].join(", ")}.`;
+    const source =
+      nextPackage.sourceReference || nextPackage.installationReference;
+    setPlan((current) => ({
+      ...current,
+      railingCatalogMaterialId: null,
+      railingSectionLengthFeet: railingGeometry.railingLengthFeet
+        ? String(railingGeometry.railingLengthFeet)
+        : current.railingSectionLengthFeet,
+      railingUnitCost: nextPackage.totalCost
+        ? String(nextPackage.totalCost)
+        : "",
+      railingSourceReference: source,
+      additionalLines: customApprovedFootprint
+        ? current.additionalLines.map((line) =>
+            line.key === "custom_railing"
+              ? {
+                  ...line,
+                  description,
+                  quantity: "1",
+                  unit: "system",
+                  unitCost: nextPackage.totalCost
+                    ? String(nextPackage.totalCost)
+                    : "",
+                  sourceReference: source,
+                  catalogMaterialId: null,
+                }
+              : line,
+          )
+        : current.additionalLines,
+    }));
+    setPreview(null);
   }
 
   async function requestPreview() {
@@ -1206,6 +1315,16 @@ export function DeckTakeoffPlanner({
   const suggestionByKind = new Map(
     suggestions.map((item) => [item.kind, item]),
   );
+  const aluminumRailingPackage =
+    railingFamily === "metal"
+      ? buildDefaultAluminumRailingPackage({
+          products: suggestions,
+          railingLengthFeet: railingGeometry.railingLengthFeet,
+          stairsPresent: railingGeometry.stairsPresent,
+          stairProjectionFeet:
+            plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
+        })
+      : null;
   const recommendedProducts = [
     {
       key: "board",
@@ -1246,8 +1365,10 @@ export function DeckTakeoffPlanner({
       label: "Railing",
       priceLabel: "Estimating retail price per railing section",
       description:
-        selectedRailing?.description ??
-        suggestionByKind.get("railing_section")?.description ??
+        aluminumRailingPackage?.lines.length
+          ? `${aluminumRailingPackage.manufacturer} ${aluminumRailingPackage.productLine} complete component package`
+          : selectedRailing?.description ??
+            suggestionByKind.get("railing_section")?.description ??
         "No Lowe's product found yet",
       cost: plan.railingUnitCost,
       source: plan.railingSourceReference,
@@ -1487,6 +1608,89 @@ export function DeckTakeoffPlanner({
           </div>
         </fieldset>
       )}
+
+      {aluminumRailingPackage ? (
+        <section className="mt-4 rounded-lg border border-blue-400 bg-slate-900 p-3 text-white">
+          <p className="text-xs font-black uppercase tracking-[.14em] text-blue-300">
+            Default aluminum system
+          </p>
+          <h5 className="mt-1 text-base font-black">
+            {aluminumRailingPackage.manufacturer} {aluminumRailingPackage.productLine} · {aluminumRailingPackage.railHeightInches}-in · {aluminumRailingPackage.finish}
+          </h5>
+          <p className="mt-1 text-xs leading-5 text-slate-300">
+            Every line below stays in this manufacturer and product line. Parts already included in a kit are not counted twice.
+          </p>
+          <div className="mt-3 space-y-2">
+            {aluminumRailingPackage.lines.map((line) => (
+              <article
+                key={line.role}
+                className="rounded-md border border-slate-600 bg-slate-950 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-white">
+                      {line.quantity} × {line.label}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-300">
+                      Includes: {line.includedComponents.join(", ")}
+                    </p>
+                  </div>
+                  <p className={`shrink-0 text-sm font-black ${line.product?.unitCost ? "text-emerald-300" : "text-amber-300"}`}>
+                    {line.product?.unitCost
+                      ? `$${(line.quantity * line.product.unitCost).toFixed(2)}`
+                      : "Price needed"}
+                  </p>
+                </div>
+                {line.product ? (
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem] sm:items-end">
+                    <a
+                      className="inline-flex min-h-11 items-center text-xs font-bold text-blue-300 underline"
+                      href={line.product.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open matching Lowe&apos;s component
+                    </a>
+                    <label className="block text-xs font-bold text-white">
+                      Retail estimate each
+                      <span className="mt-1 flex min-h-11 items-center rounded-md border border-slate-500 bg-white px-2 text-slate-950 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-300">
+                        <span aria-hidden="true" className="mr-1">$</span>
+                        <input
+                          className="w-full bg-transparent py-2 text-sm font-bold outline-none"
+                          inputMode="decimal"
+                          aria-label={`${line.label} retail estimate each`}
+                          value={line.product.unitCost ?? ""}
+                          onChange={(event) =>
+                            updateAluminumComponentPrice(
+                              line.role,
+                              event.target.value,
+                            )
+                          }
+                        />
+                      </span>
+                    </label>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs font-bold text-amber-300">
+                    Matching component not found yet; the system estimate remains incomplete.
+                  </p>
+                )}
+              </article>
+            ))}
+          </div>
+          <p className="mt-3 rounded-md border border-amber-500 bg-amber-950 p-3 text-xs font-bold leading-5 text-amber-100">
+            Post anchoring fasteners are not included with the post kits. They remain in the structural hardware schedule because the correct anchor depends on the deck framing and approved attachment detail.
+          </p>
+          <a
+            className="mt-2 inline-block min-h-11 py-2 text-xs font-bold text-blue-300 underline"
+            href={aluminumRailingPackage.installationReference}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Review manufacturer installation instructions
+          </a>
+        </section>
+      ) : null}
 
       <button
         type="button"

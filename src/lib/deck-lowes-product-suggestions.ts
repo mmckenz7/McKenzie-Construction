@@ -1,10 +1,12 @@
 import "server-only";
 
+import type { DeckRailingProductRole } from "@/lib/deck-railing-system";
+
 export const DECK_LOWES_SUGGESTION_MODEL = "gpt-5.6";
 export const DECK_LOWES_SUGGESTION_VERSION = "deck-lowes-defaults-v1";
 
 export type DeckLowesSuggestion = Readonly<{
-  kind: "deck_board" | "deck_fastener" | "railing_section";
+  kind: "deck_board" | "deck_fastener" | DeckRailingProductRole;
   description: string;
   unitCost: number | null;
   sourceUrl: string;
@@ -61,7 +63,7 @@ function matchesRequestedFinish(
       ? /composite|trex|timbertech|deckorators/.test(text)
       : /wood|lumber|pressure.?treated|yellow pine|cedar/.test(text) &&
           !/composite|pvc/.test(text);
-  if (kind === "railing_section") {
+  if (kind.startsWith("railing_")) {
     if (railingFamily === "none") return false;
     if (railingFamily === "cable") return /cable/.test(text);
     if (railingFamily === "metal") return /aluminum|metal|steel/.test(text);
@@ -75,6 +77,7 @@ export async function findDeckLowesDefaults(args: Readonly<{
   deckLengthFeet: number;
   deckWidthFeet: number;
   railingLengthFeet: number | null;
+  stairsPresent: boolean | null;
   deckingFamily: "wood" | "composite";
   compositeColor: "brown" | "gray" | "cedar" | "redwood" | "coastal" | null;
   railingFamily: "wood" | "metal" | "cable" | "none";
@@ -98,14 +101,21 @@ export async function findDeckLowesDefaults(args: Readonly<{
       `Find practical Lowe's finish products for a ${args.deckingFamily === "wood" ? "pressure-treated wood" : `${args.compositeColor ?? "brown"} composite`} replacement deck in Knoxville, Tennessee.`,
       `Verified rectangular deck: ${args.deckLengthFeet} ft board run by ${args.deckWidthFeet} ft wide.`,
       args.railingLengthFeet === null ? "Railing footage is not yet resolved." : `Calculated railing footage: ${args.railingLengthFeet} linear ft.`,
+      args.stairsPresent === true
+        ? "The approved shape includes stairs, so include the compatible stair rail kit and lower stair post kit."
+        : args.stairsPresent === false
+          ? "The approved shape has no stairs; do not return stair railing components."
+          : "Stair applicability is unresolved; do not claim the railing package is complete.",
       `Decking family is ${args.deckingFamily}${args.deckingFamily === "composite" ? ` with a ${args.compositeColor} color family` : ""}. Return only matching deck-board products and a compatible manufacturer-approved fastening product.`,
       args.railingFamily === "none"
         ? "No railing product is required."
         : `Railing family is ${args.railingFamily}. Return only matching ${args.railingFamily} railing-system products and do not substitute another railing family.`,
-      args.railingFamily === "metal" || args.railingFamily === "cable"
-        ? "Every manufactured railing choice must be one coherent system from one manufacturer and one named product line. Do not mix rails, posts, brackets, panels, cable, gates, caps, or fasteners across manufacturers or product lines. Return manufacturer and productLine only when the Lowe's product page clearly establishes both; otherwise omit that railing choice."
+      args.railingFamily === "metal"
+        ? "Use Deckorators Contemporary 36-in matte-black aluminum as the single default system. Return its level rail kit as railing_level_kit, compatible 39-in post kit as railing_level_post, and—when stairs exist—its 6-ft stair rail kit as railing_stair_kit and compatible 48-in lower stair post kit as railing_stair_lower_post. Treat included brackets, bracket hardware, rail supports, post caps, and post skirts as included components rather than separate products. Do not mix another manufacturer or product line."
+        : args.railingFamily === "cable"
+          ? "Every manufactured railing choice must be one coherent system from one manufacturer and one named product line. Do not mix rails, posts, brackets, panels, cable, gates, caps, or fasteners across manufacturers or product lines. Return manufacturer and productLine only when the Lowe's product page clearly establishes both; otherwise omit that railing choice."
         : "Do not claim manufactured railing-system compatibility unless the public product page supports it.",
-      "Return up to three current matching Lowe's deck-board choices, one compatible deck-fastener choice, and—when required—up to three compatible railing-system choices so a customer can compare combinations.",
+      "Return up to three current matching Lowe's deck-board choices, one compatible deck-fastener choice, and all required default railing-system component roles. For wood or cable railing, railing_section remains the comparison product.",
       "For deck boards, prefer the shortest sold stock length that spans the full board run without a joint. If no sold length spans it, prefer a length that reaches at least half the run for a perimeter picture-frame plus center-divider layout.",
       "Use only exact lowes.com /pd/ product pages. Copy a public price only when the page clearly supports it; otherwise return null. Never invent availability, price, dimensions, package coverage, compatibility, or manufacturer guidance.",
       "Return JSON only with the requested schema.",
@@ -120,12 +130,12 @@ export async function findDeckLowesDefaults(args: Readonly<{
         properties: {
           products: {
             type: "array",
-            maxItems: 7,
+            maxItems: 12,
             items: {
               type: "object",
               additionalProperties: false,
               properties: {
-                kind: { type: "string", enum: ["deck_board", "deck_fastener", "railing_section"] },
+                kind: { type: "string", enum: ["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post"] },
                 description: { type: "string", minLength: 1, maxLength: 240 },
                 unitCost: { type: ["number", "null"], minimum: 0 },
                 sourceUrl: { type: "string", minLength: 1, maxLength: 1000 },
@@ -176,8 +186,8 @@ export async function findDeckLowesDefaults(args: Readonly<{
     const item = raw as Record<string, unknown>;
     const kind = item.kind;
     const sourceUrl = exactLowesProductUrl(item.sourceUrl);
-    if (!sourceUrl || !["deck_board", "deck_fastener", "railing_section"].includes(String(kind))) continue;
-    const limit = kind === "deck_fastener" ? 1 : 3;
+    if (!sourceUrl || !["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post"].includes(String(kind))) continue;
+    const limit = kind === "deck_board" || kind === "railing_section" ? 3 : 1;
     if ((counts.get(String(kind)) ?? 0) >= limit) continue;
     if (typeof item.description !== "string" || typeof item.reason !== "string") continue;
     if (!matchesRequestedFinish(
@@ -192,7 +202,7 @@ export async function findDeckLowesDefaults(args: Readonly<{
     const productLine = typeof item.productLine === "string"
       ? item.productLine.trim().slice(0, 120)
       : null;
-    const manufacturedRailing = kind === "railing_section" &&
+    const manufacturedRailing = String(kind).startsWith("railing_") &&
       (args.railingFamily === "metal" || args.railingFamily === "cable");
     if (manufacturedRailing && (!manufacturer || !productLine)) continue;
     const unitCost = item.unitCost === null ? null : Number(item.unitCost);

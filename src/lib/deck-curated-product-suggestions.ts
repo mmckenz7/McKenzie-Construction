@@ -75,7 +75,7 @@ function productLengthFeet(description: string) {
 
 function productKind(material: CuratedDeckMaterial) {
   const explicit = text(material.metadata?.deck_product_kind);
-  if (["deck_board", "deck_fastener", "railing_section"].includes(explicit)) {
+  if (["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post"].includes(explicit)) {
     return explicit as DeckLowesSuggestion["kind"];
   }
   const haystack = `${material.category ?? ""} ${material.description}`.toLowerCase();
@@ -99,7 +99,7 @@ function finishMatches(material: CuratedDeckMaterial, kind: DeckLowesSuggestion[
     }
     return !/composite|pvc/.test(haystack) && /pressure.?treated|yellow pine|wood|lumber/.test(haystack);
   }
-  if (kind === "railing_section") {
+  if (kind.startsWith("railing_")) {
     if (request.railingFamily === "none") return false;
     if (explicitRailing && explicitRailing !== request.railingFamily) return false;
     if (request.railingFamily === "cable") return /cable/.test(haystack);
@@ -154,7 +154,7 @@ export function selectCuratedDeckProducts(args: Readonly<{
     );
     const catalogCost = Number(material.unit_cost);
     if (!selected && !(catalogUrl && Number.isFinite(catalogCost) && catalogCost > 0)) continue;
-    const manufacturedRailing = kind === "railing_section" && ["metal", "cable"].includes(args.request.railingFamily);
+    const manufacturedRailing = kind.startsWith("railing_") && ["metal", "cable"].includes(args.request.railingFamily);
     if (manufacturedRailing && (!material.brand?.trim() || !material.product_line?.trim())) continue;
     candidates.push({
       kind,
@@ -172,9 +172,9 @@ export function selectCuratedDeckProducts(args: Readonly<{
     });
   }
 
-  const limits = { deck_board: 3, deck_fastener: 1, railing_section: 3 } as const;
+  const limits: Record<DeckLowesSuggestion["kind"], number> = { deck_board: 3, deck_fastener: 1, railing_section: 3, railing_level_kit: 1, railing_level_post: 1, railing_stair_kit: 1, railing_stair_lower_post: 1 };
   const selected: DeckProductSuggestion[] = [];
-  for (const kind of ["deck_board", "deck_fastener", "railing_section"] as const) {
+  for (const kind of ["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post"] as const) {
     selected.push(
       ...candidates
         .filter((candidate) => candidate.kind === kind)
@@ -198,9 +198,9 @@ export function mergeDeckProductSuggestions(
   curated: readonly DeckProductSuggestion[],
   live: readonly DeckProductSuggestion[],
 ) {
-  const limits = { deck_board: 3, deck_fastener: 1, railing_section: 3 } as const;
+  const limits: Record<DeckLowesSuggestion["kind"], number> = { deck_board: 3, deck_fastener: 1, railing_section: 3, railing_level_kit: 1, railing_level_post: 1, railing_stair_kit: 1, railing_stair_lower_post: 1 };
   const merged: DeckProductSuggestion[] = [];
-  for (const kind of ["deck_board", "deck_fastener", "railing_section"] as const) {
+  for (const kind of ["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post"] as const) {
     const seen = new Set<string>();
     for (const item of [...curated, ...live].filter((candidate) => candidate.kind === kind)) {
       const key = item.sourceUrl.toLowerCase();
