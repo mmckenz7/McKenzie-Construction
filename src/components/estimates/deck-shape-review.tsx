@@ -712,6 +712,7 @@ export function DeckShapeReview({
       </div>
     </div> : null}
 
+    {!perimeterPoints && measurementStep === null ? <>
     <details className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3" open={advancedEditing} onToggle={(event) => setAdvancedEditing(event.currentTarget.open)}>
       <summary className="min-h-11 cursor-pointer py-2 font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Optional fine adjustments</summary>
     <fieldset className="mt-2 rounded-lg border border-slate-300 bg-white p-3">
@@ -803,5 +804,6 @@ export function DeckShapeReview({
     </div>
     <p role="status" aria-live="polite" className="mt-3 rounded-lg bg-blue-50 p-3 text-sm font-bold text-blue-950">{feedback}</p>
     <button type="button" className={`mt-4 w-full ${primary}`} disabled={disabled || saving || !isValidDeckOutline(outline) || stairsPresent === null || (stairsPresent && !stairGeometry)} onClick={() => void approveShape()}>{saving ? "Saving approved shape…" : "Save this shape — continue to structure"}</button>
+    </> : <p role="status" aria-live="polite" className="mt-3 rounded-lg bg-blue-50 p-3 text-sm font-bold text-blue-950">{feedback}</p>}
   </section>;
 }

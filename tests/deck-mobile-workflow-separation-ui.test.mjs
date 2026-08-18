@@ -86,6 +86,7 @@ test("simple perimeter walk begins at the house and validates before exact measu
   assert.match(shape, /setMeasurementStep\(0\)/);
   assert.match(shape, /Wall \{measurementStep \+ 1\} of \{outline\.length\}/);
   assert.match(shape, /Exact length \(ft\)/);
+  assert.match(shape, /!perimeterPoints && measurementStep === null/);
 });
 
 test("approved shape feeds structure while pricing controls remain in takeoff", () => {
