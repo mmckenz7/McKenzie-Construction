@@ -29,6 +29,12 @@ test("preview and apply reconstruct the authoritative field and catalog inputs s
   assert.match(route, /buildPlanConfirmed/);
   assert.match(route, /completeRebuildConfirmed/);
   assert.match(route, /LEGACY_PLAN_KEYS/);
+  assert.match(route, /SHAPE_BINDING_KEYS/);
+  assert.match(route, /guided_deck_shape_revisions/);
+  assert.match(route, /shape_revision/);
+  assert.match(route, /stale_shape_revision/);
+  assert.doesNotMatch(route, /if \(plan\.shapeBinding\) \{[\s\S]*guided_deck_shape_revisions/);
+  assert.match(route, /latest && !plan\.shapeBinding/);
   assert.match(route, /design:\s*\{/);
   assert.match(route, /apply_reviewed_deck_takeoff/);
 });

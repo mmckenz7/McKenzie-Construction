@@ -138,6 +138,8 @@ export function DeckPrescriptivePlanGenerator({
   stairEdge = "yard",
   stairPosition = "center",
   stairOffsetFeet = "",
+  approvedStairWidthFeet,
+  approvedStairProjectionFeet,
   approvedOutline,
   disabled,
   onApprove,
@@ -154,6 +156,8 @@ export function DeckPrescriptivePlanGenerator({
   stairEdge?: "left" | "right" | "yard" | "top";
   stairPosition?: "start" | "center" | "end";
   stairOffsetFeet?: string;
+  approvedStairWidthFeet?: number;
+  approvedStairProjectionFeet?: number;
   approvedOutline?: readonly DeckOutlinePoint[];
   disabled: boolean;
   onApprove: (plan: DeckPrescriptivePlan) => void;
@@ -173,7 +177,7 @@ export function DeckPrescriptivePlanGenerator({
   );
   const seedSignature = JSON.stringify(visitSeed);
   const approvedOutlineSignature = JSON.stringify(approvedOutline ?? null);
-  const factsSignature = `${lengthFeet}:${widthFeet}:${blueprintAttachment ?? "unknown"}:${blueprintStairs ?? "unknown"}:${blueprintRailings ?? "unknown"}:${stairPlacementConfirmed}:${seedSignature}:${approvedOutlineSignature}`;
+  const factsSignature = `${lengthFeet}:${widthFeet}:${blueprintAttachment ?? "unknown"}:${blueprintStairs ?? "unknown"}:${blueprintRailings ?? "unknown"}:${stairPlacementConfirmed}:${approvedStairWidthFeet ?? "unknown"}:${approvedStairProjectionFeet ?? "unknown"}:${seedSignature}:${approvedOutlineSignature}`;
   const [draft, setDraft] = useState<DeckPrescriptiveDraft>(() =>
     ({
       ...draftForFacts(facts, lengthFeet, widthFeet, visitSeed),
@@ -300,6 +304,12 @@ export function DeckPrescriptivePlanGenerator({
     (150 * Math.min(proposedWidthFeet, Math.max(0, beamDistance))) /
       Math.max(0.1, proposedWidthFeet);
   const stairWidthFeet = (() => {
+    if (
+      typeof approvedStairWidthFeet === "number" &&
+      Number.isFinite(approvedStairWidthFeet) &&
+      approvedStairWidthFeet > 0
+    )
+      return approvedStairWidthFeet;
     const found = visitSeed.observedMeasurements.find(
       (item) => item.key === "stair_width",
     );
@@ -323,6 +333,23 @@ export function DeckPrescriptivePlanGenerator({
         : stairEdgeLength / 2;
   const stairOffset =
     Number(stairOffsetFeet) > 0 ? Number(stairOffsetFeet) : legacyStairOffset;
+  const stairProjectionFeet =
+    typeof approvedStairProjectionFeet === "number" &&
+    Number.isFinite(approvedStairProjectionFeet) &&
+    approvedStairProjectionFeet > 0
+      ? approvedStairProjectionFeet
+      : 4;
+  const stairOpeningPixels = Math.max(
+    18,
+    Math.min(80, (260 * stairWidthFeet) / Math.max(0.1, stairEdgeLength)),
+  );
+  const stairProjectionPixels = Math.max(
+    18,
+    Math.min(
+      70,
+      (150 * stairProjectionFeet) / Math.max(0.1, proposedWidthFeet),
+    ),
+  );
   const stairAlong =
     30 + (260 * stairOffset) / Math.max(0.1, proposedLengthFeet) - 20;
   const stairAcross =
@@ -1840,10 +1867,14 @@ export function DeckPrescriptivePlanGenerator({
                           : stairAcross
                     }
                     width={
-                      stairEdge === "left" || stairEdge === "right" ? 25 : 40
+                      stairEdge === "left" || stairEdge === "right"
+                        ? stairProjectionPixels
+                        : stairOpeningPixels
                     }
                     height={
-                      stairEdge === "left" || stairEdge === "right" ? 40 : 25
+                      stairEdge === "left" || stairEdge === "right"
+                        ? stairOpeningPixels
+                        : stairProjectionPixels
                     }
                     fill="#fef3c7"
                     stroke="#92400e"

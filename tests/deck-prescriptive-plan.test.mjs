@@ -7,6 +7,7 @@ import {
   buildPrescriptiveDeckPlan,
   closeDeckOutlineWithMeasuredWall,
   deckEstimatingImmediateIssueIds,
+  deckShapeStructuralHandoff,
   deckWallDirectionTemplate,
   drawingClientToDeckPoint,
   isCanonicalFramingEvidence,
@@ -25,6 +26,8 @@ import {
 import {
   buildDeckTakeoffPreview,
   COMPLETE_REBUILD_LINE_KEYS,
+  deckShapeBindingMatches,
+  deckStructuralLineIsComplete,
 } from "../src/lib/deck-takeoff-v0.ts";
 
 const verified = {
@@ -54,6 +57,237 @@ const withLayout = (
   postPositionsFeet: Array.from({ length: postCount }, (_, index) =>
     String((lengthFeet * index) / Math.max(1, postCount - 1)),
   ).join(","),
+});
+
+test("approved shape handoff preserves stairs and separates inset footprints from the rectangle profile", () => {
+  const rectangle = deckShapeStructuralHandoff({
+    outline: [
+      { x: 0, y: 0 },
+      { x: 14, y: 0 },
+      { x: 14, y: 12 },
+      { x: 0, y: 12 },
+    ],
+    stairsPresent: true,
+    stairPlacement: {
+      edgeIndex: 2,
+      offsetFeet: 7,
+      widthFeet: 3,
+      projectionFeet: 4,
+    },
+  });
+  assert.deepEqual(rectangle, {
+    footprintMode: "rectangular_profile",
+    stairPlacementConfirmed: true,
+    rectangularStairPlacement: {
+      edge: "yard",
+      offsetFeet: 7,
+      widthFeet: 3,
+      projectionFeet: 4,
+    },
+  });
+
+  const reversedRectangle = deckShapeStructuralHandoff({
+    outline: [
+      { x: 14, y: 12 },
+      { x: 14, y: 0 },
+      { x: 0, y: 0 },
+      { x: 0, y: 12 },
+    ],
+    stairsPresent: true,
+    stairPlacement: {
+      edgeIndex: 3,
+      offsetFeet: 7,
+      widthFeet: 3,
+      projectionFeet: 4,
+    },
+  });
+  assert.deepEqual(reversedRectangle.rectangularStairPlacement, {
+    edge: "yard",
+    offsetFeet: 7,
+    widthFeet: 3,
+    projectionFeet: 4,
+  });
+
+  const inset = deckShapeStructuralHandoff({
+    outline: [
+      { x: 0, y: 0 },
+      { x: 19, y: 0 },
+      { x: 19, y: 15 },
+      { x: 0, y: 15 },
+      { x: 0, y: 10 },
+      { x: 7, y: 10 },
+      { x: 7, y: 5 },
+      { x: 0, y: 5 },
+    ],
+    stairsPresent: true,
+    stairPlacement: {
+      edgeIndex: 2,
+      offsetFeet: 8,
+      widthFeet: 3,
+      projectionFeet: 4,
+    },
+  });
+  assert.deepEqual(inset, {
+    footprintMode: "reviewed_custom_plan",
+    stairPlacementConfirmed: true,
+    rectangularStairPlacement: null,
+  });
+
+  assert.equal(
+    deckShapeStructuralHandoff({
+      outline: [
+        { x: 0, y: 0 },
+        { x: 19, y: 0 },
+        { x: 19, y: 15 },
+        { x: 0, y: 15 },
+        { x: 0, y: 10 },
+        { x: 7, y: 10 },
+        { x: 7, y: 5 },
+        { x: 0, y: 5 },
+      ],
+      stairsPresent: true,
+      stairPlacement: null,
+    }).stairPlacementConfirmed,
+    false,
+  );
+});
+
+test("custom structural rows require a description, finite positive decimal, and unit", () => {
+  assert.equal(
+    deckStructuralLineIsComplete({ description: "Beam", quantity: "12.5", unit: "lf" }),
+    true,
+  );
+  for (const line of [
+    { description: "", quantity: "12", unit: "lf" },
+    { description: "Beam", quantity: "Infinity", unit: "lf" },
+    { description: "Beam", quantity: "NaN", unit: "lf" },
+    { description: "Beam", quantity: "0", unit: "lf" },
+    { description: "Beam", quantity: "12", unit: "" },
+  ]) assert.equal(deckStructuralLineIsComplete(line), false);
+});
+
+test("shape binding comparison is semantic and detects actual revision or geometry changes", () => {
+  const left = {
+    id: "11111111-1111-4111-8111-111111111111",
+    shapeRevision: 2,
+    outline: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 8 }, { x: 0, y: 8 }],
+    stairsPresent: true,
+    stairPlacement: { edgeIndex: 2, offsetFeet: 5, widthFeet: 3, projectionFeet: 4 },
+  };
+  const reordered = {
+    stairsPresent: true,
+    outline: left.outline.map(({ x, y }) => ({ y, x })),
+    shapeRevision: 2,
+    id: left.id,
+    stairPlacement: { projectionFeet: 4, widthFeet: 3, offsetFeet: 5, edgeIndex: 2 },
+  };
+  assert.equal(deckShapeBindingMatches(left, reordered), true);
+  assert.equal(deckShapeBindingMatches(left, { ...reordered, shapeRevision: 3 }), false);
+  assert.equal(
+    deckShapeBindingMatches(left, { ...reordered, outline: [{ x: 0, y: 0 }, ...reordered.outline.slice(1)] }),
+    true,
+  );
+  assert.equal(
+    deckShapeBindingMatches(left, { ...reordered, outline: [{ x: 1, y: 0 }, ...reordered.outline.slice(1)] }),
+    false,
+  );
+});
+
+test("inset takeoff uses polygon area and reviewed custom quantities, never its bounding rectangle", () => {
+  const outline = [
+    { x: 0, y: 0 }, { x: 19, y: 0 }, { x: 19, y: 15 },
+    { x: 0, y: 15 }, { x: 0, y: 10 }, { x: 7, y: 10 },
+    { x: 7, y: 5 }, { x: 0, y: 5 },
+  ];
+  const baseLines = COMPLETE_REBUILD_LINE_KEYS.map((key) => ({
+    key,
+    category: key === "labor" ? "labor" : "material",
+    description: key.replaceAll("_", " "),
+    quantity: "1",
+    unit: "ea",
+    unitCost: "10",
+    catalogMaterialId: null,
+    sourceReference: "Reviewed custom plan price",
+  }));
+  const plan = {
+    shapeBinding: {
+      id: "11111111-1111-4111-8111-111111111111",
+      shapeRevision: 4,
+      outline,
+      stairsPresent: false,
+      stairPlacement: null,
+    },
+    takeoffScope: "complete_rebuild",
+    completeRebuildConfirmed: true,
+    buildPlanReference: "Reviewed custom inset plan A4",
+    buildPlanConfirmed: true,
+    framingPlanEvidence: null,
+    hardwareSelections: [],
+    scopeDecisions: Object.fromEntries(COMPLETE_REBUILD_LINE_KEYS.map((key) => [key, "include"])),
+    boardRunDirection: "along_length",
+    stairEdge: "yard",
+    stairPosition: "center",
+    stairOffsetFeet: "",
+    stairPlacementConfirmed: true,
+    boardActualWidthInches: "5.5",
+    boardGapInches: "0.125",
+    boardStockLengthFeet: "16",
+    boardWastePercent: "10",
+    boardCatalogMaterialId: null,
+    boardUnitCost: "10",
+    boardSourceReference: "Board source",
+    screwCoverageSquareFeetPerPack: "100",
+    screwCatalogMaterialId: null,
+    screwPackUnitCost: "20",
+    screwSourceReference: "Fastener source",
+    railingSectionLengthFeet: "6",
+    railingCatalogMaterialId: null,
+    railingUnitCost: "100",
+    railingSourceReference: "Rail source",
+    additionalLines: [
+      ...baseLines,
+      { key: "custom_decking", category: "material", description: "Reviewed custom board count", quantity: "40", unit: "ea", unitCost: "10", catalogMaterialId: null, sourceReference: "Reviewed layout" },
+      { key: "custom_railing", category: "material", description: "Reviewed custom rail sections", quantity: "8", unit: "ea", unitCost: "100", catalogMaterialId: null, sourceReference: "Reviewed layout" },
+    ],
+  };
+  const items = [
+    { itemKey: "full_deck_yard", observation: { measurements: { length: { value: "19", unit: "ft" }, width: { value: "15", unit: "ft" } } } },
+    { itemKey: "house_ledger", observation: { conditionStatus: "applies" } },
+    { itemKey: "stairs_landings", observation: { conditionStatus: "not_applicable" } },
+    { itemKey: "guards_railings", observation: { conditionStatus: "applies" } },
+  ];
+  const unpricedPlan = {
+    ...plan,
+    additionalLines: plan.additionalLines.map((line) =>
+      line.key === "custom_decking" || line.key === "custom_railing"
+        ? { ...line, unitCost: "", sourceReference: "" }
+        : line,
+    ),
+  };
+  const unpricedPreview = buildDeckTakeoffPreview({
+    items,
+    plan: unpricedPlan,
+    catalog: new Map(),
+  });
+  assert.equal(unpricedPreview.status, "needs_input");
+  assert.equal(
+    unpricedPreview.lines.some((line) => line.key === "custom_decking"),
+    false,
+  );
+  assert.equal(
+    unpricedPreview.lines.some((line) => line.key === "custom_railing"),
+    false,
+  );
+
+  const preview = buildDeckTakeoffPreview({ items, plan, catalog: new Map() });
+  assert.equal(preview.status, "ready");
+  assert.equal(preview.deckAreaSquareFeet, "250");
+  assert.notEqual(preview.deckAreaSquareFeet, String(19 * 15));
+  assert.equal(preview.deckingLayout, "reviewed_custom_plan");
+  assert.ok(preview.lines.some((line) => line.key === "custom_decking"));
+  assert.ok(preview.lines.some((line) => line.key === "custom_railing"));
+  assert.equal(preview.lines.some((line) => line.key === "decking"), false);
+  assert.equal(preview.lines.some((line) => line.key === "railing"), false);
 });
 
 test("bounded 2024 evaluator checks spans, posts, footings and emits purchasable BOM", () => {
@@ -790,6 +1024,37 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
     /blueprintAttachment=\{[\s\S]*railingGeometry\.attached/,
   );
   assert.match(planner, /framingPlanEvidence: approvedPlan/);
+  assert.match(planner, /deckShapeStructuralHandoff\(approvedShape\)/);
+  assert.match(planner, /shapeBinding: nextBinding/);
+  assert.match(planner, /stairPlacementConfirmed: approvedShapeStairPlacementConfirmed/);
+  assert.match(planner, /approvedShapeHandoff\?\.rectangularStairPlacement/);
+  assert.match(planner, /approvedStairProjectionFeet=/);
+  assert.match(route, /guided_deck_shape_revisions/);
+  assert.match(route, /stale_shape_revision/);
+  assert.match(planner, /The inset shape and stair location are saved/);
+  assert.match(
+    planner,
+    /The app is recording its quantities, not inventing a[\s\S]*rectangular substitute/,
+  );
+  assert.match(
+    planner,
+    /customApprovedFootprint \? customStructuralDesigner : structuralDesigner/,
+  );
+  assert.match(planner, /Price the reviewed custom-footprint finishes/);
+  assert.match(planner, /customFinishLines\.map/);
+  assert.match(
+    planner,
+    /!customApprovedFootprint \? \([\s\S]*Edit board layout and stair placement/,
+  );
+  assert.match(
+    planner,
+    /!customApprovedFootprint \? \([\s\S]*Recommended Lowe(?:'|&apos;)s package/,
+  );
+  assert.match(
+    planner,
+    /!customApprovedFootprint \? \([\s\S]*3\. Automatic railing/,
+  );
+  assert.match(planner, /Calculate custom quantities and costs/);
   assert.match(
     planner,
     /generatedShapeChanged[\s\S]*framingPlanEvidence:[\s\S]*generatedShapeChanged[\s\S]*\?[\s\S]*null/,
@@ -864,7 +1129,7 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
   assert.match(ui, /data-edit-handle=\{layoutEditorOpen \? "stairs"/);
   assert.match(
     ui,
-    /stairEdge === "left" \|\| stairEdge === "right" \? 25 : 40/,
+    /stairEdge === "left" \|\| stairEdge === "right"[\s\S]*stairProjectionPixels[\s\S]*stairOpeningPixels/,
   );
   assert.match(
     ui,

@@ -5,7 +5,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DeckPrescriptivePlanGenerator } from "@/components/estimates/deck-prescriptive-plan-generator";
 import type { FinalizedDeckShape } from "@/components/estimates/deck-shape-review";
 import type { EstimateBuilderEnvelope } from "@/lib/estimate-builder-client";
-import type { DeckPrescriptivePlan } from "@/lib/deck-prescriptive-plan";
+import {
+  deckShapeStructuralHandoff,
+  type DeckPrescriptivePlan,
+} from "@/lib/deck-prescriptive-plan";
 import {
   buildDeckTakeoffPreview,
   COMPLETE_REBUILD_LINE_KEYS,
@@ -13,6 +16,8 @@ import {
   deckBlueprintVisitSeed,
   deckFieldDimensions,
   deckRailingGeometry,
+  deckShapeBindingMatches,
+  deckStructuralLineIsComplete,
   type CompleteRebuildLineKey,
   type DeckObservationItem,
   type DeckTakeoffPlan,
@@ -169,6 +174,26 @@ const INITIAL_LINES: FixedLine[] = [
     catalogMaterialId: null,
     sourceReference: "",
   },
+  {
+    key: "custom_decking",
+    category: "material",
+    description: "Deck boards from reviewed custom-footprint layout",
+    quantity: "",
+    unit: "ea",
+    unitCost: "",
+    catalogMaterialId: null,
+    sourceReference: "",
+  },
+  {
+    key: "custom_railing",
+    category: "material",
+    description: "Railing from reviewed custom-footprint layout",
+    quantity: "",
+    unit: "ea",
+    unitCost: "",
+    catalogMaterialId: null,
+    sourceReference: "",
+  },
 ];
 
 const LINE_GUIDANCE: Record<CompleteRebuildLineKey, string> = {
@@ -204,6 +229,7 @@ const INITIAL_SCOPE_DECISIONS = Object.fromEntries(
 
 function defaultPlan(): DeckTakeoffPlan {
   return {
+    shapeBinding: null,
     takeoffScope: "complete_rebuild",
     completeRebuildConfirmed: false,
     buildPlanReference: "",
@@ -343,6 +369,81 @@ export function DeckTakeoffPlanner({
     [visitItems],
   );
   const approvedStairsPresent = approvedShape?.stairsPresent ?? railingGeometry.stairsPresent;
+  const approvedShapeHandoff = useMemo(
+    () => (approvedShape ? deckShapeStructuralHandoff(approvedShape) : null),
+    [approvedShape],
+  );
+  const approvedShapeStairPlacementConfirmed =
+    approvedShapeHandoff?.stairPlacementConfirmed ?? false;
+  const customApprovedFootprint =
+    approvedShapeHandoff?.footprintMode === "reviewed_custom_plan";
+
+  useEffect(() => {
+    if (!approvedShape) return;
+    const nextBinding = {
+      id: approvedShape.id,
+      shapeRevision: approvedShape.shapeRevision,
+      outline: approvedShape.outline,
+      stairsPresent: approvedShape.stairsPresent,
+      stairPlacement: approvedShape.stairPlacement,
+    } as const;
+    setPlan((current) => {
+      const shapeChanged = !deckShapeBindingMatches(
+        current.shapeBinding,
+        nextBinding,
+      );
+      const placement = approvedShapeHandoff?.rectangularStairPlacement;
+      if (!shapeChanged) {
+        return current.stairPlacementConfirmed ===
+          approvedShapeStairPlacementConfirmed
+          ? current
+          : {
+              ...current,
+              stairPlacementConfirmed: approvedShapeStairPlacementConfirmed,
+            };
+      }
+      const structuralKeys = new Set<CompleteRebuildLineKey>([
+        "ledger_attachment",
+        "joists",
+        "beams",
+        "posts",
+        "footings",
+        "blocking",
+        "structural_connectors",
+        "stairs",
+      ]);
+      const resetLineKeys = new Set<string>([
+        ...structuralKeys,
+        "custom_decking",
+        "custom_railing",
+      ]);
+      return {
+        ...current,
+        shapeBinding: nextBinding,
+        stairEdge: placement?.edge ?? current.stairEdge,
+        stairOffsetFeet: placement ? String(placement.offsetFeet) : "",
+        stairPlacementConfirmed: approvedShapeStairPlacementConfirmed,
+        buildPlanReference: "",
+        buildPlanConfirmed: false,
+        framingPlanEvidence: null,
+        hardwareSelections: [],
+        scopeDecisions: {
+          ...current.scopeDecisions,
+          ...Object.fromEntries([...structuralKeys].map((key) => [key, ""])),
+        },
+        additionalLines: current.additionalLines.map((line) =>
+          resetLineKeys.has(line.key)
+            ? { ...line, quantity: "", unitCost: "", sourceReference: "", catalogMaterialId: null }
+            : line,
+        ),
+      };
+    });
+    setPreview(null);
+  }, [
+    approvedShape,
+    approvedShapeHandoff,
+    approvedShapeStairPlacementConfirmed,
+  ]);
 
   function productLengthFeet(description: string) {
     const matches = [
@@ -1449,6 +1550,236 @@ export function DeckTakeoffPlanner({
     </section>
   );
 
+  const customStructuralKeys: CompleteRebuildLineKey[] = [
+    ...(railingGeometry.attached === true
+      ? (["ledger_attachment"] as const)
+      : []),
+    "joists",
+    "beams",
+    "posts",
+    "footings",
+    "blocking",
+    "structural_connectors",
+    ...(approvedStairsPresent ? (["stairs"] as const) : []),
+  ];
+  const customReviewedQuantityKeys = [
+    ...customStructuralKeys,
+    "custom_decking",
+    ...(railingGeometry.railingsPresent ? ["custom_railing"] : []),
+  ];
+  const customStructuralLines = customReviewedQuantityKeys
+    .map((key) => plan.additionalLines.find((line) => line.key === key))
+    .filter((line): line is FixedLine => Boolean(line));
+  const customFinishLines = [
+    plan.additionalLines.find((line) => line.key === "custom_decking"),
+    ...(railingGeometry.railingsPresent
+      ? [plan.additionalLines.find((line) => line.key === "custom_railing")]
+      : []),
+  ].filter((line): line is FixedLine => Boolean(line));
+  const customStructuralPlanComplete =
+    plan.buildPlanReference.trim().length > 0 &&
+    plan.buildPlanConfirmed &&
+    customStructuralLines.length === customReviewedQuantityKeys.length &&
+    customStructuralLines.every(deckStructuralLineIsComplete);
+  const activeCustomStructuralLine = customStructuralLines.find(
+    (line) => line.key === activeScopeKey,
+  ) ?? customStructuralLines[0];
+
+  const customStructuralDesigner = (
+    <section className="mt-5 rounded-xl border-2 border-emerald-700 bg-white p-4 sm:p-5">
+      <p className="text-xs font-black uppercase tracking-[.16em] text-emerald-800">
+        Approved custom footprint
+      </p>
+      <h4 className="mt-1 text-lg font-black text-slate-950">
+        The inset shape and stair location are saved
+      </h4>
+      <p className="mt-2 rounded-lg bg-emerald-50 p-3 text-sm font-bold leading-6 text-emerald-950">
+        You do not need to redraw the deck or place the stairs again. This
+        footprint is nonrectangular, so the rectangular prescriptive table is
+        not being stretched over it. Enter the quantities from a reviewed
+        framing plan that was prepared for this exact saved shape.
+      </p>
+      <div className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-3">
+        <Field
+          label="Reviewed custom framing-plan source"
+          help="Name the drawing, engineer detail, manufacturer plan, or building-department-reviewed layout used for this exact inset footprint."
+        >
+          <input
+            className={input}
+            value={plan.buildPlanReference}
+            maxLength={500}
+            onChange={(event) => {
+              setPlan((current) => ({
+                ...current,
+                buildPlanReference: event.target.value,
+                buildPlanConfirmed: false,
+                framingPlanEvidence: null,
+              }));
+              setPreview(null);
+            }}
+          />
+        </Field>
+        <label className="mt-3 flex min-h-11 items-start gap-3 rounded-md border border-slate-300 bg-white p-3 text-sm font-bold text-slate-950 focus-within:ring-2 focus-within:ring-emerald-700">
+          <input
+            className="mt-1"
+            type="checkbox"
+            checked={plan.buildPlanConfirmed}
+            onChange={(event) =>
+              setPlan((current) => ({
+                ...current,
+                buildPlanConfirmed: event.target.checked,
+              }))
+            }
+          />
+          I verified that this framing plan matches the saved inset shape and
+          stair location. The app is recording its quantities, not inventing a
+          rectangular substitute.
+        </label>
+      </div>
+      <div className="mt-4 rounded-lg border border-slate-300 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-black text-slate-950">Structural quantities</p>
+          <p className="text-sm font-bold text-slate-700">
+            {customStructuralLines.filter(
+              deckStructuralLineIsComplete,
+            ).length}{" "}
+            of {customReviewedQuantityKeys.length}
+          </p>
+        </div>
+        <Field label="Structural category">
+          <select
+            className={input}
+            value={activeCustomStructuralLine?.key ?? ""}
+            onChange={(event) =>
+              setActiveScopeKey(event.target.value as CompleteRebuildLineKey)
+            }
+          >
+            {customStructuralLines.map((line) => (
+              <option key={line.key} value={line.key}>
+                {deckStructuralLineIsComplete(line) ? "✓ " : ""}
+                {line.description}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {activeCustomStructuralLine ? (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="Plan description">
+              <input
+                className={input}
+                value={activeCustomStructuralLine.description}
+                onChange={(event) =>
+                  updateLine(
+                    activeCustomStructuralLine.key,
+                    "description",
+                    event.target.value,
+                  )
+                }
+              />
+            </Field>
+            <Field label="Reviewed quantity">
+              <input
+                className={input}
+                inputMode="decimal"
+                value={activeCustomStructuralLine.quantity}
+                onChange={(event) =>
+                  updateLine(
+                    activeCustomStructuralLine.key,
+                    "quantity",
+                    event.target.value,
+                  )
+                }
+              />
+            </Field>
+            <Field label="Unit">
+              <input
+                className={input}
+                value={activeCustomStructuralLine.unit}
+                onChange={(event) =>
+                  updateLine(
+                    activeCustomStructuralLine.key,
+                    "unit",
+                    event.target.value,
+                  )
+                }
+              />
+            </Field>
+            <Field
+              label="Unit cost"
+              help="This can be finished in Takeoff after the structural plan is approved."
+            >
+              <input
+                className={input}
+                inputMode="decimal"
+                value={activeCustomStructuralLine.unitCost}
+                onChange={(event) =>
+                  updateLine(
+                    activeCustomStructuralLine.key,
+                    "unitCost",
+                    event.target.value,
+                  )
+                }
+              />
+            </Field>
+            <Field
+              label="Price/source reference"
+              help="Required before the takeoff can become customer-ready."
+            >
+              <input
+                className={input}
+                value={activeCustomStructuralLine.sourceReference}
+                onChange={(event) =>
+                  updateLine(
+                    activeCustomStructuralLine.key,
+                    "sourceReference",
+                    event.target.value,
+                  )
+                }
+              />
+            </Field>
+          </div>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        className={`mt-4 w-full ${primary}`}
+        disabled={disabled || !customStructuralPlanComplete}
+        onClick={() => {
+          setPlan((current) => ({
+            ...current,
+            framingPlanEvidence: null,
+            stairPlacementConfirmed:
+              approvedShapeStairPlacementConfirmed,
+            scopeDecisions: {
+              ...current.scopeDecisions,
+              ...Object.fromEntries(
+                customStructuralKeys.map((key) => [key, "include"]),
+              ),
+              ...(railingGeometry.attached === false
+                ? { ledger_attachment: "not_in_scope" as const }
+                : {}),
+              ...(!approvedStairsPresent
+                ? { stairs: "not_in_scope" as const }
+                : {}),
+            },
+          }));
+          setNotice(
+            "The reviewed custom structural plan is recorded. Continue to takeoff and pricing.",
+          );
+          onStructureReady();
+        }}
+      >
+        Approve reviewed structural plan and continue to takeoff
+      </button>
+      {!customStructuralPlanComplete ? (
+        <p className="mt-2 text-sm font-bold text-amber-900">
+          Add the reviewed plan source, confirm it matches this shape, and
+          enter each required structural quantity.
+        </p>
+      ) : null}
+    </section>
+  );
+
   const structuralDesigner = dimensions.lengthFeet && dimensions.widthFeet ? (
     <DeckPrescriptivePlanGenerator
       lengthFeet={dimensions.lengthFeet}
@@ -1462,11 +1793,25 @@ export function DeckTakeoffPlanner({
       }
       blueprintStairs={approvedStairsPresent}
       blueprintRailings={railingGeometry.railingsPresent}
-      stairPlacementConfirmed={plan.stairPlacementConfirmed}
+      stairPlacementConfirmed={
+        approvedShapeStairPlacementConfirmed
+      }
       visitSeed={blueprintVisitSeed}
-      stairEdge={plan.stairEdge}
+      stairEdge={
+        approvedShapeHandoff?.rectangularStairPlacement?.edge ?? plan.stairEdge
+      }
       stairPosition={plan.stairPosition}
-      stairOffsetFeet={plan.stairOffsetFeet}
+      stairOffsetFeet={
+        approvedShapeHandoff?.rectangularStairPlacement
+          ? String(approvedShapeHandoff.rectangularStairPlacement.offsetFeet)
+          : plan.stairOffsetFeet
+      }
+      approvedStairWidthFeet={
+        approvedShapeHandoff?.rectangularStairPlacement?.widthFeet
+      }
+      approvedStairProjectionFeet={
+        approvedShapeHandoff?.rectangularStairPlacement?.projectionFeet
+      }
       approvedOutline={approvedShape?.outline}
       disabled={disabled}
       onStairPlacementChange={(edge, offsetFeet) => {
@@ -1508,7 +1853,7 @@ export function DeckTakeoffPlanner({
         <p className="mt-2 text-sm leading-6 text-slate-700">
           Work through framing, supports, footings, stairs, railing and attachment here. Material shopping, quantities, Lowe&apos;s products and prices begin only after this plan is approved.
         </p>
-        {structuralDesigner}
+        {customApprovedFootprint ? customStructuralDesigner : structuralDesigner}
       </section>
     );
 
@@ -1537,17 +1882,16 @@ export function DeckTakeoffPlanner({
         Turn field measurements into reviewed true costs
       </h3>
       <p className="mt-2 text-sm leading-6 text-slate-700">
-        This is a complete-rebuild takeoff: old decking, framing, supports, and
-        footings are not being reused. The app can calculate deck area, decking
-        layout, and a reviewed rectangular railing perimeter. Every structural
-        member, footing, connector, stair, labor, and logistics quantity must
-        come from your named build plan.
+        {customApprovedFootprint
+          ? "This is a complete-rebuild takeoff for the exact saved custom footprint. Its reviewed decking and railing quantities are priced below; rectangular board and railing calculators do not apply."
+          : "This is a complete-rebuild takeoff: old decking, framing, supports, and footings are not being reused. The app can calculate deck area, decking layout, and a reviewed rectangular railing perimeter. Every structural member, footing, connector, stair, labor, and logistics quantity must come from your named build plan."}
       </p>
 
-      <details
-        ref={layoutDetailsRef}
-        className="mt-5 scroll-mt-24 rounded-xl border border-slate-300 bg-white p-4"
-      >
+      {!customApprovedFootprint ? (
+        <details
+          ref={layoutDetailsRef}
+          className="mt-5 scroll-mt-24 rounded-xl border border-slate-300 bg-white p-4"
+        >
         <summary className="min-h-11 cursor-pointer py-2 font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700">
           Edit board layout and stair placement
         </summary>
@@ -1722,11 +2066,102 @@ export function DeckTakeoffPlanner({
             and correct them before approving the takeoff.
           </p>
         </div>
-      </details>
+        </details>
+      ) : null}
 
       {completeRebuildScope}
 
-      <section className="mt-5 rounded-lg border border-blue-200 bg-white p-4">
+      {customApprovedFootprint ? (
+        <section className="mt-5 rounded-lg border-2 border-blue-300 bg-white p-4">
+          <h4 className="font-black text-slate-950">
+            Price the reviewed custom-footprint finishes
+          </h4>
+          <p className="mt-1 text-sm leading-6 text-slate-700">
+            These quantities came from the reviewed custom plan. Add the exact
+            product description, current unit cost, and traceable price source.
+            The app will not substitute a rectangular deck-board or railing
+            calculation.
+          </p>
+          <div className="mt-3 space-y-3">
+            {customFinishLines.map((line) => (
+              <article
+                key={line.key}
+                className="rounded-lg border border-slate-300 bg-slate-50 p-3"
+              >
+                <p className="font-black text-slate-950">
+                  {line.key === "custom_decking"
+                    ? "Custom-footprint decking"
+                    : "Custom-footprint railing"}
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  <Field label="Product description">
+                    <input
+                      className={input}
+                      value={line.description}
+                      onChange={(event) =>
+                        updateLine(line.key, "description", event.target.value)
+                      }
+                    />
+                  </Field>
+                  <Field label="Reviewed quantity">
+                    <input
+                      className={input}
+                      inputMode="decimal"
+                      value={line.quantity}
+                      onChange={(event) =>
+                        updateLine(line.key, "quantity", event.target.value)
+                      }
+                    />
+                  </Field>
+                  <Field label="Unit">
+                    <input
+                      className={input}
+                      value={line.unit}
+                      onChange={(event) =>
+                        updateLine(line.key, "unit", event.target.value)
+                      }
+                    />
+                  </Field>
+                  <Field label="Unit cost">
+                    <input
+                      className={input}
+                      inputMode="decimal"
+                      value={line.unitCost}
+                      onChange={(event) =>
+                        updateLine(line.key, "unitCost", event.target.value)
+                      }
+                    />
+                  </Field>
+                  <Field label="Price source">
+                    <input
+                      className={input}
+                      value={line.sourceReference}
+                      onChange={(event) =>
+                        updateLine(
+                          line.key,
+                          "sourceReference",
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </Field>
+                </div>
+              </article>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={`mt-4 w-full ${primary}`}
+            disabled={disabled || pending}
+            onClick={() => void requestPreview()}
+          >
+            {pending ? "Calculating…" : "Calculate custom quantities and costs"}
+          </button>
+        </section>
+      ) : null}
+
+      {!customApprovedFootprint ? (
+        <section className="mt-5 rounded-lg border border-blue-200 bg-white p-4">
         <h4 className="font-black text-slate-950">
           Recommended Lowe&apos;s package
         </h4>
@@ -1880,14 +2315,16 @@ export function DeckTakeoffPlanner({
             </div>
           </section>
         ) : null}
-      </section>
+        </section>
+      ) : null}
 
       <details className="mt-4 rounded-lg border border-slate-300 bg-white p-4">
         <summary className="min-h-11 cursor-pointer font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700">
           Change products, costs, or advanced quantities
         </summary>
 
-        <div className="mt-4 rounded-lg bg-slate-50 p-4">
+        {!customApprovedFootprint ? (
+          <div className="mt-4 rounded-lg bg-slate-50 p-4">
           <h4 className="font-black text-slate-950">1. Decking calculation</h4>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field label="Actual board width (inches)">
@@ -1987,7 +2424,8 @@ export function DeckTakeoffPlanner({
               />
             </Field>
           </div>
-        </div>
+          </div>
+        ) : null}
 
         <div className="mt-4 rounded-lg bg-slate-50 p-4">
           <h4 className="font-black text-slate-950">
@@ -2058,7 +2496,8 @@ export function DeckTakeoffPlanner({
           </div>
         </div>
 
-        <div className="mt-4 rounded-lg bg-slate-50 p-4">
+        {!customApprovedFootprint ? (
+          <div className="mt-4 rounded-lg bg-slate-50 p-4">
           <h4 className="font-black text-slate-950">3. Automatic railing</h4>
           <p className="mt-1 text-sm text-slate-600">
             The app uses the rectangular deck perimeter, removes the house side
@@ -2125,7 +2564,8 @@ export function DeckTakeoffPlanner({
               />
             </Field>
           </div>
-        </div>
+          </div>
+        ) : null}
       </details>
 
       {error ? (
@@ -2160,7 +2600,9 @@ export function DeckTakeoffPlanner({
               Board layout:{" "}
               {preview.deckingLayout === "seamless"
                 ? "Full-length boards · no field joints"
-                : "Picture frame + center divider · no unsupported butt joints"}
+                : preview.deckingLayout === "picture_frame_divider"
+                  ? "Picture frame + center divider · no unsupported butt joints"
+                  : "Reviewed custom-footprint board layout"}
             </p>
           ) : null}
           {preview.railingLengthFeet ? (

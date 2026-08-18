@@ -6,6 +6,7 @@ import {
   buildDeckTakeoffPreview,
   COMPLETE_REBUILD_LINE_KEYS,
   deckRailingGeometry,
+  deckShapeBindingMatches,
   DECK_TAKEOFF_VERSION,
   type CompleteRebuildLineKey,
   type CompleteRebuildScopeDecision,
@@ -31,6 +32,9 @@ import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import {
   assertPartialFramingEvidenceBinding,
   isCanonicalFramingEvidence,
+  isValidDeckOutline,
+  type DeckOutlinePoint,
+  type DeckStairPlacement,
 } from "@/lib/deck-prescriptive-plan";
 
 type RouteContext = { params: Promise<{ estimateId: string }> };
@@ -68,6 +72,28 @@ const HARDWARE_EVIDENCE_PLAN_KEYS = new Set([
   ...PLAN_KEYS,
   "framingPlanEvidence",
   "hardwareSelections",
+]);
+const SHAPE_PLAN_KEYS = new Set([...PLAN_KEYS, "shapeBinding"]);
+const SHAPE_EVIDENCE_PLAN_KEYS = new Set([
+  ...EVIDENCE_PLAN_KEYS,
+  "shapeBinding",
+]);
+const SHAPE_HARDWARE_PLAN_KEYS = new Set([
+  ...HARDWARE_EVIDENCE_PLAN_KEYS,
+  "shapeBinding",
+]);
+const SHAPE_BINDING_KEYS = new Set([
+  "id",
+  "shapeRevision",
+  "outline",
+  "stairsPresent",
+  "stairPlacement",
+]);
+const STAIR_PLACEMENT_KEYS = new Set([
+  "edgeIndex",
+  "offsetFeet",
+  "widthFeet",
+  "projectionFeet",
 ]);
 const PRE_REBUILD_PLAN_KEYS = new Set(
   [...PLAN_KEYS].filter(
@@ -154,6 +180,75 @@ function nullableUuid(value: unknown) {
   return value;
 }
 
+function parseShapeBinding(value: unknown): NonNullable<DeckTakeoffPlan["shapeBinding"]> {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new TypeError("The saved Deck shape binding is invalid.");
+  const raw = value as Record<string, unknown>;
+  if (
+    !exactFields(raw, SHAPE_BINDING_KEYS) ||
+    typeof raw.id !== "string" ||
+    !UUID_PATTERN.test(raw.id) ||
+    !Number.isSafeInteger(raw.shapeRevision) ||
+    (raw.shapeRevision as number) < 1 ||
+    typeof raw.stairsPresent !== "boolean" ||
+    !Array.isArray(raw.outline)
+  )
+    throw new TypeError("The saved Deck shape binding is invalid.");
+  const outline = raw.outline.map((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new TypeError("The saved Deck outline is invalid.");
+    const point = value as Record<string, unknown>;
+    if (
+      !exactFields(point, new Set(["x", "y"])) ||
+      typeof point.x !== "number" ||
+      typeof point.y !== "number" ||
+      !Number.isFinite(point.x) ||
+      !Number.isFinite(point.y)
+    )
+      throw new TypeError("The saved Deck outline is invalid.");
+    return { x: point.x, y: point.y } satisfies DeckOutlinePoint;
+  });
+  if (!isValidDeckOutline(outline))
+    throw new TypeError("The saved Deck outline is invalid.");
+  let stairPlacement: DeckStairPlacement | null = null;
+  if (raw.stairPlacement !== null) {
+    if (
+      !raw.stairPlacement ||
+      typeof raw.stairPlacement !== "object" ||
+      Array.isArray(raw.stairPlacement) ||
+      !exactFields(
+        raw.stairPlacement as Record<string, unknown>,
+        STAIR_PLACEMENT_KEYS,
+      )
+    )
+      throw new TypeError("The saved stair placement is invalid.");
+    const placement = raw.stairPlacement as Record<string, unknown>;
+    for (const key of STAIR_PLACEMENT_KEYS) {
+      if (typeof placement[key] !== "number" || !Number.isFinite(placement[key]))
+        throw new TypeError("The saved stair placement is invalid.");
+    }
+    if (
+      !Number.isInteger(placement.edgeIndex) ||
+      (placement.edgeIndex as number) < 0 ||
+      (placement.edgeIndex as number) >= outline.length ||
+      (placement.offsetFeet as number) < 0 ||
+      (placement.widthFeet as number) <= 0 ||
+      (placement.projectionFeet as number) <= 0
+    )
+      throw new TypeError("The saved stair placement is invalid.");
+    stairPlacement = placement as unknown as DeckStairPlacement;
+  }
+  if (raw.stairsPresent !== (stairPlacement !== null) && stairPlacement !== null)
+    throw new TypeError("The saved stair placement is invalid.");
+  return {
+    id: raw.id,
+    shapeRevision: raw.shapeRevision as number,
+    outline,
+    stairsPresent: raw.stairsPresent,
+    stairPlacement,
+  };
+}
+
 function parsePlan(value: unknown): DeckTakeoffPlan {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("The Deck takeoff plan is invalid.");
@@ -169,10 +264,13 @@ function parsePlan(value: unknown): DeckTakeoffPlan {
     preOffsetPlan ||
     exactFields(plan, PLAN_KEYS) ||
     exactFields(plan, EVIDENCE_PLAN_KEYS) ||
-    exactFields(plan, HARDWARE_EVIDENCE_PLAN_KEYS);
+    exactFields(plan, HARDWARE_EVIDENCE_PLAN_KEYS) ||
+    exactFields(plan, SHAPE_PLAN_KEYS) ||
+    exactFields(plan, SHAPE_EVIDENCE_PLAN_KEYS) ||
+    exactFields(plan, SHAPE_HARDWARE_PLAN_KEYS);
   if (!legacyPlan && !preRebuildPlan && !rebuildPlan)
     throw new TypeError("The Deck takeoff plan is invalid.");
-  if (!Array.isArray(plan.additionalLines) || plan.additionalLines.length > 12)
+  if (!Array.isArray(plan.additionalLines) || plan.additionalLines.length > 14)
     throw new TypeError("The Deck takeoff has too many planned lines.");
   const additionalLines = plan.additionalLines.map((raw) => {
     if (
@@ -269,6 +367,12 @@ function parsePlan(value: unknown): DeckTakeoffPlan {
     }
   }
   const parsed: DeckTakeoffPlan = {
+    shapeBinding:
+      rebuildPlan && "shapeBinding" in plan
+        ? plan.shapeBinding === null
+          ? null
+          : parseShapeBinding(plan.shapeBinding)
+        : null,
     takeoffScope: rebuildPlan ? "complete_rebuild" : "legacy_partial",
     completeRebuildConfirmed: rebuildPlan
       ? (plan.completeRebuildConfirmed as boolean)
@@ -369,7 +473,11 @@ function failure(code: string) {
       },
       { status: 409 },
     );
-  if (code === "stale_visit_revision" || code === "stale_calculation_revision")
+  if (
+    code === "stale_visit_revision" ||
+    code === "stale_calculation_revision" ||
+    code === "stale_shape_revision"
+  )
     return NextResponse.json(
       {
         success: false,
@@ -424,6 +532,35 @@ async function loadVisitAndCatalog(
     return { code: "not_found" as const };
   if (visit.data.revision !== expectedVisitRevision)
     return { code: "stale_visit_revision" as const };
+  {
+    const shape = await supabase
+      .from("guided_deck_shape_revisions")
+      .select("id,shape_revision,outline,stairs_present,stair_placement")
+      .eq("company_id", companyId)
+      .eq("visit_id", visitId)
+      .order("shape_revision", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (shape.error)
+      throw new Error("The approved Deck shape could not be loaded.");
+    const latest = shape.data
+      ? parseShapeBinding({
+          id: shape.data.id,
+          shapeRevision: shape.data.shape_revision,
+          outline: shape.data.outline,
+          stairsPresent: shape.data.stairs_present,
+          stairPlacement: shape.data.stair_placement,
+        })
+      : null;
+    if (
+      (latest && !plan.shapeBinding) ||
+      (!latest && plan.shapeBinding) ||
+      (latest &&
+        plan.shapeBinding &&
+        !deckShapeBindingMatches(latest, plan.shapeBinding))
+    )
+      return { code: "stale_shape_revision" as const };
+  }
   const itemResult = await supabase
     .from("guided_site_visit_items")
     .select("item_key,observation")

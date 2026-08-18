@@ -229,6 +229,13 @@ export function completeRebuildScopeRequirement(
 }
 
 export type DeckTakeoffPlan = Readonly<{
+  shapeBinding?: Readonly<{
+    id: string;
+    shapeRevision: number;
+    outline: readonly import("@/lib/deck-prescriptive-plan").DeckOutlinePoint[];
+    stairsPresent: boolean;
+    stairPlacement: import("@/lib/deck-prescriptive-plan").DeckStairPlacement | null;
+  }> | null;
   takeoffScope: "complete_rebuild" | "legacy_partial";
   completeRebuildConfirmed: boolean;
   buildPlanReference: string;
@@ -262,6 +269,48 @@ export type DeckTakeoffPlan = Readonly<{
   additionalLines: readonly DeckTakeoffPlanLine[];
 }>;
 
+export function deckStructuralLineIsComplete(
+  line: Readonly<{ description: string; quantity: string; unit: string }>,
+) {
+  const quantity = line.quantity.trim();
+  if (!/^(?:\d+|\d*\.\d+)$/.test(quantity)) return false;
+  const numericQuantity = Number(quantity);
+  return (
+    line.description.trim().length > 0 &&
+    line.unit.trim().length > 0 &&
+    Number.isFinite(numericQuantity) &&
+    numericQuantity > 0
+  );
+}
+
+export function deckShapeBindingMatches(
+  left: DeckTakeoffPlan["shapeBinding"],
+  right: DeckTakeoffPlan["shapeBinding"],
+) {
+  if (!left || !right) return !left && !right;
+  const samePlacement =
+    left.stairPlacement === null && right.stairPlacement === null
+      ? true
+      : left.stairPlacement !== null && right.stairPlacement !== null
+        ? left.stairPlacement.edgeIndex === right.stairPlacement.edgeIndex &&
+          left.stairPlacement.offsetFeet === right.stairPlacement.offsetFeet &&
+          left.stairPlacement.widthFeet === right.stairPlacement.widthFeet &&
+          left.stairPlacement.projectionFeet ===
+            right.stairPlacement.projectionFeet
+        : false;
+  return (
+    left.id === right.id &&
+    left.shapeRevision === right.shapeRevision &&
+    left.stairsPresent === right.stairsPresent &&
+    samePlacement &&
+    left.outline.length === right.outline.length &&
+    left.outline.every(
+      (point, index) =>
+        point.x === right.outline[index]?.x && point.y === right.outline[index]?.y,
+    )
+  );
+}
+
 export type DeckTakeoffPreviewLine = Readonly<{
   key: string;
   category: DeckTakeoffPlanLine["category"];
@@ -282,7 +331,11 @@ export type DeckTakeoffPreview = Readonly<{
   deckWidthFeet: string | null;
   deckAreaSquareFeet: string | null;
   railingLengthFeet: string | null;
-  deckingLayout: "seamless" | "picture_frame_divider" | null;
+  deckingLayout:
+    | "seamless"
+    | "picture_frame_divider"
+    | "reviewed_custom_plan"
+    | null;
   lines: readonly DeckTakeoffPreviewLine[];
   unresolved: readonly string[];
   disclosures: readonly string[];
@@ -576,8 +629,29 @@ export function buildDeckTakeoffPreview(
   const lines: DeckTakeoffPreviewLine[] = [];
   if (!lengthFeet || !widthFeet)
     unresolved.push("Verified deck length and width are required.");
-  const area =
-    lengthFeet !== null && widthFeet !== null ? lengthFeet * widthFeet : null;
+  const boundOutline = input.plan.shapeBinding?.outline ?? null;
+  const boundOutlineIsRectangle = Boolean(
+    boundOutline &&
+      boundOutline.length === 4 &&
+      boundOutline.every((point, index) => {
+        const next = boundOutline[(index + 1) % boundOutline.length];
+        return point.x === next.x || point.y === next.y;
+      }),
+  );
+  const customFootprint = Boolean(boundOutline && !boundOutlineIsRectangle);
+  const polygonArea = input.plan.shapeBinding
+    ? Math.abs(
+        input.plan.shapeBinding.outline.reduce((sum, point, index, outline) => {
+          const next = outline[(index + 1) % outline.length];
+          return sum + point.x * next.y - next.x * point.y;
+        }, 0) / 2,
+      )
+    : null;
+  const area = customFootprint
+    ? polygonArea
+    : lengthFeet !== null && widthFeet !== null
+      ? lengthFeet * widthFeet
+      : null;
   const railingGeometry = deckRailingGeometry(
     input.items,
     lengthFeet && widthFeet ? { lengthFeet, widthFeet } : null,
@@ -646,7 +720,16 @@ export function buildDeckTakeoffPreview(
     input.catalog,
     "ea",
   );
-  if (area !== null && lengthFeet !== null && widthFeet !== null) {
+  if (customFootprint) {
+    const reviewedDecking = rebuildLines.get("custom_decking");
+    if (!reviewedDecking || !deckStructuralLineIsComplete(reviewedDecking)) {
+      unresolved.push(
+        "The custom footprint needs a reviewed deck-board quantity from the approved layout plan; the app will not substitute its bounding rectangle.",
+      );
+    } else {
+      deckingLayout = "reviewed_custom_plan";
+    }
+  } else if (area !== null && lengthFeet !== null && widthFeet !== null) {
     if (
       !boardWidth ||
       boardGap === null ||
@@ -750,7 +833,13 @@ export function buildDeckTakeoffPreview(
     input.catalog,
     "ea",
   );
-  if (railingGeometry.railingsPresent) {
+  if (customFootprint && railingGeometry.railingsPresent) {
+    const reviewedRailing = rebuildLines.get("custom_railing");
+    if (!reviewedRailing || !deckStructuralLineIsComplete(reviewedRailing))
+      unresolved.push(
+        "The custom footprint needs a reviewed railing quantity from the approved layout plan; the app will not use a rectangular perimeter.",
+      );
+  } else if (railingGeometry.railingsPresent) {
     if (stairPlacementIssue) {
       // The exact edge geometry must be valid before railing sections can be priced.
     } else if (railingGeometry.railingLengthFeet === null) {

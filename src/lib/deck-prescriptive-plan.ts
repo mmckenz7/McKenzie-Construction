@@ -225,6 +225,97 @@ export type DeckStairPlacement = Readonly<{
   projectionFeet: number;
 }>;
 
+export function deckOutlineAreaSquareFeet(
+  outline: readonly DeckOutlinePoint[],
+) {
+  if (!isValidDeckOutline(outline)) return null;
+  return Math.abs(
+    outline.reduce((sum, point, index) => {
+      const next = outline[(index + 1) % outline.length];
+      return sum + point.x * next.y - next.x * point.y;
+    }, 0) / 2,
+  );
+}
+
+export function deckShapeStructuralHandoff(
+  shape: Readonly<{
+    outline: readonly DeckOutlinePoint[];
+    stairsPresent: boolean;
+    stairPlacement: DeckStairPlacement | null;
+  }>,
+) {
+  const xs = shape.outline.map((point) => point.x);
+  const ys = shape.outline.map((point) => point.y);
+  const minimumX = Math.min(...xs);
+  const minimumY = Math.min(...ys);
+  const axisAlignedRectangle =
+    shape.outline.length === 4 &&
+    shape.outline.every((point, index) => {
+      const next = shape.outline[(index + 1) % shape.outline.length];
+      return (
+        Math.abs(point.x - next.x) < 0.01 ||
+        Math.abs(point.y - next.y) < 0.01
+      );
+    });
+  let rectangularStairPlacement:
+    | Readonly<{
+        edge: "left" | "right" | "yard" | "top";
+        offsetFeet: number;
+        widthFeet: number;
+        projectionFeet: number;
+      }>
+    | null = null;
+  if (
+    axisAlignedRectangle &&
+    shape.stairsPresent &&
+    shape.stairPlacement &&
+    shape.stairPlacement.edgeIndex < shape.outline.length
+  ) {
+    const start = shape.outline[shape.stairPlacement.edgeIndex];
+    const end =
+      shape.outline[
+        (shape.stairPlacement.edgeIndex + 1) % shape.outline.length
+      ];
+    const edgeLength = Math.hypot(end.x - start.x, end.y - start.y);
+    if (edgeLength > 0) {
+      const center = {
+        x:
+          start.x +
+          ((end.x - start.x) / edgeLength) *
+            shape.stairPlacement.offsetFeet,
+        y:
+          start.y +
+          ((end.y - start.y) / edgeLength) *
+            shape.stairPlacement.offsetFeet,
+      };
+      const horizontal = Math.abs(start.y - end.y) < 0.01;
+      const edge = horizontal
+        ? Math.abs(start.y - minimumY) < 0.01
+          ? ("top" as const)
+          : ("yard" as const)
+        : Math.abs(start.x - minimumX) < 0.01
+          ? ("left" as const)
+          : ("right" as const);
+      rectangularStairPlacement = Object.freeze({
+        edge,
+        offsetFeet: Number(
+          (horizontal ? center.x - minimumX : center.y - minimumY).toFixed(4),
+        ),
+        widthFeet: shape.stairPlacement.widthFeet,
+        projectionFeet: shape.stairPlacement.projectionFeet,
+      });
+    }
+  }
+  return Object.freeze({
+    footprintMode: axisAlignedRectangle
+      ? ("rectangular_profile" as const)
+      : ("reviewed_custom_plan" as const),
+    stairPlacementConfirmed:
+      !shape.stairsPresent || shape.stairPlacement !== null,
+    rectangularStairPlacement,
+  });
+}
+
 export function deckOutlineOutwardNormal(
   outline: readonly DeckOutlinePoint[],
   edgeIndex: number,
