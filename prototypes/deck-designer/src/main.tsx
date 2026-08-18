@@ -14,6 +14,7 @@ import { deriveQuantities } from "./quantities";
 import { createHistory, designHistoryReducer } from "./history";
 import { PlanView, formatFeetInches } from "./PlanView";
 import type { PlatformDimensionUpdate } from "./editor";
+import { deriveDesignNotices } from "./notices";
 import { ThreeView, type CameraPreset } from "./ThreeView";
 import "./styles.css";
 
@@ -45,10 +46,19 @@ function App() {
   const [preset, setPreset] = useState<CameraPreset>("perspective");
   const [presetRequest, setPresetRequest] = useState(0);
   const [snapIncrement, setSnapIncrement] = useState(6);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<DeckEdgeId | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const geometry = useMemo(() => deriveGeometry(design), [design]);
   const quantities = useMemo(() => deriveQuantities(design, geometry), [design, geometry]);
   const fingerprint = useMemo(() => designFingerprint(design), [design]);
+  const notices = useMemo(() => deriveDesignNotices(design, geometry), [design, geometry]);
+  const selectedEdge = geometry.platformEdges.find((edge) => edge.id === selectedEdgeId) ?? null;
+
+  useEffect(() => {
+    if (selectedEdgeId && !geometry.platformEdges.some((edge) => edge.id === selectedEdgeId)) {
+      setSelectedEdgeId(null);
+    }
+  }, [geometry.platformEdges, selectedEdgeId]);
 
   const previewPlatformDimensions = (update: PlatformDimensionUpdate) => {
     try {
@@ -208,6 +218,47 @@ function App() {
               <option value="12">12 inches · coarse</option>
             </select>
           </label>
+          <label className="field full edge-select-field">
+            <span>Edit an edge</span>
+            <select
+              value={selectedEdgeId ?? ""}
+              onChange={(event) => {
+                const edgeId = event.target.value as DeckEdgeId | "";
+                setSelectedEdgeId(edgeId || null);
+                const edge = geometry.platformEdges.find((item) => item.id === edgeId);
+                setMessage(edge ? `${edge.label} edge selected for editing.` : "Edge selection cleared.");
+              }}
+            >
+              <option value="">Choose an edge…</option>
+              {geometry.platformEdges.map((edge) => <option key={edge.id} value={edge.id}>{edge.label} · {formatFeetInches(edge.length)}</option>)}
+            </select>
+          </label>
+          {selectedEdge && (
+            <section className="selected-edge-card" aria-label="Selected edge">
+              <div><span>Selected edge</span><strong>{selectedEdge.label}</strong></div>
+              <p>{formatFeetInches(selectedEdge.length)} · {design.construction.railing.enabledEdges.includes(selectedEdge.id) ? "railing recorded" : "open edge"}</p>
+              <div className="selected-edge-actions">
+                <button onClick={() => toggleRail(selectedEdge.id)}>Toggle railing</button>
+                <button
+                  disabled={selectedEdge.length < design.construction.stairs.width}
+                  title={selectedEdge.length < design.construction.stairs.width ? "This edge is shorter than the recorded stair width." : undefined}
+                  onClick={() => {
+                    try {
+                      applyDesign(updateDesign(design, {
+                        stairEnabled: true,
+                        stairEdgeId: selectedEdge.id,
+                        stairOffset: Math.min(design.construction.stairs.offset, selectedEdge.length - design.construction.stairs.width),
+                      }));
+                      setMessage(`Stairs attached to the selected ${selectedEdge.label.toLowerCase()} edge.`);
+                    } catch (error) {
+                      setMessage(error instanceof Error ? error.message : "Stair attachment failed.");
+                    }
+                  }}
+                >Attach stairs</button>
+              </div>
+              {selectedEdge.length < design.construction.stairs.width && <small>Stair attachment unavailable: edge is shorter than the recorded stair width.</small>}
+            </section>
+          )}
 
           <div className="section-heading compact">
             <span>02</span><div><p>Railing edges</p><small>Attached edge remains open</small></div>
@@ -313,6 +364,13 @@ function App() {
             <div><span>Fingerprint</span><code>{fingerprint}</code></div>
           </div>
           <p className="status-message" aria-live="polite">{message}</p>
+          <section className="design-notices" aria-label="Design checks">
+            <div><span>Design checks</span><strong>{notices.length}</strong></div>
+            <small>Prototype review triggers only — not a code or structural determination.</small>
+            {notices.length === 0
+              ? <p>No deterministic review flags for the recorded conceptual facts.</p>
+              : notices.map((notice) => <p key={notice.id} className={notice.severity}>{notice.message}</p>)}
+          </section>
         </aside>
 
         <section className="visual-area">
@@ -326,6 +384,12 @@ function App() {
               onDimensionPreview={previewPlatformDimensions}
               onDimensionCommit={commitPlatformDimensions}
               onDimensionCancel={() => setPreviewDesign(null)}
+              selectedEdgeId={selectedEdgeId}
+              onSelectEdge={(edgeId) => {
+                setSelectedEdgeId(edgeId);
+                const edge = geometry.platformEdges.find((item) => item.id === edgeId);
+                if (edge) setMessage(`${edge.label} edge selected for editing.`);
+              }}
             />
           </article>
           <article className="view-card three-card">

@@ -54,6 +54,14 @@ button:hover { transform: translateY(-1px); }
 .field input:focus { border-color: #688273; box-shadow: 0 0 0 3px #dfe8e1; }
 .field select { width: 100%; border: 1px solid #ccd2cc; border-radius: 7px; background: white; padding: 10px; color: #283a32; outline: none; }
 .snap-field { margin-top: 14px; }
+.edge-select-field { margin-top: 10px; }
+.selected-edge-card { margin: 13px 0 0; padding: 11px; border: 1px solid #b7c5bb; border-radius: 8px; background: #eef2ec; }
+.selected-edge-card > div:first-child { display: flex; justify-content: space-between; gap: 10px; color: #526058; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
+.selected-edge-card p { margin: 6px 0 9px; color: #34473f; font-size: 11px; }
+.selected-edge-card small { display: block; margin-top: 8px; color: #7a5c21; font-size: 9px; line-height: 1.4; }
+.selected-edge-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.selected-edge-actions button { padding: 7px 5px; border-color: #aebbb2; background: white; color: #34473f; font-size: 9px; }
+.selected-edge-actions button:disabled { cursor: not-allowed; opacity: .45; transform: none; }
 .dimension-input { position: relative; }
 .dimension-input input { padding-right: 30px; }
 .dimension-input > span { position: absolute; right: 9px; top: 11px; color: #849087; font-size: 11px; }
@@ -75,6 +83,11 @@ button:hover { transform: translateY(-1px); }
 .design-facts span { color: #79847e; text-transform: uppercase; letter-spacing: .08em; }
 .design-facts strong, .design-facts code { font-size: 10px; }
 .status-message { min-height: 35px; margin: 16px 0 0; padding: 9px 10px; color: #526058; background: #eef2ec; border-radius: 7px; font-size: 10px; line-height: 1.5; }
+.design-notices { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.design-notices > div { display: flex; justify-content: space-between; color: #53635b; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+.design-notices > small { display: block; margin-top: 5px; color: #818c86; font-size: 8px; line-height: 1.4; }
+.design-notices p { margin: 7px 0 0; padding: 7px 8px; border-left: 3px solid #9aab9f; background: #f0f3ef; color: #59675f; font-size: 9px; line-height: 1.45; }
+.design-notices p.review { border-left-color: #c3973d; background: #f7efd8; color: #66501e; }
 .visual-area { min-width: 0; padding: 18px; display: grid; grid-template-columns: minmax(280px, .85fr) minmax(380px, 1.15fr); gap: 14px; background: #e6e9e4; }
 .view-card { min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: white; border: 1px solid #d3d8d1; border-radius: 12px; box-shadow: 0 5px 20px #182b2210; }
 .card-title { min-height: 57px; padding: 11px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e1e4df; }
@@ -83,6 +96,9 @@ button:hover { transform: translateY(-1px); }
 .card-title strong { font-size: 10px; color: #637069; }
 .plan-svg { width: 100%; height: 100%; min-height: 470px; }
 .plan-platform { fill: #d6b590; stroke: #263d33; stroke-width: 1.5; }
+.plan-selected-edge { stroke: var(--lime); stroke-width: 7; opacity: .9; }
+.plan-edge-hit { fill: #ffffff; fill-opacity: .001; cursor: pointer; outline: none; }
+.plan-edge-hit:hover, .plan-edge-hit:focus { fill: #c8dd3c; fill-opacity: .42; }
 .plan-board { stroke: #987454; stroke-width: .55; }
 .plan-joist { stroke: #365d4a; stroke-width: .75; stroke-dasharray: 3 2; opacity: .72; }
 .plan-rail { stroke: #142f24; stroke-width: 3.2; }

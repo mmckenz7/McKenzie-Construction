@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import type { DeckDesignV1 } from "./model";
+import type { DeckDesignV1, DeckEdgeId } from "./model";
 import type { DeckGeometry } from "./geometry";
 import { dimensionsFromHandle, type PlatformDimensionUpdate, type PlatformHandle } from "./editor";
 
@@ -11,9 +11,11 @@ type Props = {
   onDimensionPreview: (update: PlatformDimensionUpdate) => void;
   onDimensionCommit: (update: PlatformDimensionUpdate) => void;
   onDimensionCancel: () => void;
+  selectedEdgeId: DeckEdgeId | null;
+  onSelectEdge: (edgeId: DeckEdgeId) => void;
 };
 
-export function PlanView({ design, geometry, showFraming, snapIncrement, onDimensionPreview, onDimensionCommit, onDimensionCancel }: Props) {
+export function PlanView({ design, geometry, showFraming, snapIncrement, onDimensionPreview, onDimensionCommit, onDimensionCancel, selectedEdgeId, onSelectEdge }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [activeHandle, setActiveHandle] = useState<PlatformHandle | null>(null);
   const { width, projection } = design.platform;
@@ -33,6 +35,13 @@ export function PlanView({ design, geometry, showFraming, snapIncrement, onDimen
   const y = (value: number) => margin + value - minZ;
   const bottomDimensionY = y(maxZ) + margin * 0.48;
   const rightDimensionX = x(maxX) + margin * 0.48;
+  const edgeHitPoints = (start: Readonly<{ x: number; z: number }>, end: Readonly<{ x: number; z: number }>) => {
+    const hit = 6;
+    if (start.z === end.z) {
+      return `${x(start.x)},${y(start.z) - hit} ${x(end.x)},${y(end.z) - hit} ${x(end.x)},${y(end.z) + hit} ${x(start.x)},${y(start.z) + hit}`;
+    }
+    return `${x(start.x) - hit},${y(start.z)} ${x(start.x) + hit},${y(start.z)} ${x(end.x) + hit},${y(end.z)} ${x(end.x) - hit},${y(end.z)}`;
+  };
   const handlePoint = (handle: PlatformHandle) => {
     if (handle === "width") {
       return { x: width, z: design.platform.kind === "l-shape" ? (projection - design.platform.cutoutDepth) / 2 : projection / 2 };
@@ -158,6 +167,28 @@ export function PlanView({ design, geometry, showFraming, snapIncrement, onDimen
           CUTOUT {formatFeetInches(design.platform.cutoutWidth)} × {formatFeetInches(design.platform.cutoutDepth)}
         </text>
       )}
+      {geometry.platformEdges.map((edge) => (
+        <g key={`select-${edge.id}`}>
+          {selectedEdgeId === edge.id && (
+            <line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className="plan-selected-edge" />
+          )}
+          <polygon
+            points={edgeHitPoints(edge.start, edge.end)}
+            className="plan-edge-hit"
+            role="button"
+            tabIndex={0}
+            aria-label={`Select ${edge.label.toLowerCase()} edge, ${formatFeetInches(edge.length)}`}
+            aria-pressed={selectedEdgeId === edge.id}
+            onClick={() => onSelectEdge(edge.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectEdge(edge.id);
+              }
+            }}
+          />
+        </g>
+      ))}
       <g className="dimension-handles" aria-label="Editable dimension handles">
         {renderHandle("width", "Width handle")}
         {renderHandle("projection", "Projection handle")}

@@ -23,7 +23,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Any-edge straight stairs with explicit attachment and railing-opening facts
 - [x] Optional deterministic top landing
 - [ ] Turn, intermediate-landing, and multi-flight configurations
-- [ ] Edge-level railing editor and configuration warnings
+- [x] Edge selection with contextual railing/stair actions and explainable conceptual warnings
 - [x] Drag handles and selectable grid snapping for rectangle and L-cutout dimensions
 - [ ] Angle constraints, alignment guides, and broader object selection
 - [x] Undo/redo command history with monotonic design revisions

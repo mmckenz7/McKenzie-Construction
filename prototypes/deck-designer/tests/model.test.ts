@@ -4,6 +4,7 @@ import { deriveGeometry } from "../src/geometry";
 import { deriveQuantities } from "../src/quantities";
 import { createHistory, designHistoryReducer } from "../src/history";
 import { dimensionsFromHandle, snapDimension } from "../src/editor";
+import { deriveDesignNotices } from "../src/notices";
 
 describe("direct plan editing", () => {
   it("snaps dimensions deterministically", () => {
@@ -35,6 +36,38 @@ describe("direct plan editing", () => {
       stairWidth: 48,
     });
     expect(dimensionsFromHandle(notchStairs, "cutout", { x: 190, z: 96 }, 6).cutoutWidth).toBe(48);
+  });
+});
+
+describe("deterministic design checks", () => {
+  it("flags open elevated edges and stair intent from recorded facts", () => {
+    const design = updateDesign(DEFAULT_DESIGN, { railingEdges: ["front"], stairEnabled: true });
+    const notices = deriveDesignNotices(design, deriveGeometry(design));
+    expect(notices.map((notice) => notice.id)).toEqual([
+      "open-elevated-edge:left",
+      "open-elevated-edge:right",
+      "stairs-without-landing",
+    ]);
+    expect(notices.every((notice) => notice.message.length > 20)).toBe(true);
+  });
+
+  it("does not invent open-edge review flags below the prototype threshold", () => {
+    const design = updateDesign(DEFAULT_DESIGN, { surfaceElevation: 24, railingEdges: [] });
+    expect(deriveDesignNotices(design, deriveGeometry(design))).toEqual([]);
+  });
+
+  it("explains narrow L-legs and a shallow recorded landing", () => {
+    const narrow = updateDesign(DEFAULT_DESIGN, {
+      kind: "l-shape",
+      cutoutWidth: 160,
+      cutoutDepth: 112,
+      stairEnabled: true,
+      stairEdgeId: "left",
+      landingEnabled: true,
+      landingDepth: 36,
+    });
+    expect(deriveDesignNotices(narrow, deriveGeometry(narrow)).map((notice) => notice.id)).toContain("narrow-l-shape-leg");
+    expect(deriveDesignNotices(narrow, deriveGeometry(narrow)).map((notice) => notice.id)).toContain("landing-shallower-than-stair");
   });
 });
 
