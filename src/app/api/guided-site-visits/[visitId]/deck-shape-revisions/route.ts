@@ -6,7 +6,9 @@ import { authorizeGuidedSiteVisit } from "@/lib/guided-site-visits/access";
 import { exactObject, revision, UUID } from "@/lib/guided-site-visits/core";
 import {
   isValidDeckOutline,
+  type DeckGradeHeights,
   type DeckOutlinePoint,
+  type DeckStairPlacement,
 } from "@/lib/deck-prescriptive-plan";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
@@ -16,7 +18,12 @@ const BODY_FIELDS = new Set([
   "projectKind",
   "outline",
   "stairsPresent",
+  "stairPlacement",
+  "gradeHeights",
 ]);
+
+const GRADE_FIELDS = new Set(["houseLeftFeet", "houseRightFeet", "yardLeftFeet", "yardRightFeet"]);
+const STAIR_FIELDS = new Set(["edgeIndex", "offsetFeet", "widthFeet", "projectionFeet"]);
 
 function parseOutline(value: unknown): DeckOutlinePoint[] {
   if (!Array.isArray(value) || value.length < 3 || value.length > 24)
@@ -41,12 +48,57 @@ function parseOutline(value: unknown): DeckOutlinePoint[] {
   return points;
 }
 
+function parseGradeHeights(value: unknown): DeckGradeHeights {
+  const fields = exactObject(value, GRADE_FIELDS);
+  for (const key of GRADE_FIELDS) {
+    const number = fields[key];
+    if (typeof number !== "number" || !Number.isFinite(number) || number < 0 || number > 50)
+      throw new TypeError("Each deck height must be between 0 and 50 feet.");
+  }
+  return {
+    houseLeftFeet: Number((fields.houseLeftFeet as number).toFixed(3)),
+    houseRightFeet: Number((fields.houseRightFeet as number).toFixed(3)),
+    yardLeftFeet: Number((fields.yardLeftFeet as number).toFixed(3)),
+    yardRightFeet: Number((fields.yardRightFeet as number).toFixed(3)),
+  };
+}
+
+function parseStairPlacement(value: unknown, outline: readonly DeckOutlinePoint[]): DeckStairPlacement {
+  const fields = exactObject(value, STAIR_FIELDS);
+  if (!Number.isSafeInteger(fields.edgeIndex) || (fields.edgeIndex as number) < 0 || (fields.edgeIndex as number) >= outline.length)
+    throw new TypeError("Choose a valid deck wall for the stairs.");
+  const offset = fields.offsetFeet;
+  const width = fields.widthFeet;
+  const projection = fields.projectionFeet;
+  if (typeof offset !== "number" || !Number.isFinite(offset) || offset <= 0 || offset > 200
+    || typeof width !== "number" || !Number.isFinite(width) || width < 2 || width > 12
+    || typeof projection !== "number" || !Number.isFinite(projection) || projection <= 0 || projection > 30)
+    throw new TypeError("The stair position and dimensions are invalid.");
+  const edgeIndex = fields.edgeIndex as number;
+  const edgeLength = Math.hypot(
+    outline[(edgeIndex + 1) % outline.length].x - outline[edgeIndex].x,
+    outline[(edgeIndex + 1) % outline.length].y - outline[edgeIndex].y,
+  );
+  const offsetFeet = fields.offsetFeet as number;
+  const widthFeet = fields.widthFeet as number;
+  if (widthFeet > edgeLength || offsetFeet < widthFeet / 2 || offsetFeet > edgeLength - widthFeet / 2)
+    throw new TypeError("Move the full stair opening onto the selected deck wall.");
+  return {
+    edgeIndex,
+    offsetFeet: Number(offsetFeet.toFixed(3)),
+    widthFeet: Number(widthFeet.toFixed(3)),
+    projectionFeet: Number((fields.projectionFeet as number).toFixed(3)),
+  };
+}
+
 function canonicalRequest(value: {
   visitId: string;
   expectedShapeRevision: number;
   projectKind: "replacement" | "new_construction";
   outline: readonly DeckOutlinePoint[];
   stairsPresent: boolean;
+  stairPlacement: DeckStairPlacement | null;
+  gradeHeights: DeckGradeHeights;
 }) {
   return JSON.stringify({
     visitId: value.visitId,
@@ -54,6 +106,8 @@ function canonicalRequest(value: {
     projectKind: value.projectKind,
     outline: value.outline.map((point) => ({ x: point.x, y: point.y })),
     stairsPresent: value.stairsPresent,
+    stairPlacement: value.stairPlacement,
+    gradeHeights: value.gradeHeights,
   });
 }
 
@@ -69,7 +123,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: "Invalid visit ID." }, { status: 400 });
     const result = await createAdminServerClient()
       .from("guided_deck_shape_revisions")
-      .select("id,shape_revision,project_kind,outline,stairs_present,source,source_visit_revision,approved_at")
+      .select("id,shape_revision,project_kind,outline,stairs_present,stair_placement,grade_heights,source,source_visit_revision,approved_at")
       .eq("company_id", auth.authorization!.companyId)
       .eq("visit_id", visitId)
       .order("shape_revision", { ascending: false })
@@ -87,6 +141,8 @@ export async function GET(
               projectKind: result.data.project_kind,
               outline: result.data.outline,
               stairsPresent: result.data.stairs_present,
+              stairPlacement: result.data.stair_placement,
+              gradeHeights: result.data.grade_heights,
               source: result.data.source,
               sourceVisitRevision: result.data.source_visit_revision,
               approvedAt: result.data.approved_at,
@@ -120,6 +176,8 @@ export async function POST(
     if (typeof body.stairsPresent !== "boolean")
       throw new TypeError("Confirm whether the Deck has stairs.");
     const outline = parseOutline(body.outline);
+    const gradeHeights = parseGradeHeights(body.gradeHeights);
+    const stairPlacement = body.stairsPresent ? parseStairPlacement(body.stairPlacement, outline) : null;
     const requestSha256 = createHash("sha256")
       .update(canonicalRequest({
         visitId,
@@ -127,9 +185,11 @@ export async function POST(
         projectKind: body.projectKind,
         outline,
         stairsPresent: body.stairsPresent,
+        stairPlacement,
+        gradeHeights,
       }))
       .digest("hex");
-    const result = await createAdminServerClient().rpc("approve_guided_deck_shape_revision", {
+    const result = await createAdminServerClient().rpc("approve_guided_deck_shape_revision_v2", {
       requested_auth_user_id: auth.authorization!.authUserId,
       requested_visit_id: visitId,
       requested_expected_shape_revision: expectedShapeRevision,
@@ -138,6 +198,8 @@ export async function POST(
       requested_project_kind: body.projectKind,
       requested_outline: outline,
       requested_stairs_present: body.stairsPresent,
+      requested_stair_placement: stairPlacement,
+      requested_grade_heights: gradeHeights,
     });
     if (result.error)
       return NextResponse.json({ success: false, error: "The Deck shape could not be saved." }, { status: 500 });
@@ -164,6 +226,8 @@ export async function POST(
         projectKind: body.projectKind,
         outline,
         stairsPresent: body.stairsPresent,
+        stairPlacement,
+        gradeHeights,
       },
       { status: row.idempotent_replay ? 200 : 201 },
     );

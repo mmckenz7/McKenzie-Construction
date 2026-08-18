@@ -6,6 +6,10 @@ const migration = readFileSync(
   "supabase/migrations/20260817100000_guided_deck_shape_revisions.sql",
   "utf8",
 );
+const geometryMigration = readFileSync(
+  "supabase/migrations/20260818100000_guided_deck_shape_site_geometry.sql",
+  "utf8",
+);
 const route = readFileSync(
   "src/app/api/guided-site-visits/[visitId]/deck-shape-revisions/route.ts",
   "utf8",
@@ -75,4 +79,20 @@ test("mobile shape review saves before structural planning and reload restores i
   assert.match(builder, /setFinalizedDeckShape\(summary\?\.latestApprovedShape \?\? null\)/);
   assert.match(builder, /initialShape=\{finalizedDeckShape\}/);
   assert.match(builder, /finalizedDeckShape \? "structure" : "shape"/);
+});
+
+test("stair placement and four grade heights are immutable shape-revision evidence", () => {
+  assert.match(geometryMigration, /^begin;\n/);
+  assert.match(geometryMigration, /add column stair_placement jsonb/);
+  assert.match(geometryMigration, /add column grade_heights jsonb/);
+  assert.match(geometryMigration, /is_valid_guided_deck_site_geometry/);
+  assert.match(geometryMigration, /stair_offset>=stair_width\/2/);
+  assert.match(geometryMigration, /existing\.stair_placement is not distinct from requested_stair_placement/);
+  assert.match(geometryMigration, /revoke all on function public\.approve_guided_deck_shape_revision\(.+\) from service_role/);
+  assert.match(geometryMigration, /grant execute on function public\.approve_guided_deck_shape_revision_v2/);
+  assert.match(route, /parseStairPlacement/);
+  assert.match(route, /parseGradeHeights/);
+  assert.match(route, /requested_stair_placement: stairPlacement/);
+  assert.match(route, /requested_grade_heights: gradeHeights/);
+  assert.match(estimateVisitRoute, /stair_placement,grade_heights/);
 });

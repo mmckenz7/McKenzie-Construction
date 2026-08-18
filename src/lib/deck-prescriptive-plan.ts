@@ -211,6 +211,72 @@ export function parseDeckPostDistances(
 
 export type DeckOutlinePoint = Readonly<{ x: number; y: number }>;
 
+export type DeckGradeHeights = Readonly<{
+  houseLeftFeet: number;
+  houseRightFeet: number;
+  yardLeftFeet: number;
+  yardRightFeet: number;
+}>;
+
+export type DeckStairPlacement = Readonly<{
+  edgeIndex: number;
+  offsetFeet: number;
+  widthFeet: number;
+  projectionFeet: number;
+}>;
+
+export function steadyGradeHeightAtPoint(
+  point: DeckOutlinePoint,
+  bounds: Readonly<{ minX: number; maxX: number; minY: number; maxY: number }>,
+  heights: DeckGradeHeights,
+) {
+  const width = Math.max(0.01, bounds.maxX - bounds.minX);
+  const depth = Math.max(0.01, bounds.maxY - bounds.minY);
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+  const mean = (
+    heights.houseLeftFeet + heights.houseRightFeet +
+    heights.yardLeftFeet + heights.yardRightFeet
+  ) / 4;
+  const horizontalSlope = (
+    (heights.houseRightFeet + heights.yardRightFeet) / 2 -
+    (heights.houseLeftFeet + heights.yardLeftFeet) / 2
+  ) / width;
+  const awayFromHouseSlope = (
+    (heights.yardLeftFeet + heights.yardRightFeet) / 2 -
+    (heights.houseLeftFeet + heights.houseRightFeet) / 2
+  ) / depth;
+  return Number(Math.max(0, mean + horizontalSlope * (point.x - centerX) + awayFromHouseSlope * (point.y - centerY)).toFixed(3));
+}
+
+export function nearestDeckStairPlacement(
+  outline: readonly DeckOutlinePoint[],
+  candidate: DeckOutlinePoint,
+  widthFeet: number,
+  projectionFeet: number,
+) {
+  const placements = outline.map((start, edgeIndex) => {
+    const end = outline[(edgeIndex + 1) % outline.length];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy);
+    if (length < widthFeet || length < 0.25) return null;
+    const rawOffset = ((candidate.x - start.x) * dx + (candidate.y - start.y) * dy) / length;
+    const offsetFeet = Math.max(widthFeet / 2, Math.min(length - widthFeet / 2, rawOffset));
+    const center = { x: start.x + (dx / length) * offsetFeet, y: start.y + (dy / length) * offsetFeet };
+    return {
+      distance: Math.hypot(candidate.x - center.x, candidate.y - center.y),
+      placement: Object.freeze({
+        edgeIndex,
+        offsetFeet: Number(offsetFeet.toFixed(3)),
+        widthFeet: Number(widthFeet.toFixed(3)),
+        projectionFeet: Number(projectionFeet.toFixed(3)),
+      }),
+    };
+  }).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  return placements.sort((first, second) => first.distance - second.distance)[0]?.placement ?? null;
+}
+
 export function moveDeckOutlineEdge(
   outline: readonly DeckOutlinePoint[],
   edgeIndex: number,
@@ -256,8 +322,8 @@ export function snapDeckOutlinePoint(
   previous: DeckOutlinePoint,
   next: DeckOutlinePoint,
   gridFeet = 0.5,
-  angleToleranceDegrees = 7,
-  gridToleranceFeet = 0.15,
+  angleToleranceDegrees = 10,
+  gridToleranceFeet = 0.2,
 ) {
   const step = Math.max(1 / 12, gridFeet);
   const angleStep = Math.PI / 4;

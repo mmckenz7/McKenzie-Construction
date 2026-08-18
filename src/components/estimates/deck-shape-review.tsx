@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import {
+  deckBlueprintVisitSeed,
   deckFieldDimensions,
   deckRailingGeometry,
   type DeckObservationItem,
@@ -11,8 +12,12 @@ import {
   insertOutlinePointOnNearestEdge,
   isValidDeckOutline,
   moveDeckOutlineEdge,
+  nearestDeckStairPlacement,
   snapDeckOutlinePoint,
+  steadyGradeHeightAtPoint,
+  type DeckGradeHeights,
   type DeckOutlinePoint,
+  type DeckStairPlacement,
 } from "@/lib/deck-prescriptive-plan";
 
 export type FinalizedDeckShape = Readonly<{
@@ -21,6 +26,8 @@ export type FinalizedDeckShape = Readonly<{
   projectKind: "replacement" | "new_construction";
   outline: readonly DeckOutlinePoint[];
   stairsPresent: boolean;
+  stairPlacement: DeckStairPlacement | null;
+  gradeHeights: DeckGradeHeights;
   source: "human_approved_site_shape";
   sourceVisitRevision: number;
   approvedAt: string;
@@ -59,6 +66,7 @@ export function DeckShapeReview({
 }) {
   const dimensions = useMemo(() => deckFieldDimensions(visitItems), [visitItems]);
   const geometry = useMemo(() => deckRailingGeometry(visitItems), [visitItems]);
+  const fieldSeed = useMemo(() => deckBlueprintVisitSeed(visitItems), [visitItems]);
   const length = dimensions.lengthFeet ?? 12;
   const width = dimensions.widthFeet ?? 12;
   const initialOutline = useMemo<DeckOutlinePoint[]>(
@@ -73,11 +81,27 @@ export function DeckShapeReview({
   const [projectKind, setProjectKind] = useState<"replacement" | "new_construction">(initialShape?.projectKind ?? "replacement");
   const [stairsPresent, setStairsPresent] = useState<boolean | null>(initialShape?.stairsPresent ?? geometry.stairsPresent);
   const [outline, setOutline] = useState<DeckOutlinePoint[]>(initialShape ? [...initialShape.outline] : initialOutline);
+  const defaultHeight = fieldSeed.heightFromGradeFeet ?? 8;
+  const [gradeHeights, setGradeHeights] = useState<DeckGradeHeights>(initialShape?.gradeHeights ?? {
+    houseLeftFeet: defaultHeight,
+    houseRightFeet: defaultHeight,
+    yardLeftFeet: defaultHeight,
+    yardRightFeet: defaultHeight,
+  });
+  const [stairPlacement, setStairPlacement] = useState<DeckStairPlacement | null>(() =>
+    initialShape?.stairPlacement ?? nearestDeckStairPlacement(
+      initialShape?.outline ?? initialOutline,
+      { x: length / 2, y: width },
+      geometry.stairWidthFeet ?? 4,
+      3,
+    ),
+  );
   const [shapeRevision, setShapeRevision] = useState(initialShape?.shapeRevision ?? 0);
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragEdgeIndex, setDragEdgeIndex] = useState<number | null>(null);
+  const [draggingStairs, setDraggingStairs] = useState(false);
   const [addPointMode, setAddPointMode] = useState(false);
   const [snapMode, setSnapMode] = useState<"smart" | "free">("smart");
   const [selectedEdge, setSelectedEdge] = useState<number | null>(null);
@@ -94,17 +118,47 @@ export function DeckShapeReview({
   const descriptionId = useId();
   const maxX = Math.max(...outline.map((point) => point.x), length * 1.25, 1);
   const maxY = Math.max(...outline.map((point) => point.y), width * 1.25, 1);
+  const outlineBounds = useMemo(() => ({
+    minX: Math.min(...outline.map((point) => point.x)),
+    maxX: Math.max(...outline.map((point) => point.x)),
+    minY: Math.min(...outline.map((point) => point.y)),
+    maxY: Math.max(...outline.map((point) => point.y)),
+  }), [outline]);
   const drawingScale = Math.min(264 / maxX, 154 / maxY);
   const drawingOriginX = 28 + (264 - maxX * drawingScale) / 2;
   const drawingOriginY = 28 + (154 - maxY * drawingScale) / 2;
-  const toSvg = (point: DeckOutlinePoint) => ({
+  const toSvg = useCallback((point: DeckOutlinePoint) => ({
     x: drawingOriginX + point.x * drawingScale,
     y: drawingOriginY + point.y * drawingScale,
-  });
+  }), [drawingOriginX, drawingOriginY, drawingScale]);
   const points = outline.map(toSvg);
   const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
   const gridX = Array.from({ length: Math.floor(maxX * 2) + 1 }, (_, index) => index / 2);
   const gridY = Array.from({ length: Math.floor(maxY * 2) + 1 }, (_, index) => index / 2);
+  const stairGeometry = useMemo(() => {
+    if (!stairsPresent || !stairPlacement || stairPlacement.edgeIndex >= outline.length) return null;
+    const start = outline[stairPlacement.edgeIndex];
+    const end = outline[(stairPlacement.edgeIndex + 1) % outline.length];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const edgeSize = Math.hypot(dx, dy);
+    if (edgeSize < stairPlacement.widthFeet) return null;
+    const tangent = { x: dx / edgeSize, y: dy / edgeSize };
+    const outward = { x: dy / edgeSize, y: -dx / edgeSize };
+    const center = {
+      x: start.x + tangent.x * stairPlacement.offsetFeet,
+      y: start.y + tangent.y * stairPlacement.offsetFeet,
+    };
+    const nearStart = { x: center.x - tangent.x * stairPlacement.widthFeet / 2, y: center.y - tangent.y * stairPlacement.widthFeet / 2 };
+    const nearEnd = { x: center.x + tangent.x * stairPlacement.widthFeet / 2, y: center.y + tangent.y * stairPlacement.widthFeet / 2 };
+    const farStart = { x: nearStart.x + outward.x * stairPlacement.projectionFeet, y: nearStart.y + outward.y * stairPlacement.projectionFeet };
+    const farEnd = { x: nearEnd.x + outward.x * stairPlacement.projectionFeet, y: nearEnd.y + outward.y * stairPlacement.projectionFeet };
+    return {
+      center,
+      points: [nearStart, nearEnd, farEnd, farStart].map(toSvg),
+      riseFeet: steadyGradeHeightAtPoint(center, outlineBounds, gradeHeights),
+    };
+  }, [gradeHeights, outline, outlineBounds, stairPlacement, stairsPresent, toSvg]);
 
   async function loadPhotoSuggestion() {
     if (suggesting || initialShape || projectKind !== "replacement") return;
@@ -126,7 +180,16 @@ export function DeckShapeReview({
       };
       if (!response.ok || !body.success || !body.outline || !isValidDeckOutline(body.outline))
         throw new Error(body.error || "The starting shape could not be prepared.");
-      setOutline([...body.outline]);
+      const suggestedOutline = [...body.outline];
+      setOutline(suggestedOutline);
+      if (stairsPresent) {
+        setStairPlacement(nearestDeckStairPlacement(
+          suggestedOutline,
+          { x: length / 2, y: width },
+          stairPlacement?.widthFeet ?? geometry.stairWidthFeet ?? 4,
+          stairPlacement?.projectionFeet ?? 3,
+        ));
+      }
       setSelectedEdge(null);
       setFeedback(`${body.usedAi ? `AI used ${body.photoCount ?? 0} saved photos for the general shape. ` : ""}${body.explanation ?? "Review every corner and measurement before saving."}`);
     } catch (error) {
@@ -144,6 +207,29 @@ export function DeckShapeReview({
     // The first replacement visit gets one automatic suggestion. Manual retry remains available.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialShape, projectKind, visitId]);
+
+  useEffect(() => {
+    if (!stairsPresent || !stairPlacement || stairPlacement.edgeIndex >= outline.length) return;
+    const start = outline[stairPlacement.edgeIndex];
+    const end = outline[(stairPlacement.edgeIndex + 1) % outline.length];
+    const edgeSize = edgeLength(start, end);
+    if (edgeSize < stairPlacement.widthFeet) {
+      const replacement = nearestDeckStairPlacement(
+        outline,
+        { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 },
+        stairPlacement.widthFeet,
+        stairPlacement.projectionFeet,
+      );
+      if (replacement) setStairPlacement(replacement);
+      return;
+    }
+    const offsetFeet = Math.max(
+      stairPlacement.widthFeet / 2,
+      Math.min(edgeSize - stairPlacement.widthFeet / 2, stairPlacement.offsetFeet),
+    );
+    if (Math.abs(offsetFeet - stairPlacement.offsetFeet) > 0.0001)
+      setStairPlacement((current) => current ? { ...current, offsetFeet: Number(offsetFeet.toFixed(3)) } : current);
+  }, [outline, stairPlacement, stairsPresent]);
 
   function clientPoint(event: Pick<ReactPointerEvent<SVGElement>, "clientX" | "clientY">) {
     const bounds = svgRef.current?.getBoundingClientRect();
@@ -180,6 +266,13 @@ export function DeckShapeReview({
   }
 
   function movePoint(event: ReactPointerEvent<SVGSVGElement>) {
+    if (draggingStairs && stairsPresent && stairPlacement) {
+      const candidate = clientPoint(event);
+      if (!candidate) return;
+      const next = nearestDeckStairPlacement(outline, candidate, stairPlacement.widthFeet, stairPlacement.projectionFeet);
+      if (next) setStairPlacement(next);
+      return;
+    }
     if (moveWall(event)) return;
     if (dragIndex === null || addPointMode) return;
     const candidate = clientPoint(event);
@@ -212,6 +305,41 @@ export function DeckShapeReview({
     }
     setOutline([...next]);
     setFeedback(`Corner added. ${snapMode === "smart" ? "Move it freely; it will snap only when it gets close to the grid or a 45°/90° line." : "Snap is off."}`);
+  }
+
+  function beginCanvasInteraction(event: ReactPointerEvent<SVGSVGElement>) {
+    if (addPointMode) {
+      addPoint(event);
+      return;
+    }
+    const candidate = clientPoint(event);
+    if (!candidate) return;
+    const nearest = outline
+      .map((point, index) => ({ index, distance: Math.hypot(point.x - candidate.x, point.y - candidate.y) }))
+      .sort((first, second) => first.distance - second.distance)[0];
+    if (!nearest || nearest.distance > 24 / drawingScale) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    edgeDragRef.current = null;
+    setDragEdgeIndex(null);
+    setDragIndex(nearest.index);
+    setFeedback(`Moving corner ${nearest.index + 1}. The nearest corner was selected.`);
+  }
+
+  function edgeName(index: number) {
+    if (outline.length === 4) return ["House wall", "Right side", "Yard side", "Left side"][index] ?? `Wall ${index + 1}`;
+    return `Wall ${String.fromCharCode(65 + index)}`;
+  }
+
+  function selectExactEdge(index: number) {
+    setSelectedEdge(index);
+    setEdgeDraft(edgeLength(outline[index], outline[(index + 1) % outline.length]).toFixed(2));
+    setFeedback(`${edgeName(index)} selected. Enter its exact length below the drawing.`);
+  }
+
+  function updateGradeHeight(key: keyof DeckGradeHeights, raw: string) {
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 50) return;
+    setGradeHeights((current) => ({ ...current, [key]: value }));
   }
 
   function applyEdgeLength() {
@@ -255,6 +383,8 @@ export function DeckShapeReview({
           projectKind,
           outline,
           stairsPresent,
+          stairPlacement: stairsPresent ? stairPlacement : null,
+          gradeHeights,
         }),
       });
       const body = await response.json() as {
@@ -263,6 +393,8 @@ export function DeckShapeReview({
         shapeRevisionId?: string;
         shapeRevision?: number;
         outline?: DeckOutlinePoint[];
+        stairPlacement?: DeckStairPlacement | null;
+        gradeHeights?: DeckGradeHeights;
       };
       if (!response.ok || !body.success || !body.shapeRevisionId || !Number.isSafeInteger(body.shapeRevision))
         throw new Error(body.error || "The Deck shape could not be saved.");
@@ -272,6 +404,8 @@ export function DeckShapeReview({
         projectKind,
         outline: body.outline ?? outline,
         stairsPresent,
+        stairPlacement: body.stairPlacement ?? (stairsPresent ? stairPlacement : null),
+        gradeHeights: body.gradeHeights ?? gradeHeights,
         source: "human_approved_site_shape",
         sourceVisitRevision: visitRevision,
         approvedAt: new Date().toISOString(),
@@ -295,7 +429,12 @@ export function DeckShapeReview({
       <legend className="text-sm font-black text-slate-950">Project type</legend>
       <div className="mt-2 grid grid-cols-2 gap-2">
         <button type="button" aria-pressed={projectKind === "replacement"} className={projectKind === "replacement" ? primary : secondary} onClick={() => setProjectKind("replacement")}>Replacement</button>
-        <button type="button" aria-pressed={projectKind === "new_construction"} className={projectKind === "new_construction" ? primary : secondary} onClick={() => { setProjectKind("new_construction"); setOutline(initialOutline); setFeedback("New construction starts from the field-entered dimensions. Existing photos remain site context only."); }}>New deck</button>
+        <button type="button" aria-pressed={projectKind === "new_construction"} className={projectKind === "new_construction" ? primary : secondary} onClick={() => {
+          setProjectKind("new_construction");
+          setOutline(initialOutline);
+          setStairPlacement(nearestDeckStairPlacement(initialOutline, { x: length / 2, y: width }, geometry.stairWidthFeet ?? 4, 3));
+          setFeedback("New construction starts from the field-entered dimensions. Existing photos remain site context only.");
+        }}>New deck</button>
       </div>
     </fieldset>
 
@@ -313,12 +452,12 @@ export function DeckShapeReview({
         aria-labelledby={`${titleId} ${descriptionId}`}
         className="block w-full touch-none rounded-lg bg-white"
         onPointerMove={movePoint}
-        onPointerUp={() => { setDragIndex(null); setDragEdgeIndex(null); edgeDragRef.current = null; }}
-        onPointerCancel={() => { setDragIndex(null); setDragEdgeIndex(null); edgeDragRef.current = null; }}
-        onPointerDown={addPoint}
+        onPointerUp={() => { setDragIndex(null); setDragEdgeIndex(null); setDraggingStairs(false); edgeDragRef.current = null; }}
+        onPointerCancel={() => { setDragIndex(null); setDragEdgeIndex(null); setDraggingStairs(false); edgeDragRef.current = null; }}
+        onPointerDown={beginCanvasInteraction}
       >
         <title id={titleId}>Editable bird&apos;s-eye deck outline</title>
-        <desc id={descriptionId}>A top view of the proposed deck footprint with a six-inch grid, draggable corner points, measured edges, and default 45-degree and 90-degree snapping.</desc>
+        <desc id={descriptionId}>A top view of the proposed deck footprint with a six-inch grid, nearest-corner dragging, whole-wall sliders, editable measured walls, movable stairs, and four grade-height indicators.</desc>
         <rect x="0" y="0" width="320" height="210" fill="#f8fafc" />
         {gridX.map((value) => {
           const x = toSvg({ x: value, y: 0 }).x;
@@ -340,7 +479,17 @@ export function DeckShapeReview({
           const normal = { x: -(end.y - start.y) / svgEdgeSize, y: (end.x - start.x) / svgEdgeSize };
           const slider = { x: midpoint.x + normal.x * 10, y: midpoint.y + normal.y * 10 };
           return <g key={`edge-${index}`}>
-            <text x={midpoint.x} y={midpoint.y - 7} textAnchor="middle" fontSize="10" fontWeight="900" fill="#0f172a" stroke="white" strokeWidth="3" paintOrder="stroke">{edgeLength(point, outline[(index + 1) % outline.length]).toFixed(1)} ft</text>
+            <g
+              role="button"
+              tabIndex={0}
+              aria-label={`Edit ${edgeName(index)}, currently ${edgeLength(point, outline[(index + 1) % outline.length]).toFixed(1)} feet`}
+              onPointerDown={(event) => { event.stopPropagation(); selectExactEdge(index); }}
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectExactEdge(index); } }}
+            >
+              <rect x={midpoint.x - 34} y={midpoint.y - 18} width="68" height="18" rx="5" fill="white" stroke="#0f172a" strokeWidth="1.5" />
+              <text x={midpoint.x} y={midpoint.y - 10} textAnchor="middle" fontSize="7" fontWeight="800" fill="#334155">{edgeName(index)}</text>
+              <text x={midpoint.x} y={midpoint.y - 3} textAnchor="middle" fontSize="8" fontWeight="950" fill="#020617">{edgeLength(point, outline[(index + 1) % outline.length]).toFixed(1)} ft · tap</text>
+            </g>
             <circle
               cx={slider.x}
               cy={slider.y}
@@ -383,25 +532,43 @@ export function DeckShapeReview({
             />
           </g>;
         })}
-        {points.map((point, index) => <g key={`point-${index}`}>
-          <circle
-            cx={point.x}
-            cy={point.y}
-            r="22"
-            fill="transparent"
-            onPointerDown={(event) => {
-              if (addPointMode) return;
-              event.stopPropagation();
-              event.currentTarget.setPointerCapture(event.pointerId);
-              edgeDragRef.current = null;
-              setDragEdgeIndex(null);
-              setDragIndex(index);
-              setFeedback(`Moving corner ${index + 1}.`);
-            }}
-          />
-          <circle cx={point.x} cy={point.y} r="3.5" fill="#ea580c" stroke="#7c2d12" strokeWidth="1" pointerEvents="none" />
+        {points.map((point, index) => <g key={`point-${index}`} pointerEvents="none">
+          <circle cx={point.x} cy={point.y} r="6" fill="white" stroke="#0f172a" strokeWidth="1.5" />
+          <circle cx={point.x} cy={point.y} r="3" fill="#f97316" stroke="#7c2d12" strokeWidth="1" />
         </g>)}
-        {stairsPresent ? <g aria-label="Stairs are present"><rect x="130" y="181" width="60" height="22" fill="#fef3c7" stroke="#92400e" strokeWidth="2" /><text x="160" y="196" textAnchor="middle" fontSize="10" fontWeight="900" fill="#78350f">STAIRS</text></g> : null}
+        {stairGeometry ? <g
+          aria-label={`Movable stairs; estimated height ${stairGeometry.riseFeet.toFixed(1)} feet`}
+          role="slider"
+          tabIndex={0}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setDraggingStairs(true);
+            setDragIndex(null);
+            setDragEdgeIndex(null);
+            setFeedback("Moving stairs. Drag them to any outside deck wall.");
+          }}
+        >
+          <polygon points={stairGeometry.points.map((point) => `${point.x},${point.y}`).join(" ")} fill="#fde68a" stroke="#78350f" strokeWidth="3" />
+          <text x={toSvg(stairGeometry.center).x} y={toSvg(stairGeometry.center).y + 4} textAnchor="middle" fontSize="8" fontWeight="950" fill="#451a03">STAIRS · {stairGeometry.riseFeet.toFixed(1)} ft</text>
+        </g> : null}
+        {([
+          ["HL", { x: outlineBounds.minX, y: outlineBounds.minY }, gradeHeights.houseLeftFeet],
+          ["HR", { x: outlineBounds.maxX, y: outlineBounds.minY }, gradeHeights.houseRightFeet],
+          ["YL", { x: outlineBounds.minX, y: outlineBounds.maxY }, gradeHeights.yardLeftFeet],
+          ["YR", { x: outlineBounds.maxX, y: outlineBounds.maxY }, gradeHeights.yardRightFeet],
+        ] as const).map(([label, point, height]) => {
+          const base = toSvg(point);
+          const marker = {
+            x: base.x + (label.endsWith("L") ? -11 : 11),
+            y: base.y + (label.startsWith("H") ? -11 : 11),
+          };
+          return <g key={`height-${label}`} pointerEvents="none">
+            <circle cx={marker.x} cy={marker.y} r="8" fill="#0f172a" stroke="white" strokeWidth="2" />
+            <text x={marker.x} y={marker.y + 2.5} textAnchor="middle" fontSize="5.5" fontWeight="950" fill="white">{label}</text>
+            <text x={marker.x} y={marker.y + (label.startsWith("H") ? -11 : 16)} textAnchor="middle" fontSize="7" fontWeight="950" fill="#020617" stroke="white" strokeWidth="3" paintOrder="stroke">{height.toFixed(1)} ft</text>
+          </g>;
+        })}
       </svg>
     </div>
 
@@ -418,14 +585,22 @@ export function DeckShapeReview({
 
     <div className="mt-3 grid grid-cols-2 gap-2">
       <button type="button" className={addPointMode ? primary : secondary} aria-pressed={addPointMode} onClick={() => { setAddPointMode((current) => !current); setFeedback(addPointMode ? "Corner adding turned off." : "Tap an outside edge to add a bump-in or bump-out corner."); }}>{addPointMode ? "Done adding points" : "Add a corner"}</button>
-      <button type="button" className={secondary} onClick={() => { setOutline(initialOutline); setSelectedEdge(null); setFeedback("Starting rectangle restored from field measurements."); }}>Reset outline</button>
+      <button type="button" className={secondary} onClick={() => {
+        setOutline(initialOutline);
+        setStairPlacement(nearestDeckStairPlacement(initialOutline, { x: length / 2, y: width }, geometry.stairWidthFeet ?? 4, 3));
+        setSelectedEdge(null);
+        setFeedback("Starting rectangle restored from field measurements.");
+      }}>Reset outline</button>
     </div>
 
-    <details className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3">
-      <summary className="min-h-11 cursor-pointer py-2 font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Enter an exact edge measurement</summary>
+    <details open={selectedEdge !== null} className="mt-3 rounded-lg border-2 border-blue-400 bg-blue-50 p-3">
+      <summary className="min-h-11 cursor-pointer py-2 font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Edit an exact wall measurement</summary>
       <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-        <label className="text-sm font-bold text-slate-900">Edge<select className="mt-1 min-h-12 w-full rounded-lg border border-slate-400 bg-white px-3" value={selectedEdge ?? ""} onChange={(event) => { const index = Number(event.target.value); setSelectedEdge(index); setEdgeDraft(edgeLength(outline[index], outline[(index + 1) % outline.length]).toFixed(2)); }}><option value="">Choose edge</option>{outline.map((_, index) => <option key={index} value={index}>Edge {index + 1}</option>)}</select></label>
-        <label className="text-sm font-bold text-slate-900">Length in feet<input className="mt-1 min-h-12 w-full rounded-lg border border-slate-400 bg-white px-3" inputMode="decimal" value={edgeDraft} onChange={(event) => setEdgeDraft(event.target.value)} /></label>
+        <label className="text-sm font-bold text-slate-900">Wall<select className="mt-1 min-h-12 w-full rounded-lg border border-slate-400 bg-white px-3" value={selectedEdge ?? ""} onChange={(event) => {
+          if (!event.target.value) { setSelectedEdge(null); setEdgeDraft(""); return; }
+          selectExactEdge(Number(event.target.value));
+        }}><option value="">Tap a wall above or choose one</option>{outline.map((_, index) => <option key={index} value={index}>{edgeName(index)}</option>)}</select></label>
+        <label className="text-sm font-bold text-slate-900">Exact wall length (ft)<input className="mt-1 min-h-12 w-full rounded-lg border border-slate-400 bg-white px-3" inputMode="decimal" value={edgeDraft} onFocus={(event) => event.currentTarget.select()} onChange={(event) => setEdgeDraft(event.target.value)} /></label>
         <button type="button" className={`${primary} self-end`} disabled={selectedEdge === null} onClick={applyEdgeLength}>Apply</button>
       </div>
     </details>
@@ -433,9 +608,51 @@ export function DeckShapeReview({
     <fieldset className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3">
       <legend className="px-1 text-sm font-black text-slate-950">Does this deck have stairs?</legend>
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <button type="button" className={stairsPresent === true ? primary : secondary} aria-pressed={stairsPresent === true} onClick={() => setStairsPresent(true)}>Yes, stairs</button>
+        <button type="button" className={stairsPresent === true ? primary : secondary} aria-pressed={stairsPresent === true} onClick={() => {
+          setStairsPresent(true);
+          if (!stairPlacement) setStairPlacement(nearestDeckStairPlacement(outline, { x: length / 2, y: width }, geometry.stairWidthFeet ?? 4, 3));
+        }}>Yes, stairs</button>
         <button type="button" className={stairsPresent === false ? primary : secondary} aria-pressed={stairsPresent === false} onClick={() => setStairsPresent(false)}>No stairs</button>
       </div>
+      {stairsPresent && stairPlacement ? <div className="mt-3 grid gap-2 rounded-lg border border-amber-400 bg-amber-50 p-3 sm:grid-cols-3">
+        <label className="text-sm font-bold text-slate-950">Stair wall<select className="mt-1 min-h-12 w-full rounded-lg border border-slate-400 bg-white px-3" value={stairPlacement.edgeIndex} onChange={(event) => {
+          const edgeIndex = Number(event.target.value);
+          const candidate = nearestDeckStairPlacement(outline, {
+            x: (outline[edgeIndex].x + outline[(edgeIndex + 1) % outline.length].x) / 2,
+            y: (outline[edgeIndex].y + outline[(edgeIndex + 1) % outline.length].y) / 2,
+          }, stairPlacement.widthFeet, stairPlacement.projectionFeet);
+          if (candidate) setStairPlacement(candidate);
+        }}>{outline.map((_, index) => <option key={index} value={index}>{edgeName(index)}</option>)}</select></label>
+        <label className="text-sm font-bold text-slate-950">Stair width (ft)<input className="mt-1 min-h-12 w-full rounded-lg border border-slate-400 bg-white px-3" inputMode="decimal" value={stairPlacement.widthFeet} onFocus={(event) => event.currentTarget.select()} onChange={(event) => {
+          const widthFeet = Number(event.target.value);
+          if (!Number.isFinite(widthFeet) || widthFeet < 2 || widthFeet > 12) return;
+          const candidate = nearestDeckStairPlacement(outline, stairGeometry?.center ?? outline[0], widthFeet, stairPlacement.projectionFeet);
+          if (candidate) setStairPlacement(candidate);
+        }} /></label>
+        <label className="text-sm font-bold text-slate-950">Distance from wall start (ft)<input className="mt-1 min-h-12 w-full rounded-lg border border-slate-400 bg-white px-3" inputMode="decimal" value={stairPlacement.offsetFeet} onFocus={(event) => event.currentTarget.select()} onChange={(event) => {
+          const offsetFeet = Number(event.target.value);
+          if (!Number.isFinite(offsetFeet)) return;
+          const start = outline[stairPlacement.edgeIndex];
+          const end = outline[(stairPlacement.edgeIndex + 1) % outline.length];
+          const edgeSize = edgeLength(start, end);
+          setStairPlacement((current) => current ? { ...current, offsetFeet: Math.max(current.widthFeet / 2, Math.min(edgeSize - current.widthFeet / 2, offsetFeet)) } : current);
+        }} /></label>
+        <p className="sm:col-span-3 text-sm font-bold text-amber-950">Drag the stair box on the drawing or enter its wall, width, and position here. Estimated stair height: {stairGeometry?.riseFeet.toFixed(2) ?? "—"} ft.</p>
+      </div> : null}
+    </fieldset>
+
+    <fieldset className="mt-3 rounded-lg border-2 border-emerald-500 bg-emerald-50 p-3">
+      <legend className="px-1 text-sm font-black text-emerald-950">Deck height above grade</legend>
+      <p className="mt-1 text-sm leading-6 text-emerald-950">Enter the four deck-to-ground heights. The drawing assumes one steady grade plane between them and estimates the stair height at its location.</p>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        {([
+          ["houseLeftFeet", "House · left"],
+          ["houseRightFeet", "House · right"],
+          ["yardLeftFeet", "Off house · left"],
+          ["yardRightFeet", "Off house · right"],
+        ] as const).map(([key, label]) => <label key={key} className="text-sm font-bold text-slate-950">{label} (ft)<input className="mt-1 min-h-12 w-full rounded-lg border-2 border-emerald-700 bg-white px-3 text-base font-black" inputMode="decimal" value={gradeHeights[key]} onFocus={(event) => event.currentTarget.select()} onChange={(event) => updateGradeHeight(key, event.target.value)} /></label>)}
+      </div>
+      <p className="mt-3 rounded-lg bg-white p-3 text-xs font-bold leading-5 text-slate-800">Estimating assumption only: the ground is treated as a steady plane between HL, HR, YL, and YR. Confirm unusual dips, humps, or landings separately.</p>
     </fieldset>
 
     <div className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">
@@ -444,6 +661,6 @@ export function DeckShapeReview({
       <div className="rounded-lg bg-slate-100 p-2"><strong className="block text-slate-950">{stairsPresent === null ? "Choose" : stairsPresent ? "Yes" : "No"}</strong><span className="text-slate-600">stairs</span></div>
     </div>
     <p role="status" aria-live="polite" className="mt-3 rounded-lg bg-blue-50 p-3 text-sm font-bold text-blue-950">{feedback}</p>
-    <button type="button" className={`mt-4 w-full ${primary}`} disabled={disabled || saving || !isValidDeckOutline(outline) || stairsPresent === null} onClick={() => void approveShape()}>{saving ? "Saving approved shape…" : "Save this shape — continue to structure"}</button>
+    <button type="button" className={`mt-4 w-full ${primary}`} disabled={disabled || saving || !isValidDeckOutline(outline) || stairsPresent === null || (stairsPresent && !stairGeometry)} onClick={() => void approveShape()}>{saving ? "Saving approved shape…" : "Save this shape — continue to structure"}</button>
   </section>;
 }

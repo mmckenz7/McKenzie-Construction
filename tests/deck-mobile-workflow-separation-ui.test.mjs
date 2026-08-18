@@ -21,7 +21,7 @@ test("shape review contains footprint decisions but no structural or pricing wor
   assert.match(shape, /Replacement/);
   assert.match(shape, /New deck/);
   assert.match(shape, /Add a corner/);
-  assert.match(shape, /Enter an exact edge measurement/);
+  assert.match(shape, /Edit an exact wall measurement/);
   assert.match(shape, /Smart snap/);
   assert.match(shape, /Snap off/);
   assert.match(shape, /becomes magnetic only near a grid line/);
@@ -34,10 +34,31 @@ test("shape review contains footprint decisions but no structural or pricing wor
 test("shape grid stays visible while corner dots stay small without shrinking touch targets", () => {
   assert.match(shape, /fillOpacity="0\.58"/);
   assert.match(shape, /stroke=\{major \? "#64748b" : "#94a3b8"\}/);
-  assert.match(shape, /r="3\.5" fill="#ea580c"/);
-  assert.match(shape, /r="22"\s+fill="transparent"/);
+  assert.match(shape, /r="6" fill="white" stroke="#0f172a"/);
+  assert.match(shape, /The nearest corner was selected/);
   assert.match(shape, /x1="16" y1=\{y\} x2="304"/);
   assert.match(shape, /y1="24" x2=\{x\} y2="198"/);
+});
+
+test("stairs and four grade heights are editable in the shape drawing", () => {
+  assert.match(shape, /Moving stairs\. Drag them to any outside deck wall/);
+  assert.match(shape, /Stair wall/);
+  assert.match(shape, /Stair width \(ft\)/);
+  assert.match(shape, /House · left/);
+  assert.match(shape, /Off house · right/);
+  assert.match(shape, /one steady grade plane/);
+  assert.match(shape, /Estimated stair height/);
+  assert.match(shape, /stairPlacement: stairsPresent \? stairPlacement : null/);
+  assert.match(shape, /gradeHeights/);
+});
+
+test("wall labels open their exact measurement instead of exposing numbered edges only", () => {
+  assert.match(shape, /House wall/);
+  assert.match(shape, /Right side/);
+  assert.match(shape, /Yard side/);
+  assert.match(shape, /Left side/);
+  assert.match(shape, /Edit \$\{edgeName\(index\)\}, currently/);
+  assert.match(shape, /Enter its exact length below the drawing/);
 });
 
 test("wall sliders move both edge corners while retaining mobile-sized invisible targets", () => {

@@ -15,6 +15,8 @@ import {
   recommendedPrescriptiveDraft,
   snapDeckOutlinePoint,
   moveDeckOutlineEdge,
+  nearestDeckStairPlacement,
+  steadyGradeHeightAtPoint,
 } from "../src/lib/deck-prescriptive-plan.ts";
 import {
   buildDeckTakeoffPreview,
@@ -386,11 +388,11 @@ test("shape editor uses magnetic angle and grid snapping without locking freehan
   );
   assert.deepEqual(
     snapDeckOutlinePoint(
-      { x: 4.2, y: 1.7 },
+      { x: 4.24, y: 1.74 },
       { x: 0, y: 0 },
       { x: 10, y: 0 },
     ),
-    { x: 4.2, y: 1.7 },
+    { x: 4.24, y: 1.74 },
   );
   const gridOnly = snapDeckOutlinePoint(
     { x: 4.42, y: 1.62 },
@@ -398,6 +400,30 @@ test("shape editor uses magnetic angle and grid snapping without locking freehan
     { x: 10, y: 10 },
   );
   assert.deepEqual(gridOnly, { x: 4.5, y: 1.5 });
+});
+
+test("stairs attach to the nearest wall and steady grade estimates their local height", () => {
+  const rectangle = [
+    { x: 0, y: 0 },
+    { x: 14, y: 0 },
+    { x: 14, y: 12 },
+    { x: 0, y: 12 },
+  ];
+  assert.deepEqual(nearestDeckStairPlacement(rectangle, { x: 13.8, y: 8 }, 4, 3), {
+    edgeIndex: 1,
+    offsetFeet: 8,
+    widthFeet: 4,
+    projectionFeet: 3,
+  });
+  const heights = {
+    houseLeftFeet: 8,
+    houseRightFeet: 10,
+    yardLeftFeet: 10,
+    yardRightFeet: 12,
+  };
+  assert.equal(steadyGradeHeightAtPoint({ x: 0, y: 0 }, { minX: 0, maxX: 14, minY: 0, maxY: 12 }, heights), 8);
+  assert.equal(steadyGradeHeightAtPoint({ x: 14, y: 12 }, { minX: 0, maxX: 14, minY: 0, maxY: 12 }, heights), 12);
+  assert.equal(steadyGradeHeightAtPoint({ x: 7, y: 6 }, { minX: 0, maxX: 14, minY: 0, maxY: 12 }, heights), 10);
 });
 
 test("moving a wall translates both edge corners and updates its adjoining measurements", () => {

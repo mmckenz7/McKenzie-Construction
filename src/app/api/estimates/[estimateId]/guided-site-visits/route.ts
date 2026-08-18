@@ -63,7 +63,7 @@ export async function GET(
         .order("ordinal", { ascending: true }),
       db
         .from("guided_deck_shape_revisions")
-        .select("id,shape_revision,project_kind,outline,stairs_present,source,source_visit_revision,approved_at")
+        .select("id,shape_revision,project_kind,outline,stairs_present,stair_placement,grade_heights,source,source_visit_revision,approved_at")
         .eq("company_id", auth.authorization!.companyId)
         .eq("visit_id", selectedVisit.id)
         .order("shape_revision", { ascending: false })
@@ -93,6 +93,8 @@ export async function GET(
             projectKind: shape.data.project_kind,
             outline: shape.data.outline,
             stairsPresent: shape.data.stairs_present,
+            stairPlacement: shape.data.stair_placement,
+            gradeHeights: shape.data.grade_heights,
             source: shape.data.source,
             sourceVisitRevision: shape.data.source_visit_revision,
             approvedAt: shape.data.approved_at,
