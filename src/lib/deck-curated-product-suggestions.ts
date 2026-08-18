@@ -34,7 +34,7 @@ export type CuratedDeckPrice = Readonly<{
   suppliers: { name?: string | null } | null;
 }>;
 
-type FinishRequest = Readonly<{
+export type DeckFinishRequest = Readonly<{
   deckingFamily: "wood" | "composite";
   compositeColor: "brown" | "gray" | "cedar" | "redwood" | "coastal" | null;
   railingFamily: "wood" | "metal" | "cable" | "none";
@@ -85,7 +85,7 @@ function productKind(material: CuratedDeckMaterial) {
   return null;
 }
 
-function finishMatches(material: CuratedDeckMaterial, kind: DeckLowesSuggestion["kind"], request: FinishRequest) {
+function finishMatches(material: CuratedDeckMaterial, kind: DeckLowesSuggestion["kind"], request: DeckFinishRequest) {
   const haystack = `${material.category ?? ""} ${material.description} ${material.brand ?? ""} ${material.product_line ?? ""}`.toLowerCase();
   const explicitDecking = text(material.metadata?.decking_family);
   const explicitRailing = text(material.metadata?.railing_family);
@@ -126,7 +126,7 @@ function priceBasis(price: CuratedDeckPrice, now: number): DeckEstimatingPriceBa
 export function selectCuratedDeckProducts(args: Readonly<{
   materials: readonly CuratedDeckMaterial[];
   prices: readonly CuratedDeckPrice[];
-  request: FinishRequest;
+  request: DeckFinishRequest;
   now?: number;
 }>) {
   const now = args.now ?? Date.now();
@@ -153,13 +153,18 @@ export function selectCuratedDeckProducts(args: Readonly<{
       material.metadata?.product_url ?? material.metadata?.source_url,
     );
     const catalogCost = Number(material.unit_cost);
-    if (!selected && !(catalogUrl && Number.isFinite(catalogCost) && catalogCost > 0)) continue;
+    if (!selected && !catalogUrl) continue;
     const manufacturedRailing = kind.startsWith("railing_") && ["metal", "cable"].includes(args.request.railingFamily);
     if (manufacturedRailing && (!material.brand?.trim() || !material.product_line?.trim())) continue;
     candidates.push({
       kind,
       description: material.description.slice(0, 240),
-      unitCost: selected ? Number(selected.unit_cost) : catalogCost,
+      unitCost:
+        selected
+          ? Number(selected.unit_cost)
+          : Number.isFinite(catalogCost) && catalogCost > 0
+            ? catalogCost
+            : null,
       sourceUrl: selected ? exactLowesProductUrl(selected.source_reference)! : catalogUrl!,
       stockLengthFeet: productLengthFeet(material.description),
       coverageSquareFeetPerPack: null,
@@ -167,7 +172,11 @@ export function selectCuratedDeckProducts(args: Readonly<{
       productLine: material.product_line?.trim() || null,
       reason: "Approved estimating product from the McKenzie material catalog.",
       catalogMaterialId: material.id,
-      priceBasis: selected ? priceBasis(selected, now) : "catalog_estimate",
+      priceBasis: selected
+        ? priceBasis(selected, now)
+        : Number.isFinite(catalogCost) && catalogCost > 0
+          ? "catalog_estimate"
+          : "unpriced",
       priceCheckedAt: selected?.last_checked_at ?? null,
     });
   }
@@ -201,14 +210,13 @@ export function mergeDeckProductSuggestions(
   const limits: Record<DeckLowesSuggestion["kind"], number> = { deck_board: 3, deck_fastener: 1, railing_section: 3, railing_level_kit: 1, railing_level_post: 1, railing_stair_kit: 1, railing_stair_lower_post: 1, railing_cable_pack: 1, railing_cable_end_post: 1 };
   const merged: DeckProductSuggestion[] = [];
   for (const kind of ["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"] as const) {
-    const seen = new Set<string>();
+    const byUrl = new Map<string, DeckProductSuggestion>();
     for (const item of [...curated, ...live].filter((candidate) => candidate.kind === kind)) {
       const key = item.sourceUrl.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(item);
-      if (merged.filter((candidate) => candidate.kind === kind).length >= limits[kind]) break;
+      const existing = byUrl.get(key);
+      if (!existing || (!existing.unitCost && item.unitCost)) byUrl.set(key, item);
     }
+    merged.push(...[...byUrl.values()].slice(0, limits[kind]));
   }
   return merged;
 }

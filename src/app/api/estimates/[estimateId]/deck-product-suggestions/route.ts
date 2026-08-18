@@ -11,7 +11,8 @@ import {
   type CuratedDeckMaterial,
   type CuratedDeckPrice,
 } from "@/lib/deck-curated-product-suggestions";
-import { deckFieldDimensions, deckRailingGeometry, type DeckObservationItem } from "@/lib/deck-takeoff-v0";
+import { deckEstimatingProductDefaults } from "@/lib/deck-estimating-product-defaults";
+import { deckBlueprintVisitSeed, deckFieldDimensions, deckRailingGeometry, type DeckObservationItem } from "@/lib/deck-takeoff-v0";
 import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimate-access";
 import { UUID_PATTERN } from "@/lib/estimate-mutations";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -102,6 +103,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
       prices: (priceResult.data ?? []) as unknown as CuratedDeckPrice[],
       request: requestFinish,
     });
+    const joistSpacing = deckBlueprintVisitSeed(items).supportedJoistSpacingInches;
+    const woodScrewCoverageSquareFeetPerPack = joistSpacing
+      ? Math.floor(
+          625 /
+            (2 * (12 / 5.5) * (12 / Number(joistSpacing))),
+        )
+      : null;
+    const bundled = deckEstimatingProductDefaults({
+      request: requestFinish,
+      woodScrewCoverageSquareFeetPerPack,
+    });
+    const savedProducts = mergeDeckProductSuggestions(curated, bundled);
     const railingKinds: DeckLowesSuggestion["kind"][] =
       requestFinish.railingFamily === "metal" || requestFinish.railingFamily === "cable"
         ? [
@@ -122,11 +135,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
       "deck_fastener",
       ...railingKinds,
     ];
-    const curatedKinds = new Set(curated.map((product) => product.kind));
-    const neededKinds = requiredKinds.filter((kind) => !curatedKinds.has(kind));
+    const refreshKinds = requiredKinds.filter((kind) => {
+      const saved = savedProducts.find((product) => product.kind === kind);
+      return !saved?.unitCost;
+    });
 
     let live = [] as ReturnType<typeof enrichLiveDeckProducts>;
-    if (neededKinds.length) {
+    let liveLookupStatus: "not_needed" | "completed" | "unavailable" =
+      refreshKinds.length ? "unavailable" : "not_needed";
+    if (refreshKinds.length) {
       try {
         const result = await findDeckLowesDefaults({
           deckLengthFeet: body.boardRunDirection === "along_width" ? dimensions.widthFeet : dimensions.lengthFeet,
@@ -137,18 +154,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
           idempotencyKey: randomUUID(),
         });
         live = enrichLiveDeckProducts(result.products);
+        liveLookupStatus = "completed";
       } catch (error) {
-        if (!(error instanceof DeckLowesSuggestionError) || !curated.length) throw error;
+        if (!(error instanceof DeckLowesSuggestionError) || !savedProducts.length) throw error;
       }
     }
-    const products = mergeDeckProductSuggestions(curated, live);
+    const products = mergeDeckProductSuggestions(savedProducts, live);
     if (!products.length) throw new DeckLowesSuggestionError("invalid_result");
+    const productKinds = new Set(products.map((product) => product.kind));
+    const missingKinds = requiredKinds.filter((kind) => !productKinds.has(kind));
+    const unpricedKinds = requiredKinds.filter((kind) =>
+      products.some((product) => product.kind === kind && !product.unitCost),
+    );
     return NextResponse.json({
       success: true,
       version: "deck-curated-estimating-products-v1",
       products,
       catalogMatched: curated.length,
-      liveLookupUsed: neededKinds.length > 0,
+      liveLookupUsed: refreshKinds.length > 0,
+      liveLookupStatus,
+      missingKinds,
+      unpricedKinds,
       pricingNotice: "Retail estimating prices only. No Pro discount is assumed; final purchasing is repriced from the complete takeoff.",
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

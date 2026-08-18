@@ -994,6 +994,9 @@ export function DeckTakeoffPlanner({
         products?: LowesSuggestion[];
         error?: string;
         pricingNotice?: string;
+        liveLookupStatus?: "not_needed" | "completed" | "unavailable";
+        missingKinds?: LowesSuggestion["kind"][];
+        unpricedKinds?: LowesSuggestion["kind"][];
       };
       if (!response.ok || !body.success || !body.products?.length)
         throw new Error(body.error || "Lowe's defaults could not be found.");
@@ -1110,12 +1113,19 @@ export function DeckTakeoffPlanner({
           : null,
       ].filter(Boolean);
       const priceNotice = body.pricingNotice ? ` ${body.pricingNotice}` : "";
+      const partialNotice = body.missingKinds?.length
+        ? ` Live lookup could not fill: ${body.missingKinds.join(", ").replaceAll("_", " ")}. The saved products above remain usable and can be completed manually.`
+        : body.unpricedKinds?.length && body.liveLookupStatus === "unavailable"
+          ? ` Live pricing was unavailable for: ${body.unpricedKinds.join(", ").replaceAll("_", " ")}. Their saved product pages remain attached for manual estimating prices.`
+        : body.liveLookupStatus === "unavailable"
+          ? " Live price refresh was unavailable, so the saved product package was kept."
+          : "";
       setNotice(
         missingPrices.length
-          ? `Products found. Enter an estimating Lowe's ${missingPrices.join(" and ")} price${missingPrices.length === 1 ? "" : "s"} from the linked product page, then continue.${priceNotice}`
+          ? `Saved products loaded. Enter an estimating Lowe's ${missingPrices.join(" and ")} price${missingPrices.length === 1 ? "" : "s"} from the linked product page, then continue.${partialNotice}${priceNotice}`
           : customApprovedFootprint
-            ? `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are filled in. Confirm the reviewed custom-shape quantities next.${manufacturedPackage?.unresolved.length ? ` The ${manufacturedPackage.manufacturer} ${manufacturedPackage.productLine} package still needs prices for: ${manufacturedPackage.unresolved.map((line) => line.label).join(", ")}.` : ""}${priceNotice}`
-            : `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are ready. Review the calculated finish quantities next.${manufacturedPackage?.unresolved.length ? ` The ${manufacturedPackage.manufacturer} ${manufacturedPackage.productLine} package still needs prices for: ${manufacturedPackage.unresolved.map((line) => line.label).join(", ")}.` : ""}${priceNotice}`,
+            ? `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are filled in. Confirm the reviewed custom-shape quantities next.${manufacturedPackage?.unresolved.length ? ` The ${manufacturedPackage.manufacturer} ${manufacturedPackage.productLine} package still needs prices for: ${manufacturedPackage.unresolved.map((line) => line.label).join(", ")}.` : ""}${partialNotice}${priceNotice}`
+            : `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are ready. Review the calculated finish quantities next.${manufacturedPackage?.unresolved.length ? ` The ${manufacturedPackage.manufacturer} ${manufacturedPackage.productLine} package still needs prices for: ${manufacturedPackage.unresolved.map((line) => line.label).join(", ")}.` : ""}${partialNotice}${priceNotice}`,
       );
     } catch (caught) {
       if (productRequestSequence.current !== requestSequence) return;
@@ -1836,7 +1846,7 @@ export function DeckTakeoffPlanner({
         disabled={disabled || findingProducts}
         onClick={() => void findLowesProducts()}
       >
-        {findingProducts ? "Checking saved products and Lowe's…" : "Find matching Lowe's products"}
+        {findingProducts ? "Loading saved products and checking gaps…" : "Load products and estimating costs"}
       </button>
     </section>
   );

@@ -10,6 +10,7 @@ const suggestionRoute = readFileSync("src/app/api/estimates/[estimateId]/deck-pr
 const suggestionProvider = readFileSync("src/lib/deck-lowes-product-suggestions.ts", "utf8");
 const curatedSuggestions = readFileSync("src/lib/deck-curated-product-suggestions.ts", "utf8");
 const railingSystem = readFileSync("src/lib/deck-railing-system.ts", "utf8");
+const estimatingDefaults = readFileSync("src/lib/deck-estimating-product-defaults.ts", "utf8");
 
 test("preview and apply reconstruct the authoritative field and catalog inputs server-side", () => {
   assert.match(route, /authorizeEstimateRequest\(request, estimateId\)/);
@@ -154,7 +155,15 @@ test("Lowe's defaults are read-only, tenant-authorized, and bound to exact produ
   assert.match(ui, /Compatible system:/);
   assert.match(suggestionRoute, /selectCuratedDeckProducts/);
   assert.match(suggestionRoute, /\.in\("price_type", \["retail", "estimated"\]\)/);
-  assert.match(suggestionRoute, /mergeDeckProductSuggestions\(curated, live\)/);
+  assert.match(suggestionRoute, /mergeDeckProductSuggestions\(savedProducts, live\)/);
+  assert.match(suggestionRoute, /deckEstimatingProductDefaults/);
+  assert.match(suggestionRoute, /woodScrewCoverageSquareFeetPerPack/);
+  assert.match(suggestionRoute, /liveLookupStatus/);
+  assert.match(suggestionRoute, /unpricedKinds/);
+  assert.match(estimatingDefaults, /Clinton Highway/);
+  assert.match(estimatingDefaults, /25\.8/);
+  assert.match(ui, /Load products and estimating costs/);
+  assert.match(ui, /saved product pages remain attached/);
   assert.match(curatedSuggestions, /cached_retail/);
   assert.match(curatedSuggestions, /price\.price_type === "retail"/);
   assert.doesNotMatch(curatedSuggestions, /price\.price_type === "contract"/);

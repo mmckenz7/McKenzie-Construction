@@ -73,6 +73,21 @@ test("does not use contractor, quoted, or promotional discounts as the estimate 
   assert.equal(products.length, 0);
 });
 
+test("keeps an exact saved Lowe's product page when its price still needs entry", () => {
+  const products = selectCuratedDeckProducts({
+    materials: [material({ metadata: {
+      deck_product_kind: "deck_board",
+      decking_family: "wood",
+      product_url: "https://www.lowes.com/pd/board/5012345678",
+    } })],
+    prices: [],
+    request,
+  });
+  assert.equal(products.length, 1);
+  assert.equal(products[0].unitCost, null);
+  assert.equal(products[0].priceBasis, "unpriced");
+});
+
 test("requires one named manufacturer and product line for metal railing choices", () => {
   const railingMaterial = material({
     id: "22222222-2222-4222-8222-222222222222",
@@ -102,4 +117,12 @@ test("keeps curated matches ahead of live lookup results", () => {
   const live = [{ kind: "deck_board", sourceUrl: "https://www.lowes.com/pd/live/2" }];
   const merged = mergeDeckProductSuggestions(curated, live);
   assert.equal(merged[0].sourceUrl, curated[0].sourceUrl);
+});
+
+test("a live price refresh replaces the same saved unpriced product page", () => {
+  const curated = [{ kind: "deck_board", sourceUrl: "https://www.lowes.com/pd/board/1", unitCost: null }];
+  const live = [{ kind: "deck_board", sourceUrl: "https://www.lowes.com/pd/board/1", unitCost: 19.98 }];
+  const merged = mergeDeckProductSuggestions(curated, live);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].unitCost, 19.98);
 });
