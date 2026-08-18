@@ -3,6 +3,13 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { findDeckLowesDefaults, DeckLowesSuggestionError } from "@/lib/deck-lowes-product-suggestions";
+import {
+  enrichLiveDeckProducts,
+  mergeDeckProductSuggestions,
+  selectCuratedDeckProducts,
+  type CuratedDeckMaterial,
+  type CuratedDeckPrice,
+} from "@/lib/deck-curated-product-suggestions";
 import { deckFieldDimensions, deckRailingGeometry, type DeckObservationItem } from "@/lib/deck-takeoff-v0";
 import { authorizeEstimateRequest, ESTIMATE_NOT_FOUND_BODY } from "@/lib/estimate-access";
 import { UUID_PATTERN } from "@/lib/estimate-mutations";
@@ -69,16 +76,64 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { status: 409 },
       );
     }
-    const result = await findDeckLowesDefaults({
-      deckLengthFeet: body.boardRunDirection === "along_width" ? dimensions.widthFeet : dimensions.lengthFeet,
-      deckWidthFeet: body.boardRunDirection === "along_width" ? dimensions.lengthFeet : dimensions.widthFeet,
-      railingLengthFeet: railing.railingLengthFeet,
+    const materialResult = await supabase
+      .from("material_catalog")
+      .select("id,category,description,brand,product_line,unit_cost,metadata")
+      .eq("is_active", true);
+    if (materialResult.error) throw new Error("The approved estimating catalog could not be loaded.");
+    const materialIds = (materialResult.data ?? []).map((material) => material.id);
+    const priceResult = materialIds.length
+      ? await supabase
+          .from("material_supplier_prices")
+          .select("material_catalog_id,unit_cost,price_type,last_checked_at,source_reference,confidence,suppliers(name)")
+          .in("material_catalog_id", materialIds)
+          .eq("is_active", true)
+          .in("price_type", ["retail", "estimated"])
+      : { data: [], error: null };
+    if (priceResult.error) throw new Error("The approved estimating prices could not be loaded.");
+    const requestFinish = {
       deckingFamily: body.deckingFamily as "wood" | "composite",
       compositeColor: body.compositeColor as "brown" | "gray" | "cedar" | "redwood" | "coastal" | null,
       railingFamily: body.railingFamily as "wood" | "metal" | "cable" | "none",
-      idempotencyKey: randomUUID(),
+    } as const;
+    const curated = selectCuratedDeckProducts({
+      materials: (materialResult.data ?? []) as CuratedDeckMaterial[],
+      prices: (priceResult.data ?? []) as unknown as CuratedDeckPrice[],
+      request: requestFinish,
     });
-    return NextResponse.json({ success: true, ...result }, { headers: { "Cache-Control": "private, no-store" } });
+    const requiredKinds: Array<"deck_board" | "deck_fastener" | "railing_section"> = [
+      "deck_board",
+      "deck_fastener",
+      ...(requestFinish.railingFamily !== "none" ? (["railing_section"] as const) : []),
+    ];
+    const curatedKinds = new Set(curated.map((product) => product.kind));
+    const neededKinds = requiredKinds.filter((kind) => !curatedKinds.has(kind));
+
+    let live = [] as ReturnType<typeof enrichLiveDeckProducts>;
+    if (neededKinds.length) {
+      try {
+        const result = await findDeckLowesDefaults({
+          deckLengthFeet: body.boardRunDirection === "along_width" ? dimensions.widthFeet : dimensions.lengthFeet,
+          deckWidthFeet: body.boardRunDirection === "along_width" ? dimensions.lengthFeet : dimensions.widthFeet,
+          railingLengthFeet: railing.railingLengthFeet,
+          ...requestFinish,
+          idempotencyKey: randomUUID(),
+        });
+        live = enrichLiveDeckProducts(result.products);
+      } catch (error) {
+        if (!(error instanceof DeckLowesSuggestionError) || !curated.length) throw error;
+      }
+    }
+    const products = mergeDeckProductSuggestions(curated, live);
+    if (!products.length) throw new DeckLowesSuggestionError("invalid_result");
+    return NextResponse.json({
+      success: true,
+      version: "deck-curated-estimating-products-v1",
+      products,
+      catalogMatched: curated.length,
+      liveLookupUsed: neededKinds.length > 0,
+      pricingNotice: "Retail estimating prices only. No Pro discount is assumed; final purchasing is repriced from the complete takeoff.",
+    }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const isInput = error instanceof TypeError;
     const unavailable = error instanceof DeckLowesSuggestionError;

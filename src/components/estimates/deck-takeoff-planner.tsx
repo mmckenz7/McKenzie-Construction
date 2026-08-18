@@ -53,7 +53,19 @@ type LowesSuggestion = {
   manufacturer: string | null;
   productLine: string | null;
   reason: string;
+  catalogMaterialId: string | null;
+  priceBasis: "current_retail" | "cached_retail" | "catalog_estimate" | "live_public_retail" | "unpriced";
+  priceCheckedAt: string | null;
 };
+
+function estimatingPriceLabel(product: LowesSuggestion | undefined) {
+  if (!product?.unitCost) return "Price needs a manual estimate";
+  if (product.priceBasis === "current_retail" || product.priceBasis === "live_public_retail") {
+    return "Current public retail estimate";
+  }
+  if (product.priceBasis === "cached_retail") return "Last verified retail estimate";
+  return "Saved catalog estimate";
+}
 
 type DeckingFamily = "wood" | "composite";
 type CompositeColor = "brown" | "gray" | "cedar" | "redwood" | "coastal";
@@ -974,6 +986,7 @@ export function DeckTakeoffPlanner({
         success?: boolean;
         products?: LowesSuggestion[];
         error?: string;
+        pricingNotice?: string;
       };
       if (!response.ok || !body.success || !body.products?.length)
         throw new Error(body.error || "Lowe's defaults could not be found.");
@@ -1054,12 +1067,13 @@ export function DeckTakeoffPlanner({
           ? "railing"
           : null,
       ].filter(Boolean);
+      const priceNotice = body.pricingNotice ? ` ${body.pricingNotice}` : "";
       setNotice(
         missingPrices.length
-          ? `Products found. Enter the current Lowe's ${missingPrices.join(" and ")} price${missingPrices.length === 1 ? "" : "s"} shown on the linked product page, then continue.`
+          ? `Products found. Enter an estimating Lowe's ${missingPrices.join(" and ")} price${missingPrices.length === 1 ? "" : "s"} from the linked product page, then continue.${priceNotice}`
           : customApprovedFootprint
-            ? `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are filled in. Confirm the reviewed custom-shape quantities next.`
-            : `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are ready. Review the calculated finish quantities next.`,
+            ? `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are filled in. Confirm the reviewed custom-shape quantities next.${priceNotice}`
+            : `Matching ${requestedDecking}${requestedDecking === "composite" ? ` ${requestedColor}` : ""} decking and ${requestedRailing} railing products are ready. Review the calculated finish quantities next.${priceNotice}`,
       );
     } catch (caught) {
       if (productRequestSequence.current !== requestSequence) return;
@@ -1196,7 +1210,7 @@ export function DeckTakeoffPlanner({
     {
       key: "board",
       label: "Deck boards",
-      priceLabel: "Current price per board",
+      priceLabel: "Estimating retail price per board",
       description:
         selectedBoard?.description ??
         suggestionByKind.get("deck_board")?.description ??
@@ -1213,7 +1227,7 @@ export function DeckTakeoffPlanner({
     {
       key: "screw",
       label: "Fasteners",
-      priceLabel: "Current price per box",
+      priceLabel: "Estimating retail price per box",
       description:
         selectedScrew?.description ??
         suggestionByKind.get("deck_fastener")?.description ??
@@ -1230,7 +1244,7 @@ export function DeckTakeoffPlanner({
     {
       key: "railing",
       label: "Railing",
-      priceLabel: "Current price per railing section",
+      priceLabel: "Estimating retail price per railing section",
       description:
         selectedRailing?.description ??
         suggestionByKind.get("railing_section")?.description ??
@@ -1356,8 +1370,9 @@ export function DeckTakeoffPlanner({
       </h4>
       <p className="mt-1 text-sm leading-6 text-slate-300">
         Framing quantities stay unchanged. These choices select the decking,
-        railing, compatible fasteners, and current product prices used for the
-        customer options.
+        railing, compatible fasteners, and retail estimating prices used for
+        the customer options. No Pro discount is assumed; the complete takeoff
+        can be repriced by the Pro desk before purchasing.
       </p>
 
       <fieldset className="mt-4">
@@ -1479,7 +1494,7 @@ export function DeckTakeoffPlanner({
         disabled={disabled || findingProducts}
         onClick={() => void findLowesProducts()}
       >
-        {findingProducts ? "Finding matching products…" : "Find matching Lowe's products"}
+        {findingProducts ? "Checking saved products and Lowe's…" : "Find matching Lowe's products"}
       </button>
     </section>
   );
@@ -2752,17 +2767,17 @@ export function DeckTakeoffPlanner({
                     </Field>
                     {priceReady ? (
                       <div className="rounded-lg border border-emerald-700 bg-emerald-950 p-3 text-sm text-emerald-100">
-                        <p className="font-black">Current product price</p>
+                        <p className="font-black">Estimating retail price</p>
                         <p className="mt-1 text-lg font-black">
                           ${line.unitCost} per {line.unit || "item"}
                         </p>
                         <p className="mt-1 text-xs leading-5">
-                          Verify the current store price before sending the
-                          estimate.
+                          No Pro discount is assumed. Reprice the complete
+                          takeoff before purchasing.
                         </p>
                       </div>
                     ) : (
-                      <Field label="Current Lowe's price per item">
+                      <Field label="Estimating Lowe's price per item">
                         <span className="mt-1 flex items-center rounded-md border border-slate-300 bg-white focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-100">
                           <span className="pl-3 text-slate-600">$</span>
                           <input
@@ -2957,6 +2972,12 @@ export function DeckTakeoffPlanner({
                   <p className="mt-1 text-xs text-slate-700">
                     {option.railing?.description ??
                       "No railing system required"}
+                  </p>
+                  <p className="mt-2 text-xs font-bold text-slate-700">
+                    Decking price: {estimatingPriceLabel(option.board)}
+                    {option.railing
+                      ? ` · Railing price: ${estimatingPriceLabel(option.railing)}`
+                      : ""}
                   </p>
                   {option.railing?.manufacturer &&
                   option.railing.productLine ? (

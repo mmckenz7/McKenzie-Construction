@@ -8,6 +8,7 @@ const ui = readFileSync("src/components/estimates/deck-takeoff-planner.tsx", "ut
 const builder = readFileSync("src/components/estimates/estimate-builder.tsx", "utf8");
 const suggestionRoute = readFileSync("src/app/api/estimates/[estimateId]/deck-product-suggestions/route.ts", "utf8");
 const suggestionProvider = readFileSync("src/lib/deck-lowes-product-suggestions.ts", "utf8");
+const curatedSuggestions = readFileSync("src/lib/deck-curated-product-suggestions.ts", "utf8");
 
 test("preview and apply reconstruct the authoritative field and catalog inputs server-side", () => {
   assert.match(route, /authorizeEstimateRequest\(request, estimateId\)/);
@@ -69,8 +70,8 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "Framing costs and remaining estimate items",
     "Change products, costs, or advanced quantities",
     "Calculate quantities and costs",
-    "Current price per board",
-    "Current price per railing section",
+    "Estimating retail price per board",
+    "Estimating retail price per railing section",
     "How many boards should be purchased",
     "How many railing sections or kits should be purchased",
     "This[\\s\\S]*is a purchase count, not square footage",
@@ -143,6 +144,14 @@ test("Lowe's defaults are read-only, tenant-authorized, and bound to exact produ
   assert.match(suggestionProvider, /Do not mix rails, posts, brackets, panels, cable, gates, caps, or fasteners/);
   assert.match(suggestionProvider, /manufacturedRailing && \(!manufacturer \|\| !productLine\)/);
   assert.match(ui, /Compatible system:/);
+  assert.match(suggestionRoute, /selectCuratedDeckProducts/);
+  assert.match(suggestionRoute, /\.in\("price_type", \["retail", "estimated"\]\)/);
+  assert.match(suggestionRoute, /mergeDeckProductSuggestions\(curated, live\)/);
+  assert.match(curatedSuggestions, /cached_retail/);
+  assert.match(curatedSuggestions, /price\.price_type === "retail"/);
+  assert.doesNotMatch(curatedSuggestions, /price\.price_type === "contract"/);
+  assert.match(ui, /No Pro discount is assumed/);
+  assert.match(ui, /Reprice the complete[\s\S]*takeoff before purchasing/);
   assert.match(suggestionProvider, /\["lowes\.com", "www\.lowes\.com"\]\.includes\(url\.hostname\.toLowerCase\(\)\)/);
   assert.match(suggestionProvider, /pathname\.startsWith\("\/pd\/"\)/);
   assert.doesNotMatch(suggestionRoute + suggestionProvider, /insert\(|update\(|delete\(/);
