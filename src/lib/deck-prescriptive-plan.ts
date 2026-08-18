@@ -211,70 +211,94 @@ export function parseDeckPostDistances(
 
 export type DeckOutlinePoint = Readonly<{ x: number; y: number }>;
 
-const FORTY_FIVE_DIRECTIONS = Object.freeze([
-  Object.freeze({ x: 1, y: 0 }),
-  Object.freeze({ x: 1, y: 1 }),
-  Object.freeze({ x: 0, y: 1 }),
-  Object.freeze({ x: -1, y: 1 }),
-  Object.freeze({ x: -1, y: 0 }),
-  Object.freeze({ x: -1, y: -1 }),
-  Object.freeze({ x: 0, y: -1 }),
-  Object.freeze({ x: 1, y: -1 }),
-]);
+export function moveDeckOutlineEdge(
+  outline: readonly DeckOutlinePoint[],
+  edgeIndex: number,
+  requestedDelta: number,
+  magneticGrid = true,
+) {
+  if (!Number.isInteger(edgeIndex) || edgeIndex < 0 || edgeIndex >= outline.length || !Number.isFinite(requestedDelta))
+    return outline;
+  const start = outline[edgeIndex];
+  const endIndex = (edgeIndex + 1) % outline.length;
+  const end = outline[endIndex];
+  const edgeDx = end.x - start.x;
+  const edgeDy = end.y - start.y;
+  const edgeSize = Math.hypot(edgeDx, edgeDy);
+  if (edgeSize < 0.25) return outline;
+  const normal = { x: -edgeDy / edgeSize, y: edgeDx / edgeSize };
+  const gridDelta = Math.round(requestedDelta * 2) / 2;
+  const delta = magneticGrid && Math.abs(requestedDelta - gridDelta) <= 0.15
+    ? gridDelta
+    : requestedDelta;
+  let moved = outline.map((point, index) =>
+    index === edgeIndex || index === endIndex
+      ? { x: point.x + normal.x * delta, y: point.y + normal.y * delta }
+      : { ...point },
+  );
+  const minimumX = Math.min(...moved.map((point) => point.x));
+  const minimumY = Math.min(...moved.map((point) => point.y));
+  if (minimumX < 0 || minimumY < 0) {
+    moved = moved.map((point) => ({
+      x: point.x - Math.min(0, minimumX),
+      y: point.y - Math.min(0, minimumY),
+    }));
+  }
+  if (moved.some((point) => point.x > 200 || point.y > 200) || !isValidDeckOutline(moved)) return outline;
+  return Object.freeze(moved.map((point) => Object.freeze({
+    x: Number(point.x.toFixed(4)),
+    y: Number(point.y.toFixed(4)),
+  })));
+}
 
 export function snapDeckOutlinePoint(
   candidate: DeckOutlinePoint,
   previous: DeckOutlinePoint,
   next: DeckOutlinePoint,
   gridFeet = 0.5,
+  angleToleranceDegrees = 7,
+  gridToleranceFeet = 0.15,
 ) {
   const step = Math.max(1 / 12, gridFeet);
-  const gridCandidate = {
-    x: Math.round(candidate.x / step) * step,
-    y: Math.round(candidate.y / step) * step,
-  };
-  const choices: DeckOutlinePoint[] = [];
+  const angleStep = Math.PI / 4;
+  const angleTolerance = (Math.max(0, angleToleranceDegrees) * Math.PI) / 180;
+  const choices: DeckOutlinePoint[] = [candidate];
 
-  for (const fromPrevious of FORTY_FIVE_DIRECTIONS) {
-    for (const fromNext of FORTY_FIVE_DIRECTIONS) {
-      const determinant =
-        fromPrevious.x * fromNext.y - fromPrevious.y * fromNext.x;
-      if (Math.abs(determinant) < 0.000001) continue;
-      const deltaX = next.x - previous.x;
-      const deltaY = next.y - previous.y;
-      const distanceFromPrevious =
-        (deltaX * fromNext.y - deltaY * fromNext.x) / determinant;
+  for (const anchor of [previous, next]) {
+    const dx = candidate.x - anchor.x;
+    const dy = candidate.y - anchor.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 0.25) continue;
+    const angle = Math.atan2(dy, dx);
+    const snappedAngle = Math.round(angle / angleStep) * angleStep;
+    const angularDifference = Math.abs(
+      Math.atan2(Math.sin(angle - snappedAngle), Math.cos(angle - snappedAngle)),
+    );
+    if (angularDifference <= angleTolerance) {
       choices.push({
-        x: previous.x + distanceFromPrevious * fromPrevious.x,
-        y: previous.y + distanceFromPrevious * fromPrevious.y,
+        x: anchor.x + Math.cos(snappedAngle) * distance,
+        y: anchor.y + Math.sin(snappedAngle) * distance,
       });
     }
   }
 
-  const nearest = choices
-    .filter(
-      (point) =>
-        Number.isFinite(point.x) &&
-        Number.isFinite(point.y) &&
-        point.x >= 0 &&
-        point.y >= 0 &&
-        point.x <= 200 &&
-        point.y <= 200 &&
-        Math.abs(point.x / step - Math.round(point.x / step)) < 0.0001 &&
-        Math.abs(point.y / step - Math.round(point.y / step)) < 0.0001 &&
-        Math.hypot(point.x - previous.x, point.y - previous.y) >= 0.25 &&
-        Math.hypot(point.x - next.x, point.y - next.y) >= 0.25,
-    )
-    .sort(
-      (first, second) =>
-        Math.hypot(first.x - gridCandidate.x, first.y - gridCandidate.y) -
-        Math.hypot(second.x - gridCandidate.x, second.y - gridCandidate.y),
-    )[0];
+  const angleSnapped = choices.slice(1).sort(
+    (first, second) =>
+      Math.hypot(first.x - candidate.x, first.y - candidate.y) -
+      Math.hypot(second.x - candidate.x, second.y - candidate.y),
+  )[0];
+  const nearest = angleSnapped ?? {
+    x: Math.abs(candidate.x - Math.round(candidate.x / step) * step) <= gridToleranceFeet
+      ? Math.round(candidate.x / step) * step
+      : candidate.x,
+    y: Math.abs(candidate.y - Math.round(candidate.y / step) * step) <= gridToleranceFeet
+      ? Math.round(candidate.y / step) * step
+      : candidate.y,
+  };
 
-  if (!nearest) return Object.freeze(gridCandidate);
   return Object.freeze({
-    x: Number(nearest.x.toFixed(4)),
-    y: Number(nearest.y.toFixed(4)),
+    x: Number(Math.max(0, Math.min(200, nearest.x)).toFixed(4)),
+    y: Number(Math.max(0, Math.min(200, nearest.y)).toFixed(4)),
   });
 }
 

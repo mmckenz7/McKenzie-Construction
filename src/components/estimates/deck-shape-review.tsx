@@ -10,6 +10,7 @@ import {
 import {
   insertOutlinePointOnNearestEdge,
   isValidDeckOutline,
+  moveDeckOutlineEdge,
   snapDeckOutlinePoint,
   type DeckOutlinePoint,
 } from "@/lib/deck-prescriptive-plan";
@@ -76,12 +77,18 @@ export function DeckShapeReview({
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragEdgeIndex, setDragEdgeIndex] = useState<number | null>(null);
   const [addPointMode, setAddPointMode] = useState(false);
-  const [snapMode, setSnapMode] = useState<"angle" | "free">("angle");
+  const [snapMode, setSnapMode] = useState<"smart" | "free">("smart");
   const [selectedEdge, setSelectedEdge] = useState<number | null>(null);
   const [edgeDraft, setEdgeDraft] = useState("");
   const [feedback, setFeedback] = useState(initialShape ? `Saved shape revision ${initialShape.shapeRevision} loaded.` : "Starting outline loaded from the completed site visit.");
   const svgRef = useRef<SVGSVGElement>(null);
+  const edgeDragRef = useRef<{
+    edgeIndex: number;
+    startPointer: DeckOutlinePoint;
+    startOutline: readonly DeckOutlinePoint[];
+  } | null>(null);
   const automaticSuggestionStarted = useRef(false);
   const titleId = useId();
   const descriptionId = useId();
@@ -138,23 +145,47 @@ export function DeckShapeReview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialShape, projectKind, visitId]);
 
-  function clientPoint(event: ReactPointerEvent<SVGSVGElement>) {
+  function clientPoint(event: Pick<ReactPointerEvent<SVGElement>, "clientX" | "clientY">) {
     const bounds = svgRef.current?.getBoundingClientRect();
     if (!bounds) return null;
     const drawingX = ((event.clientX - bounds.left) / bounds.width) * 320;
     const drawingY = ((event.clientY - bounds.top) / bounds.height) * 210;
     return {
-      x: Math.max(0, Math.min(maxX, (drawingX - drawingOriginX) / drawingScale)),
-      y: Math.max(0, Math.min(maxY, (drawingY - drawingOriginY) / drawingScale)),
+      x: Math.max(-50, Math.min(200, (drawingX - drawingOriginX) / drawingScale)),
+      y: Math.max(-50, Math.min(200, (drawingY - drawingOriginY) / drawingScale)),
     };
   }
 
+  function moveWholeEdge(edgeIndex: number, requestedDelta: number) {
+    setOutline((current) => [...moveDeckOutlineEdge(current, edgeIndex, requestedDelta, snapMode === "smart")]);
+  }
+
+  function moveWall(event: ReactPointerEvent<SVGSVGElement>) {
+    const drag = edgeDragRef.current;
+    if (dragEdgeIndex === null || !drag || addPointMode) return false;
+    const candidate = clientPoint(event);
+    if (!candidate) return true;
+    const start = drag.startOutline[drag.edgeIndex];
+    const end = drag.startOutline[(drag.edgeIndex + 1) % drag.startOutline.length];
+    const edgeDx = end.x - start.x;
+    const edgeDy = end.y - start.y;
+    const edgeSize = Math.hypot(edgeDx, edgeDy);
+    if (edgeSize < 0.25) return true;
+    const normal = { x: -edgeDy / edgeSize, y: edgeDx / edgeSize };
+    const requestedDelta =
+      (candidate.x - drag.startPointer.x) * normal.x +
+      (candidate.y - drag.startPointer.y) * normal.y;
+    setOutline([...moveDeckOutlineEdge(drag.startOutline, drag.edgeIndex, requestedDelta, snapMode === "smart")]);
+    return true;
+  }
+
   function movePoint(event: ReactPointerEvent<SVGSVGElement>) {
+    if (moveWall(event)) return;
     if (dragIndex === null || addPointMode) return;
     const candidate = clientPoint(event);
     if (!candidate) return;
     setOutline((current) => {
-      const nextPoint = snapMode === "angle"
+      const nextPoint = snapMode === "smart"
         ? snapDeckOutlinePoint(
           candidate,
           current[(dragIndex - 1 + current.length) % current.length],
@@ -174,13 +205,13 @@ export function DeckShapeReview({
     if (!addPointMode) return;
     const candidate = clientPoint(event);
     if (!candidate) return;
-    const next = insertOutlinePointOnNearestEdge(outline, candidate, snapMode === "angle" ? 6 : 1);
+    const next = insertOutlinePointOnNearestEdge(outline, candidate, snapMode === "smart" ? 6 : 1);
     if (next === outline) {
       setFeedback("Tap closer to an outside edge to add a corner.");
       return;
     }
     setOutline([...next]);
-    setFeedback(`Corner added. ${snapMode === "angle" ? "It will snap to the 6-inch grid and 45°/90° lines when moved." : "Free placement is on."}`);
+    setFeedback(`Corner added. ${snapMode === "smart" ? "Move it freely; it will snap only when it gets close to the grid or a 45°/90° line." : "Snap is off."}`);
   }
 
   function applyEdgeLength() {
@@ -282,8 +313,8 @@ export function DeckShapeReview({
         aria-labelledby={`${titleId} ${descriptionId}`}
         className="block w-full touch-none rounded-lg bg-white"
         onPointerMove={movePoint}
-        onPointerUp={() => setDragIndex(null)}
-        onPointerCancel={() => setDragIndex(null)}
+        onPointerUp={() => { setDragIndex(null); setDragEdgeIndex(null); edgeDragRef.current = null; }}
+        onPointerCancel={() => { setDragIndex(null); setDragEdgeIndex(null); edgeDragRef.current = null; }}
         onPointerDown={addPoint}
       >
         <title id={titleId}>Editable bird&apos;s-eye deck outline</title>
@@ -305,8 +336,51 @@ export function DeckShapeReview({
           const start = points[index];
           const end = points[(index + 1) % points.length];
           const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+          const svgEdgeSize = Math.hypot(end.x - start.x, end.y - start.y) || 1;
+          const normal = { x: -(end.y - start.y) / svgEdgeSize, y: (end.x - start.x) / svgEdgeSize };
+          const slider = { x: midpoint.x + normal.x * 10, y: midpoint.y + normal.y * 10 };
           return <g key={`edge-${index}`}>
             <text x={midpoint.x} y={midpoint.y - 7} textAnchor="middle" fontSize="10" fontWeight="900" fill="#0f172a" stroke="white" strokeWidth="3" paintOrder="stroke">{edgeLength(point, outline[(index + 1) % outline.length]).toFixed(1)} ft</text>
+            <circle
+              cx={slider.x}
+              cy={slider.y}
+              r="24"
+              fill="transparent"
+              role="slider"
+              tabIndex={0}
+              aria-label={`Move wall ${index + 1}; both corners move together`}
+              onPointerDown={(event) => {
+                if (addPointMode) return;
+                event.stopPropagation();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setDragIndex(null);
+                setDragEdgeIndex(index);
+                const startPointer = clientPoint(event);
+                if (!startPointer) return;
+                edgeDragRef.current = { edgeIndex: index, startPointer, startOutline: outline.map((point) => ({ ...point })) };
+                setFeedback(`Moving wall ${index + 1}. Both corner points stay together.`);
+              }}
+              onKeyDown={(event) => {
+                if (!["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft"].includes(event.key)) return;
+                event.preventDefault();
+                const desired = event.key === "ArrowUp" ? { x: 0, y: -0.5 }
+                  : event.key === "ArrowDown" ? { x: 0, y: 0.5 }
+                    : event.key === "ArrowLeft" ? { x: -0.5, y: 0 }
+                      : { x: 0.5, y: 0 };
+                moveWholeEdge(index, desired.x * normal.x + desired.y * normal.y);
+                setFeedback(`Wall ${index + 1} moved 6 inches. Both corner points stayed together.`);
+              }}
+            />
+            <line
+              x1={slider.x - normal.x * 5}
+              y1={slider.y - normal.y * 5}
+              x2={slider.x + normal.x * 5}
+              y2={slider.y + normal.y * 5}
+              stroke="#2563eb"
+              strokeWidth="3"
+              strokeLinecap="round"
+              pointerEvents="none"
+            />
           </g>;
         })}
         {points.map((point, index) => <g key={`point-${index}`}>
@@ -319,6 +393,8 @@ export function DeckShapeReview({
               if (addPointMode) return;
               event.stopPropagation();
               event.currentTarget.setPointerCapture(event.pointerId);
+              edgeDragRef.current = null;
+              setDragEdgeIndex(null);
               setDragIndex(index);
               setFeedback(`Moving corner ${index + 1}.`);
             }}
@@ -329,13 +405,15 @@ export function DeckShapeReview({
       </svg>
     </div>
 
+    <p className="mt-2 rounded-lg bg-blue-50 p-3 text-sm font-bold text-blue-950">Drag a small blue wall slider to move that entire wall. Both corner points move together, and the adjoining measurements update automatically.</p>
+
     <fieldset className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3">
       <legend className="px-1 text-sm font-black text-slate-950">Corner movement</legend>
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <button type="button" className={snapMode === "angle" ? primary : secondary} aria-pressed={snapMode === "angle"} onClick={() => { setSnapMode("angle"); setFeedback("Snap is on: corners follow the 6-inch grid and 45°/90° lines."); }}>Snap 45° / 90°</button>
-        <button type="button" className={snapMode === "free" ? primary : secondary} aria-pressed={snapMode === "free"} onClick={() => { setSnapMode("free"); setFeedback("Free placement is on. Corners move in one-inch increments."); }}>Free placement</button>
+        <button type="button" className={snapMode === "smart" ? primary : secondary} aria-pressed={snapMode === "smart"} onClick={() => { setSnapMode("smart"); setFeedback("Smart snap is on. Drag freely; it catches only when you are close to the grid or a 45°/90° line."); }}>Smart snap</button>
+        <button type="button" className={snapMode === "free" ? primary : secondary} aria-pressed={snapMode === "free"} onClick={() => { setSnapMode("free"); setFeedback("Snap is off. Corners move freely in one-inch increments."); }}>Snap off</button>
       </div>
-      <p className="mt-2 text-xs leading-5 text-slate-700">Snap mode is the default so nearby corners stay square or diagonal. Use Free placement only for an unusual angle.</p>
+      <p className="mt-2 text-xs leading-5 text-slate-700">Smart snap is the default. Move anywhere; the corner becomes magnetic only near a grid line or a straight, 45°, or 90° angle.</p>
     </fieldset>
 
     <div className="mt-3 grid grid-cols-2 gap-2">

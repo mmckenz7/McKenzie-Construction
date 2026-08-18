@@ -22,8 +22,9 @@ test("shape review contains footprint decisions but no structural or pricing wor
   assert.match(shape, /New deck/);
   assert.match(shape, /Add a corner/);
   assert.match(shape, /Enter an exact edge measurement/);
-  assert.match(shape, /Snap 45° \/ 90°/);
-  assert.match(shape, /Free placement/);
+  assert.match(shape, /Smart snap/);
+  assert.match(shape, /Snap off/);
+  assert.match(shape, /becomes magnetic only near a grid line/);
   assert.match(shape, /six-inch grid/);
   assert.match(shape, /Does this deck have stairs\?/);
   assert.match(shape, /Framing, code, materials and pricing come later/);
@@ -37,6 +38,18 @@ test("shape grid stays visible while corner dots stay small without shrinking to
   assert.match(shape, /r="22"\s+fill="transparent"/);
   assert.match(shape, /x1="16" y1=\{y\} x2="304"/);
   assert.match(shape, /y1="24" x2=\{x\} y2="198"/);
+});
+
+test("wall sliders move both edge corners while retaining mobile-sized invisible targets", () => {
+  assert.match(shape, /function moveWholeEdge\(edgeIndex: number, requestedDelta: number\)/);
+  assert.match(shape, /moveDeckOutlineEdge\(current, edgeIndex, requestedDelta/);
+  assert.match(shape, /edgeDragRef\.current = \{ edgeIndex: index, startPointer, startOutline:/);
+  assert.match(shape, /role="slider"/);
+  assert.match(shape, /Move wall \$\{index \+ 1\}; both corners move together/);
+  assert.match(shape, /r="24"\s+fill="transparent"/);
+  assert.match(shape, /Drag a small blue wall slider to move that entire wall/);
+  assert.match(shape, /ArrowUp/);
+  assert.match(shape, /Wall \$\{index \+ 1\} moved 6 inches/);
 });
 
 test("approved shape feeds structure while pricing controls remain in takeoff", () => {

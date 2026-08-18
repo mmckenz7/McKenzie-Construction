@@ -14,6 +14,7 @@ import {
   parseDeckPostPositions,
   recommendedPrescriptiveDraft,
   snapDeckOutlinePoint,
+  moveDeckOutlineEdge,
 } from "../src/lib/deck-prescriptive-plan.ts";
 import {
   buildDeckTakeoffPreview,
@@ -374,25 +375,53 @@ test("simple editor geometry preserves exact post locations and uses the largest
   );
 });
 
-test("shape editor snaps corners to the grid and 45 or 90 degree lines", () => {
+test("shape editor uses magnetic angle and grid snapping without locking freehand movement", () => {
   assert.deepEqual(
     snapDeckOutlinePoint(
-      { x: 10.2, y: 7.7 },
+      { x: 10.2, y: 0.2 },
+      { x: 0, y: 0 },
+      { x: 10, y: 10 },
+    ),
+    { x: 10.202, y: 0 },
+  );
+  assert.deepEqual(
+    snapDeckOutlinePoint(
+      { x: 4.2, y: 1.7 },
       { x: 0, y: 0 },
       { x: 10, y: 0 },
     ),
+    { x: 4.2, y: 1.7 },
+  );
+  const gridOnly = snapDeckOutlinePoint(
+    { x: 4.42, y: 1.62 },
+    { x: 0, y: 0 },
     { x: 10, y: 10 },
   );
-  const diagonalCorner = snapDeckOutlinePoint(
-    { x: 5.1, y: 5.2 },
+  assert.deepEqual(gridOnly, { x: 4.5, y: 1.5 });
+});
+
+test("moving a wall translates both edge corners and updates its adjoining measurements", () => {
+  const rectangle = [
     { x: 0, y: 0 },
-    { x: 10, y: 0 },
-  );
-  assert.equal(Math.abs(diagonalCorner.x - diagonalCorner.y) < 0.0001, true);
-  assert.equal(
-    Math.abs((10 - diagonalCorner.x) - diagonalCorner.y) < 0.0001,
-    true,
-  );
+    { x: 14, y: 0 },
+    { x: 14, y: 12 },
+    { x: 0, y: 12 },
+  ];
+  const moved = moveDeckOutlineEdge(rectangle, 1, 2, false);
+  assert.deepEqual(moved, [
+    { x: 0, y: 0 },
+    { x: 12, y: 0 },
+    { x: 12, y: 12 },
+    { x: 0, y: 12 },
+  ]);
+  assert.equal(Math.hypot(moved[2].x - moved[1].x, moved[2].y - moved[1].y), 12);
+  assert.equal(Math.hypot(moved[1].x - moved[0].x, moved[1].y - moved[0].y), 12);
+  assert.equal(Math.hypot(moved[3].x - moved[2].x, moved[3].y - moved[2].y), 12);
+
+  const magneticallyMoved = moveDeckOutlineEdge(rectangle, 2, 1.42, true);
+  assert.equal(magneticallyMoved[2].y, 10.5);
+  assert.equal(magneticallyMoved[3].y, 10.5);
+  assert.equal(moveDeckOutlineEdge(rectangle, 9, 1), rectangle);
 });
 
 test("drawing zoom preserves fit boundaries and pointer geometry", () => {
