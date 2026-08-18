@@ -10,6 +10,10 @@ const geometryMigration = readFileSync(
   "supabase/migrations/20260818100000_guided_deck_shape_site_geometry.sql",
   "utf8",
 );
+const permissionMigration = readFileSync(
+  "supabase/migrations/20260818110000_fix_guided_deck_shape_revision_approval_permissions.sql",
+  "utf8",
+);
 const route = readFileSync(
   "src/app/api/guided-site-visits/[visitId]/deck-shape-revisions/route.ts",
   "utf8",
@@ -95,4 +99,13 @@ test("stair placement and four grade heights are immutable shape-revision eviden
   assert.match(route, /requested_stair_placement: stairPlacement/);
   assert.match(route, /requested_grade_heights: gradeHeights/);
   assert.match(estimateVisitRoute, /stair_placement,grade_heights/);
+});
+
+test("shape approval has the table-owner privilege needed for its guarded append", () => {
+  assert.match(permissionMigration, /^begin;\n/);
+  assert.match(permissionMigration, /alter function public\.approve_guided_deck_shape_revision_v2\([\s\S]+\) security definer/);
+  assert.match(permissionMigration, /revoke all on function public\.approve_guided_deck_shape_revision_v2\([\s\S]+\) from public,anon,authenticated/);
+  assert.match(permissionMigration, /grant execute on function public\.approve_guided_deck_shape_revision_v2\([\s\S]+\) to service_role/);
+  assert.match(permissionMigration, /validates the authenticated actor company/);
+  assert.match(permissionMigration, /\ncommit;\n$/);
 });

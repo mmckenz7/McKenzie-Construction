@@ -10,6 +10,7 @@ import {
 } from "@/lib/deck-takeoff-v0";
 import {
   deckWallDirectionTemplate,
+  deckOutlineOutwardNormal,
   insertOutlinePointOnNearestEdge,
   isValidDeckOutline,
   moveDeckOutlineEdge,
@@ -166,7 +167,8 @@ export function DeckShapeReview({
     const edgeSize = Math.hypot(dx, dy);
     if (edgeSize < stairPlacement.widthFeet) return null;
     const tangent = { x: dx / edgeSize, y: dy / edgeSize };
-    const outward = { x: dy / edgeSize, y: -dx / edgeSize };
+    const outward = deckOutlineOutwardNormal(outline, stairPlacement.edgeIndex);
+    if (!outward) return null;
     const center = {
       x: start.x + tangent.x * stairPlacement.offsetFeet,
       y: start.y + tangent.y * stairPlacement.offsetFeet,

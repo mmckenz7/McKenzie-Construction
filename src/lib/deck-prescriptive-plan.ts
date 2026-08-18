@@ -225,6 +225,28 @@ export type DeckStairPlacement = Readonly<{
   projectionFeet: number;
 }>;
 
+export function deckOutlineOutwardNormal(
+  outline: readonly DeckOutlinePoint[],
+  edgeIndex: number,
+) {
+  if (!Number.isInteger(edgeIndex) || edgeIndex < 0 || edgeIndex >= outline.length)
+    return null;
+  const start = outline[edgeIndex];
+  const end = outline[(edgeIndex + 1) % outline.length];
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 0.001) return null;
+  const signedAreaTwice = outline.reduce((sum, point, index) => {
+    const next = outline[(index + 1) % outline.length];
+    return sum + point.x * next.y - next.x * point.y;
+  }, 0);
+  if (Math.abs(signedAreaTwice) < 0.001) return null;
+  return signedAreaTwice > 0
+    ? Object.freeze({ x: dy / length, y: -dx / length })
+    : Object.freeze({ x: -dy / length, y: dx / length });
+}
+
 export function steadyGradeHeightAtPoint(
   point: DeckOutlinePoint,
   bounds: Readonly<{ minX: number; maxX: number; minY: number; maxY: number }>,
