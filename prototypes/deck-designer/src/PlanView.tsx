@@ -1,9 +1,21 @@
+import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { DeckDesignV1 } from "./model";
 import type { DeckGeometry } from "./geometry";
+import { dimensionsFromHandle, type PlatformDimensionUpdate, type PlatformHandle } from "./editor";
 
-type Props = { design: DeckDesignV1; geometry: DeckGeometry; showFraming: boolean };
+type Props = {
+  design: DeckDesignV1;
+  geometry: DeckGeometry;
+  showFraming: boolean;
+  snapIncrement: number;
+  onDimensionPreview: (update: PlatformDimensionUpdate) => void;
+  onDimensionCommit: (update: PlatformDimensionUpdate) => void;
+  onDimensionCancel: () => void;
+};
 
-export function PlanView({ design, geometry, showFraming }: Props) {
+export function PlanView({ design, geometry, showFraming, snapIncrement, onDimensionPreview, onDimensionCommit, onDimensionCancel }: Props) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [activeHandle, setActiveHandle] = useState<PlatformHandle | null>(null);
   const { width, projection } = design.platform;
   const margin = Math.max(width, projection) * 0.18;
   const projectedPoints = [
@@ -21,8 +33,80 @@ export function PlanView({ design, geometry, showFraming }: Props) {
   const y = (value: number) => margin + value - minZ;
   const bottomDimensionY = y(maxZ) + margin * 0.48;
   const rightDimensionX = x(maxX) + margin * 0.48;
+  const handlePoint = (handle: PlatformHandle) => {
+    if (handle === "width") {
+      return { x: width, z: design.platform.kind === "l-shape" ? (projection - design.platform.cutoutDepth) / 2 : projection / 2 };
+    }
+    if (handle === "projection") return { x: 0, z: projection };
+    return { x: width - design.platform.cutoutWidth, z: projection - design.platform.cutoutDepth };
+  };
+  const pointFromEvent = (event: PointerEvent<SVGCircleElement>) => {
+    const svg = svgRef.current;
+    const matrix = svg?.getScreenCTM();
+    if (!svg || !matrix) return null;
+    const point = svg.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const local = point.matrixTransform(matrix.inverse());
+    return { x: local.x - margin + minX, z: local.y - margin + minZ };
+  };
+  const updateFromPointer = (handle: PlatformHandle, event: PointerEvent<SVGCircleElement>, commit: boolean) => {
+    const point = pointFromEvent(event);
+    if (!point) return;
+    const update = dimensionsFromHandle(design, handle, point, snapIncrement);
+    if (commit) onDimensionCommit(update);
+    else onDimensionPreview(update);
+  };
+  const nudgeHandle = (handle: PlatformHandle, event: KeyboardEvent<SVGCircleElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    if (handle === "width" && !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    if (handle === "projection" && !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    const point = handlePoint(handle);
+    if (event.key === "ArrowLeft") point.x -= snapIncrement;
+    if (event.key === "ArrowRight") point.x += snapIncrement;
+    if (event.key === "ArrowUp") point.z -= snapIncrement;
+    if (event.key === "ArrowDown") point.z += snapIncrement;
+    onDimensionCommit(dimensionsFromHandle(design, handle, point, snapIncrement));
+  };
+  const renderHandle = (handle: PlatformHandle, label: string) => {
+    const point = handlePoint(handle);
+    return (
+      <circle
+        key={handle}
+        cx={x(point.x)}
+        cy={y(point.z)}
+        r={activeHandle === handle ? 6 : 5}
+        className={`dimension-handle${activeHandle === handle ? " active" : ""}`}
+        role="button"
+        tabIndex={0}
+        aria-label={`${label}; drag or use arrow keys; snaps to ${snapIncrement} inches`}
+        onKeyDown={(event) => nudgeHandle(handle, event)}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setActiveHandle(handle);
+        }}
+        onPointerMove={(event) => {
+          if (activeHandle === handle && event.currentTarget.hasPointerCapture(event.pointerId)) {
+            updateFromPointer(handle, event, false);
+          }
+        }}
+        onPointerUp={(event) => {
+          if (activeHandle !== handle) return;
+          updateFromPointer(handle, event, true);
+          event.currentTarget.releasePointerCapture(event.pointerId);
+          setActiveHandle(null);
+        }}
+        onPointerCancel={() => {
+          setActiveHandle(null);
+          onDimensionCancel();
+        }}
+      />
+    );
+  };
   return (
     <svg
+      ref={svgRef}
       className="plan-svg"
       viewBox={`0 0 ${viewWidth} ${viewHeight}`}
       role="img"
@@ -74,6 +158,11 @@ export function PlanView({ design, geometry, showFraming }: Props) {
           CUTOUT {formatFeetInches(design.platform.cutoutWidth)} × {formatFeetInches(design.platform.cutoutDepth)}
         </text>
       )}
+      <g className="dimension-handles" aria-label="Editable dimension handles">
+        {renderHandle("width", "Width handle")}
+        {renderHandle("projection", "Projection handle")}
+        {design.platform.kind === "l-shape" && renderHandle("cutout", "Cutout corner handle")}
+      </g>
     </svg>
   );
 }

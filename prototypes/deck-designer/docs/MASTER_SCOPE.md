@@ -24,7 +24,8 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Optional deterministic top landing
 - [ ] Turn, intermediate-landing, and multi-flight configurations
 - [ ] Edge-level railing editor and configuration warnings
-- [ ] Drag handles, grid, snapping, angle constraints, alignment, selection
+- [x] Drag handles and selectable grid snapping for rectangle and L-cutout dimensions
+- [ ] Angle constraints, alignment guides, and broader object selection
 - [x] Undo/redo command history with monotonic design revisions
 - [ ] Duplicate/copy and common McKenzie templates
 - [ ] House walls, openings, grade references, and attachment conditions

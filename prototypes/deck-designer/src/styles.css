@@ -53,6 +53,7 @@ button:hover { transform: translateY(-1px); }
 .field input { width: 100%; min-width: 0; border: 1px solid #ccd2cc; border-radius: 7px; background: white; padding: 10px; outline: none; }
 .field input:focus { border-color: #688273; box-shadow: 0 0 0 3px #dfe8e1; }
 .field select { width: 100%; border: 1px solid #ccd2cc; border-radius: 7px; background: white; padding: 10px; color: #283a32; outline: none; }
+.snap-field { margin-top: 14px; }
 .dimension-input { position: relative; }
 .dimension-input input { padding-right: 30px; }
 .dimension-input > span { position: absolute; right: 9px; top: 11px; color: #849087; font-size: 11px; }
@@ -91,6 +92,9 @@ button:hover { transform: translateY(-1px); }
 .cutout-label { fill: #66736c; font-size: 5.5px; font-weight: 700; letter-spacing: .04em; }
 .dimension-line { stroke: #6b756f; stroke-width: .8; marker-start: url(#arrow); marker-end: url(#arrow); }
 .dimension-text.vertical { transform-box: fill-box; transform-origin: center; transform: rotate(90deg); }
+.dimension-handle { fill: var(--lime); stroke: #173b2d; stroke-width: 1.5; cursor: grab; touch-action: none; }
+.dimension-handle:hover, .dimension-handle:focus, .dimension-handle.active { fill: #f3ff8d; stroke-width: 2.4; outline: none; }
+.dimension-handle.active { cursor: grabbing; }
 .three-card { min-height: 530px; }
 .three-mount { flex: 1; min-height: 470px; cursor: grab; }
 .three-mount:active { cursor: grabbing; }

@@ -3,6 +3,40 @@ import { DEFAULT_DESIGN, designFingerprint, normalizeDesign, stableDesignJson, u
 import { deriveGeometry } from "../src/geometry";
 import { deriveQuantities } from "../src/quantities";
 import { createHistory, designHistoryReducer } from "../src/history";
+import { dimensionsFromHandle, snapDimension } from "../src/editor";
+
+describe("direct plan editing", () => {
+  it("snaps dimensions deterministically", () => {
+    expect(snapDimension(194.9, 6)).toBe(192);
+    expect(snapDimension(195.1, 6)).toBe(198);
+    expect(snapDimension(195.1, 1)).toBe(195);
+  });
+
+  it("derives rectangle width and projection edits from handle coordinates", () => {
+    expect(dimensionsFromHandle(DEFAULT_DESIGN, "width", { x: 221, z: 50 }, 6)).toEqual({ width: 222 });
+    expect(dimensionsFromHandle(DEFAULT_DESIGN, "projection", { x: 50, z: 161 }, 12)).toEqual({ projection: 156 });
+  });
+
+  it("derives both L-shape cutout facts from the elbow handle", () => {
+    const design = updateDesign(DEFAULT_DESIGN, { kind: "l-shape" });
+    expect(dimensionsFromHandle(design, "cutout", { x: 132, z: 84 }, 6)).toEqual({
+      cutoutWidth: 60,
+      cutoutDepth: 60,
+    });
+  });
+
+  it("constrains drag edits so active stair openings remain valid", () => {
+    const frontStairs = updateDesign(DEFAULT_DESIGN, { stairEnabled: true, stairOffset: 120, stairWidth: 48 });
+    expect(dimensionsFromHandle(frontStairs, "width", { x: 60, z: 50 }, 6)).toEqual({ width: 168 });
+    const notchStairs = updateDesign(updateDesign(DEFAULT_DESIGN, { kind: "l-shape" }), {
+      stairEnabled: true,
+      stairEdgeId: "notch-horizontal",
+      stairOffset: 0,
+      stairWidth: 48,
+    });
+    expect(dimensionsFromHandle(notchStairs, "cutout", { x: 190, z: 96 }, 6).cutoutWidth).toBe(48);
+  });
+});
 
 describe("DeckDesignV1 normalization", () => {
   it("normalizes to an immutable, stable document", () => {

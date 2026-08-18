@@ -13,6 +13,7 @@ import {
 import { deriveQuantities } from "./quantities";
 import { createHistory, designHistoryReducer } from "./history";
 import { PlanView, formatFeetInches } from "./PlanView";
+import type { PlatformDimensionUpdate } from "./editor";
 import { ThreeView, type CameraPreset } from "./ThreeView";
 import "./styles.css";
 
@@ -33,16 +34,41 @@ function App() {
     loadInitialDesign(),
     createHistory,
   );
-  const design = history.present;
-  const applyDesign = (next: DeckDesignV1) => dispatchHistory({ type: "apply", design: next });
+  const [previewDesign, setPreviewDesign] = useState<DeckDesignV1 | null>(null);
+  const design = previewDesign ?? history.present;
+  const applyDesign = (next: DeckDesignV1) => {
+    setPreviewDesign(null);
+    dispatchHistory({ type: "apply", design: next });
+  };
   const [message, setMessage] = useState("Ready — changes update every projection immediately.");
   const [showFraming, setShowFraming] = useState(true);
   const [preset, setPreset] = useState<CameraPreset>("perspective");
   const [presetRequest, setPresetRequest] = useState(0);
+  const [snapIncrement, setSnapIncrement] = useState(6);
   const fileInput = useRef<HTMLInputElement>(null);
   const geometry = useMemo(() => deriveGeometry(design), [design]);
   const quantities = useMemo(() => deriveQuantities(design, geometry), [design, geometry]);
   const fingerprint = useMemo(() => designFingerprint(design), [design]);
+
+  const previewPlatformDimensions = (update: PlatformDimensionUpdate) => {
+    try {
+      setPreviewDesign(updateDesign(history.present, update));
+    } catch {
+      // Constrained handles retain the last valid authoritative preview.
+    }
+  };
+
+  const commitPlatformDimensions = (update: PlatformDimensionUpdate) => {
+    try {
+      const next = updateDesign(history.present, update);
+      setPreviewDesign(null);
+      dispatchHistory({ type: "apply", design: next });
+      setMessage(`Plan edit committed on a ${snapIncrement}-inch grid.`);
+    } catch (error) {
+      setPreviewDesign(null);
+      setMessage(error instanceof Error ? error.message : "Plan edit was not supported.");
+    }
+  };
 
   const applyNumber = (
     field: "width" | "projection" | "surfaceElevation" | "joistSpacing" | "cutoutWidth" | "cutoutDepth" | "stairOffset" | "stairWidth" | "treadDepth" | "landingDepth",
@@ -174,6 +200,14 @@ function App() {
               </>
             )}
           </div>
+          <label className="field full snap-field">
+            <span>Plan snap</span>
+            <select value={snapIncrement} onChange={(event) => setSnapIncrement(Number(event.target.value))}>
+              <option value="1">1 inch · fine</option>
+              <option value="6">6 inches · standard</option>
+              <option value="12">12 inches · coarse</option>
+            </select>
+          </label>
 
           <div className="section-heading compact">
             <span>02</span><div><p>Railing edges</p><small>Attached edge remains open</small></div>
@@ -284,7 +318,15 @@ function App() {
         <section className="visual-area">
           <article className="view-card plan-card">
             <div className="card-title"><div><span>Measured plan</span><small>2D · live projection</small></div><strong>{formatFeetInches(design.platform.surfaceElevation)} high</strong></div>
-            <PlanView design={design} geometry={geometry} showFraming={showFraming} />
+            <PlanView
+              design={design}
+              geometry={geometry}
+              showFraming={showFraming}
+              snapIncrement={snapIncrement}
+              onDimensionPreview={previewPlatformDimensions}
+              onDimensionCommit={commitPlatformDimensions}
+              onDimensionCancel={() => setPreviewDesign(null)}
+            />
           </article>
           <article className="view-card three-card">
             <div className="card-title">

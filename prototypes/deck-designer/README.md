@@ -20,6 +20,7 @@ Open the local URL Vite prints. Use `npm test` and `npm run build` for validatio
 - Any-free-edge conceptual stairs with an explicit railing opening
 - Optional top landing with deterministic orientation and area
 - Command-based undo and redo
+- Direct plan handles for width, projection, and L-cutout dimensions with selectable 1, 6, or 12 inch snapping
 - Orbit, pan, zoom, and camera presets
 - Browser local save plus JSON download/upload
 - Conceptual output only; not structural engineering or construction documents
