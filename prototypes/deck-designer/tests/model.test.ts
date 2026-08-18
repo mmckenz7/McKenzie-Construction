@@ -1,3 +1,4 @@
+// @ts-ignore The production root intentionally does not install this isolated prototype package's test runner.
 import { describe, expect, it } from "vitest";
 import { DEFAULT_DESIGN, designFingerprint, normalizeDesign, stableDesignJson, updateDesign } from "../src/model";
 import { deriveGeometry } from "../src/geometry";

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
+// @ts-ignore The production root intentionally does not install this isolated prototype package's dependencies.
 import * as THREE from "three";
+// @ts-ignore The production root intentionally does not install this isolated prototype package's dependencies.
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { DeckDesignV1 } from "./model";
 import type { DeckGeometry, LinearMember } from "./geometry";
@@ -200,7 +202,7 @@ export function ThreeView({ design, geometry, preset, presetRequest, showFraming
       observer.disconnect();
       controls.dispose();
       renderer.dispose();
-      scene.traverse((object) => {
+      scene.traverse((object: any) => {
         if (object instanceof THREE.Mesh) object.geometry.dispose();
       });
       for (const material of [deckingMaterial, framingMaterial, railMaterial]) material.dispose();
