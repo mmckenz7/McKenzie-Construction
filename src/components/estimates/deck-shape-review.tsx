@@ -9,6 +9,7 @@ import {
   type DeckObservationItem,
 } from "@/lib/deck-takeoff-v0";
 import {
+  closeDeckOutlineWithMeasuredWall,
   insertOutlinePointOnNearestEdge,
   isValidDeckOutline,
   moveDeckOutlineEdge,
@@ -106,6 +107,9 @@ export function DeckShapeReview({
   const [snapMode, setSnapMode] = useState<"smart" | "free">("smart");
   const [selectedEdge, setSelectedEdge] = useState<number | null>(null);
   const [edgeDraft, setEdgeDraft] = useState("");
+  const [perimeterPoints, setPerimeterPoints] = useState<DeckOutlinePoint[] | null>(null);
+  const [measurementStep, setMeasurementStep] = useState<number | null>(null);
+  const [advancedEditing, setAdvancedEditing] = useState(false);
   const [feedback, setFeedback] = useState(initialShape ? `Saved shape revision ${initialShape.shapeRevision} loaded.` : "Starting outline loaded from the completed site visit.");
   const svgRef = useRef<SVGSVGElement>(null);
   const edgeDragRef = useRef<{
@@ -116,8 +120,9 @@ export function DeckShapeReview({
   const automaticSuggestionStarted = useRef(false);
   const titleId = useId();
   const descriptionId = useId();
-  const maxX = Math.max(...outline.map((point) => point.x), length * 1.25, 1);
-  const maxY = Math.max(...outline.map((point) => point.y), width * 1.25, 1);
+  const displayedOutline = perimeterPoints ?? outline;
+  const maxX = Math.max(...displayedOutline.map((point) => point.x), length * 1.25, 1);
+  const maxY = Math.max(...displayedOutline.map((point) => point.y), width * 1.25, 1);
   const outlineBounds = useMemo(() => ({
     minX: Math.min(...outline.map((point) => point.x)),
     maxX: Math.max(...outline.map((point) => point.x)),
@@ -131,7 +136,7 @@ export function DeckShapeReview({
     x: drawingOriginX + point.x * drawingScale,
     y: drawingOriginY + point.y * drawingScale,
   }), [drawingOriginX, drawingOriginY, drawingScale]);
-  const points = outline.map(toSvg);
+  const points = displayedOutline.map(toSvg);
   const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
   const gridX = Array.from({ length: Math.floor(maxX * 2) + 1 }, (_, index) => index / 2);
   const gridY = Array.from({ length: Math.floor(maxY * 2) + 1 }, (_, index) => index / 2);
@@ -308,10 +313,56 @@ export function DeckShapeReview({
   }
 
   function beginCanvasInteraction(event: ReactPointerEvent<SVGSVGElement>) {
+    if (perimeterPoints) {
+      const candidate = clientPoint(event);
+      if (!candidate) return;
+      const first = perimeterPoints[0];
+      if (perimeterPoints.length >= 3 && Math.hypot(candidate.x - first.x, candidate.y - first.y) <= 24 / drawingScale) {
+        if (!isValidDeckOutline(perimeterPoints)) {
+          setFeedback("That perimeter crosses or collapses. Undo the last corner and try again.");
+          return;
+        }
+        const completed = perimeterPoints.map((point) => ({ ...point }));
+        setOutline(completed);
+        setPerimeterPoints(null);
+        setMeasurementStep(0);
+        setSelectedEdge(0);
+        setEdgeDraft(edgeLength(completed[0], completed[1]).toFixed(2));
+        setFeedback("Perimeter closed. Now enter each wall measurement in order.");
+        return;
+      }
+      if (perimeterPoints.length >= 24) {
+        setFeedback("This outline already has the maximum of 24 corners.");
+        return;
+      }
+      const previous = perimeterPoints[perimeterPoints.length - 1];
+      const dx = candidate.x - previous.x;
+      const dy = candidate.y - previous.y;
+      if (Math.hypot(dx, dy) < 0.5) {
+        setFeedback("Move at least 6 inches from the previous corner.");
+        return;
+      }
+      const rawAngle = Math.atan2(dy, dx);
+      const angleStep = Math.PI / 4;
+      const snappedAngle = Math.round(rawAngle / angleStep) * angleStep;
+      const angleDifference = Math.abs(Math.atan2(Math.sin(rawAngle - snappedAngle), Math.cos(rawAngle - snappedAngle)));
+      const distance = Math.hypot(dx, dy);
+      const next = angleDifference <= (12 * Math.PI) / 180
+        ? { x: previous.x + Math.cos(snappedAngle) * distance, y: previous.y + Math.sin(snappedAngle) * distance }
+        : candidate;
+      const bounded = {
+        x: Number(Math.max(0, Math.min(200, next.x)).toFixed(3)),
+        y: Number(Math.max(0, Math.min(200, next.y)).toFixed(3)),
+      };
+      setPerimeterPoints((current) => current ? [...current, bounded] : current);
+      setFeedback(`Corner ${perimeterPoints.length + 1} added. Keep walking around the outside, or tap the green starting point to close the deck.`);
+      return;
+    }
     if (addPointMode) {
       addPoint(event);
       return;
     }
+    if (!advancedEditing) return;
     const candidate = clientPoint(event);
     if (!candidate) return;
     const nearest = outline
@@ -336,6 +387,21 @@ export function DeckShapeReview({
     setFeedback(`${edgeName(index)} selected. Enter its exact length below the drawing.`);
   }
 
+  function startPerimeterWalk() {
+    setPerimeterPoints([{ x: 0, y: 0 }]);
+    setMeasurementStep(null);
+    setSelectedEdge(null);
+    setAdvancedEditing(false);
+    setFeedback("Starting at the left house corner. Walk clockwise and tap every outside corner. Tap the green starting point when you get back to the house.");
+  }
+
+  function useStartingOutline() {
+    setPerimeterPoints(null);
+    setMeasurementStep(0);
+    selectExactEdge(0);
+    setFeedback("Starting outline selected. Enter each wall measurement in order.");
+  }
+
   function updateGradeHeight(key: keyof DeckGradeHeights, raw: string) {
     const value = Number(raw);
     if (!Number.isFinite(value) || value < 0 || value > 50) return;
@@ -349,12 +415,14 @@ export function DeckShapeReview({
       setFeedback("Enter an edge length greater than 0 and no more than 100 feet.");
       return;
     }
-    setOutline((current) => {
+    const current = outline;
+
+    if (measurementStep === null) {
       const start = current[selectedEdge];
       const endIndex = (selectedEdge + 1) % current.length;
       const end = current[endIndex];
       const currentLength = edgeLength(start, end);
-      if (!currentLength) return current;
+      if (!currentLength) return;
       const nextEnd = {
         x: start.x + ((end.x - start.x) / currentLength) * value,
         y: start.y + ((end.y - start.y) / currentLength) * value,
@@ -362,11 +430,51 @@ export function DeckShapeReview({
       const next = current.map((point, index) => index === endIndex ? nextEnd : point);
       if (!isValidDeckOutline(next)) {
         setFeedback("That measurement would cross or collapse the outline.");
-        return current;
+        return;
       }
-      setFeedback(`Edge ${selectedEdge + 1} updated to ${value} feet.`);
-      return next;
-    });
+      setOutline(next);
+      setFeedback(`${edgeName(selectedEdge)} updated to ${value} feet.`);
+      return;
+    }
+
+    const start = current[selectedEdge];
+    const endIndex = (selectedEdge + 1) % current.length;
+    const end = current[endIndex];
+    const currentLength = edgeLength(start, end);
+    if (!currentLength) return;
+    let next: DeckOutlinePoint[];
+
+    if (selectedEdge === current.length - 1) {
+      const resolved = closeDeckOutlineWithMeasuredWall(current, value);
+      if (!resolved) {
+        setFeedback("Those wall lengths cannot meet at the house corner. Recheck the last two measurements or adjust the rough corner direction.");
+        return;
+      }
+      next = [...resolved];
+    } else {
+      const nextPoint = {
+        x: start.x + ((end.x - start.x) / currentLength) * value,
+        y: start.y + ((end.y - start.y) / currentLength) * value,
+      };
+      next = current.map((point, index) => index === endIndex ? nextPoint : point);
+    }
+    if (!isValidDeckOutline(next)) {
+      setFeedback("That measurement would cross or collapse the outline. Check the previous wall direction.");
+      return;
+    }
+    setOutline(next);
+    const nextStep = measurementStep === null ? null : measurementStep + 1;
+    if (nextStep !== null && nextStep < next.length) {
+      setMeasurementStep(nextStep);
+      setSelectedEdge(nextStep);
+      setEdgeDraft(edgeLength(next[nextStep], next[(nextStep + 1) % next.length]).toFixed(2));
+      setFeedback(`${edgeName(selectedEdge)} saved at ${value} feet. Measure wall ${nextStep + 1} next.`);
+    } else {
+      setMeasurementStep(null);
+      setSelectedEdge(null);
+      setEdgeDraft("");
+      setFeedback("All wall measurements are entered. Review the shape and stairs, then save it.");
+    }
   }
 
   async function approveShape() {
@@ -444,6 +552,23 @@ export function DeckShapeReview({
       <button type="button" className={`mt-2 w-full ${secondary}`} disabled={suggesting} onClick={() => void loadPhotoSuggestion()}>{suggesting ? "Reviewing saved photos…" : "Try the saved photos again"}</button>
     </div> : null}
 
+    <div className="mt-4 rounded-xl border-2 border-emerald-700 bg-emerald-50 p-4">
+      <p className="text-xs font-black uppercase tracking-[.14em] text-emerald-800">Simple perimeter walk</p>
+      <h3 className="mt-1 text-xl font-black text-slate-950">Start at the left house corner</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-800">Walk clockwise. Tap each corner roughly, then tap the green starting point when you return to the house. The app will ask for every exact wall measurement next.</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <button type="button" className={primary} onClick={startPerimeterWalk}>Draw perimeter from the house</button>
+        <button type="button" className={secondary} onClick={useStartingOutline}>Use this starting outline</button>
+      </div>
+      {perimeterPoints ? <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-white p-3 text-sm font-bold text-slate-900">
+        <span>{perimeterPoints.length === 1 ? "Starting point placed" : `${perimeterPoints.length} corners placed`}</span>
+        <button type="button" className="min-h-11 rounded-lg border-2 border-slate-400 px-3 font-black" disabled={perimeterPoints.length <= 1} onClick={() => {
+          setPerimeterPoints((current) => current && current.length > 1 ? current.slice(0, -1) : current);
+          setFeedback("Last corner removed.");
+        }}>Undo corner</button>
+      </div> : null}
+    </div>
+
     <div className="mt-4 rounded-xl border-2 border-slate-900 bg-slate-950 p-2">
       <svg
         ref={svgRef}
@@ -470,8 +595,10 @@ export function DeckShapeReview({
           return <line key={`grid-y-${value}`} x1="16" y1={y} x2="304" y2={y} stroke={major ? "#64748b" : "#94a3b8"} strokeWidth={major ? "1.1" : "0.7"} vectorEffect="non-scaling-stroke" />;
         })}
         <text x="160" y="18" textAnchor="middle" fontSize="10" fontWeight="800" fill="#334155">HOUSE / BUILDING SIDE</text>
-        <polygon points={polygon} fill="#bfdbfe" fillOpacity="0.58" stroke="#0f172a" strokeWidth="3" />
-        {outline.map((point, index) => {
+        {perimeterPoints
+          ? <polyline points={polygon} fill="none" stroke="#0f172a" strokeWidth="3" strokeDasharray="7 4" />
+          : <polygon points={polygon} fill="#bfdbfe" fillOpacity="0.58" stroke="#0f172a" strokeWidth="3" />}
+        {!perimeterPoints ? outline.map((point, index) => {
           const start = points[index];
           const end = points[(index + 1) % points.length];
           const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
@@ -486,11 +613,11 @@ export function DeckShapeReview({
               onPointerDown={(event) => { event.stopPropagation(); selectExactEdge(index); }}
               onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectExactEdge(index); } }}
             >
-              <rect x={midpoint.x - 34} y={midpoint.y - 18} width="68" height="18" rx="5" fill="white" stroke="#0f172a" strokeWidth="1.5" />
+              <rect x={midpoint.x - 34} y={midpoint.y - 18} width="68" height="18" rx="5" fill={selectedEdge === index ? "#dcfce7" : "white"} stroke={selectedEdge === index ? "#047857" : "#0f172a"} strokeWidth={selectedEdge === index ? "2.5" : "1.5"} />
               <text x={midpoint.x} y={midpoint.y - 10} textAnchor="middle" fontSize="7" fontWeight="800" fill="#334155">{edgeName(index)}</text>
               <text x={midpoint.x} y={midpoint.y - 3} textAnchor="middle" fontSize="8" fontWeight="950" fill="#020617">{edgeLength(point, outline[(index + 1) % outline.length]).toFixed(1)} ft · tap</text>
             </g>
-            <circle
+            {advancedEditing ? <circle
               cx={slider.x}
               cy={slider.y}
               r="24"
@@ -519,8 +646,8 @@ export function DeckShapeReview({
                 moveWholeEdge(index, desired.x * normal.x + desired.y * normal.y);
                 setFeedback(`Wall ${index + 1} moved 6 inches. Both corner points stayed together.`);
               }}
-            />
-            <line
+            /> : null}
+            {advancedEditing ? <line
               x1={slider.x - normal.x * 5}
               y1={slider.y - normal.y * 5}
               x2={slider.x + normal.x * 5}
@@ -529,14 +656,15 @@ export function DeckShapeReview({
               strokeWidth="3"
               strokeLinecap="round"
               pointerEvents="none"
-            />
+            /> : null}
           </g>;
-        })}
+        }) : null}
         {points.map((point, index) => <g key={`point-${index}`} pointerEvents="none">
-          <circle cx={point.x} cy={point.y} r="6" fill="white" stroke="#0f172a" strokeWidth="1.5" />
-          <circle cx={point.x} cy={point.y} r="3" fill="#f97316" stroke="#7c2d12" strokeWidth="1" />
+          <circle cx={point.x} cy={point.y} r={perimeterPoints && index === 0 ? 8 : 6} fill="white" stroke="#0f172a" strokeWidth="1.5" />
+          <circle cx={point.x} cy={point.y} r={perimeterPoints && index === 0 ? 5 : 3} fill={perimeterPoints && index === 0 ? "#16a34a" : "#f97316"} stroke={perimeterPoints && index === 0 ? "#14532d" : "#7c2d12"} strokeWidth="1" />
+          {perimeterPoints ? <text x={point.x} y={point.y - 9} textAnchor="middle" fontSize="7" fontWeight="950" fill="#020617" stroke="white" strokeWidth="3" paintOrder="stroke">{index === 0 ? "START" : index + 1}</text> : null}
         </g>)}
-        {stairGeometry ? <g
+        {!perimeterPoints && stairGeometry ? <g
           aria-label={`Movable stairs; estimated height ${stairGeometry.riseFeet.toFixed(1)} feet`}
           role="slider"
           tabIndex={0}
@@ -552,7 +680,7 @@ export function DeckShapeReview({
           <polygon points={stairGeometry.points.map((point) => `${point.x},${point.y}`).join(" ")} fill="#fde68a" stroke="#78350f" strokeWidth="3" />
           <text x={toSvg(stairGeometry.center).x} y={toSvg(stairGeometry.center).y + 4} textAnchor="middle" fontSize="8" fontWeight="950" fill="#451a03">STAIRS · {stairGeometry.riseFeet.toFixed(1)} ft</text>
         </g> : null}
-        {([
+        {!perimeterPoints ? ([
           ["HL", { x: outlineBounds.minX, y: outlineBounds.minY }, gradeHeights.houseLeftFeet],
           ["HR", { x: outlineBounds.maxX, y: outlineBounds.minY }, gradeHeights.houseRightFeet],
           ["YL", { x: outlineBounds.minX, y: outlineBounds.maxY }, gradeHeights.yardLeftFeet],
@@ -568,13 +696,25 @@ export function DeckShapeReview({
             <text x={marker.x} y={marker.y + 2.5} textAnchor="middle" fontSize="5.5" fontWeight="950" fill="white">{label}</text>
             <text x={marker.x} y={marker.y + (label.startsWith("H") ? -11 : 16)} textAnchor="middle" fontSize="7" fontWeight="950" fill="#020617" stroke="white" strokeWidth="3" paintOrder="stroke">{height.toFixed(1)} ft</text>
           </g>;
-        })}
+        }) : null}
       </svg>
     </div>
 
-    <p className="mt-2 rounded-lg bg-blue-50 p-3 text-sm font-bold text-blue-950">Drag a small blue wall slider to move that entire wall. Both corner points move together, and the adjoining measurements update automatically.</p>
+    <p className="mt-2 rounded-lg bg-blue-50 p-3 text-sm font-bold text-blue-950">{perimeterPoints ? "Tap the next outside corner. When you return to the house, tap the green START point to close the shape." : "Tap any wall label to edit that exact measurement."}</p>
 
-    <fieldset className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3">
+    {measurementStep !== null && selectedEdge !== null ? <div className="mt-3 rounded-xl border-2 border-emerald-700 bg-emerald-50 p-4">
+      <p className="text-xs font-black uppercase tracking-[.14em] text-emerald-800">Wall {measurementStep + 1} of {outline.length}</p>
+      <h3 className="mt-1 text-lg font-black text-slate-950">Measure {edgeName(selectedEdge)}</h3>
+      <p className="mt-1 text-sm text-slate-700">Enter the real tape measurement for the highlighted segment.</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+        <label className="text-sm font-bold text-slate-950">Exact length (ft)<input autoFocus className="mt-1 min-h-12 w-full rounded-lg border-2 border-emerald-700 bg-white px-3 text-lg font-black" inputMode="decimal" value={edgeDraft} onFocus={(event) => event.currentTarget.select()} onChange={(event) => setEdgeDraft(event.target.value)} /></label>
+        <button type="button" className={`${primary} self-end`} onClick={applyEdgeLength}>{measurementStep + 1 === outline.length ? "Save final wall" : "Save and measure next wall"}</button>
+      </div>
+    </div> : null}
+
+    <details className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3" open={advancedEditing} onToggle={(event) => setAdvancedEditing(event.currentTarget.open)}>
+      <summary className="min-h-11 cursor-pointer py-2 font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Optional fine adjustments</summary>
+    <fieldset className="mt-2 rounded-lg border border-slate-300 bg-white p-3">
       <legend className="px-1 text-sm font-black text-slate-950">Corner movement</legend>
       <div className="mt-2 grid grid-cols-2 gap-2">
         <button type="button" className={snapMode === "smart" ? primary : secondary} aria-pressed={snapMode === "smart"} onClick={() => { setSnapMode("smart"); setFeedback("Smart snap is on. Drag freely; it catches only when you are close to the grid or a 45°/90° line."); }}>Smart snap</button>
@@ -603,6 +743,7 @@ export function DeckShapeReview({
         <label className="text-sm font-bold text-slate-900">Exact wall length (ft)<input className="mt-1 min-h-12 w-full rounded-lg border border-slate-400 bg-white px-3" inputMode="decimal" value={edgeDraft} onFocus={(event) => event.currentTarget.select()} onChange={(event) => setEdgeDraft(event.target.value)} /></label>
         <button type="button" className={`${primary} self-end`} disabled={selectedEdge === null} onClick={applyEdgeLength}>Apply</button>
       </div>
+    </details>
     </details>
 
     <fieldset className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3">

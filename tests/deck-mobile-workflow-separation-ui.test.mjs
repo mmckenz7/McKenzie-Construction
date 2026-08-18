@@ -20,6 +20,12 @@ test("shape review contains footprint decisions but no structural or pricing wor
   assert.match(shape, /Does this look like the deck\?/);
   assert.match(shape, /Replacement/);
   assert.match(shape, /New deck/);
+  assert.match(shape, /Simple perimeter walk/);
+  assert.match(shape, /Draw perimeter from the house/);
+  assert.match(shape, /Use this starting outline/);
+  assert.match(shape, /tap the green starting point to close the deck/i);
+  assert.match(shape, /Save and measure next wall/);
+  assert.match(shape, /Save final wall/);
   assert.match(shape, /Add a corner/);
   assert.match(shape, /Edit an exact wall measurement/);
   assert.match(shape, /Smart snap/);
@@ -34,8 +40,8 @@ test("shape review contains footprint decisions but no structural or pricing wor
 test("shape grid stays visible while corner dots stay small without shrinking touch targets", () => {
   assert.match(shape, /fillOpacity="0\.58"/);
   assert.match(shape, /stroke=\{major \? "#64748b" : "#94a3b8"\}/);
-  assert.match(shape, /r="6" fill="white" stroke="#0f172a"/);
-  assert.match(shape, /The nearest corner was selected/);
+  assert.match(shape, /r=\{perimeterPoints && index === 0 \? 8 : 6\}/);
+  assert.match(shape, /fill=\{perimeterPoints && index === 0 \? "#16a34a" : "#f97316"\}/);
   assert.match(shape, /x1="16" y1=\{y\} x2="304"/);
   assert.match(shape, /y1="24" x2=\{x\} y2="198"/);
 });
@@ -61,16 +67,25 @@ test("wall labels open their exact measurement instead of exposing numbered edge
   assert.match(shape, /Enter its exact length below the drawing/);
 });
 
-test("wall sliders move both edge corners while retaining mobile-sized invisible targets", () => {
+test("advanced wall sliders remain optional and retain mobile-sized invisible targets", () => {
   assert.match(shape, /function moveWholeEdge\(edgeIndex: number, requestedDelta: number\)/);
   assert.match(shape, /moveDeckOutlineEdge\(current, edgeIndex, requestedDelta/);
   assert.match(shape, /edgeDragRef\.current = \{ edgeIndex: index, startPointer, startOutline:/);
   assert.match(shape, /role="slider"/);
   assert.match(shape, /Move wall \$\{index \+ 1\}; both corners move together/);
   assert.match(shape, /r="24"\s+fill="transparent"/);
-  assert.match(shape, /Drag a small blue wall slider to move that entire wall/);
+  assert.match(shape, /Optional fine adjustments/);
+  assert.match(shape, /advancedEditing \? <circle/);
   assert.match(shape, /ArrowUp/);
   assert.match(shape, /Wall \$\{index \+ 1\} moved 6 inches/);
+});
+
+test("simple perimeter walk begins at the house and validates before exact measurements", () => {
+  assert.match(shape, /setPerimeterPoints\(\[\{ x: 0, y: 0 \}\]\)/);
+  assert.match(shape, /isValidDeckOutline\(perimeterPoints\)/);
+  assert.match(shape, /setMeasurementStep\(0\)/);
+  assert.match(shape, /Wall \{measurementStep \+ 1\} of \{outline\.length\}/);
+  assert.match(shape, /Exact length \(ft\)/);
 });
 
 test("approved shape feeds structure while pricing controls remain in takeoff", () => {

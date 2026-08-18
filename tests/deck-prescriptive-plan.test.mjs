@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   assertPartialFramingEvidenceBinding,
   buildPrescriptiveDeckPlan,
+  closeDeckOutlineWithMeasuredWall,
   deckEstimatingImmediateIssueIds,
   drawingClientToDeckPoint,
   isCanonicalFramingEvidence,
@@ -448,6 +449,24 @@ test("moving a wall translates both edge corners and updates its adjoining measu
   assert.equal(magneticallyMoved[2].y, 10.5);
   assert.equal(magneticallyMoved[3].y, 10.5);
   assert.equal(moveDeckOutlineEdge(rectangle, 9, 1), rectangle);
+});
+
+test("final measured wall closes without changing previously measured walls", () => {
+  const rough = [
+    { x: 0, y: 0 },
+    { x: 14, y: 0 },
+    { x: 14, y: 12 },
+    { x: 0.4, y: 11.5 },
+  ];
+  const previousLength = Math.hypot(
+    rough[3].x - rough[2].x,
+    rough[3].y - rough[2].y,
+  );
+  const closed = closeDeckOutlineWithMeasuredWall(rough, 12);
+  assert.ok(closed);
+  assert.ok(Math.abs(Math.hypot(closed[3].x, closed[3].y) - 12) < 0.001);
+  assert.ok(Math.abs(Math.hypot(closed[3].x - closed[2].x, closed[3].y - closed[2].y) - previousLength) < 0.001);
+  assert.equal(closeDeckOutlineWithMeasuredWall(rough, 50), null);
 });
 
 test("drawing zoom preserves fit boundaries and pointer geometry", () => {

@@ -546,6 +546,60 @@ export function isValidDeckOutline(points: readonly DeckOutlinePoint[]) {
   return true;
 }
 
+export function closeDeckOutlineWithMeasuredWall(
+  points: readonly DeckOutlinePoint[],
+  finalWallLengthFeet: number,
+) {
+  if (
+    !isValidDeckOutline(points) ||
+    !Number.isFinite(finalWallLengthFeet) ||
+    finalWallLengthFeet <= 0
+  )
+    return null;
+  const lastIndex = points.length - 1;
+  const first = points[0];
+  const previous = points[lastIndex - 1];
+  const last = points[lastIndex];
+  const previousWallLength = Math.hypot(last.x - previous.x, last.y - previous.y);
+  const centerDistance = Math.hypot(first.x - previous.x, first.y - previous.y);
+  if (
+    centerDistance < 0.000001 ||
+    centerDistance > previousWallLength + finalWallLengthFeet ||
+    centerDistance < Math.abs(previousWallLength - finalWallLengthFeet)
+  )
+    return null;
+  const along = (
+    previousWallLength ** 2 - finalWallLengthFeet ** 2 + centerDistance ** 2
+  ) / (2 * centerDistance);
+  const height = Math.sqrt(Math.max(0, previousWallLength ** 2 - along ** 2));
+  const unit = {
+    x: (first.x - previous.x) / centerDistance,
+    y: (first.y - previous.y) / centerDistance,
+  };
+  const base = {
+    x: previous.x + unit.x * along,
+    y: previous.y + unit.y * along,
+  };
+  const candidates = [
+    { x: base.x - unit.y * height, y: base.y + unit.x * height },
+    { x: base.x + unit.y * height, y: base.y - unit.x * height },
+  ].sort(
+    (a, b) =>
+      Math.hypot(a.x - last.x, a.y - last.y) -
+      Math.hypot(b.x - last.x, b.y - last.y),
+  );
+  const resolved = candidates
+    .map((candidate) => points.map((point, index) =>
+      index === lastIndex
+        ? { x: Number(candidate.x.toFixed(4)), y: Number(candidate.y.toFixed(4)) }
+        : { ...point },
+    ))
+    .find(isValidDeckOutline);
+  return resolved
+    ? Object.freeze(resolved.map((point) => Object.freeze({ ...point })))
+    : null;
+}
+
 function defaultPostPositions(lengthFeet: number, count = 3) {
   return Array.from({ length: count }, (_, index) =>
     String((lengthFeet * index) / Math.max(1, count - 1)),
