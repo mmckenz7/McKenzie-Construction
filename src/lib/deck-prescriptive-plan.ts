@@ -600,6 +600,43 @@ export function closeDeckOutlineWithMeasuredWall(
     : null;
 }
 
+export function applyDeckWallMeasurementInSequence(
+  points: readonly DeckOutlinePoint[],
+  edgeIndex: number,
+  wallLengthFeet: number,
+) {
+  if (
+    !isValidDeckOutline(points) ||
+    !Number.isInteger(edgeIndex) ||
+    edgeIndex < 0 ||
+    edgeIndex >= points.length ||
+    !Number.isFinite(wallLengthFeet) ||
+    wallLengthFeet <= 0
+  )
+    return null;
+  if (edgeIndex === points.length - 1)
+    return closeDeckOutlineWithMeasuredWall(points, wallLengthFeet);
+
+  const start = points[edgeIndex];
+  const oldEnd = points[edgeIndex + 1];
+  const currentLength = Math.hypot(oldEnd.x - start.x, oldEnd.y - start.y);
+  if (currentLength < 0.000001) return null;
+  const measuredEnd = {
+    x: start.x + ((oldEnd.x - start.x) / currentLength) * wallLengthFeet,
+    y: start.y + ((oldEnd.y - start.y) / currentLength) * wallLengthFeet,
+  };
+  const shift = { x: measuredEnd.x - oldEnd.x, y: measuredEnd.y - oldEnd.y };
+  const rebuilt = points.map((point, index) => index > edgeIndex
+    ? {
+        x: Number((point.x + shift.x).toFixed(4)),
+        y: Number((point.y + shift.y).toFixed(4)),
+      }
+    : { ...point });
+  return isValidDeckOutline(rebuilt)
+    ? Object.freeze(rebuilt.map((point) => Object.freeze({ ...point })))
+    : null;
+}
+
 function defaultPostPositions(lengthFeet: number, count = 3) {
   return Array.from({ length: count }, (_, index) =>
     String((lengthFeet * index) / Math.max(1, count - 1)),

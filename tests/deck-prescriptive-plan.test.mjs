@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  applyDeckWallMeasurementInSequence,
   assertPartialFramingEvidenceBinding,
   buildPrescriptiveDeckPlan,
   closeDeckOutlineWithMeasuredWall,
@@ -467,6 +468,34 @@ test("final measured wall closes without changing previously measured walls", ()
   assert.ok(Math.abs(Math.hypot(closed[3].x, closed[3].y) - 12) < 0.001);
   assert.ok(Math.abs(Math.hypot(closed[3].x - closed[2].x, closed[3].y - closed[2].y) - previousLength) < 0.001);
   assert.equal(closeDeckOutlineWithMeasuredWall(rough, 50), null);
+});
+
+test("ordered wall measurements rebuild the rough perimeter instead of preserving rough dot locations", () => {
+  let shape = [
+    { x: 0, y: 0 },
+    { x: 0, y: 4 },
+    { x: 6, y: 4 },
+    { x: 6, y: 8 },
+    { x: 0, y: 8 },
+    { x: 0, y: 12 },
+    { x: 12, y: 12 },
+    { x: 12, y: 0 },
+  ];
+  for (const [edgeIndex, length] of [5, 7, 5, 7, 5].entries()) {
+    const rebuilt = applyDeckWallMeasurementInSequence(shape, edgeIndex, length);
+    assert.ok(rebuilt);
+    shape = [...rebuilt];
+  }
+  assert.deepEqual(shape.slice(0, 6), [
+    { x: 0, y: 0 },
+    { x: 0, y: 5 },
+    { x: 7, y: 5 },
+    { x: 7, y: 10 },
+    { x: 0, y: 10 },
+    { x: 0, y: 15 },
+  ]);
+  assert.equal(shape[6].x, 12);
+  assert.equal(shape[6].y, 15);
 });
 
 test("drawing zoom preserves fit boundaries and pointer geometry", () => {

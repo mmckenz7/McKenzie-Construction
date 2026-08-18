@@ -9,7 +9,7 @@ import {
   type DeckObservationItem,
 } from "@/lib/deck-takeoff-v0";
 import {
-  closeDeckOutlineWithMeasuredWall,
+  applyDeckWallMeasurementInSequence,
   insertOutlinePointOnNearestEdge,
   isValidDeckOutline,
   moveDeckOutlineEdge,
@@ -449,31 +449,14 @@ export function DeckShapeReview({
       return;
     }
 
-    const start = current[selectedEdge];
-    const endIndex = (selectedEdge + 1) % current.length;
-    const end = current[endIndex];
-    const currentLength = edgeLength(start, end);
-    if (!currentLength) return;
-    let next: DeckOutlinePoint[];
-
-    if (selectedEdge === current.length - 1) {
-      const resolved = closeDeckOutlineWithMeasuredWall(current, value);
-      if (!resolved) {
-        setFeedback("Those wall lengths cannot meet at the house corner. Recheck the last two measurements or adjust the rough corner direction.");
-        return;
-      }
-      next = [...resolved];
-    } else {
-      const nextPoint = {
-        x: start.x + ((end.x - start.x) / currentLength) * value,
-        y: start.y + ((end.y - start.y) / currentLength) * value,
-      };
-      next = current.map((point, index) => index === endIndex ? nextPoint : point);
-    }
-    if (!isValidDeckOutline(next)) {
-      setFeedback("That measurement would cross or collapse the outline. Check the previous wall direction.");
+    const rebuilt = applyDeckWallMeasurementInSequence(current, selectedEdge, value);
+    if (!rebuilt) {
+      setFeedback(selectedEdge === current.length - 1
+        ? "Those wall lengths cannot meet at the house corner. Recheck the last two measurements or adjust the rough corner direction."
+        : "That measurement would cross or collapse the outline. Check the rough wall direction.");
       return;
     }
+    const next = [...rebuilt];
     setOutline(next);
     const nextStep = measurementStep === null ? null : measurementStep + 1;
     if (nextStep !== null && nextStep < next.length) {
