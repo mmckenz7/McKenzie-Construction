@@ -140,6 +140,18 @@ export function DeckShapeReview({
   const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
   const gridX = Array.from({ length: Math.floor(maxX * 2) + 1 }, (_, index) => index / 2);
   const gridY = Array.from({ length: Math.floor(maxY * 2) + 1 }, (_, index) => index / 2);
+  const selectedMeasurementPosition = selectedEdge === null || perimeterPoints
+    ? null
+    : (() => {
+        const start = points[selectedEdge];
+        const end = points[(selectedEdge + 1) % points.length];
+        const size = Math.hypot(end.x - start.x, end.y - start.y) || 1;
+        const normal = { x: -(end.y - start.y) / size, y: (end.x - start.x) / size };
+        return {
+          left: `${(((start.x + end.x) / 2 - normal.x * 10) / 320) * 100}%`,
+          top: `${(((start.y + end.y) / 2 - normal.y * 10) / 210) * 100}%`,
+        };
+      })();
   const stairGeometry = useMemo(() => {
     if (!stairsPresent || !stairPlacement || stairPlacement.edgeIndex >= outline.length) return null;
     const start = outline[stairPlacement.edgeIndex];
@@ -528,7 +540,7 @@ export function DeckShapeReview({
     }
   }
 
-  return <section aria-labelledby="deck-shape-review-title" className="rounded-2xl border-2 border-blue-700 bg-white p-4 shadow-sm sm:p-6">
+  return <section aria-labelledby="deck-shape-review-title" className="rounded-2xl border border-slate-300 bg-white p-4 shadow-sm sm:p-6">
     <p className="text-xs font-black uppercase tracking-[.16em] text-blue-700">Step 2 · Confirm the shape</p>
     <h2 id="deck-shape-review-title" className="mt-1 text-2xl font-black text-slate-950">Does this look like the deck?</h2>
     <p className="mt-2 text-sm leading-6 text-slate-700">Saved field measurements create the starting outline, and the site photos remain the visual reference. Correct only the footprint and stair presence here. Framing, code, materials and pricing come later.</p>
@@ -552,7 +564,7 @@ export function DeckShapeReview({
       <button type="button" className={`mt-2 w-full ${secondary}`} disabled={suggesting} onClick={() => void loadPhotoSuggestion()}>{suggesting ? "Reviewing saved photos…" : "Try the saved photos again"}</button>
     </div> : null}
 
-    <div className="mt-4 rounded-xl border-2 border-emerald-700 bg-emerald-50 p-4">
+    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <p className="text-xs font-black uppercase tracking-[.14em] text-emerald-800">Simple perimeter walk</p>
       <h3 className="mt-1 text-xl font-black text-slate-950">Start at the left house corner</h3>
       <p className="mt-2 text-sm leading-6 text-slate-800">Walk clockwise. Tap each corner roughly, then tap the green starting point when you return to the house. The app will ask for every exact wall measurement next.</p>
@@ -569,7 +581,7 @@ export function DeckShapeReview({
       </div> : null}
     </div>
 
-    <div className="mt-4 rounded-xl border-2 border-slate-900 bg-slate-950 p-2">
+    <div className="relative mt-4 overflow-hidden rounded-xl border border-slate-300 bg-white p-2 shadow-sm">
       <svg
         ref={svgRef}
         viewBox="0 0 320 210"
@@ -587,17 +599,17 @@ export function DeckShapeReview({
         {gridX.map((value) => {
           const x = toSvg({ x: value, y: 0 }).x;
           const major = Number.isInteger(value);
-          return <line key={`grid-x-${value}`} x1={x} y1="24" x2={x} y2="198" stroke={major ? "#64748b" : "#94a3b8"} strokeWidth={major ? "1.1" : "0.7"} vectorEffect="non-scaling-stroke" />;
+          return <line key={`grid-x-${value}`} x1={x} y1="24" x2={x} y2="198" stroke={major ? "#cbd5e1" : "#e2e8f0"} strokeWidth={major ? "0.8" : "0.45"} vectorEffect="non-scaling-stroke" />;
         })}
         {gridY.map((value) => {
           const y = toSvg({ x: 0, y: value }).y;
           const major = Number.isInteger(value);
-          return <line key={`grid-y-${value}`} x1="16" y1={y} x2="304" y2={y} stroke={major ? "#64748b" : "#94a3b8"} strokeWidth={major ? "1.1" : "0.7"} vectorEffect="non-scaling-stroke" />;
+          return <line key={`grid-y-${value}`} x1="16" y1={y} x2="304" y2={y} stroke={major ? "#cbd5e1" : "#e2e8f0"} strokeWidth={major ? "0.8" : "0.45"} vectorEffect="non-scaling-stroke" />;
         })}
-        <text x="160" y="18" textAnchor="middle" fontSize="10" fontWeight="800" fill="#334155">HOUSE / BUILDING SIDE</text>
+        <text x="160" y="18" textAnchor="middle" fontSize="8" fontWeight="700" letterSpacing="0.8" fill="#475569">HOUSE / BUILDING SIDE</text>
         {perimeterPoints
-          ? <polyline points={polygon} fill="none" stroke="#0f172a" strokeWidth="3" strokeDasharray="7 4" />
-          : <polygon points={polygon} fill="#bfdbfe" fillOpacity="0.58" stroke="#0f172a" strokeWidth="3" />}
+          ? <polyline points={polygon} fill="none" stroke="#334155" strokeWidth="2" strokeDasharray="5 3" />
+          : <polygon points={polygon} fill="#dbeafe" fillOpacity="0.5" stroke="#334155" strokeWidth="2" />}
         {!perimeterPoints ? outline.map((point, index) => {
           const start = points[index];
           const end = points[(index + 1) % points.length];
@@ -605,32 +617,24 @@ export function DeckShapeReview({
           const svgEdgeSize = Math.hypot(end.x - start.x, end.y - start.y) || 1;
           const normal = { x: -(end.y - start.y) / svgEdgeSize, y: (end.x - start.x) / svgEdgeSize };
           const slider = { x: midpoint.x + normal.x * 10, y: midpoint.y + normal.y * 10 };
-          const measurementLabel = { x: midpoint.x - normal.x * 13, y: midpoint.y - normal.y * 13 };
+          const measurementLabel = { x: midpoint.x - normal.x * 10, y: midpoint.y - normal.y * 10 };
+          const isSelected = selectedEdge === index;
           return <g key={`edge-${index}`}>
-            <foreignObject x={measurementLabel.x - 30} y={measurementLabel.y - 24} width="60" height="48" overflow="visible">
-              <label className="flex h-full w-full cursor-text items-center justify-center" onPointerDown={(event) => event.stopPropagation()}>
-                <span className="sr-only">{edgeName(index)} length in feet</span>
-                <input
-                  aria-label={`${edgeName(index)} length in feet`}
-                  className={`h-8 w-[54px] rounded-md border-2 bg-white px-1 text-center text-[11px] font-black text-slate-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 ${selectedEdge === index ? "border-emerald-700 bg-emerald-50" : "border-slate-900"}`}
-                  inputMode="decimal"
-                  value={selectedEdge === index ? edgeDraft : edgeLength(point, outline[(index + 1) % outline.length]).toFixed(1)}
-                  onFocus={(event) => {
-                    if (measurementStep !== null) setMeasurementStep(index);
-                    selectExactEdge(index);
-                    event.currentTarget.select();
-                  }}
-                  onChange={(event) => setEdgeDraft(event.target.value)}
-                  onBlur={() => { if (measurementStep === null) applyEdgeLength(); }}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter") return;
-                    event.preventDefault();
-                    if (measurementStep === null) event.currentTarget.blur();
-                    else applyEdgeLength();
-                  }}
-                />
-              </label>
-            </foreignObject>
+            <g
+              role="button"
+              tabIndex={0}
+              aria-label={`Edit ${edgeName(index)} length, currently ${edgeLength(point, outline[(index + 1) % outline.length]).toFixed(1)} feet`}
+              onPointerDown={(event) => { event.stopPropagation(); selectExactEdge(index); }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                selectExactEdge(index);
+              }}
+            >
+              <rect x={measurementLabel.x - 22} y={measurementLabel.y - 12} width="44" height="24" fill="transparent" />
+              <rect x={measurementLabel.x - 14} y={measurementLabel.y - 5.5} width="28" height="11" rx="2.5" fill={isSelected ? "#eff6ff" : "white"} stroke={isSelected ? "#2563eb" : "#94a3b8"} strokeWidth={isSelected ? "1.2" : "0.7"} />
+              <text x={measurementLabel.x} y={measurementLabel.y + 2.2} textAnchor="middle" fontSize="6.2" fontWeight="700" fill="#0f172a">{edgeLength(point, outline[(index + 1) % outline.length]).toFixed(1)}′</text>
+            </g>
             {advancedEditing ? <circle
               cx={slider.x}
               cy={slider.y}
@@ -674,8 +678,8 @@ export function DeckShapeReview({
           </g>;
         }) : null}
         {points.map((point, index) => <g key={`point-${index}`} pointerEvents="none">
-          <circle cx={point.x} cy={point.y} r={perimeterPoints && index === 0 ? 8 : 6} fill="white" stroke="#0f172a" strokeWidth="1.5" />
-          <circle cx={point.x} cy={point.y} r={perimeterPoints && index === 0 ? 5 : 3} fill={perimeterPoints && index === 0 ? "#16a34a" : "#f97316"} stroke={perimeterPoints && index === 0 ? "#14532d" : "#7c2d12"} strokeWidth="1" />
+          <circle cx={point.x} cy={point.y} r={perimeterPoints && index === 0 ? 5.5 : 4} fill="white" stroke="#475569" strokeWidth="1.2" />
+          <circle cx={point.x} cy={point.y} r={perimeterPoints && index === 0 ? 3.2 : 2} fill={perimeterPoints && index === 0 ? "#16a34a" : "#2563eb"} />
           {perimeterPoints ? <text x={point.x} y={point.y - 9} textAnchor="middle" fontSize="7" fontWeight="950" fill="#020617" stroke="white" strokeWidth="3" paintOrder="stroke">{index === 0 ? "START" : index + 1}</text> : null}
         </g>)}
         {!perimeterPoints && stairGeometry ? <g
@@ -691,8 +695,8 @@ export function DeckShapeReview({
             setFeedback("Moving stairs. Drag them to any outside deck wall.");
           }}
         >
-          <polygon points={stairGeometry.points.map((point) => `${point.x},${point.y}`).join(" ")} fill="#fde68a" stroke="#78350f" strokeWidth="3" />
-          <text x={toSvg(stairGeometry.center).x} y={toSvg(stairGeometry.center).y + 4} textAnchor="middle" fontSize="8" fontWeight="950" fill="#451a03">STAIRS · {stairGeometry.riseFeet.toFixed(1)} ft</text>
+          <polygon points={stairGeometry.points.map((point) => `${point.x},${point.y}`).join(" ")} fill="#f1f5f9" stroke="#475569" strokeWidth="1.5" />
+          <text x={toSvg(stairGeometry.center).x} y={toSvg(stairGeometry.center).y + 2} textAnchor="middle" fontSize="5.5" fontWeight="700" fill="#334155">STAIRS · {stairGeometry.riseFeet.toFixed(1)}′</text>
         </g> : null}
         {!perimeterPoints ? ([
           ["HL", { x: outlineBounds.minX, y: outlineBounds.minY }, gradeHeights.houseLeftFeet],
@@ -706,12 +710,38 @@ export function DeckShapeReview({
             y: base.y + (label.startsWith("H") ? -11 : 11),
           };
           return <g key={`height-${label}`} pointerEvents="none">
-            <circle cx={marker.x} cy={marker.y} r="8" fill="#0f172a" stroke="white" strokeWidth="2" />
-            <text x={marker.x} y={marker.y + 2.5} textAnchor="middle" fontSize="5.5" fontWeight="950" fill="white">{label}</text>
-            <text x={marker.x} y={marker.y + (label.startsWith("H") ? -11 : 16)} textAnchor="middle" fontSize="7" fontWeight="950" fill="#020617" stroke="white" strokeWidth="3" paintOrder="stroke">{height.toFixed(1)} ft</text>
+            <rect x={marker.x - 13} y={marker.y - 5} width="26" height="10" rx="2.5" fill="white" stroke="#94a3b8" strokeWidth="0.7" />
+            <text x={marker.x} y={marker.y + 2.2} textAnchor="middle" fontSize="5.5" fontWeight="700" fill="#334155">{label} {height.toFixed(1)}′</text>
           </g>;
         }) : null}
       </svg>
+      {!perimeterPoints && selectedEdge !== null && selectedMeasurementPosition ? <label
+        className="absolute -translate-x-1/2 -translate-y-1/2"
+        style={selectedMeasurementPosition}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <span className="sr-only">{edgeName(selectedEdge)} length in feet</span>
+        <input
+          key={selectedEdge}
+          autoFocus
+          aria-label={`${edgeName(selectedEdge)} length in feet`}
+          className="h-9 w-[68px] rounded-md border border-blue-600 bg-white px-2 text-center text-sm font-bold text-slate-950 shadow-md outline-none ring-2 ring-blue-200"
+          inputMode="decimal"
+          value={edgeDraft}
+          onFocus={(event) => {
+            if (measurementStep !== null) setMeasurementStep(selectedEdge);
+            event.currentTarget.select();
+          }}
+          onChange={(event) => setEdgeDraft(event.target.value)}
+          onBlur={() => { if (measurementStep === null) applyEdgeLength(); }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            if (measurementStep === null) event.currentTarget.blur();
+            else applyEdgeLength();
+          }}
+        />
+      </label> : null}
     </div>
 
     <p className="mt-2 rounded-lg bg-blue-50 p-3 text-sm font-bold text-blue-950">{perimeterPoints ? "Tap the next outside corner. When you return to the house, tap the green START point to close the shape." : "Tap any measurement box on the drawing, type the real wall length, and press Enter."}</p>

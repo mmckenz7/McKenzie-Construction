@@ -38,10 +38,11 @@ test("shape review contains footprint decisions but no structural or pricing wor
 });
 
 test("shape grid stays visible while corner dots stay small without shrinking touch targets", () => {
-  assert.match(shape, /fillOpacity="0\.58"/);
-  assert.match(shape, /stroke=\{major \? "#64748b" : "#94a3b8"\}/);
-  assert.match(shape, /r=\{perimeterPoints && index === 0 \? 8 : 6\}/);
-  assert.match(shape, /fill=\{perimeterPoints && index === 0 \? "#16a34a" : "#f97316"\}/);
+  assert.match(shape, /fillOpacity="0\.5"/);
+  assert.match(shape, /stroke=\{major \? "#cbd5e1" : "#e2e8f0"\}/);
+  assert.match(shape, /r=\{perimeterPoints && index === 0 \? 5\.5 : 4\}/);
+  assert.match(shape, /fill=\{perimeterPoints && index === 0 \? "#16a34a" : "#2563eb"\}/);
+  assert.match(shape, /width="44" height="24" fill="transparent"/);
   assert.match(shape, /x1="16" y1=\{y\} x2="304"/);
   assert.match(shape, /y1="24" x2=\{x\} y2="198"/);
 });
@@ -63,8 +64,11 @@ test("wall measurements are editable directly inside the drawing", () => {
   assert.match(shape, /Right side/);
   assert.match(shape, /Yard side/);
   assert.match(shape, /Left side/);
-  assert.match(shape, /<foreignObject/);
-  assert.match(shape, /aria-label=\{`\$\{edgeName\(index\)\} length in feet`\}/);
+  assert.doesNotMatch(shape, /<foreignObject/);
+  assert.match(shape, /Edit \$\{edgeName\(index\)\} length/);
+  assert.match(shape, /selectedMeasurementPosition/);
+  assert.match(shape, /w-\[68px\]/);
+  assert.match(shape, /autoFocus/);
   assert.match(shape, /Tap any measurement box on the drawing/);
   assert.match(shape, /Edit the green measurement box directly on the drawing/);
   assert.match(shape, /onBlur=\{\(\) => \{ if \(measurementStep === null\) applyEdgeLength\(\); \}\}/);
