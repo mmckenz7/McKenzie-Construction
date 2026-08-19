@@ -2430,6 +2430,43 @@ export function DeckTakeoffPlanner({
           "The site visit did not establish this proposed quantity or cost. Add it from the reviewed framing plan, supplier quote, or company cost record.",
         ];
   };
+  const prefillScopeLineFromSavedFacts = (line: FixedLine): FixedLine => {
+    const facts = scopeVisitEvidence(line.key as CompleteRebuildLineKey).filter(
+      (fact) => !fact.startsWith("The site visit did not establish"),
+    );
+    const existingReference = facts.length ? ` ${facts.join(" ")}` : "";
+    const preserveDescription =
+      line.description.trim() &&
+      line.description !==
+        INITIAL_LINES.find((candidate) => candidate.key === line.key)
+          ?.description;
+    const description = preserveDescription
+      ? line.description
+      : line.key === "ledger_attachment"
+        ? `Replacement ledger and house attachment.${existingReference} Final attachment and flashing follow the reviewed plan.`
+        : line.key === "beams"
+          ? `Replacement beam / support system.${existingReference} Final member size, plies, span, and bearing follow the reviewed plan.`
+          : line.key === "posts"
+            ? `Replacement posts / supports.${existingReference} Final count, locations, and connections follow the reviewed plan.`
+            : line.key === "footings"
+              ? `Replacement foundations / footings and concrete.${existingReference} Final count, dimensions, depth, and reinforcement follow the reviewed plan.`
+              : line.key === "blocking"
+                ? "Replacement blocking and bracing, including support required for picture framing, guards, and openings, per the reviewed plan."
+                : line.key === "structural_connectors"
+                  ? "Complete structural connector and fastener package matched to the reviewed framing plan and selected treated-lumber system."
+                  : line.key === "stairs"
+                    ? `Replacement stair assembly.${existingReference} Final stringers, landing, foundations, guards, and connections follow the reviewed plan.`
+                    : line.key === "demolition_disposal"
+                      ? "Remove the complete existing deck structure; haul and dispose of demolition debris."
+                      : line.key === "labor"
+                        ? "Labor to demolish and replace the complete deck, including framing, finishes, stairs, railing, and jobsite cleanup."
+                        : line.description;
+
+    if (line.key === "demolition_disposal" && !line.quantity.trim()) {
+      return { ...line, description, quantity: "1", unit: "job" };
+    }
+    return { ...line, description };
+  };
   const openScopeCategory = (key: CompleteRebuildLineKey) => {
     setActiveScopeKey(key);
     window.requestAnimationFrame(() =>
@@ -2544,6 +2581,9 @@ export function DeckTakeoffPlanner({
             setPlan((current) => ({
               ...current,
               completeRebuildConfirmed: confirmed,
+              additionalLines: confirmed
+                ? current.additionalLines.map(prefillScopeLineFromSavedFacts)
+                : current.additionalLines,
               scopeDecisions: confirmed
                 ? (Object.fromEntries(
                     COMPLETE_REBUILD_LINE_KEYS.map((key) => {

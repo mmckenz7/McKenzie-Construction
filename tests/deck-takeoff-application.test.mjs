@@ -140,6 +140,10 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /Already known from the site visit and approved shape/);
   assert.match(ui, /Included automatically because this is a complete replacement/);
   assert.match(ui, /Planned material or work description/);
+  assert.match(ui, /prefillScopeLineFromSavedFacts/);
+  assert.match(ui, /Remove the complete existing deck structure/);
+  assert.match(ui, /quantity: "1", unit: "job"/);
+  assert.match(ui, /Final member size, plies, span, and bearing follow the reviewed plan/);
   assert.match(ui, /Site visit recorded this deck as attached to the house/);
   assert.match(ui, /requirement === "required"\) return \[key, "include"\]/);
   assert.match(ui, /COMPLETE_REBUILD_LINE_KEYS\.map/);
