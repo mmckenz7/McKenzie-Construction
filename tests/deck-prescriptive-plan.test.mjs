@@ -53,6 +53,14 @@ test("custom finish geometry calculates polygon boards and open-edge railing", (
   assert.equal(geometry.perimeterFeet, 82);
   assert.equal(geometry.houseEdgeFeet, 19);
   assert.equal(geometry.levelRailingFeet, 60);
+  const reorderedGeometry = customDeckFinishGeometry({
+    outline: [...outline.slice(3), ...outline.slice(0, 3)].reverse(),
+    attached: true,
+    stairsPresent: true,
+    stairPlacement: { widthFeet: 3 },
+  });
+  assert.equal(reorderedGeometry.houseEdgeFeet, 19);
+  assert.equal(reorderedGeometry.levelRailingFeet, 60);
   const boards = estimateCustomDeckBoardPieces({
     areaSquareFeet: geometry.areaSquareFeet,
     boardActualWidthInches: 5.5,

@@ -374,7 +374,14 @@ export function customDeckFinishGeometry(args: Readonly<{
   );
   if (!Number.isFinite(areaSquareFeet) || areaSquareFeet <= 0) return null;
   const perimeterFeet = edgeLengths.reduce((sum, length) => sum + length, 0);
-  const houseEdgeFeet = args.attached === true ? edgeLengths[0] ?? 0 : 0;
+  const houseEdgeFeet =
+    args.attached === true
+      ? args.outline.reduce((sum, point, index, outline) => {
+          const next = outline[(index + 1) % outline.length];
+          const isHouseEdge = Math.abs(point.y) < 0.0001 && Math.abs(next.y) < 0.0001;
+          return isHouseEdge ? sum + edgeLengths[index] : sum;
+        }, 0)
+      : 0;
   const stairOpeningFeet =
     args.stairsPresent === true && args.stairPlacement
       ? args.stairPlacement.widthFeet
