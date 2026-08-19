@@ -5,8 +5,13 @@ import type { DeckRailingProductRole } from "@/lib/deck-railing-system";
 export const DECK_LOWES_SUGGESTION_MODEL = "gpt-5.6";
 export const DECK_LOWES_SUGGESTION_VERSION = "deck-lowes-defaults-v1";
 
+export type DeckBoardProductRole =
+  | "deck_board"
+  | "deck_board_grooved"
+  | "deck_board_square_edge";
+
 export type DeckLowesSuggestion = Readonly<{
-  kind: "deck_board" | "deck_fastener" | DeckRailingProductRole;
+  kind: DeckBoardProductRole | "deck_fastener" | DeckRailingProductRole;
   description: string;
   unitCost: number | null;
   sourceUrl: string;
@@ -58,7 +63,7 @@ function matchesRequestedFinish(
   railingFamily: "wood" | "metal" | "cable" | "none",
 ) {
   const text = description.toLowerCase();
-  if (kind === "deck_board")
+  if (kind === "deck_board" || kind === "deck_board_grooved" || kind === "deck_board_square_edge")
     return deckingFamily === "composite"
       ? /composite|trex|timbertech|deckorators/.test(text)
       : /wood|lumber|pressure.?treated|yellow pine|cedar/.test(text) &&
@@ -106,7 +111,10 @@ export async function findDeckLowesDefaults(args: Readonly<{
         : args.stairsPresent === false
           ? "The approved shape has no stairs; do not return stair railing components."
           : "Stair applicability is unresolved; do not claim the railing package is complete.",
-      `Decking family is ${args.deckingFamily}${args.deckingFamily === "composite" ? ` with a ${args.compositeColor} color family` : ""}. Return only matching deck-board products and a compatible manufacturer-approved fastening product.`,
+      `Decking family is ${args.deckingFamily}${args.deckingFamily === "composite" ? ` with a ${args.compositeColor} color family` : ""}. Return only matching deck-board products and compatible manufacturer-approved fastening products.`,
+      args.deckingFamily === "composite"
+        ? "Return one grooved field board as deck_board_grooved and the matching square-edge border/stair/divider board as deck_board_square_edge. They must have the same manufacturer, product line, color, width, thickness, and stock length. Do not substitute a generic deck_board for either role."
+        : "Return the pressure-treated wood board as deck_board. Wood boards do not need separate grooved and square-edge roles.",
       args.railingFamily === "none"
         ? "No railing product is required."
         : `Railing family is ${args.railingFamily}. Return only matching ${args.railingFamily} railing-system products and do not substitute another railing family.`,
@@ -115,7 +123,7 @@ export async function findDeckLowesDefaults(args: Readonly<{
         : args.railingFamily === "cable"
           ? "Use Deckorators Contemporary Cable 36-in textured-black as the single default system. Return its 8-ft level top rail kit as railing_level_kit, 39-in line post as railing_level_post, 39-in end post as railing_cable_end_post, 10-ft cable-with-hardware pack as railing_cable_pack, and—when stairs exist—its 8-ft stair top rail kit as railing_stair_kit and compatible lower stair post as railing_stair_lower_post. Do not mix another manufacturer, product line, finish, or height."
         : "Do not claim manufactured railing-system compatibility unless the public product page supports it.",
-      "Return up to three current matching Lowe's deck-board choices, one compatible deck-fastener choice, and all required default railing-system component roles. Wood railing is priced locally per linear foot and does not require a railing product.",
+      "Return the required matching Lowe's deck-board profile roles, one compatible field fastening product, and all required default railing-system component roles. Wood railing is priced locally per linear foot and does not require a railing product.",
       "Every manufactured railing package must remain one coherent system from one manufacturer and one named product line.",
       "Do not mix rails, posts, brackets, panels, cable, gates, caps, or fasteners across product lines.",
       "For deck boards, prefer the shortest sold stock length that spans the full board run without a joint. If no sold length spans it, prefer a length that reaches at least half the run for a perimeter picture-frame plus center-divider layout.",
@@ -137,7 +145,7 @@ export async function findDeckLowesDefaults(args: Readonly<{
               type: "object",
               additionalProperties: false,
               properties: {
-                kind: { type: "string", enum: ["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"] },
+                kind: { type: "string", enum: ["deck_board", "deck_board_grooved", "deck_board_square_edge", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"] },
                 description: { type: "string", minLength: 1, maxLength: 240 },
                 unitCost: { type: ["number", "null"], minimum: 0 },
                 sourceUrl: { type: "string", minLength: 1, maxLength: 1000 },
@@ -188,7 +196,7 @@ export async function findDeckLowesDefaults(args: Readonly<{
     const item = raw as Record<string, unknown>;
     const kind = item.kind;
     const sourceUrl = exactLowesProductUrl(item.sourceUrl);
-    if (!sourceUrl || !["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"].includes(String(kind))) continue;
+    if (!sourceUrl || !["deck_board", "deck_board_grooved", "deck_board_square_edge", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"].includes(String(kind))) continue;
     const limit = kind === "deck_board" || kind === "railing_section" ? 3 : 1;
     if ((counts.get(String(kind)) ?? 0) >= limit) continue;
     if (typeof item.description !== "string" || typeof item.reason !== "string") continue;
@@ -225,6 +233,31 @@ export async function findDeckLowesDefaults(args: Readonly<{
       productLine,
       reason: item.reason.slice(0, 500),
     });
+  }
+  if (args.deckingFamily === "composite") {
+    const grooved = products.find(
+      (product) => product.kind === "deck_board_grooved",
+    );
+    const squareEdge = products.find(
+      (product) => product.kind === "deck_board_square_edge",
+    );
+    const sameSystem =
+      grooved &&
+      squareEdge &&
+      grooved.manufacturer?.toLowerCase() ===
+        squareEdge.manufacturer?.toLowerCase() &&
+      grooved.productLine?.toLowerCase() ===
+        squareEdge.productLine?.toLowerCase() &&
+      grooved.stockLengthFeet === squareEdge.stockLengthFeet;
+    if (!sameSystem) {
+      for (let index = products.length - 1; index >= 0; index -= 1) {
+        if (
+          products[index].kind === "deck_board_grooved" ||
+          products[index].kind === "deck_board_square_edge"
+        )
+          products.splice(index, 1);
+      }
+    }
   }
   if (!products.length) throw new DeckLowesSuggestionError("invalid_result");
   return { version: DECK_LOWES_SUGGESTION_VERSION, products } as const;

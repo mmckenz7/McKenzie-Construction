@@ -278,7 +278,7 @@ function parsePlan(value: unknown): DeckTakeoffPlan {
     exactFields(plan, CUSTOM_STRUCTURAL_PLAN_KEYS);
   if (!legacyPlan && !preRebuildPlan && !rebuildPlan)
     throw new TypeError("The Deck takeoff plan is invalid.");
-  if (!Array.isArray(plan.additionalLines) || plan.additionalLines.length > 14)
+  if (!Array.isArray(plan.additionalLines) || plan.additionalLines.length > 15)
     throw new TypeError("The Deck takeoff has too many planned lines.");
   const additionalLines = plan.additionalLines.map((raw) => {
     if (

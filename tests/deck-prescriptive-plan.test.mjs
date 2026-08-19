@@ -34,6 +34,7 @@ import {
   deckShapeBindingMatches,
   deckStructuralLineIsComplete,
   estimateCustomDeckBoardPieces,
+  estimateCustomSquareEdgePieces,
 } from "../src/lib/deck-takeoff-v0.ts";
 
 test("custom finish geometry calculates polygon boards and open-edge railing", () => {
@@ -60,6 +61,16 @@ test("custom finish geometry calculates polygon boards and open-edge railing", (
     wastePercent: 10,
   });
   assert.equal(boards.pieces, 37);
+  const squareEdge = estimateCustomSquareEdgePieces({
+    perimeterFeet: geometry.perimeterFeet,
+    boardRunFeet: 19,
+    dividerSpanFeet: 15,
+    stockLengthFeet: 16,
+    wastePercent: 10,
+  });
+  assert.equal(squareEdge.dividerCount, 1);
+  assert.equal(squareEdge.requiredLinearFeet, 97);
+  assert.equal(squareEdge.pieces, 7);
 });
 
 test("custom estimating concept derives only exact orthogonal footprint geometry", () => {

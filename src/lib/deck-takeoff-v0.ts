@@ -424,6 +424,43 @@ export function estimateCustomDeckBoardPieces(args: Readonly<{
   });
 }
 
+export function estimateCustomSquareEdgePieces(args: Readonly<{
+  perimeterFeet: number;
+  boardRunFeet: number;
+  dividerSpanFeet: number;
+  stockLengthFeet: number;
+  wastePercent: number;
+}>) {
+  if (
+    !Number.isFinite(args.perimeterFeet) ||
+    args.perimeterFeet <= 0 ||
+    !Number.isFinite(args.boardRunFeet) ||
+    args.boardRunFeet <= 0 ||
+    !Number.isFinite(args.dividerSpanFeet) ||
+    args.dividerSpanFeet <= 0 ||
+    !Number.isFinite(args.stockLengthFeet) ||
+    args.stockLengthFeet <= 0 ||
+    !Number.isFinite(args.wastePercent) ||
+    args.wastePercent < 0 ||
+    args.wastePercent > 50
+  )
+    return null;
+  const dividerCount = Math.max(
+    0,
+    Math.ceil(args.boardRunFeet / args.stockLengthFeet) - 1,
+  );
+  const requiredLinearFeet =
+    args.perimeterFeet + dividerCount * args.dividerSpanFeet;
+  return Object.freeze({
+    dividerCount,
+    requiredLinearFeet,
+    pieces: Math.ceil(
+      (requiredLinearFeet / args.stockLengthFeet) *
+        (1 + args.wastePercent / 100),
+    ),
+  });
+}
+
 export function measurementFeet(value: unknown, unit: unknown): number | null {
   if (typeof value !== "string" || typeof unit !== "string") return null;
   const normalized = value.trim().toLowerCase();

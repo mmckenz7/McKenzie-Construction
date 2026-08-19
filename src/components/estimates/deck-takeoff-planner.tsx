@@ -35,6 +35,7 @@ import {
   deckShapeBindingMatches,
   deckStructuralLineIsComplete,
   estimateCustomDeckBoardPieces,
+  estimateCustomSquareEdgePieces,
   type CompleteRebuildLineKey,
   type DeckObservationItem,
   type DeckTakeoffPlan,
@@ -56,7 +57,12 @@ type CatalogMaterial = {
 
 type FixedLine = DeckTakeoffPlan["additionalLines"][number];
 type LowesSuggestion = {
-  kind: "deck_board" | "deck_fastener" | DeckRailingProductRole;
+  kind:
+    | "deck_board"
+    | "deck_board_grooved"
+    | "deck_board_square_edge"
+    | "deck_fastener"
+    | DeckRailingProductRole;
   description: string;
   unitCost: number | null;
   sourceUrl: string;
@@ -227,6 +233,16 @@ const INITIAL_LINES: FixedLine[] = [
     key: "custom_decking",
     category: "material",
     description: "Deck boards from reviewed custom-footprint layout",
+    quantity: "",
+    unit: "ea",
+    unitCost: "",
+    catalogMaterialId: null,
+    sourceReference: "",
+  },
+  {
+    key: "custom_decking_square_edge",
+    category: "material",
+    description: "Square-edge picture-frame and divider boards",
     quantity: "",
     unit: "ea",
     unitCost: "",
@@ -494,6 +510,30 @@ export function DeckTakeoffPlanner({
     plan.boardStockLengthFeet,
     plan.boardWastePercent,
   ]);
+  const customSquareEdgeEstimate = useMemo(() => {
+    if (!customFinishGeometry || !approvedShape?.outline.length) return null;
+    const xs = approvedShape.outline.map((point) => point.x);
+    const ys = approvedShape.outline.map((point) => point.y);
+    const widthFeet = Math.max(...xs) - Math.min(...xs);
+    const projectionFeet = Math.max(...ys) - Math.min(...ys);
+    const boardRunFeet =
+      plan.boardRunDirection === "along_width" ? widthFeet : projectionFeet;
+    const dividerSpanFeet =
+      plan.boardRunDirection === "along_width" ? projectionFeet : widthFeet;
+    return estimateCustomSquareEdgePieces({
+      perimeterFeet: customFinishGeometry.perimeterFeet,
+      boardRunFeet,
+      dividerSpanFeet,
+      stockLengthFeet: Number(plan.boardStockLengthFeet),
+      wastePercent: Number(plan.boardWastePercent),
+    });
+  }, [
+    approvedShape,
+    customFinishGeometry,
+    plan.boardRunDirection,
+    plan.boardStockLengthFeet,
+    plan.boardWastePercent,
+  ]);
   const customDeckingCoverageSquareFeet = customFinishGeometry
     ? customFinishGeometry.areaSquareFeet *
       (1 + Math.max(0, Number(plan.boardWastePercent) || 0) / 100)
@@ -519,6 +559,15 @@ export function DeckTakeoffPlanner({
             return line;
           changed = true;
           return { ...line, quantity: nextDeckQuantity, unit: nextDeckUnit };
+        }
+        if (line.key === "custom_decking_square_edge") {
+          const nextQuantity =
+            deckingFamily === "composite" && customSquareEdgeEstimate
+              ? String(customSquareEdgeEstimate.pieces)
+              : "";
+          if (line.quantity === nextQuantity && line.unit === "ea") return line;
+          changed = true;
+          return { ...line, quantity: nextQuantity, unit: "ea" };
         }
         if (line.key === "custom_railing") {
           if (
@@ -546,6 +595,8 @@ export function DeckTakeoffPlanner({
     customDeckBoardEstimate,
     customDeckingCoverageSquareFeet,
     customFinishGeometry,
+    customSquareEdgeEstimate,
+    deckingFamily,
     finishRailingLengthFeet,
     railingFamily,
     railingGeometry.railingsPresent,
@@ -590,6 +641,7 @@ export function DeckTakeoffPlanner({
       const resetLineKeys = new Set<string>([
         ...structuralKeys,
         "custom_decking",
+        "custom_decking_square_edge",
         "custom_railing",
       ]);
       return {
@@ -1220,7 +1272,17 @@ export function DeckTakeoffPlanner({
         throw new Error(body.error || "Lowe's defaults could not be found.");
       if (productRequestSequence.current !== requestSequence) return;
       setSuggestions(body.products);
-      const board = body.products.find((item) => item.kind === "deck_board");
+      const board = body.products.find((item) =>
+        requestedDecking === "composite"
+          ? item.kind === "deck_board_grooved"
+          : item.kind === "deck_board",
+      );
+      const squareEdgeBoard =
+        requestedDecking === "composite"
+          ? body.products.find(
+              (item) => item.kind === "deck_board_square_edge",
+            )
+          : undefined;
       const screw = body.products.find((item) => item.kind === "deck_fastener");
       const aluminumPackage =
         requestedRailing === "metal"
@@ -1287,6 +1349,24 @@ export function DeckTakeoffPlanner({
                   unit: "ea",
                   unitCost: board.unitCost ? String(board.unitCost) : "",
                   sourceReference: board.sourceUrl,
+                  catalogMaterialId: null,
+                };
+              }
+              if (
+                line.key === "custom_decking_square_edge" &&
+                squareEdgeBoard
+              ) {
+                return {
+                  ...line,
+                  description: squareEdgeBoard.description,
+                  quantity: customSquareEdgeEstimate
+                    ? String(customSquareEdgeEstimate.pieces)
+                    : "",
+                  unit: "ea",
+                  unitCost: squareEdgeBoard.unitCost
+                    ? String(squareEdgeBoard.unitCost)
+                    : "",
+                  sourceReference: squareEdgeBoard.sourceUrl,
                   catalogMaterialId: null,
                 };
               }
@@ -1368,6 +1448,9 @@ export function DeckTakeoffPlanner({
       setPreview(null);
       const missingPrices = [
         board && !board.unitCost ? "deck-board" : null,
+        squareEdgeBoard && !squareEdgeBoard.unitCost
+          ? "square-edge board"
+          : null,
         railingGeometry.railingsPresent && railing && !railingUnitCost
           ? "railing"
           : null,
@@ -1562,7 +1645,8 @@ export function DeckTakeoffPlanner({
         lines: plan.additionalLines
           .filter(
             (line) =>
-              line.key === "custom_decking" || line.key === "custom_railing",
+              line.key === "custom_decking" ||
+              line.key === "custom_railing",
           )
           .map((line) => ({
             key: line.key,
@@ -1765,7 +1849,11 @@ export function DeckTakeoffPlanner({
       priceLabel: "Estimating retail price per board",
       description:
         selectedBoard?.description ??
-        suggestionByKind.get("deck_board")?.description ??
+        suggestionByKind.get(
+          deckingFamily === "composite"
+            ? "deck_board_grooved"
+            : "deck_board",
+        )?.description ??
         "No Lowe's product found yet",
       cost: plan.boardUnitCost,
       source: plan.boardSourceReference,
@@ -1826,7 +1914,8 @@ export function DeckTakeoffPlanner({
       : null,
   ].filter((value): value is string => Boolean(value));
   const boardSuggestions = suggestions.filter(
-    (item) => item.kind === "deck_board",
+    (item) =>
+      item.kind === "deck_board" || item.kind === "deck_board_grooved",
   );
   const railingSuggestions = suggestions.filter(
     (item) => item.kind === "railing_section",
@@ -1899,13 +1988,17 @@ export function DeckTakeoffPlanner({
       railingUnitCost: "",
       railingSourceReference: "",
       additionalLines: current.additionalLines.map((line) =>
-        line.key === "custom_decking" || line.key === "custom_railing"
+        line.key === "custom_decking" ||
+        line.key === "custom_decking_square_edge" ||
+        line.key === "custom_railing"
           ? {
               ...line,
               description:
                 line.key === "custom_decking"
                   ? "Decking for the approved custom footprint"
-                  : "Railing for the approved custom footprint",
+                  : line.key === "custom_decking_square_edge"
+                    ? "Square-edge picture-frame and divider boards"
+                    : "Railing for the approved custom footprint",
               unitCost: "",
               sourceReference: "",
               catalogMaterialId: null,
@@ -2605,6 +2698,9 @@ export function DeckTakeoffPlanner({
   const customReviewedQuantityKeys = [
     ...customStructuralKeys,
     "custom_decking",
+    ...(deckingFamily === "composite"
+      ? ["custom_decking_square_edge"]
+      : []),
     ...(railingGeometry.railingsPresent ? ["custom_railing"] : []),
   ];
   const customStructuralLines = customReviewedQuantityKeys
@@ -2612,6 +2708,13 @@ export function DeckTakeoffPlanner({
     .filter((line): line is FixedLine => Boolean(line));
   const customFinishLines = [
     plan.additionalLines.find((line) => line.key === "custom_decking"),
+    ...(deckingFamily === "composite"
+      ? [
+          plan.additionalLines.find(
+            (line) => line.key === "custom_decking_square_edge",
+          ),
+        ]
+      : []),
     ...(railingGeometry.railingsPresent
       ? [plan.additionalLines.find((line) => line.key === "custom_railing")]
       : []),
@@ -3436,6 +3539,8 @@ export function DeckTakeoffPlanner({
           <div className="mt-3 space-y-3">
             {customFinishLines.map((line) => {
               const isDecking = line.key === "custom_decking";
+              const isSquareEdge =
+                line.key === "custom_decking_square_edge";
               const isWoodRailing =
                 line.key === "custom_railing" && railingFamily === "wood";
               const lowesPage =
@@ -3448,7 +3553,13 @@ export function DeckTakeoffPlanner({
                   className="rounded-lg border border-slate-600 bg-slate-900 p-3"
                 >
                   <p className="font-black text-white">
-                    {isDecking ? "Decking" : "Railing"}
+                    {isDecking
+                      ? deckingFamily === "composite"
+                        ? "Grooved field boards"
+                        : "Decking"
+                      : isSquareEdge
+                        ? "Square-edge border and divider boards"
+                        : "Railing"}
                   </p>
                   <p className="mt-1 text-sm font-bold leading-6 text-slate-200">
                     {isWoodRailing
@@ -3483,6 +3594,8 @@ export function DeckTakeoffPlanner({
                           ? customDeckBoardEstimate
                             ? "Calculated boards to purchase"
                             : "Calculated decking coverage"
+                          : isSquareEdge
+                            ? "Calculated square-edge boards to purchase"
                           : "Calculated railing package quantity"
                       }
                     >
@@ -3492,7 +3605,7 @@ export function DeckTakeoffPlanner({
                         inputMode="decimal"
                         readOnly
                         value={
-                          isDecking
+                          isDecking || isSquareEdge
                             ? line.quantity
                             : isWoodRailing
                               ? woodRailingFeet.toFixed(2)
@@ -3507,6 +3620,10 @@ export function DeckTakeoffPlanner({
                           ? customDeckBoardEstimate
                             ? `Calculated from the approved polygon, ${plan.boardStockLengthFeet || "selected-length"}-ft boards, and ${plan.boardWastePercent || "0"}% waste.`
                             : `The approved polygon requires ${customDeckingCoverageSquareFeet?.toFixed(1) ?? "0"} sq ft including ${plan.boardWastePercent || "0"}% waste. The app converts this to boards when the selected product length is known.`
+                          : isSquareEdge
+                            ? customSquareEdgeEstimate
+                              ? `Includes ${customFinishGeometry?.perimeterFeet.toFixed(1) ?? "0"} ft of picture frame plus ${customSquareEdgeEstimate.dividerCount} full-width divider${customSquareEdgeEstimate.dividerCount === 1 ? "" : "s"} where the board run exceeds stock length, with ${plan.boardWastePercent || "0"}% waste.`
+                              : "Calculated after the matching square-edge stock length is known."
                           : "Calculated from the exact open-edge perimeter and selected railing system. Stair-side components are included in the system summary."}
                       </span>
                     </Field>

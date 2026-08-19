@@ -8,7 +8,7 @@ import {
   DEFAULT_CABLE_RAILING_COMPONENTS,
 } from "@/lib/deck-railing-system";
 
-const PRICE_CHECKED_AT = "2026-08-18T00:00:00.000Z";
+const PRICE_CHECKED_AT = "2026-08-19T00:00:00.000Z";
 
 function estimatingDefault(
   product: DeckLowesSuggestion,
@@ -27,6 +27,47 @@ export function deckEstimatingProductDefaults(args: Readonly<{
   woodScrewCoverageSquareFeetPerPack: number | null;
 }>) {
   const products: DeckProductSuggestion[] = [];
+  if (
+    args.request.deckingFamily === "composite" &&
+    args.request.compositeColor === "brown"
+  ) {
+    products.push(
+      estimatingDefault(
+        {
+          kind: "deck_board_grooved",
+          description:
+            "Trex Select 1-in x 6-in x 16-ft Whiskey Barrel grooved composite deck board",
+          unitCost: 79.98,
+          sourceUrl:
+            "https://www.lowes.com/pd/Trex-Select-1-in-x-6-in-x-16-ft-Whiskey-Barrel-Grooved-Composite-Deck-board/5017400727",
+          stockLengthFeet: 16,
+          coverageSquareFeetPerPack: null,
+          manufacturer: "Trex",
+          productLine: "Select Whiskey Barrel",
+          reason:
+            "Saved public retail estimating price for the matching grooved field board, checked for the North Knoxville Lowe's on August 19, 2026.",
+        },
+        "cached_retail",
+      ),
+      estimatingDefault(
+        {
+          kind: "deck_board_square_edge",
+          description:
+            "Trex Select 1-in x 6-in x 16-ft Whiskey Barrel square-edge composite deck board",
+          unitCost: 90,
+          sourceUrl:
+            "https://www.lowes.com/pd/Trex-Select-1-in-x-6-in-x-16-ft-Whiskey-Barrel-Square-Composite-Deck-board/5017400701",
+          stockLengthFeet: 16,
+          coverageSquareFeetPerPack: null,
+          manufacturer: "Trex",
+          productLine: "Select Whiskey Barrel",
+          reason:
+            "Saved public retail estimating price for matching picture-frame, divider, and stair-edge stock, checked for the North Knoxville Lowe's on August 19, 2026.",
+        },
+        "cached_retail",
+      ),
+    );
+  }
   if (args.request.deckingFamily === "wood") {
     products.push(
       estimatingDefault({

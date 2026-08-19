@@ -96,13 +96,17 @@ function productLengthFeet(description: string) {
 
 function productKind(material: CuratedDeckMaterial) {
   const explicit = text(material.metadata?.deck_product_kind);
-  if (["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"].includes(explicit)) {
+  if (["deck_board", "deck_board_grooved", "deck_board_square_edge", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"].includes(explicit)) {
     return explicit as DeckLowesSuggestion["kind"];
   }
   const haystack = `${material.category ?? ""} ${material.description}`.toLowerCase();
   if (/deck.*(?:screw|fastener)|(?:screw|fastener).*deck/.test(haystack)) return "deck_fastener";
   if (/rail|baluster|cable rail/.test(haystack)) return "railing_section";
-  if (/deck/.test(haystack) && /board|decking|lumber/.test(haystack)) return "deck_board";
+  if (/deck/.test(haystack) && /board|decking|lumber/.test(haystack)) {
+    if (/grooved/.test(haystack)) return "deck_board_grooved";
+    if (/square(?:\/solid| edge)?|solid edge/.test(haystack)) return "deck_board_square_edge";
+    return "deck_board";
+  }
   return null;
 }
 
@@ -110,7 +114,7 @@ function finishMatches(material: CuratedDeckMaterial, kind: DeckLowesSuggestion[
   const haystack = `${material.category ?? ""} ${material.description} ${material.brand ?? ""} ${material.product_line ?? ""}`.toLowerCase();
   const explicitDecking = text(material.metadata?.decking_family);
   const explicitRailing = text(material.metadata?.railing_family);
-  if (kind === "deck_board") {
+  if (kind === "deck_board" || kind === "deck_board_grooved" || kind === "deck_board_square_edge") {
     if (explicitDecking && explicitDecking !== request.deckingFamily) return false;
     if (request.deckingFamily === "composite") {
       if (!explicitDecking && !/composite|pvc/.test(haystack)) return false;
@@ -202,9 +206,9 @@ export function selectCuratedDeckProducts(args: Readonly<{
     });
   }
 
-  const limits: Record<DeckLowesSuggestion["kind"], number> = { deck_board: 3, deck_fastener: 1, railing_section: 3, railing_level_kit: 1, railing_level_post: 1, railing_stair_kit: 1, railing_stair_lower_post: 1, railing_cable_pack: 1, railing_cable_end_post: 1 };
+  const limits: Record<DeckLowesSuggestion["kind"], number> = { deck_board: 3, deck_board_grooved: 1, deck_board_square_edge: 1, deck_fastener: 1, railing_section: 3, railing_level_kit: 1, railing_level_post: 1, railing_stair_kit: 1, railing_stair_lower_post: 1, railing_cable_pack: 1, railing_cable_end_post: 1 };
   const selected: DeckProductSuggestion[] = [];
-  for (const kind of ["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"] as const) {
+  for (const kind of ["deck_board", "deck_board_grooved", "deck_board_square_edge", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"] as const) {
     selected.push(
       ...candidates
         .filter((candidate) => candidate.kind === kind)
@@ -228,9 +232,9 @@ export function mergeDeckProductSuggestions(
   curated: readonly DeckProductSuggestion[],
   live: readonly DeckProductSuggestion[],
 ) {
-  const limits: Record<DeckLowesSuggestion["kind"], number> = { deck_board: 3, deck_fastener: 1, railing_section: 3, railing_level_kit: 1, railing_level_post: 1, railing_stair_kit: 1, railing_stair_lower_post: 1, railing_cable_pack: 1, railing_cable_end_post: 1 };
+  const limits: Record<DeckLowesSuggestion["kind"], number> = { deck_board: 3, deck_board_grooved: 1, deck_board_square_edge: 1, deck_fastener: 1, railing_section: 3, railing_level_kit: 1, railing_level_post: 1, railing_stair_kit: 1, railing_stair_lower_post: 1, railing_cable_pack: 1, railing_cable_end_post: 1 };
   const merged: DeckProductSuggestion[] = [];
-  for (const kind of ["deck_board", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"] as const) {
+  for (const kind of ["deck_board", "deck_board_grooved", "deck_board_square_edge", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"] as const) {
     const byUrl = new Map<string, DeckProductSuggestion>();
     for (const item of [...curated, ...live].filter((candidate) => candidate.kind === kind)) {
       const key = item.sourceUrl.toLowerCase();

@@ -72,6 +72,9 @@ test("authenticated route binds every save to the latest shape and structural co
 test("custom takeoff restores and explicitly saves working materials before customer-ready application", () => {
   assert.match(planner, /Saved finish selections and working costs restored/);
   assert.match(planner, /saveWorkingFinishSelection/);
+  assert.match(planner, /custom_decking_square_edge/);
+  assert.match(planner, /Square-edge border and divider boards/);
+  assert.match(planner, /customSquareEdgeEstimate\.dividerCount/);
   assert.match(planner, /Save working materials and costs/);
   assert.match(planner, /Save updated working costs/);
   assert.match(planner, /Saving keeps these selections and working prices available after a[\s\S]*refresh/);

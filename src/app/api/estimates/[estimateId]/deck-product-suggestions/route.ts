@@ -132,8 +132,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
         : requestFinish.railingFamily === "none" || requestFinish.railingFamily === "wood"
           ? []
           : ["railing_section"];
+    const deckingKinds: DeckLowesSuggestion["kind"][] =
+      requestFinish.deckingFamily === "composite"
+        ? ["deck_board_grooved", "deck_board_square_edge"]
+        : ["deck_board"];
     const requiredKinds: DeckLowesSuggestion["kind"][] = [
-      "deck_board",
+      ...deckingKinds,
       "deck_fastener",
       ...railingKinds,
     ];

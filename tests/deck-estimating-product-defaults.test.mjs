@@ -40,6 +40,23 @@ test("wood defaults include a traceable board and cached screw price with calcul
   assert.equal(screws.priceBasis, "cached_retail");
 });
 
+test("brown composite defaults keep matching grooved and square-edge boards with estimating prices", () => {
+  const products = deckEstimatingProductDefaults({
+    request: { deckingFamily: "composite", compositeColor: "brown", railingFamily: "none" },
+    woodScrewCoverageSquareFeetPerPack: null,
+  });
+  const grooved = products.find((item) => item.kind === "deck_board_grooved");
+  const square = products.find((item) => item.kind === "deck_board_square_edge");
+  assert.equal(grooved.unitCost, 79.98);
+  assert.equal(square.unitCost, 90);
+  assert.equal(grooved.manufacturer, square.manufacturer);
+  assert.equal(grooved.productLine, square.productLine);
+  assert.match(grooved.sourceUrl, /5017400727$/);
+  assert.match(square.sourceUrl, /5017400701$/);
+  assert.equal(grooved.priceBasis, "cached_retail");
+  assert.equal(square.priceBasis, "cached_retail");
+});
+
 test("aluminum defaults preserve one compatible product line and only claim observed prices", () => {
   const products = deckEstimatingProductDefaults({
     request: { deckingFamily: "composite", compositeColor: "gray", railingFamily: "metal" },
