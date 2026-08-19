@@ -6,6 +6,11 @@ import { DeckPrescriptivePlanGenerator } from "@/components/estimates/deck-presc
 import type { FinalizedDeckShape } from "@/components/estimates/deck-shape-review";
 import type { EstimateBuilderEnvelope } from "@/lib/estimate-builder-client";
 import {
+  DECK_FINISH_DRAFT_VERSION,
+  parseDeckFinishDraftSnapshot,
+  type DeckFinishDraftSnapshot,
+} from "@/lib/deck-finish-draft";
+import {
   buildDefaultAluminumRailingPackage,
   buildDefaultCableRailingPackage,
   type DeckRailingProductRole,
@@ -94,6 +99,8 @@ const input =
   "mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100";
 const primary =
   "min-h-11 rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+const secondary =
+  "min-h-11 rounded-md border border-slate-400 bg-white px-4 py-2 text-sm font-bold text-slate-950 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 const INITIAL_LINES: FixedLine[] = [
   {
@@ -385,10 +392,16 @@ export function DeckTakeoffPlanner({
   const [customPlanRevision, setCustomPlanRevision] = useState(0);
   const [savedCustomPlan, setSavedCustomPlan] = useState<{
     id: string;
+    shapeRevisionId: string;
+    shapeRevision: number;
+    shapeDigest: string;
     concept: CustomDeckEstimatingConcept;
   } | null>(null);
   const [customPlanLoading, setCustomPlanLoading] = useState(false);
+  const [finishDraftRevision, setFinishDraftRevision] = useState(0);
+  const [finishDraftLoading, setFinishDraftLoading] = useState(false);
   const customPlanSaveKey = useRef("");
+  const finishDraftSaveKey = useRef("");
   const productRequestSequence = useRef(0);
   const appliedDefaults = useRef(false);
   const layoutDetailsRef = useRef<HTMLDetailsElement>(null);
@@ -628,6 +641,9 @@ export function DeckTakeoffPlanner({
           latestPlan?: {
             id: string;
             planRevision: number;
+            shapeRevisionId: string;
+            shapeRevision: number;
+            shapeDigest: string;
             concept: CustomDeckEstimatingConcept;
           } | null;
         };
@@ -642,7 +658,17 @@ export function DeckTakeoffPlanner({
         }
         const latest = body.latestPlan ?? null;
         setCustomPlanRevision(body.currentPlanRevision ?? latest?.planRevision ?? 0);
-        setSavedCustomPlan(latest ? { id: latest.id, concept: latest.concept } : null);
+        setSavedCustomPlan(
+          latest
+            ? {
+                id: latest.id,
+                shapeRevisionId: latest.shapeRevisionId,
+                shapeRevision: latest.shapeRevision,
+                shapeDigest: latest.shapeDigest,
+                concept: latest.concept,
+              }
+            : null,
+        );
         if (latest) {
           setCustomJoistDirection(latest.concept.joistDirection);
           setCustomJoistSpacing(latest.concept.joistSpacingInches);
@@ -671,6 +697,99 @@ export function DeckTakeoffPlanner({
       cancelled = true;
     };
   }, [approvedShape, customApprovedFootprint, visitId]);
+
+  useEffect(() => {
+    if (!customApprovedFootprint || !savedCustomPlan || !approvedShape) {
+      setFinishDraftRevision(0);
+      return;
+    }
+    let cancelled = false;
+    setFinishDraftLoading(true);
+    fetch(
+      `/api/guided-site-visits/${encodeURIComponent(visitId)}/deck-finish-selection`,
+      { cache: "no-store" },
+    )
+      .then(async (response) => {
+        const body = (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          staleDesign?: boolean;
+          currentSelectionRevision?: number;
+          latestSelection?: {
+            selectionRevision: number;
+            selection: DeckFinishDraftSnapshot;
+          } | null;
+        };
+        if (!response.ok || !body.success)
+          throw new Error(
+            body.error || "The saved finish selections could not be loaded.",
+          );
+        if (cancelled) return;
+        setFinishDraftRevision(body.currentSelectionRevision ?? 0);
+        if (body.staleDesign) {
+          setNotice(
+            "The saved Deck design changed. Choose finishes again for this revision.",
+          );
+          return;
+        }
+        if (!body.latestSelection) return;
+        const saved = parseDeckFinishDraftSnapshot(
+          body.latestSelection.selection,
+        );
+        setDeckingFamily(saved.deckingFamily);
+        if (saved.compositeColor) setCompositeColor(saved.compositeColor);
+        setRailingFamily(saved.railingFamily);
+        setStairRailSides(saved.stairRailSides);
+        setWoodRailingRate(
+          saved.woodRailingRate === null ? "" : String(saved.woodRailingRate),
+        );
+        setPlan((current) => ({
+          ...current,
+          boardActualWidthInches: String(saved.board.actualWidthInches),
+          boardGapInches: String(saved.board.gapInches),
+          boardStockLengthFeet:
+            saved.board.stockLengthFeet === null
+              ? ""
+              : String(saved.board.stockLengthFeet),
+          boardWastePercent: String(saved.board.wastePercent),
+          additionalLines: current.additionalLines.map((line) => {
+            const savedLine = saved.lines.find((item) => item.key === line.key);
+            return savedLine
+              ? {
+                  ...line,
+                  description: savedLine.description,
+                  quantity:
+                    savedLine.quantity === null
+                      ? ""
+                      : String(savedLine.quantity),
+                  unit: savedLine.unit,
+                  unitCost:
+                    savedLine.unitCost === null
+                      ? ""
+                      : String(savedLine.unitCost),
+                  sourceReference: savedLine.sourceReference,
+                  catalogMaterialId: savedLine.catalogMaterialId,
+                }
+              : line;
+          }),
+        }));
+        setNotice("Saved finish selections and working costs restored.");
+      })
+      .catch((caught) => {
+        if (!cancelled)
+          setError(
+            caught instanceof Error
+              ? caught.message
+              : "The saved finish selections could not be loaded.",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setFinishDraftLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [approvedShape, customApprovedFootprint, savedCustomPlan, visitId]);
 
   function productLengthFeet(description: string) {
     const matches = [
@@ -1408,6 +1527,90 @@ export function DeckTakeoffPlanner({
         caught instanceof Error
           ? caught.message
           : "Draft takeoff could not be calculated.",
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function saveWorkingFinishSelection() {
+    if (!customApprovedFootprint || !savedCustomPlan) return;
+    const numberOrNull = (value: string) => {
+      if (!value.trim()) return null;
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed < 0)
+        throw new TypeError("Enter a valid nonnegative number before saving.");
+      return parsed;
+    };
+    setPending(true);
+    setError("");
+    setNotice("");
+    try {
+      const selection = parseDeckFinishDraftSnapshot({
+        version: DECK_FINISH_DRAFT_VERSION,
+        deckingFamily,
+        compositeColor: deckingFamily === "composite" ? compositeColor : null,
+        railingFamily,
+        stairRailSides,
+        woodRailingRate: numberOrNull(woodRailingRate),
+        board: {
+          actualWidthInches: Number(plan.boardActualWidthInches),
+          gapInches: Number(plan.boardGapInches),
+          stockLengthFeet: numberOrNull(plan.boardStockLengthFeet),
+          wastePercent: Number(plan.boardWastePercent),
+        },
+        lines: plan.additionalLines
+          .filter(
+            (line) =>
+              line.key === "custom_decking" || line.key === "custom_railing",
+          )
+          .map((line) => ({
+            key: line.key,
+            description: line.description,
+            quantity: numberOrNull(line.quantity),
+            unit: line.unit,
+            unitCost: numberOrNull(line.unitCost),
+            sourceReference: line.sourceReference,
+            catalogMaterialId: line.catalogMaterialId,
+          })),
+      });
+      if (!finishDraftSaveKey.current)
+        finishDraftSaveKey.current = crypto.randomUUID();
+      const response = await fetch(
+        `/api/guided-site-visits/${encodeURIComponent(visitId)}/deck-finish-selection`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            expectedSelectionRevision: finishDraftRevision,
+            idempotencyKey: finishDraftSaveKey.current,
+            shapeRevisionId: savedCustomPlan.shapeRevisionId,
+            shapeRevision: savedCustomPlan.shapeRevision,
+            shapeDigest: savedCustomPlan.shapeDigest,
+            structuralPlanRevisionId: savedCustomPlan.id,
+            selection,
+          }),
+        },
+      );
+      const body = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+        selectionRevision?: number;
+      };
+      if (!response.ok || !body.success || !body.selectionRevision)
+        throw new Error(
+          body.error || "The working finish selections could not be saved.",
+        );
+      setFinishDraftRevision(body.selectionRevision);
+      finishDraftSaveKey.current = "";
+      setNotice(
+        "Working finish selections and estimating costs saved. They will return after refresh; they are not customer-ready estimate lines yet.",
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "The working finish selections could not be saved.",
       );
     } finally {
       setPending(false);
@@ -2554,12 +2757,29 @@ export function DeckTakeoffPlanner({
         error?: string;
         id?: string;
         planRevision?: number;
+        shapeRevisionId?: string;
+        shapeRevision?: number;
+        shapeDigest?: string;
         concept?: CustomDeckEstimatingConcept;
       };
-      if (!response.ok || !body.success || !body.id || !body.concept)
+      if (
+        !response.ok ||
+        !body.success ||
+        !body.id ||
+        !body.shapeRevisionId ||
+        !body.shapeRevision ||
+        !body.shapeDigest ||
+        !body.concept
+      )
         throw new Error(body.error || "The preliminary estimating plan could not be saved.");
       const line = customDeckEstimatingConceptJoistLine(body.concept);
-      setSavedCustomPlan({ id: body.id, concept: body.concept });
+      setSavedCustomPlan({
+        id: body.id,
+        shapeRevisionId: body.shapeRevisionId,
+        shapeRevision: body.shapeRevision,
+        shapeDigest: body.shapeDigest,
+        concept: body.concept,
+      });
       customPlanSaveKey.current = "";
       setCustomPlanRevision(body.planRevision ?? customPlanRevision + 1);
       setPlan((current) => ({
@@ -3370,14 +3590,41 @@ export function DeckTakeoffPlanner({
               );
             })}
           </div>
-          <button
-            type="button"
-            className={`mt-4 w-full ${primary}`}
-            disabled={disabled || pending}
-            onClick={() => void requestPreview()}
-          >
-            {pending ? "Calculating…" : "Calculate custom quantities and costs"}
-          </button>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              className={`w-full ${secondary}`}
+              disabled={
+                disabled ||
+                pending ||
+                finishDraftLoading ||
+                !savedCustomPlan
+              }
+              onClick={() => void saveWorkingFinishSelection()}
+            >
+              {finishDraftLoading
+                ? "Loading saved selections…"
+                : pending
+                  ? "Saving…"
+                  : finishDraftRevision
+                    ? "Save updated working costs"
+                    : "Save working materials and costs"}
+            </button>
+            <button
+              type="button"
+              className={`w-full ${primary}`}
+              disabled={disabled || pending}
+              onClick={() => void requestPreview()}
+            >
+              {pending
+                ? "Calculating…"
+                : "Calculate custom quantities and costs"}
+            </button>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-300">
+            Saving keeps these selections and working prices available after a
+            refresh. It does not add incomplete costs to the customer estimate.
+          </p>
         </section>
       ) : null}
 

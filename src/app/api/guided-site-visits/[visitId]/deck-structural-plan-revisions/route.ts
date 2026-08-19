@@ -183,7 +183,16 @@ export async function POST(
       return NextResponse.json({ success: false, error: "The completed site visit was not found.", code }, { status: 404 });
     if (code !== "ok")
       return NextResponse.json({ success: false, error: code === "visit_incomplete" ? "Complete the site visit first." : code === "not_editable" ? "This estimate can no longer be edited." : "The preliminary plan was invalid.", code }, { status: 422 });
-    return NextResponse.json({ success: true, id: row.structural_plan_revision_id, planRevision: row.next_plan_revision, idempotentReplay: row.idempotent_replay, concept }, { status: row.idempotent_replay ? 200 : 201 });
+    return NextResponse.json({
+      success: true,
+      id: row.structural_plan_revision_id,
+      planRevision: row.next_plan_revision,
+      shapeRevisionId: shape.id,
+      shapeRevision: shape.shapeRevision,
+      shapeDigest: shape.shapeDigest,
+      idempotentReplay: row.idempotent_replay,
+      concept,
+    }, { status: row.idempotent_replay ? 200 : 201 });
   } catch (error) {
     return NextResponse.json({ success: false, error: error instanceof TypeError ? error.message : "The preliminary Deck plan could not be saved." }, { status: error instanceof TypeError ? 400 : 500 });
   }
