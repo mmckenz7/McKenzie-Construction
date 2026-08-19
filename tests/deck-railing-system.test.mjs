@@ -21,7 +21,7 @@ runInNewContext(transformed, {
   URL,
   Math,
 });
-const { buildDefaultAluminumRailingPackage, buildDefaultCableRailingPackage } = testModule.exports;
+const { buildDefaultAluminumRailingPackage, buildDefaultCableRailingPackage, buildDefaultVinylRailingPackage } = testModule.exports;
 
 const product = (kind, unitCost, stockLengthFeet = null) => ({
   kind,
@@ -152,4 +152,26 @@ test("the default recipe exposes every required component when lookup returns no
       line.product?.sourceUrl.startsWith("https://www.lowes.com/pd/"),
     ),
   );
+});
+
+test("vinyl uses an unpriced compatible-system filler until company products are selected", () => {
+  const system = buildDefaultVinylRailingPackage({
+    products: [],
+    railingLengthFeet: 14,
+    stairsPresent: true,
+    stairProjectionFeet: 7,
+    stairRailSides: 1,
+  });
+
+  assert.equal(system.manufacturer, "Company default");
+  assert.equal(system.productLine, "Draft compatible vinyl system");
+  assert.deepEqual(Array.from(system.lines, (line) => [line.role, line.quantity]), [
+    ["railing_level_kit", 3],
+    ["railing_level_post", 5],
+    ["railing_stair_kit", 2],
+    ["railing_stair_lower_post", 1],
+  ]);
+  assert.equal(system.totalCost, null);
+  assert.equal(system.unresolved.length, 4);
+  assert.ok(system.lines.every((line) => line.product?.sourceUrl === ""));
 });

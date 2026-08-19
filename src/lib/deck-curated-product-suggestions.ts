@@ -37,7 +37,7 @@ export type CuratedDeckPrice = Readonly<{
 export type DeckFinishRequest = Readonly<{
   deckingFamily: "wood" | "composite";
   compositeColor: "brown" | "gray" | "cedar" | "redwood" | "coastal" | null;
-  railingFamily: "wood" | "metal" | "cable" | "none";
+  railingFamily: "wood" | "metal" | "vinyl" | "cable" | "none";
 }>;
 
 export function deckProductKindsNeedingRefresh(
@@ -129,6 +129,7 @@ function finishMatches(material: CuratedDeckMaterial, kind: DeckLowesSuggestion[
     if (explicitRailing && explicitRailing !== request.railingFamily) return false;
     if (request.railingFamily === "cable") return /cable/.test(haystack);
     if (request.railingFamily === "metal") return /aluminum|metal|steel/.test(haystack);
+    if (request.railingFamily === "vinyl") return /vinyl|pvc/.test(haystack) && !/cable/.test(haystack);
     return /wood|pressure.?treated|yellow pine|cedar/.test(haystack) && !/cable|aluminum|metal|steel/.test(haystack);
   }
   return kind === "deck_fastener";
@@ -179,7 +180,7 @@ export function selectCuratedDeckProducts(args: Readonly<{
     );
     const catalogCost = Number(material.unit_cost);
     if (!selected && !catalogUrl) continue;
-    const manufacturedRailing = kind.startsWith("railing_") && ["metal", "cable"].includes(args.request.railingFamily);
+    const manufacturedRailing = kind.startsWith("railing_") && ["metal", "vinyl", "cable"].includes(args.request.railingFamily);
     if (manufacturedRailing && (!material.brand?.trim() || !material.product_line?.trim())) continue;
     candidates.push({
       kind,

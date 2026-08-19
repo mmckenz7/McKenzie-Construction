@@ -22,7 +22,7 @@ export type DeckFinishDraftSnapshot = Readonly<{
   version: typeof DECK_FINISH_DRAFT_VERSION;
   deckingFamily: "wood" | "composite";
   compositeColor: "brown" | "gray" | "cedar" | "redwood" | "coastal" | null;
-  railingFamily: "wood" | "metal" | "cable" | "none";
+  railingFamily: "wood" | "metal" | "vinyl" | "cable" | "none";
   stairRailSides: 1 | 2;
   woodRailingRate: number | null;
   board: Readonly<{
@@ -73,7 +73,7 @@ export function parseDeckFinishDraftSnapshot(value: unknown): DeckFinishDraftSna
   const compositeColor = source.compositeColor;
   if (compositeColor !== null && !["brown", "gray", "cedar", "redwood", "coastal"].includes(String(compositeColor)))
     throw new TypeError("The saved composite color is invalid.");
-  if (!["wood", "metal", "cable", "none"].includes(String(source.railingFamily)))
+  if (!["wood", "metal", "vinyl", "cable", "none"].includes(String(source.railingFamily)))
     throw new TypeError("The saved railing family is invalid.");
   if (source.stairRailSides !== 1 && source.stairRailSides !== 2)
     throw new TypeError("The saved stair railing selection is invalid.");

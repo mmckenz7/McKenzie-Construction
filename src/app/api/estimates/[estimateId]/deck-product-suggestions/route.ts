@@ -34,7 +34,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (Object.keys(body).length !== 6 || typeof body.visitId !== "string" || !UUID_PATTERN.test(body.visitId)
       || (body.boardRunDirection !== "along_length" && body.boardRunDirection !== "along_width")
       || (body.deckingFamily !== "wood" && body.deckingFamily !== "composite")
-      || !(["wood", "metal", "cable", "none"] as unknown[]).includes(body.railingFamily)
+      || !(["wood", "metal", "vinyl", "cable", "none"] as unknown[]).includes(body.railingFamily)
       || (body.deckingFamily === "wood" && body.compositeColor !== null)
       || (body.deckingFamily === "composite" && !(["brown", "gray", "cedar", "redwood", "coastal"] as unknown[]).includes(body.compositeColor))
       || !Number.isSafeInteger(body.expectedVisitRevision) || (body.expectedVisitRevision as number) < 1) {
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const requestFinish = {
       deckingFamily: body.deckingFamily as "wood" | "composite",
       compositeColor: body.compositeColor as "brown" | "gray" | "cedar" | "redwood" | "coastal" | null,
-      railingFamily: body.railingFamily as "wood" | "metal" | "cable" | "none",
+      railingFamily: body.railingFamily as "wood" | "metal" | "vinyl" | "cable" | "none",
     } as const;
     const curated = selectCuratedDeckProducts({
       materials: (materialResult.data ?? []) as CuratedDeckMaterial[],
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     });
     const savedProducts = mergeDeckProductSuggestions(curated, bundled);
     const railingKinds: DeckLowesSuggestion["kind"][] =
-      requestFinish.railingFamily === "metal" || requestFinish.railingFamily === "cable"
+      requestFinish.railingFamily === "metal" || requestFinish.railingFamily === "vinyl" || requestFinish.railingFamily === "cable"
         ? [
             "railing_level_kit",
             "railing_level_post",

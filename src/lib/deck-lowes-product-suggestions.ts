@@ -60,7 +60,7 @@ function matchesRequestedFinish(
   kind: DeckLowesSuggestion["kind"],
   description: string,
   deckingFamily: "wood" | "composite",
-  railingFamily: "wood" | "metal" | "cable" | "none",
+  railingFamily: "wood" | "metal" | "vinyl" | "cable" | "none",
 ) {
   const text = description.toLowerCase();
   if (kind === "deck_board" || kind === "deck_board_grooved" || kind === "deck_board_square_edge")
@@ -72,6 +72,7 @@ function matchesRequestedFinish(
     if (railingFamily === "none") return false;
     if (railingFamily === "cable") return /cable/.test(text);
     if (railingFamily === "metal") return /aluminum|metal|steel/.test(text);
+    if (railingFamily === "vinyl") return /vinyl|pvc/.test(text) && !/cable/.test(text);
     return /wood|lumber|pressure.?treated|yellow pine|cedar/.test(text) &&
       !/cable|aluminum|metal|steel/.test(text);
   }
@@ -85,7 +86,7 @@ export async function findDeckLowesDefaults(args: Readonly<{
   stairsPresent: boolean | null;
   deckingFamily: "wood" | "composite";
   compositeColor: "brown" | "gray" | "cedar" | "redwood" | "coastal" | null;
-  railingFamily: "wood" | "metal" | "cable" | "none";
+  railingFamily: "wood" | "metal" | "vinyl" | "cable" | "none";
   idempotencyKey: string;
   fetchImpl?: typeof fetch;
 }>) {
@@ -120,6 +121,8 @@ export async function findDeckLowesDefaults(args: Readonly<{
         : `Railing family is ${args.railingFamily}. Return only matching ${args.railingFamily} railing-system products and do not substitute another railing family.`,
       args.railingFamily === "metal"
         ? "Use Deckorators Contemporary 36-in matte-black aluminum as the single default system. Return its level rail kit as railing_level_kit, compatible 39-in post kit as railing_level_post, and—when stairs exist—its 6-ft stair rail kit as railing_stair_kit and compatible 48-in lower stair post kit as railing_stair_lower_post. Treat included brackets, bracket hardware, rail supports, post caps, and post skirts as included components rather than separate products. Do not mix another manufacturer or product line."
+        : args.railingFamily === "vinyl"
+          ? "Return one complete compatible vinyl railing system from a single manufacturer and product line: level rail kit, compatible post/cap/trim kit, and—when stairs exist—compatible stair rail and stair post kits. Do not mix manufacturers or product lines."
         : args.railingFamily === "cable"
           ? "Use Deckorators Contemporary Cable 36-in textured-black as the single default system. Return its 8-ft level top rail kit as railing_level_kit, 39-in line post as railing_level_post, 39-in end post as railing_cable_end_post, 10-ft cable-with-hardware pack as railing_cable_pack, and—when stairs exist—its 8-ft stair top rail kit as railing_stair_kit and compatible lower stair post as railing_stair_lower_post. Do not mix another manufacturer, product line, finish, or height."
         : "Do not claim manufactured railing-system compatibility unless the public product page supports it.",
@@ -213,7 +216,7 @@ export async function findDeckLowesDefaults(args: Readonly<{
       ? item.productLine.trim().slice(0, 120)
       : null;
     const manufacturedRailing = String(kind).startsWith("railing_") &&
-      (args.railingFamily === "metal" || args.railingFamily === "cable");
+      (args.railingFamily === "metal" || args.railingFamily === "vinyl" || args.railingFamily === "cable");
     if (manufacturedRailing && (!manufacturer || !productLine)) continue;
     const unitCost = item.unitCost === null ? null : Number(item.unitCost);
     const stockLengthFeet = item.stockLengthFeet === null ? null : Number(item.stockLengthFeet);

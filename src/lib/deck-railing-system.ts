@@ -175,6 +175,126 @@ export function buildDefaultAluminumRailingPackage(args: Readonly<{
   } as const;
 }
 
+export const DEFAULT_VINYL_RAILING_SYSTEM = {
+  manufacturer: "Company default",
+  productLine: "Draft compatible vinyl system",
+  finish: "White",
+  railHeightInches: 36,
+  installationReference: "",
+} as const;
+
+export const DEFAULT_VINYL_RAILING_COMPONENTS: readonly DeckRailingPackageProduct[] = [
+  {
+    kind: "railing_level_kit",
+    description: "Compatible vinyl level rail kit — exact company product line pending",
+    unitCost: null,
+    sourceUrl: "",
+    stockLengthFeet: 6,
+    manufacturer: "Company default",
+    productLine: "Draft compatible vinyl system",
+  },
+  {
+    kind: "railing_level_post",
+    description: "Compatible vinyl post, cap, and trim kit — exact company product line pending",
+    unitCost: null,
+    sourceUrl: "",
+    stockLengthFeet: null,
+    manufacturer: "Company default",
+    productLine: "Draft compatible vinyl system",
+  },
+  {
+    kind: "railing_stair_kit",
+    description: "Compatible vinyl stair rail kit — one kit per stair side; exact company product line pending",
+    unitCost: null,
+    sourceUrl: "",
+    stockLengthFeet: 6,
+    manufacturer: "Company default",
+    productLine: "Draft compatible vinyl system",
+  },
+  {
+    kind: "railing_stair_lower_post",
+    description: "Compatible vinyl lower stair post kit — exact company product line pending",
+    unitCost: null,
+    sourceUrl: "",
+    stockLengthFeet: null,
+    manufacturer: "Company default",
+    productLine: "Draft compatible vinyl system",
+  },
+] as const;
+
+export function buildDefaultVinylRailingPackage(args: Readonly<{
+  products: readonly DeckRailingPackageProduct[];
+  railingLengthFeet: number | null;
+  stairsPresent: boolean | null;
+  stairProjectionFeet?: number | null;
+  stairRailSides?: 1 | 2;
+}>) {
+  const find = (role: DeckRailingPackageLine["role"]) =>
+    args.products.find(
+      (product) =>
+        product.kind === role &&
+        /vinyl|pvc/i.test(`${product.description} ${product.productLine ?? ""}`),
+    ) ?? DEFAULT_VINYL_RAILING_COMPONENTS.find((product) => product.kind === role) ?? null;
+  const levelRail = find("railing_level_kit");
+  const levelRailLength = levelRail?.stockLengthFeet ?? 6;
+  const levelRailCount =
+    args.railingLengthFeet !== null && args.railingLengthFeet > 0
+      ? Math.ceil(args.railingLengthFeet / levelRailLength)
+      : 0;
+  const sides = args.stairRailSides ?? 2;
+  const stairRail = find("railing_stair_kit");
+  const stairRailLength = stairRail?.stockLengthFeet ?? 6;
+  const stairRailCount = args.stairsPresent
+    ? Math.max(1, Math.ceil((args.stairProjectionFeet ?? stairRailLength) / stairRailLength)) * sides
+    : 0;
+  const candidateLines: DeckRailingPackageLine[] = [
+    {
+      role: "railing_level_kit",
+      label: "Compatible vinyl level rail kit",
+      quantity: levelRailCount,
+      product: levelRail,
+      includedComponents: ["top and bottom rails", "balusters", "manufacturer brackets and fasteners"],
+    },
+    {
+      role: "railing_level_post",
+      label: "Compatible vinyl post kit",
+      quantity: levelRailCount > 0 ? levelRailCount + 1 + (args.stairsPresent ? sides : 0) : 0,
+      product: find("railing_level_post"),
+      includedComponents: ["post", "post cap", "base trim"],
+    },
+    ...(args.stairsPresent
+      ? [
+          {
+            role: "railing_stair_kit" as const,
+            label: "Compatible vinyl stair rail kit",
+            quantity: stairRailCount,
+            product: stairRail,
+            includedComponents: ["stair rails", "balusters", "manufacturer brackets and fasteners"],
+          },
+          {
+            role: "railing_stair_lower_post" as const,
+            label: "Compatible vinyl lower stair post kit",
+            quantity: sides,
+            product: find("railing_stair_lower_post"),
+            includedComponents: ["post", "post cap", "base trim"],
+          },
+        ]
+      : []),
+  ];
+  const lines = candidateLines.filter((line) => line.quantity > 0);
+  const unresolved = lines.filter((line) => !line.product?.sourceUrl || !line.product.unitCost);
+  const totalCost = unresolved.length
+    ? null
+    : lines.reduce((sum, line) => sum + line.quantity * (line.product?.unitCost ?? 0), 0);
+  return {
+    ...DEFAULT_VINYL_RAILING_SYSTEM,
+    lines,
+    unresolved,
+    totalCost,
+    sourceReference: lines.map((line) => line.product?.sourceUrl).filter(Boolean).join(" | "),
+  } as const;
+}
+
 export const DEFAULT_CABLE_RAILING_SYSTEM = {
   manufacturer: "Deckorators",
   productLine: "Contemporary Cable",

@@ -70,6 +70,8 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "Composite decking",
     "Composite color family",
     "Cable",
+    "Vinyl",
+    "Aluminum",
     "Complete framing, hardware, labor, and remaining costs",
     "Change products, costs, or advanced quantities",
     "Calculate quantities and costs",
@@ -103,6 +105,8 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /deckingFamily === value[\s\S]*bg-blue-50/);
   assert.match(ui, /compositeColor === color\.key[\s\S]*bg-blue-50/);
   assert.match(ui, /railingFamily === value[\s\S]*bg-blue-50/);
+  assert.match(ui, /buildDefaultVinylRailingPackage/);
+  assert.match(ui, /Draft company default — select the exact compatible product line in Materials/);
   assert.match(ui, /Matching products for the custom footprint[\s\S]*border-slate-300 bg-white/);
   assert.match(ui, /Finish material estimate[\s\S]*bg-emerald-50/);
   assert.match(builder, /deck-estimate-light/);

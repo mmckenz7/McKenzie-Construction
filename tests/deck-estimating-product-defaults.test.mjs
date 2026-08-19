@@ -16,12 +16,16 @@ const aluminum = [
   { kind: "railing_stair_kit", description: "stair", unitCost: null, sourceUrl: "https://www.lowes.com/pd/stair/1", stockLengthFeet: 6, manufacturer: "Deckorators", productLine: "Contemporary" },
   { kind: "railing_stair_lower_post", description: "lower", unitCost: null, sourceUrl: "https://www.lowes.com/pd/lower/1", stockLengthFeet: null, manufacturer: "Deckorators", productLine: "Contemporary" },
 ];
+const vinyl = [
+  { kind: "railing_level_kit", description: "vinyl level", unitCost: null, sourceUrl: "", stockLengthFeet: 6, manufacturer: "Company default", productLine: "Draft compatible vinyl system" },
+  { kind: "railing_level_post", description: "vinyl post", unitCost: null, sourceUrl: "", stockLengthFeet: null, manufacturer: "Company default", productLine: "Draft compatible vinyl system" },
+];
 const testModule = { exports: {} };
 runInNewContext(transformed, {
   module: testModule,
   exports: testModule.exports,
   require: (id) => id === "@/lib/deck-railing-system"
-    ? { DEFAULT_ALUMINUM_RAILING_COMPONENTS: aluminum, DEFAULT_CABLE_RAILING_COMPONENTS: [] }
+    ? { DEFAULT_ALUMINUM_RAILING_COMPONENTS: aluminum, DEFAULT_VINYL_RAILING_COMPONENTS: vinyl, DEFAULT_CABLE_RAILING_COMPONENTS: [] }
     : require(id),
 });
 const { deckEstimatingProductDefaults } = testModule.exports;
@@ -86,4 +90,16 @@ test("aluminum defaults preserve one compatible product line and only claim obse
   assert.ok(railing.every((item) => item.productLine === "Contemporary"));
   assert.equal(railing.find((item) => item.kind === "railing_level_kit").unitCost, 374.65);
   assert.equal(railing.find((item) => item.kind === "railing_stair_kit").unitCost, null);
+});
+
+test("vinyl defaults expose the background filler without inventing prices", () => {
+  const products = deckEstimatingProductDefaults({
+    request: { deckingFamily: "wood", compositeColor: null, railingFamily: "vinyl" },
+    woodScrewCoverageSquareFeetPerPack: 190,
+  });
+  const railing = products.filter((item) => item.kind.startsWith("railing_"));
+  assert.equal(railing.length, 2);
+  assert.ok(railing.every((item) => item.productLine === "Draft compatible vinyl system"));
+  assert.ok(railing.every((item) => item.unitCost === null));
+  assert.ok(railing.every((item) => item.priceBasis === "unpriced"));
 });

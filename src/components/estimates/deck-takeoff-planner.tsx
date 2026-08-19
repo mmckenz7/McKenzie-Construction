@@ -13,6 +13,7 @@ import {
 import {
   buildDefaultAluminumRailingPackage,
   buildDefaultCableRailingPackage,
+  buildDefaultVinylRailingPackage,
   type DeckRailingProductRole,
 } from "@/lib/deck-railing-system";
 import {
@@ -87,7 +88,7 @@ function estimatingPriceLabel(product: LowesSuggestion | undefined) {
 
 type DeckingFamily = "wood" | "composite";
 type CompositeColor = "brown" | "gray" | "cedar" | "redwood" | "coastal";
-type RailingFamily = "wood" | "metal" | "cable" | "none";
+type RailingFamily = "wood" | "metal" | "vinyl" | "cable" | "none";
 
 const COMPOSITE_COLORS: readonly {
   key: CompositeColor;
@@ -1315,9 +1316,20 @@ export function DeckTakeoffPlanner({
               stairRailSides,
             })
           : null;
-      const manufacturedPackage = aluminumPackage ?? cablePackage;
+      const vinylPackage =
+        requestedRailing === "vinyl"
+          ? buildDefaultVinylRailingPackage({
+              products: body.products,
+              railingLengthFeet: finishRailingLengthFeet,
+              stairsPresent: railingGeometry.stairsPresent,
+              stairProjectionFeet:
+                plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
+              stairRailSides,
+            })
+          : null;
+      const manufacturedPackage = aluminumPackage ?? vinylPackage ?? cablePackage;
       const railing = body.products.find((item) =>
-        requestedRailing === "metal" || requestedRailing === "cable"
+        requestedRailing === "metal" || requestedRailing === "vinyl" || requestedRailing === "cable"
           ? item.kind === "railing_level_kit"
           : item.kind === "railing_section",
       );
@@ -1500,7 +1512,9 @@ export function DeckTakeoffPlanner({
     const unitCost = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     const packageBuilder = railingFamily === "cable"
       ? buildDefaultCableRailingPackage
-      : buildDefaultAluminumRailingPackage;
+      : railingFamily === "vinyl"
+        ? buildDefaultVinylRailingPackage
+        : buildDefaultAluminumRailingPackage;
     const currentPackage = packageBuilder({
       products: suggestions,
       railingLengthFeet: finishRailingLengthFeet,
@@ -1889,7 +1903,18 @@ export function DeckTakeoffPlanner({
           stairRailSides,
         })
       : null;
-  const manufacturedRailingPackage = aluminumRailingPackage ?? cableRailingPackage;
+  const vinylRailingPackage =
+    railingFamily === "vinyl"
+      ? buildDefaultVinylRailingPackage({
+          products: suggestions,
+          railingLengthFeet: finishRailingLengthFeet,
+          stairsPresent: railingGeometry.stairsPresent,
+          stairProjectionFeet:
+            plan.shapeBinding?.stairPlacement?.projectionFeet ?? null,
+          stairRailSides,
+        })
+      : null;
+  const manufacturedRailingPackage = aluminumRailingPackage ?? vinylRailingPackage ?? cableRailingPackage;
   function applyWoodRailingRate(value: string, sides = stairRailSides) {
     setWoodRailingRate(value);
     const rate = Number(value);
@@ -2197,11 +2222,12 @@ export function DeckTakeoffPlanner({
       ) : (
         <fieldset className="mt-4">
           <legend className="text-sm font-black text-slate-950">Railing</legend>
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(
               [
                 ["wood", "Wood", "▥"],
-                ["metal", "Metal", "▦"],
+                ["metal", "Aluminum", "▦"],
+                ["vinyl", "Vinyl", "▤"],
                 ["cable", "Cable", "≡"],
               ] as const
             ).map(([value, label, icon]) => (
@@ -2312,14 +2338,20 @@ export function DeckTakeoffPlanner({
                 </div>
                 {line.product ? (
                   <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem] sm:items-end">
-                    <a
-                      className="inline-flex min-h-11 items-center text-xs font-bold text-blue-700 underline"
-                      href={line.product.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open matching Lowe&apos;s component
-                    </a>
+                    {line.product.sourceUrl ? (
+                      <a
+                        className="inline-flex min-h-11 items-center text-xs font-bold text-blue-700 underline"
+                        href={line.product.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open matching Lowe&apos;s component
+                      </a>
+                    ) : (
+                      <p className="py-2 text-xs font-bold text-amber-900">
+                        Draft company default — select the exact compatible product line in Materials.
+                      </p>
+                    )}
                     <label className="block text-xs font-bold text-slate-950">
                       Retail estimate each
                       <span className="mt-1 flex min-h-11 items-center rounded-md border border-slate-500 bg-white px-2 text-slate-950 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-300">
@@ -2350,14 +2382,16 @@ export function DeckTakeoffPlanner({
           <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-950">
             Post anchoring fasteners are not included with the post kits. They remain in the structural hardware schedule because the correct anchor depends on the deck framing and approved attachment detail.
           </p>
-          <a
-            className="mt-2 inline-block min-h-11 py-2 text-xs font-bold text-blue-700 underline"
-            href={manufacturedRailingPackage.installationReference}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Review manufacturer installation instructions
-          </a>
+          {manufacturedRailingPackage.installationReference ? (
+            <a
+              className="mt-2 inline-block min-h-11 py-2 text-xs font-bold text-blue-700 underline"
+              href={manufacturedRailingPackage.installationReference}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Review manufacturer installation instructions
+            </a>
+          ) : null}
         </section>
       ) : null}
 

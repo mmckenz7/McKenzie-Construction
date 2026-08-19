@@ -6,6 +6,7 @@ import type {
 import {
   DEFAULT_ALUMINUM_RAILING_COMPONENTS,
   DEFAULT_CABLE_RAILING_COMPONENTS,
+  DEFAULT_VINYL_RAILING_COMPONENTS,
 } from "@/lib/deck-railing-system";
 
 const PRICE_CHECKED_AT = "2026-08-19T00:00:00.000Z";
@@ -162,6 +163,8 @@ export function deckEstimatingProductDefaults(args: Readonly<{
   const manufactured =
     args.request.railingFamily === "metal"
       ? DEFAULT_ALUMINUM_RAILING_COMPONENTS
+      : args.request.railingFamily === "vinyl"
+        ? DEFAULT_VINYL_RAILING_COMPONENTS
       : args.request.railingFamily === "cable"
         ? DEFAULT_CABLE_RAILING_COMPONENTS
         : [];
