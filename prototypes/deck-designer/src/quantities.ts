@@ -129,13 +129,39 @@ export function deriveQuantities(design: DeckDesignV1, geometry: DeckGeometry): 
             explanation: `${geometry.stairTreads.length} treads × ${design.construction.stairs.treadDepth} in conceptual tread depth`,
           }),
           ...(geometry.landing
-            ? [Object.freeze({
-                id: "stair-landing-area",
-                label: "Landing area",
-                quantity: squareFeet(geometry.landing.width * geometry.landing.depth),
-                unit: "sq ft" as const,
-                explanation: `${geometry.landing.width} in × ${geometry.landing.depth} in conceptual top landing`,
-              })]
+            ? [
+                Object.freeze({
+                  id: "stair-landing-area",
+                  label: "Landing area",
+                  quantity: squareFeet(geometry.landing.width * geometry.landing.depth),
+                  unit: "sq ft" as const,
+                  explanation: `${geometry.landing.width} in × ${geometry.landing.depth} in conceptual top landing`,
+                }),
+                Object.freeze({
+                  id: "landing-support-post-count",
+                  label: "Landing support posts",
+                  quantity: geometry.landingSupportPosts.length,
+                  unit: "each" as const,
+                  explanation: "Two conceptual outer landing support locations; visualization intent only",
+                }),
+                Object.freeze({
+                  id: "landing-railing-linear-feet",
+                  label: "Landing side railing",
+                  quantity: feet(geometry.landingRailSegments.reduce(
+                    (total, rail) => total + Math.hypot(rail.end.x - rail.start.x, rail.end.z - rail.start.z),
+                    0,
+                  )),
+                  unit: "lin ft" as const,
+                  explanation: `Two conceptual landing sides × ${geometry.landing.depth} in depth`,
+                }),
+                Object.freeze({
+                  id: "landing-railing-post-count",
+                  label: "Landing railing posts",
+                  quantity: geometry.landingRailPosts.length,
+                  unit: "each" as const,
+                  explanation: "Four conceptual landing-side endpoints; visualization intent only",
+                }),
+              ]
             : []),
         ]
       : []),

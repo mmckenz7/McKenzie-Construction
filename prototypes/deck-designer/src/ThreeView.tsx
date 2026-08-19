@@ -120,6 +120,13 @@ export function ThreeView({ design, geometry, preset, presetRequest, showFraming
         mesh.castShadow = true;
         model.add(mesh);
       }
+      for (const post of geometry.landingSupportPosts) {
+        const height = Math.max(1, post.top);
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(5.5, height, 5.5), framingMaterial);
+        mesh.position.set(post.x, height / 2, post.z);
+        mesh.castShadow = true;
+        model.add(mesh);
+      }
     }
     for (const post of geometry.railPosts) {
       const height = design.construction.railing.height;
@@ -145,6 +152,24 @@ export function ThreeView({ design, geometry, preset, presetRequest, showFraming
         2,
         railMaterial,
       );
+    }
+    for (const post of geometry.landingRailPosts) {
+      const height = design.construction.railing.height;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, height, 4), railMaterial);
+      mesh.position.set(post.x, design.platform.surfaceElevation + height / 2, post.z);
+      mesh.castShadow = true;
+      model.add(mesh);
+    }
+    for (const rail of geometry.landingRailSegments) {
+      addLinearMember(
+        model,
+        rail,
+        design.platform.surfaceElevation + design.construction.railing.height - 2,
+        3,
+        2.5,
+        railMaterial,
+      );
+      addLinearMember(model, rail, design.platform.surfaceElevation + 7, 2, 2, railMaterial);
     }
     for (const tread of geometry.stairTreads) {
       const mesh = new THREE.Mesh(

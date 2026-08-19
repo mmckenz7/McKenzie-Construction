@@ -19,6 +19,7 @@ Open the local URL Vite prints. Use `npm test` and `npm run build` for validatio
 - Simple decking, joists, beam, posts, and railings
 - Any-free-edge conceptual stairs with an explicit railing opening
 - Optional top landing with deterministic orientation and area
+- Conceptual landing side rails, rail posts, and outer support locations
 - Command-based undo and redo
 - Direct plan handles for width, projection, and L-cutout dimensions with selectable 1, 6, or 12 inch snapping
 - Keyboard/click edge selection with contextual railing and stair actions

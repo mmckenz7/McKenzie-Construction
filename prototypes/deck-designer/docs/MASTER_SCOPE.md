@@ -22,6 +22,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Stable free-edge identities for rectangle and L-shape platforms
 - [x] Any-edge straight stairs with explicit attachment and railing-opening facts
 - [x] Optional deterministic top landing
+- [x] Deterministic top-landing side rails and conceptual outer supports
 - [ ] Turn, intermediate-landing, and multi-flight configurations
 - [x] Edge selection with contextual railing/stair actions and explainable conceptual warnings
 - [x] Drag handles and selectable grid snapping for rectangle and L-cutout dimensions
@@ -29,7 +30,8 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Undo/redo command history with monotonic design revisions
 - [x] Local duplicate command and initial generic deck templates
 - [ ] House walls, openings, grade references, and attachment conditions
-- [ ] Property-based tests
+- [x] Property-style invariant matrix across rectangle, L-shape, stair, and landing combinations
+- [ ] Randomized/generative fuzzing beyond the deterministic matrix
 - [x] Initial versioned rectangle and L-shape golden fixtures
 
 ## Phase C — configuration depth and polish

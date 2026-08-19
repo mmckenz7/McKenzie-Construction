@@ -151,6 +151,9 @@ export function PlanView({ design, geometry, showFraming, snapIncrement, onDimen
           className="plan-landing"
         />
       )}
+      {geometry.landingRailSegments.map((rail) => (
+        <line key={rail.id} x1={x(rail.start.x)} y1={y(rail.start.z)} x2={x(rail.end.x)} y2={y(rail.end.z)} className="plan-rail plan-landing-rail" />
+      ))}
       {geometry.stairTreads.map((tread) => (
         <polygon
           key={tread.id}

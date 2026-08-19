@@ -47,6 +47,9 @@ export type DeckGeometry = Readonly<{
   stairOpening: LinearMember | null;
   stairTreads: readonly StairTread[];
   landing: Landing | null;
+  landingRailSegments: readonly LinearMember[];
+  landingRailPosts: readonly Post[];
+  landingSupportPosts: readonly Post[];
 }>;
 
 const point = (x: number, z: number): Point2 => Object.freeze({ x, z });
@@ -204,6 +207,45 @@ export function deriveGeometry(design: DeckDesignV1): DeckGeometry {
   const landingAlongZ = stairDz * stair.width / 2;
   const landingOutX = stairEdge.outward.x * stair.landingDepth / 2;
   const landingOutZ = stairEdge.outward.z * stair.landingDepth / 2;
+  const landingCorners = Object.freeze([
+    point(landingCenter.x - landingAlongX - landingOutX, landingCenter.z - landingAlongZ - landingOutZ),
+    point(landingCenter.x + landingAlongX - landingOutX, landingCenter.z + landingAlongZ - landingOutZ),
+    point(landingCenter.x + landingAlongX + landingOutX, landingCenter.z + landingAlongZ + landingOutZ),
+    point(landingCenter.x - landingAlongX + landingOutX, landingCenter.z - landingAlongZ + landingOutZ),
+  ]);
+  const landing = stair.enabled && stair.landingEnabled
+    ? Object.freeze({
+        id: "stair-landing" as const,
+        y: surfaceElevation,
+        depth: stair.landingDepth,
+        width: stair.width,
+        center: landingCenter,
+        rotationY: stairRotationY,
+        corners: landingCorners,
+      })
+    : null;
+  const landingRailSegments = landing
+    ? Object.freeze([
+        Object.freeze({ id: "landing-rail-left", start: landingCorners[0], end: landingCorners[3] }),
+        Object.freeze({ id: "landing-rail-right", start: landingCorners[1], end: landingCorners[2] }),
+      ])
+    : Object.freeze([]);
+  const landingRailPosts = landing
+    ? Object.freeze(landingCorners.map((corner, index) => Object.freeze({
+        id: `landing-rail-post-${index + 1}`,
+        x: corner.x,
+        z: corner.z,
+        top: surfaceElevation + design.construction.railing.height,
+      })))
+    : Object.freeze([]);
+  const landingSupportPosts = landing
+    ? Object.freeze([landingCorners[2], landingCorners[3]].map((corner, index) => Object.freeze({
+        id: `landing-support-post-${index + 1}`,
+        x: corner.x,
+        z: corner.z,
+        top: surfaceElevation - 5.5,
+      })))
+    : Object.freeze([]);
 
   return Object.freeze({
     footprint: kind === "rectangle"
@@ -223,21 +265,9 @@ export function deriveGeometry(design: DeckDesignV1): DeckGeometry {
       ? Object.freeze({ id: "stair-opening", start: positionOnEdge(stair.offset), end: positionOnEdge(stair.offset + stair.width) })
       : null,
     stairTreads,
-    landing: stair.enabled && stair.landingEnabled
-      ? Object.freeze({
-          id: "stair-landing",
-          y: surfaceElevation,
-          depth: stair.landingDepth,
-          width: stair.width,
-          center: landingCenter,
-          rotationY: stairRotationY,
-          corners: Object.freeze([
-            point(landingCenter.x - landingAlongX - landingOutX, landingCenter.z - landingAlongZ - landingOutZ),
-            point(landingCenter.x + landingAlongX - landingOutX, landingCenter.z + landingAlongZ - landingOutZ),
-            point(landingCenter.x + landingAlongX + landingOutX, landingCenter.z + landingAlongZ + landingOutZ),
-            point(landingCenter.x - landingAlongX + landingOutX, landingCenter.z - landingAlongZ + landingOutZ),
-          ]),
-        })
-      : null,
+    landing,
+    landingRailSegments,
+    landingRailPosts,
+    landingSupportPosts,
   });
 }

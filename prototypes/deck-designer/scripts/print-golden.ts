@@ -20,6 +20,9 @@ for (const [name, design] of designs) {
     railSegmentCount: geometry.railSegments.length,
     stairTreadCount: geometry.stairTreads.length,
     landingCenter: geometry.landing?.center ?? null,
+    landingRailSegmentCount: geometry.landingRailSegments.length,
+    landingRailPostCount: geometry.landingRailPosts.length,
+    landingSupportPostCount: geometry.landingSupportPosts.length,
     quantities: Object.fromEntries(
       deriveQuantities(design, geometry).map((line) => [line.id, { quantity: line.quantity, unit: line.unit }]),
     ),

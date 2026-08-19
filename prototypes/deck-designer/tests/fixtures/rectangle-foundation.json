@@ -39,6 +39,9 @@
     "railSegmentCount": 3,
     "stairTreadCount": 0,
     "landingCenter": null,
+    "landingRailSegmentCount": 0,
+    "landingRailPostCount": 0,
+    "landingSupportPostCount": 0,
     "quantities": {
       "platform-area": { "quantity": 192, "unit": "sq ft" },
       "deck-board-rows": { "quantity": 26, "unit": "each" },

@@ -26,6 +26,9 @@ describe("golden design fixtures", () => {
       railSegmentCount: geometry.railSegments.length,
       stairTreadCount: geometry.stairTreads.length,
       landingCenter: geometry.landing?.center ?? null,
+      landingRailSegmentCount: geometry.landingRailSegments.length,
+      landingRailPostCount: geometry.landingRailPosts.length,
+      landingSupportPostCount: geometry.landingSupportPosts.length,
       quantities: Object.fromEntries(
         deriveQuantities(design, geometry).map((line) => [line.id, { quantity: line.quantity, unit: line.unit }]),
       ),
@@ -271,6 +274,14 @@ describe("deterministic geometry", () => {
     expect(geometry.stairTreads.every((tread) => tread.x > 240)).toBe(true);
     expect(geometry.stairTreads.every((tread) => tread.rotationY === -Math.PI / 2)).toBe(true);
     expect(geometry.landing?.center).toEqual({ x: 216, z: 48 });
+    expect(geometry.landingRailSegments).toEqual([
+      { id: "landing-rail-left", start: { x: 192, z: 24 }, end: { x: 240, z: 24 } },
+      { id: "landing-rail-right", start: { x: 192, z: 72 }, end: { x: 240, z: 72 } },
+    ]);
+    expect(geometry.landingRailPosts).toHaveLength(4);
+    expect(geometry.landingSupportPosts.map((post) => ({ x: post.x, z: post.z }))).toEqual([
+      { x: 240, z: 72 }, { x: 240, z: 24 },
+    ]);
   });
 
   it("creates two additional stable attachment edges for an L-shape", () => {
@@ -340,6 +351,9 @@ describe("deterministic conceptual quantities", () => {
     });
     const quantities = deriveQuantities(design, deriveGeometry(design));
     expect(quantities.find((line) => line.id === "stair-landing-area")?.quantity).toBe(16);
+    expect(quantities.find((line) => line.id === "landing-support-post-count")?.quantity).toBe(2);
+    expect(quantities.find((line) => line.id === "landing-railing-linear-feet")?.quantity).toBe(8);
+    expect(quantities.find((line) => line.id === "landing-railing-post-count")?.quantity).toBe(4);
     expect(quantities.find((line) => line.id === "stair-tread-count")?.explanation).toMatch(/^right edge:/);
   });
 });

@@ -39,6 +39,9 @@
     "railSegmentCount": 6,
     "stairTreadCount": 7,
     "landingCenter": { "x": 264, "z": 60 },
+    "landingRailSegmentCount": 2,
+    "landingRailPostCount": 4,
+    "landingSupportPostCount": 2,
     "quantities": {
       "platform-area": { "quantity": 270, "unit": "sq ft" },
       "deck-board-rows": { "quantity": 32, "unit": "each" },
@@ -52,7 +55,10 @@
       "surface-screw-allowance": { "quantity": 914, "unit": "each" },
       "stair-tread-count": { "quantity": 7, "unit": "each" },
       "stair-run": { "quantity": 5.83, "unit": "lin ft" },
-      "stair-landing-area": { "quantity": 16, "unit": "sq ft" }
+      "stair-landing-area": { "quantity": 16, "unit": "sq ft" },
+      "landing-support-post-count": { "quantity": 2, "unit": "each" },
+      "landing-railing-linear-feet": { "quantity": 8, "unit": "lin ft" },
+      "landing-railing-post-count": { "quantity": 4, "unit": "each" }
     }
   }
 }
