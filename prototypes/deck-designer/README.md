@@ -18,6 +18,7 @@ Open the local URL Vite prints. Use `npm test` and `npm run build` for validatio
 - Deterministic 2D plan, procedural 3D, and basic quantities
 - Simple decking, joists, beam, posts, and railings
 - Any-free-edge conceptual stairs with an explicit railing opening
+- Deterministic conceptual stair side-stringer paths in 2D, 3D, and quantities
 - Optional top landing with deterministic orientation and area
 - Conceptual landing side rails, rail posts, and outer support locations
 - Command-based undo and redo

@@ -38,6 +38,7 @@
     "joistCount": 13,
     "railSegmentCount": 3,
     "stairTreadCount": 0,
+    "stairStringerCount": 0,
     "landingCenter": null,
     "landingRailSegmentCount": 0,
     "landingRailPostCount": 0,

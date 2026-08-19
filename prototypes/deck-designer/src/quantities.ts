@@ -128,6 +128,27 @@ export function deriveQuantities(design: DeckDesignV1, geometry: DeckGeometry): 
             unit: "lin ft" as const,
             explanation: `${geometry.stairTreads.length} treads × ${design.construction.stairs.treadDepth} in conceptual tread depth`,
           }),
+          Object.freeze({
+            id: "stair-stringer-count",
+            label: "Stair side stringers",
+            quantity: geometry.stairStringers.length,
+            unit: "each" as const,
+            explanation: "Two conceptual side stringer paths for visualization; structural count is not determined",
+          }),
+          Object.freeze({
+            id: "stair-stringer-linear-feet",
+            label: "Stringer path",
+            quantity: feet(geometry.stairStringers.reduce(
+              (total, stringer) => total + Math.hypot(
+                stringer.end.x - stringer.start.x,
+                stringer.end.y - stringer.start.y,
+                stringer.end.z - stringer.start.z,
+              ),
+              0,
+            )),
+            unit: "lin ft" as const,
+            explanation: `Two conceptual side paths across ${geometry.stairTreads.length * design.construction.stairs.treadDepth} in run and ${design.platform.surfaceElevation} in rise`,
+          }),
           ...(geometry.landing
             ? [
                 Object.freeze({

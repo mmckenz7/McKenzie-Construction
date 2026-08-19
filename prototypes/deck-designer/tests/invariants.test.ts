@@ -41,6 +41,12 @@ function assertProjectionInvariants(design: DeckDesignV1): void {
     expect(stairEdge).toBeDefined();
     expect(normalized.construction.stairs.offset + normalized.construction.stairs.width).toBeLessThanOrEqual(stairEdge!.length);
     expect(first.stairTreads.length).toBe(Math.ceil(normalized.platform.surfaceElevation / normalized.construction.stairs.maxRiserHeight));
+    expect(first.stairStringers).toHaveLength(2);
+    expect(first.stairStringers.every((stringer) =>
+      stringer.start.y === normalized.platform.surfaceElevation && stringer.end.y === 0
+    )).toBe(true);
+  } else {
+    expect(first.stairStringers).toHaveLength(0);
   }
 }
 

@@ -142,6 +142,9 @@ export function PlanView({ design, geometry, showFraming, snapIncrement, onDimen
       {showFraming && geometry.joists.map((joist) => (
         <line key={joist.id} x1={x(joist.start.x)} y1={y(joist.start.z)} x2={x(joist.end.x)} y2={y(joist.end.z)} className="plan-joist" />
       ))}
+      {showFraming && geometry.stairStringers.map((stringer) => (
+        <line key={stringer.id} x1={x(stringer.start.x)} y1={y(stringer.start.z)} x2={x(stringer.end.x)} y2={y(stringer.end.z)} className="plan-stringer" />
+      ))}
       {geometry.railSegments.map((rail) => (
         <line key={rail.id} x1={x(rail.start.x)} y1={y(rail.start.z)} x2={x(rail.end.x)} y2={y(rail.end.z)} className="plan-rail" />
       ))}

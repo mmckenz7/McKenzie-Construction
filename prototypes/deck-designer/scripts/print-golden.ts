@@ -19,6 +19,7 @@ for (const [name, design] of designs) {
     joistCount: geometry.joists.length,
     railSegmentCount: geometry.railSegments.length,
     stairTreadCount: geometry.stairTreads.length,
+    stairStringerCount: geometry.stairStringers.length,
     landingCenter: geometry.landing?.center ?? null,
     landingRailSegmentCount: geometry.landingRailSegments.length,
     landingRailPostCount: geometry.landingRailPosts.length,

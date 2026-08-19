@@ -1,6 +1,7 @@
 import type { DeckDesignV1, DeckEdgeId } from "./model";
 
 export type Point2 = Readonly<{ x: number; z: number }>;
+export type Point3 = Readonly<{ x: number; y: number; z: number }>;
 export type LinearMember = Readonly<{
   id: string;
   start: Point2;
@@ -17,6 +18,11 @@ export type StairTread = Readonly<{
   rise: number;
   rotationY: number;
   corners: readonly Point2[];
+}>;
+export type StairStringer = Readonly<{
+  id: string;
+  start: Point3;
+  end: Point3;
 }>;
 export type PlatformEdge = LinearMember & Readonly<{
   id: DeckEdgeId;
@@ -46,6 +52,7 @@ export type DeckGeometry = Readonly<{
   railPosts: readonly Post[];
   stairOpening: LinearMember | null;
   stairTreads: readonly StairTread[];
+  stairStringers: readonly StairStringer[];
   landing: Landing | null;
   landingRailSegments: readonly LinearMember[];
   landingRailPosts: readonly Post[];
@@ -53,6 +60,7 @@ export type DeckGeometry = Readonly<{
 }>;
 
 const point = (x: number, z: number): Point2 => Object.freeze({ x, z });
+const point3 = (x: number, y: number, z: number): Point3 => Object.freeze({ x, y, z });
 
 function evenlySpacedPositions(length: number, maximumSpacing: number): readonly number[] {
   const bays = Math.max(1, Math.ceil(length / maximumSpacing));
@@ -199,6 +207,23 @@ export function deriveGeometry(design: DeckDesignV1): DeckGeometry {
       });
     }
   ));
+  const stairRun = riserCount * stair.treadDepth;
+  const stringerSideOffset = Math.max(0, stair.width / 2 - 0.75);
+  const stairStringers = stair.enabled
+    ? Object.freeze([-1, 1].map((side, index) => Object.freeze({
+        id: `stair-stringer-${index + 1}`,
+        start: point3(
+          stairCenterOnEdge.x + stairDx * stringerSideOffset * side + stairEdge.outward.x * landingOffset,
+          surfaceElevation,
+          stairCenterOnEdge.z + stairDz * stringerSideOffset * side + stairEdge.outward.z * landingOffset,
+        ),
+        end: point3(
+          stairCenterOnEdge.x + stairDx * stringerSideOffset * side + stairEdge.outward.x * (landingOffset + stairRun),
+          0,
+          stairCenterOnEdge.z + stairDz * stringerSideOffset * side + stairEdge.outward.z * (landingOffset + stairRun),
+        ),
+      })))
+    : Object.freeze([]);
   const landingCenter = point(
     stairCenterOnEdge.x + stairEdge.outward.x * stair.landingDepth / 2,
     stairCenterOnEdge.z + stairEdge.outward.z * stair.landingDepth / 2,
@@ -265,6 +290,7 @@ export function deriveGeometry(design: DeckDesignV1): DeckGeometry {
       ? Object.freeze({ id: "stair-opening", start: positionOnEdge(stair.offset), end: positionOnEdge(stair.offset + stair.width) })
       : null,
     stairTreads,
+    stairStringers,
     landing,
     landingRailSegments,
     landingRailPosts,

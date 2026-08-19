@@ -40,7 +40,7 @@ Phase A established a single rectangular platform; the next isolated slice adds 
 
 ## Deterministic quantity policy
 
-The current projection reports geometry-derived conceptual quantities: platform area, surface board rows and linear feet, joist count and linear feet, one beam line, post count, railing length and unique railing-post count, and a visible screw allowance. Rounding happens only at named output boundaries. Every number is reproducible from normalized design facts; no AI participates.
+The current projection reports geometry-derived conceptual quantities: platform area, surface board rows and linear feet, joist count and linear feet, one beam line, post count, railing length and unique railing-post count, straight-stair tread/run and two side-stringer paths, and a visible screw allowance. Rounding happens only at named output boundaries. Every number is reproducible from normalized design facts; no AI participates. Stringers are deliberately limited to two visualization paths and do not claim an estimate-grade or structurally adequate count.
 
 Every free platform edge has a stable semantic ID. Rectangles expose `front`, `left`, and `right`; L-shapes additionally expose `notch-horizontal` and `notch-vertical`. When enabled, stairs attach to one recorded edge ID. The attachment offset and width create the railing opening; the edge direction and deterministic outward normal orient the run. Elevation and maximum-riser intent produce equal conceptual rises and tread count. An optional recorded top-landing depth shifts the run outward and produces a separate landing-area projection. Undo/redo restores recorded facts as a new monotonic revision rather than silently moving the authoritative revision backward.
 

@@ -4,7 +4,7 @@ import * as THREE from "three";
 // @ts-ignore The production root intentionally does not install this isolated prototype package's dependencies.
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { DeckDesignV1 } from "./model";
-import type { DeckGeometry, LinearMember } from "./geometry";
+import type { DeckGeometry, LinearMember, StairStringer } from "./geometry";
 
 export type CameraPreset = "perspective" | "top" | "front";
 
@@ -30,6 +30,22 @@ function addLinearMember(
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(length, height, depth), material);
   mesh.position.set((member.start.x + member.end.x) / 2, y, (member.start.z + member.end.z) / 2);
   mesh.rotation.y = -Math.atan2(dz, dx);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+}
+
+function addSlopedMember(
+  group: THREE.Group,
+  member: StairStringer,
+  material: THREE.Material,
+) {
+  const start = new THREE.Vector3(member.start.x, member.start.y, member.start.z);
+  const end = new THREE.Vector3(member.end.x, member.end.y, member.end.z);
+  const direction = end.clone().sub(start);
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(direction.length(), 9.25, 1.5), material);
+  mesh.position.copy(start).add(end).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), direction.normalize());
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   group.add(mesh);
@@ -126,6 +142,9 @@ export function ThreeView({ design, geometry, preset, presetRequest, showFraming
         mesh.position.set(post.x, height / 2, post.z);
         mesh.castShadow = true;
         model.add(mesh);
+      }
+      for (const stringer of geometry.stairStringers) {
+        addSlopedMember(model, stringer, framingMaterial);
       }
     }
     for (const post of geometry.railPosts) {

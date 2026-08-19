@@ -25,6 +25,7 @@ describe("golden design fixtures", () => {
       joistCount: geometry.joists.length,
       railSegmentCount: geometry.railSegments.length,
       stairTreadCount: geometry.stairTreads.length,
+      stairStringerCount: geometry.stairStringers.length,
       landingCenter: geometry.landing?.center ?? null,
       landingRailSegmentCount: geometry.landingRailSegments.length,
       landingRailPostCount: geometry.landingRailPosts.length,
@@ -253,6 +254,12 @@ describe("deterministic geometry", () => {
       id: "stair-opening", start: { x: 48, z: 144 }, end: { x: 96, z: 144 },
     });
     expect(geometry.stairTreads).toHaveLength(7);
+    expect(geometry.stairStringers).toHaveLength(2);
+    expect(geometry.stairStringers[0]).toEqual({
+      id: "stair-stringer-1",
+      start: { x: 48.75, y: 48, z: 144 },
+      end: { x: 48.75, y: 0, z: 214 },
+    });
     expect(geometry.railSegments).toHaveLength(4);
     expect(geometry.railSegments.some((rail) => rail.start.x === 48 && rail.end.x === 96 && rail.start.z === 144)).toBe(false);
   });
@@ -338,6 +345,8 @@ describe("deterministic conceptual quantities", () => {
     const byId = Object.fromEntries(quantities.map((line) => [line.id, line.quantity]));
     expect(byId["stair-tread-count"]).toBe(7);
     expect(byId["stair-run"]).toBe(5.83);
+    expect(byId["stair-stringer-count"]).toBe(2);
+    expect(byId["stair-stringer-linear-feet"]).toBe(14.15);
     expect(byId["railing-linear-feet"]).toBe(36);
     expect(quantities.map((line) => line.id).join(" ")).not.toMatch(/price|cost|sku|margin/);
   });
