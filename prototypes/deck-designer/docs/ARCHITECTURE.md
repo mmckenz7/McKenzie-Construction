@@ -16,6 +16,12 @@ Phase A established a single rectangular platform; later isolated slices added a
 
 The UI directly adds, selects, edits, and removes up to eight conceptual house-wall segments. Each wall records endpoints, base elevation, height, attachment intent, and multiple non-overlapping door/window openings. These remain site-context facts only and require field verification.
 
+## Photo-assisted start boundary
+
+The optional photo intake is deliberately outside DeckDesign v3. It creates temporary browser object URLs for up to three images (wide site, house connection, and stairs/grade), revokes those previews when review closes, and never writes image bytes, file names, or inferred measurements to design JSON or browser storage. The user can skip every photo.
+
+Only explicitly confirmed width, projection, optional elevation, and attachment response can create a new authoritative rectangle through the existing deterministic migration/normalization path. A door width without a recorded wall position remains a review reference and is not placed automatically. Missing elevation carries the current design elevation with a visible field-verification note. This slice performs no image analysis or AI calls; future backdrop calibration or AI suggestions must remain proposals until user confirmation and must not alter this authority boundary.
+
 ## Current prototype JSON shape
 
 ```json

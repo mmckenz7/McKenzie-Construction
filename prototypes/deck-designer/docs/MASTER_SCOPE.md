@@ -87,6 +87,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 
 ## Phase F — advanced capabilities
 
+- [x] Local-only guided photo intake with skip/manual fallback and confirmed-fact review
 - [ ] Design-from-photo/backdrop alignment
 - [ ] Offline/high-quality rendering and richer environments
 - [ ] Optional AR/site visualization

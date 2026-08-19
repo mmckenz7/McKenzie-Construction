@@ -35,3 +35,11 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Added short explanations for plan orientation, drag steps, house-wall positions, and stair position.
 - Desktop at 1060 CSS pixels: after 1,350 pixels of page scroll, the 2D/3D workspace remained pinned at viewport top with no console errors.
 - Tablet at 768 × 1024: sticky behavior correctly disabled, content returned to normal flow, and 753-pixel content width matched document width with no horizontal overflow.
+
+## 2026-08-19 photo-assisted start check
+
+- Opened the optional photo start from the v3 header and confirmed all three photo slots are skippable, replaceable, and labeled by purpose.
+- Confirmed the dialog states that photos remain local and are excluded from JSON, browser storage, and the repository.
+- Entered a 12 × 12-foot deck, 6-foot door reference, and ledger response; the handoff created an exact 144 × 144-inch v3 rectangle with 144 square feet while leaving the unpositioned door out of geometry.
+- Desktop dialog measured 980 CSS pixels wide with no horizontal overflow; all six visible dialog actions measured at least 44 CSS pixels high for touch use.
+- Mobile CSS collapses photo slots, facts, and review columns to one column; the dialog becomes full-screen and retains 44-pixel actions. A device-width interactive pass remains required before treating mobile photo capture as beta-ready.
