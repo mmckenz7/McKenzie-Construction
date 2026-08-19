@@ -53,7 +53,7 @@ function loadInitialDesign(): DeckDesign {
   }
 }
 
-function LegacyApp({ onOpenCornerEditor }: { onOpenCornerEditor: (design: DeckDesign) => void }) {
+function LegacyApp({ onOpenCornerEditor, onStartPhotos }: { onOpenCornerEditor: (design: DeckDesign) => void; onStartPhotos: (design: DeckDesign) => void }) {
   const [history, dispatchHistory] = useReducer(
     designHistoryReducer,
     loadInitialDesign(),
@@ -231,6 +231,7 @@ function LegacyApp({ onOpenCornerEditor }: { onOpenCornerEditor: (design: DeckDe
           <h1>Deck Designer</h1>
         </div>
         <div className="header-actions">
+          <button className="quiet" onClick={() => onStartPhotos(design)}>Start with photos</button>
           <button className="quiet" onClick={saveLocal}>Save locally</button>
           <button className="quiet" onClick={downloadJson}>Download JSON</button>
           <button className="primary" onClick={() => fileInput.current?.click()}>Load JSON</button>
@@ -685,17 +686,20 @@ function App() {
   const initial = useMemo(() => loadDeckDesignV3(localStorage), []);
   const [v3Design, setV3Design] = useState<DeckDesignV3 | null>(initial.design);
   const [v3Message, setV3Message] = useState(initial.message);
-  if (v3Design) return <V3App initialDesign={v3Design} initialMessage={v3Message} />;
-  return <LegacyApp onOpenCornerEditor={(legacy) => {
+  const [v3StartWithPhotos, setV3StartWithPhotos] = useState(false);
+  const openV3 = (legacy: DeckDesign, photos: boolean) => {
     try {
       const migrated = migrateDeckDesignToV3(legacy);
       saveDeckDesignV3(localStorage, migrated);
-      setV3Message("Upgraded this local design to v3. Exact edge references are protected until you explicitly unlock outline editing.");
+      setV3Message("Flexible outline ready. Side attachments remain protected until you choose Edit deck outline.");
+      setV3StartWithPhotos(photos);
       setV3Design(migrated);
     } catch (error) {
       setV3Message(error instanceof Error ? error.message : "The corner editor could not be opened.");
     }
-  }} />;
+  };
+  if (v3Design) return <V3App initialDesign={v3Design} initialMessage={v3Message} startWithPhotos={v3StartWithPhotos} />;
+  return <LegacyApp onOpenCornerEditor={(legacy) => openV3(legacy, false)} onStartPhotos={(legacy) => openV3(legacy, true)} />;
 }
 
 function DimensionField({ label, value, onCommit }: { label: string; value: number; onCommit: (value: string) => void }) {

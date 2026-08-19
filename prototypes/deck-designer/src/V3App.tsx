@@ -22,7 +22,7 @@ function revisePlatform(design: DeckDesignV3, platform: DeckPlatformV3): DeckDes
   return normalizeDeckDesignV3({ ...design, platforms: design.platforms.map((item) => item.id === platform.id ? platform : item), metadata: { ...design.metadata, revision: design.metadata.revision + 1 } });
 }
 
-export function V3App({ initialDesign, initialMessage = "Corner editor ready." }: { initialDesign: DeckDesignV3; initialMessage?: string }) {
+export function V3App({ initialDesign, initialMessage = "Corner editor ready.", startWithPhotos = false }: { initialDesign: DeckDesignV3; initialMessage?: string; startWithPhotos?: boolean }) {
   const [history, dispatch] = useReducer(designHistoryReducerV3, initialDesign, createHistoryV3);
   const [preview, setPreview] = useState<DeckDesignV3 | null>(null);
   const [selectedPlatformId, setSelectedPlatformId] = useState(initialDesign.platforms[0].id);
@@ -39,7 +39,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
   const [preset, setPreset] = useState<CameraPreset>("perspective");
   const [presetRequest, setPresetRequest] = useState(0);
   const [quality, setQuality] = useState<RenderQuality>("balanced");
-  const [photoIntakeOpen, setPhotoIntakeOpen] = useState(false);
+  const [photoIntakeOpen, setPhotoIntakeOpen] = useState(startWithPhotos);
   const [photoStartSummary, setPhotoStartSummary] = useState<Readonly<{ photoCount: number; review: PhotoIntakeReview }> | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const hasEdgeReferences = platform.edgeConditions.some((condition) => condition.condition === "house_attachment") || platform.construction.railing.enabledEdgeIds.length > 0 || platform.construction.stairs.enabled;
