@@ -18,9 +18,9 @@ The UI directly adds, selects, edits, and removes up to eight conceptual house-w
 
 ## Photo-assisted start boundary
 
-The optional photo intake is deliberately outside DeckDesign v3. It creates temporary browser object URLs for up to three images (wide site, house connection, and stairs/grade), revokes those previews when review closes, and never writes image bytes, file names, or inferred measurements to design JSON or browser storage. The user can skip every photo.
+The optional photo intake is deliberately outside DeckDesign v3. It creates temporary browser object URLs for six guided angles (wide site, house connection, left corner, right corner, stairs/grade, and elevated overview) plus up to six additional images, revokes those previews when review closes, and never writes image bytes, file names, or inferred measurements to design JSON or browser storage. The user can skip every photo. A deterministic coverage review recommends missing corner/overview angles for a non-standard deck but never blocks manual design.
 
-Only explicitly confirmed width, projection, optional elevation, and attachment response can create a new authoritative rectangle through the existing deterministic migration/normalization path. A door width without a recorded wall position remains a review reference and is not placed automatically. Missing elevation carries the current design elevation with a visible field-verification note. This slice performs no image analysis or AI calls; future backdrop calibration or AI suggestions must remain proposals until user confirmation and must not alter this authority boundary.
+Only explicitly confirmed width, projection, optional elevation, and attachment response can create a new authoritative rectangle through the existing deterministic migration/normalization path. A non-standard selection creates only a clearly labeled overall-size envelope that must be reshaped before quantities are relied upon. A door width without a recorded wall position remains a review reference and is not placed automatically. Missing elevation carries the current design elevation with a visible field-verification note. This slice performs no image analysis or AI calls; future backdrop calibration or AI suggestions must remain proposals until user confirmation and must not alter this authority boundary.
 
 ## Current prototype JSON shape
 

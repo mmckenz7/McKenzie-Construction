@@ -11,10 +11,10 @@ import { saveDeckDesignV3 } from "./storageV3";
 import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
 import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment } from "./polygonEditorV3";
-import { PhotoIntake } from "./PhotoIntakeDialog";
 import { createDesignFromConfirmedPhotoFacts, type ConfirmedPhotoFacts, type PhotoIntakeReview } from "./photoIntake";
 
 const ThreeViewV3 = lazy(async () => ({ default: (await import("./ThreeViewV3")).ThreeViewV3 }));
+const PhotoIntake = lazy(async () => ({ default: (await import("./PhotoIntakeDialog")).PhotoIntake }));
 type Point = Readonly<{ x: number; z: number }>;
 
 function revisePlatform(design: DeckDesignV3, platform: DeckPlatformV3): DeckDesignV3 {
@@ -142,6 +142,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
   }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
   const initialPhotoFacts: ConfirmedPhotoFacts = {
     designName: design.name,
+    layoutIntent: "rectangle",
     width: photoBounds.maxX - photoBounds.minX,
     projection: photoBounds.maxZ - photoBounds.minZ,
     surfaceElevation: null,
@@ -158,16 +159,18 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
     setAddCornerMode(false);
     setPhotoStartSummary(Object.freeze({ photoCount, review }));
     setPhotoIntakeOpen(false);
-    setMessage(`Photo-assisted start created a ${formatFeetInches(facts.width)} × ${formatFeetInches(facts.projection)} rectangle from confirmed entries only.`);
+    setMessage(facts.layoutIntent === "non-standard"
+      ? `Photo-assisted start created a ${formatFeetInches(facts.width)} × ${formatFeetInches(facts.projection)} editable envelope. Shape the non-standard outline before relying on quantities.`
+      : `Photo-assisted start created a ${formatFeetInches(facts.width)} × ${formatFeetInches(facts.projection)} rectangle from confirmed entries only.`);
   };
 
   return <main>
-    {photoIntakeOpen && <PhotoIntake initialFacts={initialPhotoFacts} onCancel={() => setPhotoIntakeOpen(false)} onStartDesign={startFromPhotos} />}
+    {photoIntakeOpen && <Suspense fallback={<div className="photo-intake-backdrop"><div className="photo-intake-loading" role="status">Preparing local photo review…</div></div>}><PhotoIntake initialFacts={initialPhotoFacts} onCancel={() => setPhotoIntakeOpen(false)} onStartDesign={startFromPhotos} /></Suspense>}
     <header className="topbar"><div className="brand-mark">M</div><div><p className="eyebrow">McKenzie Construction · isolated R&amp;D</p><h1>Deck Designer</h1></div><div className="header-actions"><button className="quiet" onClick={() => setPhotoIntakeOpen(true)}>Start with photos</button><button className="quiet" onClick={() => { saveDeckDesignV3(localStorage, design); setMessage(`Saved v3 locally at revision ${design.metadata.revision}.`); }}>Save locally</button><button className="quiet" onClick={download}>Download JSON</button><button className="primary" onClick={() => fileInput.current?.click()}>Load JSON</button><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const next = migrateDeckDesignToV3(JSON.parse(await file.text())); dispatch({ type: "reset", design: next }); setMessage(`Loaded v3 design “${next.name}”.`); } catch (error) { setMessage(error instanceof Error ? `Load rejected: ${error.message}` : "Load rejected."); } event.target.value = ""; }} /></div></header>
     <section className="warning"><strong>Conceptual design — not for construction.</strong> Corner geometry and quantities are deterministic; structure, connections, code, and field dimensions still require qualified review.</section>
     <div className="workspace"><aside className="controls-panel">
       <div className="section-heading"><span>01</span><div><p>Deck outline</p><small>Move corners or add rectangular offsets</small></div></div>
-      {photoStartSummary && <section className="photo-start-summary"><strong>Photo-assisted start</strong><p>{photoStartSummary.photoCount} local photo{photoStartSummary.photoCount === 1 ? "" : "s"} reviewed. Geometry came only from confirmed entries.</p><small>{photoStartSummary.review.fieldVerification.length} field-verification note{photoStartSummary.review.fieldVerification.length === 1 ? "" : "s"} remain. Photo previews were released after review.</small><button onClick={() => setPhotoIntakeOpen(true)}>Start another photo review</button></section>}
+      {photoStartSummary && <section className={`photo-start-summary${photoStartSummary.review.outlineWarning ? " needs-outline" : ""}`}><strong>Photo-assisted start</strong><p>{photoStartSummary.photoCount} local photo{photoStartSummary.photoCount === 1 ? "" : "s"} reviewed. Geometry came only from confirmed entries.</p>{photoStartSummary.review.outlineWarning && <p className="outline-warning">{photoStartSummary.review.outlineWarning}</p>}<small>{photoStartSummary.review.fieldVerification.length} field-verification note{photoStartSummary.review.fieldVerification.length === 1 ? "" : "s"} remain. Photo previews were released after review.</small><button onClick={() => setPhotoIntakeOpen(true)}>Start another photo review</button></section>}
       <div className="shape-switch"><button onClick={() => applyTemplate("rectangle")}>Rectangle</button><button onClick={() => applyTemplate("l-shape")}>L-shape</button></div>
       <label className="field full"><span>Design name</span><input value={design.name} onChange={(event) => { try { apply(normalizeDeckDesignV3({ ...history.present, name: event.target.value, metadata: { ...history.present.metadata, revision: history.present.metadata.revision + 1 } }), "Design name updated."); } catch { /* retain */ } }} /></label>
       {design.platforms.length > 1 && <label className="field full"><span>Platform to edit</span><select value={platform.id} onChange={(event) => { setSelectedPlatformId(event.target.value); setSelectedEdgeId(null); }} >{design.platforms.map((item) => <option key={item.id} value={item.id}>{item.id} · {formatFeetInches(item.elevation)} high</option>)}</select></label>}
@@ -192,7 +195,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
       <article className="view-card plan-card"><div className="card-title"><div><span>Measured polygon plan</span><small>2D · {platform.id} · {platform.region.outer.length} editable corners</small></div><strong>{formatFeetInches(platform.elevation)} high</strong></div><PlanViewV3 platform={platform} geometry={geometry} snapIncrement={snapIncrement} selectedEdgeId={selectedEdgeId} onSelectEdge={(edgeId) => { setSelectedEdgeId(edgeId); setOffsetComplete(false); }} onCornerPreview={(index, point) => moveCorner(index, point, false)} onCornerCommit={(index, point) => moveCorner(index, point, true)} onCancel={() => setPreview(null)} onStairPreview={(offset) => updateStairs({ offset }, "", true)} onStairCommit={(offset) => updateStairs({ offset }, `Stairs moved to ${formatFeetInches(offset)} from the edge start.`)} addCornerMode={addCornerMode} onAddCorner={addCorner} onSegmentPreview={(index, distance) => moveSegment(index, distance, false)} onSegmentCommit={(index, distance) => moveSegment(index, distance, true)} /></article>
       <article className="view-card three-card"><div className="card-title"><div><span>Model view</span><small>3D · polygon authority</small></div><div className="view-tools"><select value={quality} aria-label="3D quality" onChange={(event) => setQuality(event.target.value as RenderQuality)}><option value="economy">Economy</option><option value="balanced">Balanced</option><option value="detailed">Detailed</option></select><div className="camera-buttons">{(["perspective", "top", "front"] as CameraPreset[]).map((value) => <button key={value} className={preset === value ? "active" : ""} onClick={() => { setPreset(value); setPresetRequest((current) => current + 1); }}>{value}</button>)}</div></div></div><Suspense fallback={<div className="three-loading">Preparing polygon model…</div>}><ThreeViewV3 platform={platform} geometry={geometry} gradeElevation={design.siteContext.gradeElevation} preset={preset} presetRequest={presetRequest} showFraming={showFraming} quality={quality} /></Suspense><label className="check-row three-framing"><input type="checkbox" checked={showFraming} onChange={(event) => setShowFraming(event.target.checked)} />Show framing intent</label></article>
     </section></div>
-    <section className="quantity-section"><div className="quantity-heading"><div><p className="eyebrow">Deterministic v3 projection</p><h2>Conceptual quantities</h2></div><p>No products, prices, labor, waste, margin, or structural conclusions.</p></div><div className="quantity-grid">{projection.aggregateQuantities.map((line) => <article className="quantity-card" key={line.key}><span>{line.key.replaceAll("-", " ")}</span><strong>{line.amount.toLocaleString()} <small>{line.unit}</small></strong><p>Derived from {line.sourceGeometry.length} recorded geometry references.</p></article>)}</div></section>
+    <section className="quantity-section"><div className="quantity-heading"><div><p className="eyebrow">Deterministic v3 projection</p><h2>Conceptual quantities</h2></div><p>{photoStartSummary?.review.outlineWarning ? "Overall-envelope quantities only—the non-standard outline must be reshaped before these are used." : "No products, prices, labor, waste, margin, or structural conclusions."}</p></div><div className="quantity-grid">{projection.aggregateQuantities.map((line) => <article className="quantity-card" key={line.key}><span>{line.key.replaceAll("-", " ")}</span><strong>{line.amount.toLocaleString()} <small>{line.unit}</small></strong><p>Derived from {line.sourceGeometry.length} recorded geometry references.</p></article>)}</div></section>
   </main>;
 }
 

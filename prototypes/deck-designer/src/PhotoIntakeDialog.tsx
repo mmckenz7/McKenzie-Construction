@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { HouseAttachment } from "./model";
-import { normalizeConfirmedPhotoFacts, reviewConfirmedPhotoFacts, type ConfirmedPhotoFacts, type PhotoIntakeReview } from "./photoIntake";
+import { normalizeConfirmedPhotoFacts, reviewConfirmedPhotoFacts, reviewPhotoCoverage, type ConfirmedPhotoFacts, type GuidedPhotoRole, type PhotoIntakeReview } from "./photoIntake";
 
-type PhotoRole = "wide-site" | "house-connection" | "stairs-grade";
 type LocalPhoto = Readonly<{ name: string; url: string }>;
 type Props = Readonly<{
   initialFacts: ConfirmedPhotoFacts;
@@ -10,20 +9,27 @@ type Props = Readonly<{
   onStartDesign: (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number) => void;
 }>;
 
-const PHOTO_SLOTS: readonly Readonly<{ role: PhotoRole; title: string; help: string }>[] = [
+const PHOTO_SLOTS: readonly Readonly<{ role: GuidedPhotoRole; title: string; help: string }>[] = [
   { role: "wide-site", title: "Wide site", help: "Show the house wall and the full work area." },
   { role: "house-connection", title: "House connection", help: "Show where the deck meets—or will meet—the house." },
+  { role: "left-corner", title: "Left corner", help: "Capture every turn and offset along the left side." },
+  { role: "right-corner", title: "Right corner", help: "Capture every turn and offset along the right side." },
   { role: "stairs-grade", title: "Stairs and grade", help: "Show the stair location and ground-height changes." },
+  { role: "elevated-overview", title: "Elevated overview", help: "From a doorway or safe higher view, show the deck outline." },
 ];
+
+const ROLE_LABELS: Readonly<Record<GuidedPhotoRole, string>> = Object.freeze(Object.fromEntries(PHOTO_SLOTS.map((slot) => [slot.role, slot.title])) as Record<GuidedPhotoRole, string>);
 
 const feet = (inches: number): string => String(Math.round(inches / 12 * 100) / 100);
 const parseFeet = (value: string): number => Number(value) * 12;
 const parseOptionalInches = (value: string): number | null => value.trim() ? Number(value) : null;
 
 export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
-  const [photos, setPhotos] = useState<Partial<Record<PhotoRole, LocalPhoto>>>({});
+  const [photos, setPhotos] = useState<Partial<Record<GuidedPhotoRole, LocalPhoto>>>({});
+  const [additionalPhotos, setAdditionalPhotos] = useState<readonly LocalPhoto[]>([]);
   const urls = useRef(new Set<string>());
   const [designName, setDesignName] = useState(initialFacts.designName);
+  const [layoutIntent, setLayoutIntent] = useState<ConfirmedPhotoFacts["layoutIntent"]>(initialFacts.layoutIntent);
   const [width, setWidth] = useState(feet(initialFacts.width));
   const [projection, setProjection] = useState(feet(initialFacts.projection));
   const [surfaceElevation, setSurfaceElevation] = useState(initialFacts.surfaceElevation === null ? "" : String(initialFacts.surfaceElevation));
@@ -34,16 +40,19 @@ export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
 
   const draft = useMemo<ConfirmedPhotoFacts>(() => ({
     designName,
+    layoutIntent,
     width: parseFeet(width),
     projection: parseFeet(projection),
     surfaceElevation: parseOptionalInches(surfaceElevation),
     doorWidth: doorWidth.trim() ? parseFeet(doorWidth) : null,
     attachment,
-  }), [attachment, designName, doorWidth, projection, surfaceElevation, width]);
+  }), [attachment, designName, doorWidth, layoutIntent, projection, surfaceElevation, width]);
   let review: PhotoIntakeReview | null = null;
   try { review = reviewConfirmedPhotoFacts(draft); } catch { /* show validation only when submitted */ }
+  const guidedRoles = Object.keys(photos) as GuidedPhotoRole[];
+  const coverage = reviewPhotoCoverage(layoutIntent, guidedRoles, additionalPhotos.length);
 
-  const choosePhoto = (role: PhotoRole, file: File | undefined) => {
+  const choosePhoto = (role: GuidedPhotoRole, file: File | undefined) => {
     if (!file) return;
     if (!file.type.startsWith("image/") || file.size > 20 * 1024 * 1024) {
       setError("Choose a JPG, PNG, or WebP image no larger than 20 MB.");
@@ -56,15 +65,37 @@ export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
     setPhotos((current) => ({ ...current, [role]: Object.freeze({ name: file.name, url }) }));
     setError("");
   };
-  const removePhoto = (role: PhotoRole) => {
+  const removePhoto = (role: GuidedPhotoRole) => {
     const previous = photos[role];
     if (previous) { URL.revokeObjectURL(previous.url); urls.current.delete(previous.url); }
     setPhotos((current) => { const next = { ...current }; delete next[role]; return next; });
   };
+  const chooseAdditionalPhotos = (files: FileList | null) => {
+    if (!files?.length) return;
+    const chosen = Array.from(files);
+    if (chosen.some((file) => !file.type.startsWith("image/") || file.size > 20 * 1024 * 1024)) {
+      setError("Choose JPG, PNG, or WebP images no larger than 20 MB each.");
+      return;
+    }
+    const remaining = 6 - additionalPhotos.length;
+    if (remaining <= 0) { setError("Remove an additional photo before adding another."); return; }
+    const nextPhotos = chosen.slice(0, remaining).map((file) => {
+      const url = URL.createObjectURL(file);
+      urls.current.add(url);
+      return Object.freeze({ name: file.name, url });
+    });
+    setAdditionalPhotos((current) => Object.freeze([...current, ...nextPhotos]));
+    setError(chosen.length > remaining ? `Added ${remaining} photos; the additional-angle limit is six.` : "");
+  };
+  const removeAdditionalPhoto = (url: string) => {
+    URL.revokeObjectURL(url);
+    urls.current.delete(url);
+    setAdditionalPhotos((current) => Object.freeze(current.filter((photo) => photo.url !== url)));
+  };
   const start = () => {
     try {
       const normalized = normalizeConfirmedPhotoFacts(draft);
-      onStartDesign(normalized, reviewConfirmedPhotoFacts(normalized), Object.keys(photos).length);
+      onStartDesign(normalized, reviewConfirmedPhotoFacts(normalized), coverage.addedCount);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Review the confirmed dimensions before starting.");
     }
@@ -73,10 +104,10 @@ export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
   return <div className="photo-intake-backdrop" role="presentation"><section className="photo-intake" role="dialog" aria-modal="true" aria-labelledby="photo-intake-title">
     <header><div><p className="eyebrow">Optional job-photo start</p><h2 id="photo-intake-title">Start with what you know</h2><p>Photos stay on this device. Only confirmed entries create the deck.</p></div><button className="photo-close" onClick={onCancel} aria-label="Close photo start">Close</button></header>
     <div className="photo-intake-content">
-      <section><div className="photo-step"><span>1</span><div><strong>Add useful photos</strong><small>Any photo can be skipped or replaced.</small></div></div><div className="photo-slot-grid">{PHOTO_SLOTS.map((slot) => {
+      <section><div className="photo-step"><span>1</span><div><strong>Add useful photos</strong><small>Any photo can be skipped or replaced.</small></div></div><label className="field photo-layout-intent"><span>Deck shape you expect</span><select value={layoutIntent} onChange={(event) => setLayoutIntent(event.target.value as ConfirmedPhotoFacts["layoutIntent"])}><option value="rectangle">Simple rectangle</option><option value="non-standard">Non-standard · offsets or multiple corners</option></select></label><div className="photo-slot-grid">{PHOTO_SLOTS.map((slot) => {
         const photo = photos[slot.role];
         return <article className="photo-slot" key={slot.role}>{photo ? <img src={photo.url} alt={`${slot.title} preview`} /> : <div className="photo-placeholder">Optional</div>}<strong>{slot.title}</strong><p>{slot.help}</p><div><label className="photo-file-button">{photo ? "Replace" : "Choose photo"}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => { choosePhoto(slot.role, event.target.files?.[0]); event.target.value = ""; }} /></label>{photo && <button onClick={() => removePhoto(slot.role)}>Remove</button>}</div>{photo && <small title={photo.name}>{photo.name}</small>}</article>;
-      })}</div><p className="photo-privacy">Local preview only—photos are not saved in design JSON, browser storage, or the repository.</p></section>
+      })}</div><div className="additional-photo-card"><div><strong>More angles</strong><p>Add up to six closeups, interior corners, lower framing views, or obstacles.</p></div><label className="photo-file-button">Add several photos<input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event) => { chooseAdditionalPhotos(event.target.files); event.target.value = ""; }} /></label>{additionalPhotos.length > 0 && <div className="additional-photo-list">{additionalPhotos.map((photo) => <span key={photo.url}>{photo.name}<button aria-label={`Remove additional photo ${photo.name}`} onClick={() => removeAdditionalPhoto(photo.url)}>×</button></span>)}</div>}</div><div className={`photo-coverage${coverage.missingRecommendedRoles.length === 0 && coverage.addedCount > 0 ? " ready" : ""}`}><strong>{coverage.message}</strong>{coverage.missingRecommendedRoles.length > 0 && <small>Recommended next: {coverage.missingRecommendedRoles.map((role) => ROLE_LABELS[role]).join(", ")}.</small>}<small>This guidance never blocks manual design.</small></div><p className="photo-privacy">Local preview only—photos are not saved in design JSON, browser storage, or the repository.</p></section>
       <section><div className="photo-step"><span>2</span><div><strong>Confirm the design facts</strong><small>Leave unknown details blank; they will be marked for field verification.</small></div></div><div className="photo-facts-grid">
         <label className="field full"><span>Design name</span><input value={designName} onChange={(event) => setDesignName(event.target.value)} /></label>
         <label className="field"><span>Deck width (feet)</span><input inputMode="decimal" type="number" min="4" step="0.25" value={width} onChange={(event) => setWidth(event.target.value)} /></label>
@@ -87,7 +118,7 @@ export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
       </div></section>
       <section><div className="photo-step"><span>3</span><div><strong>Review before creating geometry</strong><small>No photo-derived measurement is applied automatically.</small></div></div>{review ? <div className="photo-review"><div><strong>Confirmed</strong>{review.confirmed.map((item) => <p key={item}>✓ {item}</p>)}</div><div><strong>Still verify</strong>{review.fieldVerification.map((item) => <p key={item}>• {item}</p>)}</div></div> : <p className="photo-review-error">Enter a valid deck width and distance from the house.</p>}</section>
     </div>
-    <footer><div><strong>{Object.keys(photos).length} of 3 photos added</strong><small>You can start with zero photos and enter dimensions manually.</small></div><div><button onClick={onCancel}>Keep current design</button><button className="primary" onClick={start}>Start rectangle design</button></div></footer>
+    <footer><div><strong>{coverage.addedCount} photo{coverage.addedCount === 1 ? "" : "s"} added</strong><small>You can start with zero photos and enter dimensions manually.</small></div><div><button onClick={onCancel}>Keep current design</button><button className="primary" onClick={start}>{layoutIntent === "non-standard" ? "Start editable outline" : "Start rectangle design"}</button></div></footer>
     {error && <p className="photo-error" role="alert">{error}</p>}
   </section></div>;
 }

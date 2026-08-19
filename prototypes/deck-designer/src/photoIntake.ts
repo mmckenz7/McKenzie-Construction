@@ -3,6 +3,7 @@ import { migrateDeckDesignToV3, type DeckDesignV3 } from "./modelV3";
 
 export type ConfirmedPhotoFacts = Readonly<{
   designName: string;
+  layoutIntent: "rectangle" | "non-standard";
   width: number;
   projection: number;
   surfaceElevation: number | null;
@@ -13,7 +14,19 @@ export type ConfirmedPhotoFacts = Readonly<{
 export type PhotoIntakeReview = Readonly<{
   confirmed: readonly string[];
   fieldVerification: readonly string[];
+  outlineWarning: string | null;
 }>;
+
+export type GuidedPhotoRole = "wide-site" | "house-connection" | "left-corner" | "right-corner" | "stairs-grade" | "elevated-overview";
+export type PhotoCoverageReview = Readonly<{
+  addedCount: number;
+  missingRecommendedRoles: readonly GuidedPhotoRole[];
+  message: string;
+}>;
+
+const NON_STANDARD_RECOMMENDED: readonly GuidedPhotoRole[] = Object.freeze([
+  "wide-site", "house-connection", "left-corner", "right-corner", "elevated-overview",
+]);
 
 const inches = (value: number, label: string, minimum: number, maximum: number): number => {
   if (!Number.isFinite(value) || value < minimum || value > maximum) {
@@ -25,9 +38,11 @@ const inches = (value: number, label: string, minimum: number, maximum: number):
 export function normalizeConfirmedPhotoFacts(facts: ConfirmedPhotoFacts): ConfirmedPhotoFacts {
   const designName = facts.designName.trim();
   if (!designName || designName.length > 120) throw new TypeError("Design name is required and must be 120 characters or fewer.");
+  if (facts.layoutIntent !== "rectangle" && facts.layoutIntent !== "non-standard") throw new TypeError("Choose rectangle or non-standard layout intent.");
   if (!["unknown", "ledger", "non-ledger"].includes(facts.attachment)) throw new TypeError("Choose a supported house attachment status.");
   return Object.freeze({
     designName,
+    layoutIntent: facts.layoutIntent,
     width: inches(facts.width, "Deck width", 48, 1200),
     projection: inches(facts.projection, "Deck projection", 48, 600),
     surfaceElevation: facts.surfaceElevation === null ? null : inches(facts.surfaceElevation, "Deck height", 6, 144),
@@ -40,6 +55,7 @@ export function reviewConfirmedPhotoFacts(facts: ConfirmedPhotoFacts): PhotoInta
   const normalized = normalizeConfirmedPhotoFacts(facts);
   return Object.freeze({
     confirmed: Object.freeze([
+      `Layout intent: ${normalized.layoutIntent}`,
       `Deck footprint: ${normalized.width} × ${normalized.projection} inches`,
       ...(normalized.surfaceElevation === null ? [] : [`Deck height: ${normalized.surfaceElevation} inches`]),
       ...(normalized.doorWidth === null ? [] : [`Door width reference: ${normalized.doorWidth} inches`]),
@@ -50,8 +66,34 @@ export function reviewConfirmedPhotoFacts(facts: ConfirmedPhotoFacts): PhotoInta
       ...(normalized.doorWidth === null ? ["Door width and wall position are not recorded."] : ["Door position is not recorded, so the opening is not placed automatically."]),
       ...(normalized.attachment === "unknown" ? ["House attachment remains unknown."] : ["Visible and concealed attachment conditions still require field verification."]),
       "Photos are reference evidence only and do not generate authoritative geometry.",
+      ...(normalized.layoutIntent === "non-standard" ? ["The starting rectangle is only the confirmed overall envelope; edit the outline before relying on quantities."] : []),
     ]),
+    outlineWarning: normalized.layoutIntent === "non-standard"
+      ? "Non-standard outline is not confirmed. The first rectangle is an editable overall-size envelope."
+      : null,
   });
+}
+
+export function reviewPhotoCoverage(
+  layoutIntent: ConfirmedPhotoFacts["layoutIntent"],
+  guidedRoles: readonly GuidedPhotoRole[],
+  additionalCount: number,
+): PhotoCoverageReview {
+  if (layoutIntent !== "rectangle" && layoutIntent !== "non-standard") throw new TypeError("Photo coverage requires a supported layout intent.");
+  if (!Number.isInteger(additionalCount) || additionalCount < 0 || additionalCount > 6) throw new RangeError("Additional photo count must be from 0 through 6.");
+  const uniqueRoles = Object.freeze([...new Set(guidedRoles)]);
+  const missingRecommendedRoles = layoutIntent === "non-standard"
+    ? Object.freeze(NON_STANDARD_RECOMMENDED.filter((role) => !uniqueRoles.includes(role)))
+    : Object.freeze([] as GuidedPhotoRole[]);
+  const addedCount = uniqueRoles.length + additionalCount;
+  const message = addedCount === 0
+    ? "No photos added; manual design remains available."
+    : missingRecommendedRoles.length > 0
+      ? `${missingRecommendedRoles.length} recommended non-standard-deck angle${missingRecommendedRoles.length === 1 ? " is" : "s are"} still missing.`
+      : layoutIntent === "non-standard"
+        ? "Good multi-angle coverage for reviewing a non-standard outline."
+        : "Photo coverage is optional for this rectangle start.";
+  return Object.freeze({ addedCount, missingRecommendedRoles, message });
 }
 
 export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: ConfirmedPhotoFacts): DeckDesignV3 {
