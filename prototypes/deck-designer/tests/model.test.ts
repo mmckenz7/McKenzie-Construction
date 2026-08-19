@@ -9,6 +9,7 @@ import { formatFeetInches } from "../src/PlanView";
 import { deriveDesignNotices } from "../src/notices";
 import { GENERIC_DECK_TEMPLATES, applyTemplateToDesign, duplicateDesign, getDeckTemplate } from "../src/templates";
 import { RENDER_QUALITY_POLICIES } from "../src/renderQuality";
+import { createHouseOpening } from "../src/siteContext";
 import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
 import lShapeLandingFixture from "./fixtures/l-shape-landing.json";
 
@@ -90,6 +91,26 @@ describe("local 3D quality policy", () => {
     });
     expect(Object.isFrozen(RENDER_QUALITY_POLICIES)).toBe(true);
     expect(stableDesignJson(DEFAULT_DESIGN)).not.toMatch(/quality|pixelRatio|shadowMap/);
+  });
+});
+
+describe("house opening commands", () => {
+  it("places the first opening centrally and later openings in the first valid gap", () => {
+    const wall = DEFAULT_DESIGN.siteContext.houseWalls[0];
+    const first = createHouseOpening(wall, "door");
+    expect(first).toEqual({ id: "door-1", kind: "door", offset: 138, width: 36, sillHeight: 0, height: 80 });
+    const second = createHouseOpening({ ...wall, openings: [first] }, "window");
+    expect(second).toEqual({ id: "window-1", kind: "window", offset: 0, width: 48, sillHeight: 36, height: 48 });
+  });
+
+  it("fails clearly when no opening fits", () => {
+    const wall = {
+      ...DEFAULT_DESIGN.siteContext.houseWalls[0],
+      end: { x: 24, z: 0 },
+      start: { x: 0, z: 0 },
+      openings: [{ id: "existing", kind: "door" as const, offset: 0, width: 24, sillHeight: 0, height: 48 }],
+    };
+    expect(() => createHouseOpening(wall, "door")).toThrow(/No 36-inch opening fits/);
   });
 });
 

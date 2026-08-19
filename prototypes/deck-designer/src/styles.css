@@ -67,6 +67,7 @@ button:hover { transform: translateY(-1px); }
 .house-opening-actions button, .house-opening-card button { border-color: #aebbb2; background: white; color: #34473f; font-size: 10px; }
 .house-opening-card { margin-top: 10px; padding: 10px; border: 1px solid #cbd4cd; border-radius: 8px; background: #f1f4f0; }
 .house-opening-card > div:first-child { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: #42554b; font-size: 10px; text-transform: capitalize; }
+.house-opening-empty { margin: 8px 0 0; color: #78857e; font-size: 9px; }
 .selected-edge-card { margin: 13px 0 0; padding: 11px; border: 1px solid #b7c5bb; border-radius: 8px; background: #eef2ec; }
 .selected-edge-card > div:first-child { display: flex; justify-content: space-between; gap: 10px; color: #526058; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
 .selected-edge-card p { margin: 6px 0 9px; color: #34473f; font-size: 11px; }

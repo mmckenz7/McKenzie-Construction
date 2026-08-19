@@ -25,6 +25,7 @@ import {
 } from "./templates";
 import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
+import { createHouseOpening } from "./siteContext";
 import "./styles.css";
 
 const STORAGE_KEY = "mckenzie-deck-designer:v2:current";
@@ -69,6 +70,7 @@ function App() {
   const [snapIncrement, setSnapIncrement] = useState(6);
   const [selectedEdgeId, setSelectedEdgeId] = useState<DeckEdgeId | null>(null);
   const [templateId, setTemplateId] = useState<DeckTemplateId>("compact-ground");
+  const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const geometry = useMemo(() => deriveGeometry(design), [design]);
   const quantities = useMemo(() => deriveQuantities(design, geometry), [design, geometry]);
@@ -116,23 +118,17 @@ function App() {
   };
 
   const primaryWall = design.siteContext.houseWalls[0];
-  const primaryOpening = primaryWall.openings[0] ?? null;
-  const primaryWallLength = Math.hypot(
-    primaryWall.end.x - primaryWall.start.x,
-    primaryWall.end.z - primaryWall.start.z,
-  );
+  const primaryOpening = primaryWall.openings.find((opening) => opening.id === selectedOpeningId)
+    ?? primaryWall.openings[0]
+    ?? null;
+  useEffect(() => {
+    if (primaryOpening?.id !== selectedOpeningId) setSelectedOpeningId(primaryOpening?.id ?? null);
+  }, [primaryOpening?.id, selectedOpeningId]);
   const addHouseOpening = (kind: HouseOpeningKind) => {
-    const width = kind === "door" ? 36 : 48;
-    const opening = {
-      id: `${kind}-1`,
-      kind,
-      offset: Math.max(0, Math.round((primaryWallLength - width) / 2)),
-      width,
-      sillHeight: kind === "door" ? 0 : 36,
-      height: kind === "door" ? 80 : 48,
-    } as const;
     try {
-      applyDesign(updateDesign(design, { houseOpenings: [opening] }));
+      const opening = createHouseOpening(primaryWall, kind);
+      applyDesign(updateDesign(design, { houseOpenings: [...primaryWall.openings, opening] }));
+      setSelectedOpeningId(opening.id);
       setMessage(`Conceptual ${kind} opening added to ${primaryWall.id}; field verification required.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "House opening update failed.");
@@ -142,7 +138,7 @@ function App() {
     if (!primaryOpening) return;
     try {
       applyDesign(updateDesign(design, {
-        houseOpenings: primaryWall.openings.map((opening, index) => index === 0 ? { ...opening, ...update } : opening),
+        houseOpenings: primaryWall.openings.map((opening) => opening.id === primaryOpening.id ? { ...opening, ...update } : opening),
       }));
       setMessage("Conceptual house opening updated from recorded dimensions.");
     } catch (error) {
@@ -382,17 +378,25 @@ function App() {
               <option value="non-ledger">Non-ledger intent</option>
             </select>
           </label>
-          {!primaryOpening ? (
-            <div className="house-opening-actions">
-              <button onClick={() => addHouseOpening("door")}>Add door</button>
-              <button onClick={() => addHouseOpening("window")}>Add window</button>
-            </div>
-          ) : (
+          <div className="house-opening-actions">
+            <button onClick={() => addHouseOpening("door")}>Add door</button>
+            <button onClick={() => addHouseOpening("window")}>Add window</button>
+          </div>
+          {primaryOpening ? (
             <section className="house-opening-card" aria-label="House opening">
               <div><strong>{primaryOpening.kind}</strong><button onClick={() => {
-                applyDesign(updateDesign(design, { houseOpenings: primaryWall.openings.slice(1) }));
+                applyDesign(updateDesign(design, { houseOpenings: primaryWall.openings.filter((opening) => opening.id !== primaryOpening.id) }));
+                setSelectedOpeningId(null);
                 setMessage("Conceptual house opening removed.");
               }}>Remove</button></div>
+              <label className="field full">
+                <span>Edit opening</span>
+                <select aria-label="House opening selection" value={primaryOpening.id} onChange={(event) => setSelectedOpeningId(event.target.value)}>
+                  {primaryWall.openings.map((opening) => (
+                    <option key={opening.id} value={opening.id}>{opening.id} · {opening.kind}</option>
+                  ))}
+                </select>
+              </label>
               <label className="field full">
                 <span>Opening type</span>
                 <select value={primaryOpening.kind} onChange={(event) => updatePrimaryOpening({ kind: event.target.value as HouseOpeningKind })}>
@@ -407,7 +411,7 @@ function App() {
                 <DimensionField label="Opening height" value={primaryOpening.height} onCommit={(value) => updatePrimaryOpening({ height: Number(value) })} />
               </div>
             </section>
-          )}
+          ) : <p className="house-opening-empty">No door or window recorded.</p>}
 
           <div className="section-heading compact">
             <span>03</span><div><p>Railing edges</p><small>Attached edge remains open</small></div>

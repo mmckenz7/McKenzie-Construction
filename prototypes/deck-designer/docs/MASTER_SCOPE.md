@@ -32,7 +32,8 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Undo/redo command history with monotonic design revisions
 - [x] Local duplicate command and initial generic deck templates
 - [x] Initial grade, house-wall, opening, and attachment-intent foundation
-- [ ] Multi-wall direct editing and multiple-opening UI
+- [x] Multiple-opening add/select/edit UI on the primary recorded wall
+- [ ] Multi-wall direct editing
 - [x] Property-style invariant matrix across rectangle, L-shape, stair, and landing combinations
 - [ ] Randomized/generative fuzzing beyond the deterministic matrix
 - [x] Initial versioned rectangle and L-shape golden fixtures
