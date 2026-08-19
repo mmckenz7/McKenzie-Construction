@@ -40,6 +40,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Test-only v3 apply/undo/redo history with monotonic revision restoration
 - [x] Golden v2-to-v3 equivalence gate for core area/decking/joist projections
 - [x] Golden v2-to-v3 equivalence for railing, stair, stringer, and landing geometry
+- [x] Traceable v3 accessory quantity projection with v2 equivalence and safety classifications
 - [x] Undo/redo command history with monotonic design revisions
 - [x] Local duplicate command and initial generic deck templates
 - [x] Initial grade, house-wall, opening, and attachment-intent foundation
