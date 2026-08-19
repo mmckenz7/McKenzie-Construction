@@ -148,6 +148,7 @@ button:hover { transform: translateY(-1px); }
 .review-card .primary { width: 100%; }
 .offset-action-status { margin: 8px 0 0; padding: 9px 10px; border-radius: 8px; background: #fff4df; color: #744716; font-size: 12px; font-weight: 700; }
 .offset-action-status.ready { background: #e7f1d0; color: #294d28; }
+.outline-edit-feedback { margin: 7px 0 0; color: #526058; font-size: 11px; line-height: 1.4; }
 .full-action:disabled { cursor: not-allowed; opacity: .5; }
 .add-corner-button.active { background: #d87d45; border-color: #9c4723; }
 .add-corner-mode .v3-edge { fill: rgba(216, 125, 69, .3); cursor: crosshair; }

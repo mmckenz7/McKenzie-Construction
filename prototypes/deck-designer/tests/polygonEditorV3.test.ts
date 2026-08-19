@@ -41,6 +41,22 @@ describe("direct v3 polygon authoring", () => {
     expect(normalizePolygon(mergedCorner)).toEqual(mergedCorner);
   });
 
+  it("magnetically aligns a dragged corner to nearby corner axes", () => {
+    const bumpout = addBumpoutOnEdge(rectangle, 1, { x: 192, z: 60 }, 6);
+    const next = movePolygonCorner(bumpout, 2, { x: 197, z: 5 }, true, 6);
+    expect(next).toHaveLength(6);
+    expect(next[1]).toEqual({ x: 198, z: 0 });
+    expect(normalizePolygon(next)).toEqual(next);
+  });
+
+  it("magnetically aligns a moved side to a nearby corner line", () => {
+    const bumpout = addBumpoutOnEdge(rectangle, 1, { x: 192, z: 60 }, 6);
+    const next = movePolygonSegment(bumpout, 2, 43, 6);
+    expect(next).toHaveLength(6);
+    expect(next[1]).toEqual({ x: 198, z: 0 });
+    expect(normalizePolygon(next)).toEqual(next);
+  });
+
   it("rejects corner insertion on segments too short for snapped placement", () => {
     const narrow = [{ x: 0, z: 0 }, { x: 12, z: 0 }, { x: 12, z: 60 }, { x: 0, z: 60 }];
     expect(() => addBumpoutOnEdge(narrow, 0, { x: 6, z: 0 }, 6)).toThrow(/too short/i);

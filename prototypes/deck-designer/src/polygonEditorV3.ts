@@ -4,6 +4,19 @@ const snap = (value: number, increment: number): number => Math.round(value / in
 const samePoint = (first: PolygonPoint, second: PolygonPoint): boolean =>
   Math.abs(first.x - second.x) < .01 && Math.abs(first.z - second.z) < .01;
 
+function snapCoordinateToCorners(
+  value: number,
+  values: readonly number[],
+  threshold: number,
+): number {
+  if (threshold <= 0) return value;
+  const nearest = values
+    .map((candidate) => ({ candidate, distance: Math.abs(candidate - value) }))
+    .filter(({ distance }) => distance <= threshold + .01)
+    .sort((first, second) => first.distance - second.distance || first.candidate - second.candidate)[0];
+  return nearest?.candidate ?? value;
+}
+
 function mergeCoincidentNeighbors(points: readonly PolygonPoint[]): readonly PolygonPoint[] {
   const merged = points.filter((point, index) => !samePoint(point, points[(index - 1 + points.length) % points.length]));
   let changed = true;
@@ -66,10 +79,15 @@ export function movePolygonCorner(
   cornerIndex: number,
   point: PolygonPoint,
   mergeCoincident = true,
+  alignmentThreshold = 0,
 ): readonly PolygonPoint[] {
   if (!outer[cornerIndex]) throw new RangeError("Select an existing corner before moving it.");
   const next = [...outer];
-  next[cornerIndex] = Object.freeze({ x: point.x, z: point.z });
+  const otherCorners = outer.filter((_, index) => index !== cornerIndex);
+  next[cornerIndex] = Object.freeze({
+    x: snapCoordinateToCorners(point.x, otherCorners.map((candidate) => candidate.x), alignmentThreshold),
+    z: snapCoordinateToCorners(point.z, otherCorners.map((candidate) => candidate.z), alignmentThreshold),
+  });
   return mergeCoincident ? mergeCoincidentNeighbors(next) : Object.freeze(next);
 }
 
@@ -83,7 +101,16 @@ export function movePolygonSegment(
   const edges = deriveGeometricPolygonEdges(outer);
   const edge = edges[edgeIndex];
   if (!edge) throw new RangeError("Select an existing outline segment before moving it.");
-  const distance = snap(perpendicularDistance, snapIncrement);
+  const requestedDistance = snap(perpendicularDistance, snapIncrement);
+  const endpointIndexes = new Set([edgeIndex, (edgeIndex + 1) % outer.length]);
+  const magneticDistance = outer
+    .map((point, index) => ({
+      index,
+      distance: (point.x - edge.start.x) * edge.outward.x + (point.z - edge.start.z) * edge.outward.z,
+    }))
+    .filter(({ index, distance }) => !endpointIndexes.has(index) && Math.abs(distance - requestedDistance) <= snapIncrement + .01)
+    .sort((first, second) => Math.abs(first.distance - requestedDistance) - Math.abs(second.distance - requestedDistance) || first.index - second.index)[0]?.distance;
+  const distance = magneticDistance ?? requestedDistance;
   const movedStart = Object.freeze({ x: edge.start.x + edge.outward.x * distance, z: edge.start.z + edge.outward.z * distance });
   const movedEnd = Object.freeze({ x: edge.end.x + edge.outward.x * distance, z: edge.end.z + edge.outward.z * distance });
   const next = [...outer];

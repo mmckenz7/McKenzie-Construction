@@ -27,6 +27,7 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Direct-edit follow-up added an armed “Add corner” mode, clickable wide segment targets, persistent round corner handles, and square segment handles. Browser QA added a fifth corner by clicking segment 2, then moved segment 1 by one snap increment; both endpoints moved and the adjacent segments remained connected in 2D/3D.
 - The single-corner default created two diagonal segments, which was unsuitable for typical deck offsets. Click placement now creates a small outward rectangular bumpout: the new center segment remains parallel to the original edge, its sides are perpendicular, and all four inserted corners remain editable.
 - Corner-alignment follow-up allows bumpout placement near an edge endpoint to anchor directly to that existing corner. Dragging a bumpout side or corner onto its adjacent existing corner now merges coincident vertices instead of leaving an unusable short segment or rejecting a zero-length edge.
+- Repeated-alignment follow-up fixed an inactive stair placeholder that could block a later outline edit after the owner explicitly unlocked and disabled edge options. Active stair references still require review. Both round corners and square side handles now magnetically align to nearby corner axes within the selected drag step; a live desktop pass aligned one bumpout side to the top corner and then the remaining side to the bottom corner without a false review stop.
 
 ## 2026-08-19 sidebar clarity and sticky workspace check
 

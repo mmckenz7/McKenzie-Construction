@@ -16,11 +16,32 @@ describe("DeckDesign v3 region replacement planning", () => {
     const plan = planPolygonRegionReplacement(design, "platform-1", { outer: notchedTop, holes: [] });
     expect(plan.safeToApplyWithoutReview).toBe(false);
     expect(plan.impacts).toEqual([expect.objectContaining({
-      usages: expect.arrayContaining(["railing", "stairs"]),
+      usages: ["railing"],
       status: "review_required",
       candidateEdgeIds: expect.arrayContaining([expect.any(String), expect.any(String)]),
     })]);
     expect(JSON.stringify(design)).toBe(originalJson);
+  });
+
+  it("still requires review when an enabled stair reference would split", () => {
+    const design = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const firstPlan = planPolygonRegionReplacement(design, "platform-1", { outer: notchedTop, holes: [] });
+    const topEdgeId = firstPlan.impacts[0].previousEdgeId;
+    const platform = design.platforms[0];
+    const withActiveStairs = normalizeDeckDesignV3({
+      ...design,
+      platforms: [{
+        ...platform,
+        construction: {
+          ...platform.construction,
+          railing: { ...platform.construction.railing, enabledEdgeIds: [] },
+          stairs: { ...platform.construction.stairs, enabled: true, edgeId: topEdgeId },
+        },
+      }],
+    });
+    const plan = planPolygonRegionReplacement(withActiveStairs, "platform-1", { outer: notchedTop, holes: [] });
+    expect(plan.safeToApplyWithoutReview).toBe(false);
+    expect(plan.impacts).toEqual([expect.objectContaining({ usages: ["stairs"], status: "review_required" })]);
   });
 
   it("allows the same split when the affected free edge has no active attachment", () => {
@@ -49,6 +70,29 @@ describe("DeckDesign v3 region replacement planning", () => {
     expect(plan.safeToApplyWithoutReview).toBe(true);
     expect(plan.impacts).toEqual([]);
     expect(plan.addedEdgeIds.length).toBeGreaterThan(2);
+  });
+
+  it("does not let a disabled stair placeholder block repeated safe outline edits", () => {
+    const design = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = design.platforms[0];
+    const unlocked = normalizeDeckDesignV3({
+      ...design,
+      platforms: [{
+        ...platform,
+        edgeConditions: platform.edgeConditions.map((condition) => ({ ...condition, condition: "free", attachment: "none" })),
+        construction: {
+          ...platform.construction,
+          railing: { ...platform.construction.railing, enabledEdgeIds: [] },
+          stairs: { ...platform.construction.stairs, enabled: false },
+        },
+      }],
+    });
+    const first = applyPolygonRegionReplacement(unlocked, "platform-1", { outer: notchedTop, holes: [] });
+    const secondOuter = first.design.platforms[0].region.outer.map((point, index) => index === 4 ? { ...point, z: point.z + 12 } : point);
+    const second = applyPolygonRegionReplacement(first.design, "platform-1", { outer: secondOuter, holes: [] });
+    expect(second.design.metadata.revision).toBe(unlocked.metadata.revision + 2);
+    expect(second.design.platforms[0].construction.stairs.enabled).toBe(false);
+    expect(second.design.platforms[0].edgeConditions.some((condition) => condition.edgeId === second.design.platforms[0].construction.stairs.edgeId && condition.condition === "free")).toBe(true);
   });
 
   it("applies only a safe plan as one immutable monotonic revision", () => {

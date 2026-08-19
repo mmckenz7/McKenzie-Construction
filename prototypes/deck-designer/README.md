@@ -25,7 +25,7 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Command-based undo and redo
 - Direct plan handles for width, projection, and L-cutout dimensions with selectable 1, 6, or 12 inch snapping
 - Flexible polygon corner handles, exact corner coordinates, and repeatable rectangular offsets
-- Click-to-add rectangular bumpouts with parallel outer segments plus draggable segment handles that move both attached endpoints
+- Click-to-add rectangular bumpouts with parallel outer segments, magnetic corner-axis alignment, and draggable segment handles that move both attached endpoints
 - Direct stair movement along exact geometric edges with bounds and grid snapping
 - Keyboard/click edge selection with contextual railing and stair actions
 - Deterministic, explainable conceptual review notices
