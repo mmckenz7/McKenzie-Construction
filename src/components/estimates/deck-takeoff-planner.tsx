@@ -2534,6 +2534,13 @@ export function DeckTakeoffPlanner({
   };
   const completedScopeCount =
     COMPLETE_REBUILD_LINE_KEYS.filter(scopeLineComplete).length;
+  const incompleteScopeKeys = COMPLETE_REBUILD_LINE_KEYS.filter(
+    (key) => !scopeLineComplete(key),
+  );
+  const nextIncompleteScopeKey =
+    incompleteScopeKeys.find((key) => key !== activeScopeKey) ??
+    incompleteScopeKeys[0] ??
+    null;
   const scopeLineStatus = (key: CompleteRebuildLineKey) => {
     const requirement = completeRebuildScopeRequirement(key, visitItems);
     const decision = plan.scopeDecisions[key];
@@ -2669,59 +2676,59 @@ export function DeckTakeoffPlanner({
             }}
           />
         </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {COMPLETE_REBUILD_LINE_KEYS.map((key) => {
-            const line = plan.additionalLines.find(
-              (candidate) => candidate.key === key,
-            );
-            const complete = scopeLineComplete(key);
-            const knownFact = scopeVisitEvidence(key).find(
-              (fact) => !fact.startsWith("The site visit did not establish"),
-            );
-            return (
-              <button
-                key={key}
-                type="button"
-                aria-controls="deck-scope-category-editor"
-                className={`min-h-16 rounded-md border p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 ${activeScopeKey === key ? "border-blue-700 bg-blue-50" : complete ? "border-emerald-400 bg-emerald-50" : "border-slate-300 bg-white"}`}
-                onClick={() => openScopeCategory(key)}
-              >
-                <span className="block text-sm font-black text-slate-950">
-                  {complete ? "✓ " : ""}
-                  {line?.description || key.replaceAll("_", " ")}
-                </span>
-                <span
-                  className={`mt-1 block text-xs font-bold leading-5 ${complete ? "text-emerald-800" : "text-amber-900"}`}
-                >
-                  {scopeLineStatus(key)}
-                </span>
-                {knownFact ? (
-                  <span className="mt-1 block text-xs leading-5 text-slate-600">
-                    Site fact: {knownFact}
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-        <Field label="Scope category">
-          <select
-            className={input}
-            value={activeScopeKey}
-            onChange={(event) =>
-              openScopeCategory(event.target.value as CompleteRebuildLineKey)
-            }
+        {nextIncompleteScopeKey ? (
+          <button
+            type="button"
+            className={`mt-3 w-full ${primary}`}
+            onClick={() => openScopeCategory(nextIncompleteScopeKey)}
           >
-            {plan.additionalLines.map((line) => (
-              <option key={line.key} value={line.key}>
-                {scopeLineComplete(line.key as CompleteRebuildLineKey)
-                  ? "✓ "
-                  : ""}
-                {line.description}
-              </option>
-            ))}
-          </select>
-        </Field>
+            Continue with next missing detail
+          </button>
+        ) : (
+          <p className="mt-3 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm font-black text-emerald-950">
+            Every framing, cost, and scope item is complete.
+          </p>
+        )}
+        <details className="mt-3 rounded-md border border-slate-300 bg-white">
+          <summary className="flex min-h-11 cursor-pointer items-center px-3 py-2 text-sm font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700">
+            See all categories and progress
+          </summary>
+          <div className="grid gap-2 border-t border-slate-200 p-3 sm:grid-cols-2">
+            {COMPLETE_REBUILD_LINE_KEYS.map((key) => {
+              const line = plan.additionalLines.find(
+                (candidate) => candidate.key === key,
+              );
+              const complete = scopeLineComplete(key);
+              const knownFact = scopeVisitEvidence(key).find(
+                (fact) => !fact.startsWith("The site visit did not establish"),
+              );
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  aria-controls="deck-scope-category-editor"
+                  className={`min-h-16 rounded-md border p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 ${activeScopeKey === key ? "border-blue-700 bg-blue-50" : complete ? "border-emerald-400 bg-emerald-50" : "border-slate-300 bg-white"}`}
+                  onClick={() => openScopeCategory(key)}
+                >
+                  <span className="block text-sm font-black text-slate-950">
+                    {complete ? "✓ " : ""}
+                    {line?.description || key.replaceAll("_", " ")}
+                  </span>
+                  <span
+                    className={`mt-1 block text-xs font-bold leading-5 ${complete ? "text-emerald-800" : "text-amber-900"}`}
+                  >
+                    {scopeLineStatus(key)}
+                  </span>
+                  {knownFact ? (
+                    <span className="mt-1 block text-xs leading-5 text-slate-600">
+                      Site fact: {knownFact}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </details>
       </div>
       {activeScopeLine ? (
         <fieldset

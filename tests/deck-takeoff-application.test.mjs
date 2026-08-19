@@ -135,6 +135,9 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /Required for complete rebuild/);
   assert.match(ui, /Only delivery, equipment/);
   assert.match(ui, /Checklist progress/);
+  assert.match(ui, /Continue with next missing detail/);
+  assert.match(ui, /See all categories and progress/);
+  assert.match(ui, /Every framing, cost, and scope item is complete/);
   assert.match(ui, /Every required category is shown below/);
   assert.match(ui, /price and source needed/);
   assert.match(ui, /Already known from the site visit and approved shape/);
