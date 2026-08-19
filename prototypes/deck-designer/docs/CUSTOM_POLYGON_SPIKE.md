@@ -8,11 +8,13 @@ A future design version may replace shape-specific dimensions with one open oute
 
 The ring—not generated meshes or quantities—would be authoritative. Stable ordered edge IDs, area, outward normals, and horizontal/vertical scanline intervals are deterministic projections. The scanline intervals are the candidate foundation for board and joist segmentation through concave shapes.
 
+An isolated region kernel also proves up to eight strictly contained, non-touching, non-overlapping hole rings. Region area subtracts normalized hole areas, and horizontal/vertical member intervals split deterministically around voids. These are still kernel semantics only, not DeckDesign facts.
+
 ## Migration and integration direction
 
 - Rectangle and L-shape facts can migrate deterministically into canonical rings.
 - No v3 migration should ship until dimension-edit commands and backward JSON compatibility are defined.
-- Holes/cutouts should be separate normalized rings, not sentinel vertices in the outer ring.
+- Holes/cutouts should be separate normalized rings, not sentinel vertices in the outer ring; containment and overlap rejection are now proven in the isolated kernel.
 - Multi-level platforms should compose independent rings with explicit elevations and connections; they should not overload one polygon.
 - The future takeoff adapter should receive traceable normalized measurements and stable edge identities. Product selection, price, labor, waste, margin, structural conclusions, and field verification remain outside this kernel.
 

@@ -30,6 +30,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Drag handles and selectable grid snapping for rectangle and L-cutout dimensions
 - [ ] Angle constraints, alignment guides, and broader object selection
 - [x] Prototype-only canonical custom-polygon kernel and contract spike (not yet part of DeckDesign)
+- [x] Prototype-only contained-hole region kernel with subtractive area and split member intervals
 - [x] Undo/redo command history with monotonic design revisions
 - [x] Local duplicate command and initial generic deck templates
 - [x] Initial grade, house-wall, opening, and attachment-intent foundation

@@ -40,6 +40,35 @@ function segmentsIntersect(a: PolygonPoint, b: PolygonPoint, c: PolygonPoint, d:
     (Math.abs(cdB) < EPSILON && pointOnSegment(b, c, d));
 }
 
+export function polygonContainsPoint(points: readonly PolygonPoint[], point: PolygonPoint): boolean {
+  const normalized = normalizePolygon(points);
+  let inside = false;
+  for (let index = 0; index < normalized.length; index += 1) {
+    const start = normalized[index];
+    const end = normalized[(index + 1) % normalized.length];
+    if (pointOnSegment(point, start, end)) return false;
+    if ((start.z > point.z) !== (end.z > point.z)) {
+      const crossingX = start.x + ((point.z - start.z) * (end.x - start.x)) / (end.z - start.z);
+      if (crossingX > point.x) inside = !inside;
+    }
+  }
+  return inside;
+}
+
+export function polygonsIntersect(first: readonly PolygonPoint[], second: readonly PolygonPoint[]): boolean {
+  const a = normalizePolygon(first);
+  const b = normalizePolygon(second);
+  for (let firstIndex = 0; firstIndex < a.length; firstIndex += 1) {
+    for (let secondIndex = 0; secondIndex < b.length; secondIndex += 1) {
+      if (segmentsIntersect(
+        a[firstIndex], a[(firstIndex + 1) % a.length],
+        b[secondIndex], b[(secondIndex + 1) % b.length],
+      )) return true;
+    }
+  }
+  return false;
+}
+
 export function normalizePolygon(input: readonly PolygonPoint[]): readonly PolygonPoint[] {
   const withoutClosingPoint = input.length > 1 && samePoint(input[0], input[input.length - 1])
     ? input.slice(0, -1)
