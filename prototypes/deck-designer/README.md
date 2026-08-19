@@ -38,3 +38,4 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/MASTER_SCOPE.md](docs/MASTER_SCOPE.md).
 The future custom-outline semantics are being proven separately in [docs/CUSTOM_POLYGON_SPIKE.md](docs/CUSTOM_POLYGON_SPIKE.md) before any DeckDesign version change.
+The browser application and local-storage format remain on DeckDesign v2; `modelV3.ts` is a test-only migration contract spike and is not imported by the UI.
