@@ -140,13 +140,17 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /Every framing, cost, and scope item is complete/);
   assert.match(ui, /Every required category is shown below/);
   assert.match(ui, /price and source needed/);
-  assert.match(ui, /Already known from the site visit and approved shape/);
+  assert.match(ui, /Already known from the site visit and approved structural geometry/);
   assert.match(ui, /Included automatically because this is a complete replacement/);
   assert.match(ui, /Planned material or work description/);
   assert.match(ui, /prefillScopeLineFromSavedFacts/);
   assert.match(ui, /Remove the complete existing deck structure/);
   assert.match(ui, /quantity: "1", unit: "job"/);
   assert.match(ui, /Final member size, plies, span, and bearing follow the reviewed plan/);
+  assert.match(ui, /Approved replacement house edge/);
+  assert.match(ui, /Replacement ledger run along the/);
+  assert.match(ui, /quantity: formattedFeet\(approvedHouseEdgeFeet\)/);
+  assert.match(ui, /unit: "ln ft"/);
   assert.match(ui, /Site visit recorded this deck as attached to the house/);
   assert.match(ui, /Site fact: \{knownFact\}/);
   assert.match(ui, /numericParts\.some\(\(value\) => value !== 0\)/);

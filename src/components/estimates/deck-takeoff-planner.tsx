@@ -2383,6 +2383,12 @@ export function DeckTakeoffPlanner({
   const activeScopeIncluded =
     plan.scopeDecisions[activeScopeKey] === "include" ||
     (activeScopeRequirement === "required" && plan.completeRebuildConfirmed);
+  const approvedHouseEdgeFeet =
+    railingGeometry.attached === true
+      ? (customFinishGeometry?.houseEdgeFeet ?? dimensions.lengthFeet)
+      : null;
+  const formattedFeet = (value: number) =>
+    value.toFixed(2).replace(/\.0+$|(?<=\.[0-9]*?)0+$/g, "");
   const observedMeasurement = (...keys: string[]) =>
     blueprintVisitSeed.observedMeasurements
       .filter((item) => keys.includes(item.key))
@@ -2402,6 +2408,11 @@ export function DeckTakeoffPlanner({
           : railingGeometry.attached === false
             ? "Site visit recorded this deck as freestanding."
             : "House attachment was not resolved during the site visit.",
+        ...(approvedHouseEdgeFeet && approvedHouseEdgeFeet > 0
+          ? [
+              `Approved replacement house edge: ${formattedFeet(approvedHouseEdgeFeet)} ft.`,
+            ]
+          : []),
         ...observedMeasurement("ledger_length"),
       ];
     else if (key === "joists")
@@ -2447,7 +2458,9 @@ export function DeckTakeoffPlanner({
     const description = preserveDescription
       ? line.description
       : line.key === "ledger_attachment"
-        ? `Replacement ledger and house attachment.${existingReference} Final attachment and flashing follow the reviewed plan.`
+        ? approvedHouseEdgeFeet && approvedHouseEdgeFeet > 0
+          ? `Replacement ledger run along the ${formattedFeet(approvedHouseEdgeFeet)} ft approved house edge. Final ledger size, attachment, flashing, and fastener schedule follow the reviewed structural detail.`
+          : `Replacement ledger and house attachment.${existingReference} Final attachment and flashing follow the reviewed plan.`
         : line.key === "beams"
           ? `Replacement beam / support system.${existingReference} Final member size, plies, span, and bearing follow the reviewed plan.`
           : line.key === "posts"
@@ -2466,6 +2479,19 @@ export function DeckTakeoffPlanner({
                         ? "Labor to demolish and replace the complete deck, including framing, finishes, stairs, railing, and jobsite cleanup."
                         : line.description;
 
+    if (
+      line.key === "ledger_attachment" &&
+      !line.quantity.trim() &&
+      approvedHouseEdgeFeet &&
+      approvedHouseEdgeFeet > 0
+    ) {
+      return {
+        ...line,
+        description,
+        quantity: formattedFeet(approvedHouseEdgeFeet),
+        unit: "ln ft",
+      };
+    }
     if (line.key === "demolition_disposal" && !line.quantity.trim()) {
       return { ...line, description, quantity: "1", unit: "job" };
     }
@@ -2754,7 +2780,7 @@ export function DeckTakeoffPlanner({
           </p>
           <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3">
             <p className="text-xs font-black uppercase tracking-wide text-blue-900">
-              Already known from the site visit and approved shape
+              Already known from the site visit and approved structural geometry
             </p>
             <ul className="mt-1 space-y-1 text-sm leading-5 text-slate-800">
               {scopeVisitEvidence(activeScopeKey).map((fact) => (
