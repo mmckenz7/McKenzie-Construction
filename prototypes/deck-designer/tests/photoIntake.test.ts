@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { migrateDeckDesignToV3 } from "../src/modelV3";
 import { DEFAULT_DESIGN } from "../src/model";
 import { createDesignFromConfirmedPhotoFacts, normalizeConfirmedPhotoFacts, reviewConfirmedPhotoFacts, reviewPhotoCoverage } from "../src/photoIntake";
-import { isRectangleTrace, rectangleTrace, validatePhotoTrace } from "../src/PhotoOutlineTracer";
+import { isRectangleTrace, moveTraceCornerToFeet, moveTraceSegmentToFeet, rectangleTrace, validatePhotoTrace } from "../src/PhotoOutlineTracer";
 import { derivePlatformGeometryV3 } from "../src/geometryV3";
 import { deriveDeckAccessoryProjectionV3, stableDeckAccessoryProjectionV3Json } from "../src/quantityProjectionV3";
 
@@ -70,6 +70,15 @@ describe("local-only photo-assisted start", () => {
     const house = next.platforms[0].edgeConditions.find((condition) => condition.condition === "house_attachment");
     expect(house?.attachment).toBe("ledger");
     expect(next.platforms[0].region.outer).toEqual(outer);
+  });
+
+  it("places bumpout edges and corners at exact feet-based dimensions", () => {
+    const bumpout = [{ x: 0, z: 0 }, { x: 240, z: 0 }, { x: 240, z: 144 }, { x: 132, z: 144 }, { x: 132, z: 150 }, { x: 108, z: 150 }, { x: 108, z: 144 }, { x: 0, z: 144 }];
+    const deepened = moveTraceSegmentToFeet(bumpout, 4, 18);
+    expect(deepened[4].z).toBe(216);
+    expect(deepened[5].z).toBe(216);
+    const exactCorner = moveTraceCornerToFeet(deepened, 4, 10.5, 18);
+    expect(exactCorner[4]).toEqual({ x: 126, z: 216 });
   });
 
   it("carries the existing height only when the intake leaves height unknown", () => {
