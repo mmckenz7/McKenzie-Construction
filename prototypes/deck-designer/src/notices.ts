@@ -1,5 +1,5 @@
 import type { DeckGeometry } from "./geometry";
-import type { DeckDesignV1 } from "./model";
+import type { DeckDesign } from "./model";
 
 export type DesignNotice = Readonly<{
   id: string;
@@ -7,19 +7,27 @@ export type DesignNotice = Readonly<{
   message: string;
 }>;
 
-export function deriveDesignNotices(design: DeckDesignV1, geometry: DeckGeometry): readonly DesignNotice[] {
+export function deriveDesignNotices(design: DeckDesign, geometry: DeckGeometry): readonly DesignNotice[] {
   const notices: DesignNotice[] = [];
   // This is a conservative prototype review trigger, not a code-compliance determination.
-  if (design.platform.surfaceElevation >= 30) {
+  const deckToGradeRise = design.platform.surfaceElevation - design.siteContext.gradeElevation;
+  if (deckToGradeRise >= 30) {
     for (const edge of geometry.platformEdges) {
       if (!design.construction.railing.enabledEdges.includes(edge.id)) {
         notices.push(Object.freeze({
           id: `open-elevated-edge:${edge.id}`,
           severity: "review",
-          message: `${edge.label} is open at the recorded ${design.platform.surfaceElevation}-inch conceptual elevation; this prototype flags it for qualified railing and code review.`,
+          message: `${edge.label} is open at the recorded ${deckToGradeRise}-inch conceptual deck-to-grade rise; this prototype flags it for qualified railing and code review.`,
         }));
       }
     }
+  }
+  if (design.siteContext.houseWalls.some((wall) => wall.attachment === "unknown")) {
+    notices.push(Object.freeze({
+      id: "house-attachment-unverified",
+      severity: "information",
+      message: "House attachment intent is recorded as unknown; field verification is required before any structural or estimate handoff.",
+    }));
   }
   if (design.platform.kind === "l-shape") {
     const frontLeg = design.platform.width - design.platform.cutoutWidth;

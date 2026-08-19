@@ -31,7 +31,8 @@
     "metadata": { "status": "conceptual", "revision": 2 }
   },
   "expected": {
-    "fingerprint": "v1-2faa2fb8",
+    "schemaVersion": 2,
+    "fingerprint": "v2-a6a5703f",
     "footprint": [{ "x": 0, "z": 0 }, { "x": 240, "z": 0 }, { "x": 240, "z": 120 }, { "x": 168, "z": 120 }, { "x": 168, "z": 180 }, { "x": 0, "z": 180 }],
     "edgeIds": ["front", "left", "right", "notch-horizontal", "notch-vertical"],
     "boardCount": 32,
@@ -39,6 +40,9 @@
     "railSegmentCount": 6,
     "stairTreadCount": 7,
     "stairStringerCount": 2,
+    "gradeElevation": 0,
+    "houseWallPanelCount": 1,
+    "houseOpeningCount": 0,
     "landingCenter": { "x": 264, "z": 60 },
     "landingRailSegmentCount": 2,
     "landingRailPostCount": 4,

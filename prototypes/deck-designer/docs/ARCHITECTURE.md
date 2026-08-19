@@ -2,23 +2,23 @@
 
 ## Boundary
 
-Everything under `prototypes/deck-designer/` is an isolated browser application. It does not import from McKenzie OS, call its APIs, use Supabase, or modify shared domain models. `DeckDesignV1` is a prototype-owned contract until the owner and Master Technical Controller approve an integration contract.
+Everything under `prototypes/deck-designer/` is an isolated browser application. It does not import from McKenzie OS, call its APIs, use Supabase, or modify shared domain models. `DeckDesign` schema v2 is a prototype-owned contract until the owner and Master Technical Controller approve an integration contract.
 
 The build runs an isolation guard before compilation. It rejects source imports that escape the prototype, unapproved bare imports, browser network primitives, and environment-variable access. This complements scoped-diff review; it does not grant integration authority.
 
 ## Authoritative flow
 
-`DeckDesignV1 JSON -> normalize and validate -> deterministic geometry projection -> 2D + 3D + deterministic quantity projection`
+`DeckDesign JSON -> normalize and validate -> deterministic geometry projection -> 2D + 3D + deterministic quantity projection`
 
 The design document is authoritative. Render meshes, SVG elements, and quantities are disposable projections and are never written back as design facts. Measurements are inches in a right-handed local coordinate system: `x` runs along the house, `y` is elevation, and `z` projects away from the house. The attached house edge is `z = 0`.
 
-Phase A established a single rectangular platform; the next isolated slice adds an L-shape expressed as a front-right rectangular cutout. Numeric facts are normalized to hundredths of an inch, bounded, and rejected if non-finite. Construction intent is explicit but does not assert structural adequacy, code compliance, field conditions, or product availability.
+Phase A established a single rectangular platform; later isolated slices added an L-shape expressed as a front-right rectangular cutout and explicit site context. Numeric facts are normalized to hundredths of an inch, bounded, and rejected if non-finite. Construction and attachment intent is explicit but does not assert structural adequacy, code compliance, field conditions, or product availability. Local schema-v1 JSON is deterministically migrated to v2 with a conceptual grade-zero wall context; unsupported future versions fail closed.
 
-## Proposed versioned JSON shape
+## Current prototype JSON shape
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "local-deck-001",
   "name": "Back deck concept",
   "units": "in",
@@ -29,6 +29,21 @@ Phase A established a single rectangular platform; the next isolated slice adds 
     "surfaceElevation": 48,
     "cutoutWidth": 48,
     "cutoutDepth": 48
+  },
+  "siteContext": {
+    "gradeElevation": 0,
+    "houseWalls": [{
+      "id": "house-wall-1",
+      "start": { "x": -60, "z": 0 },
+      "end": { "x": 252, "z": 0 },
+      "baseElevation": 0,
+      "height": 120,
+      "attachment": "unknown",
+      "openings": [{
+        "id": "door-1", "kind": "door", "offset": 138,
+        "width": 36, "sillHeight": 0, "height": 80
+      }]
+    }]
   },
   "construction": {
     "decking": { "boardWidth": 5.5, "gap": 0.25 },
@@ -68,6 +83,7 @@ The future adapter should emit a neutral payload rather than catalog items or es
 - `measurementPolicyVersion` and `quantityPolicyVersion`.
 - `units` and explicit rounding rules.
 - Platform measurements: polygon/level identifier, area, perimeter, elevation, and attached/free edge lengths.
+- Site-context measurements: grade reference, house-wall segments, openings, and attachment intent with field-verification status.
 - Generic quantity lines: stable semantic key, quantity class (`visualization` or `takeoff_candidate`), amount, unit, assembly intent, source geometry references, calculation explanation, and warning codes.
 - Configuration intent: generic material family, board direction/pattern, railing edge/length intent, stair/landing intent, and framing intent without product IDs or prices.
 - Review state kept outside the design document: reviewer, accepted/replaced quantity, catalog selection, and rationale.

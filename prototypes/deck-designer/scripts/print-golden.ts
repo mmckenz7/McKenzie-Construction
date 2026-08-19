@@ -12,6 +12,7 @@ for (const [name, design] of designs) {
   const geometry = deriveGeometry(design);
   const snapshot = {
     name,
+    schemaVersion: design.schemaVersion,
     fingerprint: designFingerprint(design),
     footprint: geometry.footprint,
     edgeIds: geometry.platformEdges.map((edge) => edge.id),
@@ -20,6 +21,9 @@ for (const [name, design] of designs) {
     railSegmentCount: geometry.railSegments.length,
     stairTreadCount: geometry.stairTreads.length,
     stairStringerCount: geometry.stairStringers.length,
+    gradeElevation: design.siteContext.gradeElevation,
+    houseWallPanelCount: geometry.houseWallPanels.length,
+    houseOpeningCount: geometry.houseOpenings.length,
     landingCenter: geometry.landing?.center ?? null,
     landingRailSegmentCount: geometry.landingRailSegments.length,
     landingRailPostCount: geometry.landingRailPosts.length,

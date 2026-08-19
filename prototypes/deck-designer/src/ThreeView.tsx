@@ -3,14 +3,14 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 // @ts-ignore The production root intentionally does not install this isolated prototype package's dependencies.
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { DeckDesignV1 } from "./model";
+import type { DeckDesign } from "./model";
 import type { DeckGeometry, LinearMember, StairStringer } from "./geometry";
 import { RENDER_QUALITY_POLICIES, type RenderQuality } from "./renderQuality";
 
 export type CameraPreset = "perspective" | "top" | "front";
 
 type Props = {
-  design: DeckDesignV1;
+  design: DeckDesign;
   geometry: DeckGeometry;
   preset: CameraPreset;
   presetRequest: number;
@@ -97,22 +97,26 @@ export function ThreeView({ design, geometry, preset, presetRequest, showFraming
       new THREE.MeshStandardMaterial({ color: 0x7f9675, roughness: 1 }),
     );
     ground.rotation.x = -Math.PI / 2;
+    ground.position.y = design.siteContext.gradeElevation;
     ground.receiveShadow = true;
     scene.add(ground);
-
-    const house = new THREE.Mesh(
-      new THREE.BoxGeometry(design.platform.width + 160, 220, 12),
-      new THREE.MeshStandardMaterial({ color: 0xd6d1c5, roughness: 0.92 }),
-    );
-    house.position.set(design.platform.width / 2, 110, -8);
-    house.castShadow = true;
-    house.receiveShadow = true;
-    scene.add(house);
 
     const model = new THREE.Group();
     const deckingMaterial = new THREE.MeshStandardMaterial({ color: 0x8b6545, roughness: 0.68 });
     const framingMaterial = new THREE.MeshStandardMaterial({ color: 0xb48a5d, roughness: 0.86 });
     const railMaterial = new THREE.MeshStandardMaterial({ color: 0x263a32, roughness: 0.55 });
+    const houseMaterial = new THREE.MeshStandardMaterial({ color: 0xd6d1c5, roughness: 0.92 });
+
+    for (const panel of geometry.houseWallPanels) {
+      addLinearMember(
+        model,
+        panel,
+        panel.baseElevation + panel.height / 2,
+        panel.height,
+        8,
+        houseMaterial,
+      );
+    }
 
     const boardPitch = design.construction.decking.boardWidth + design.construction.decking.gap;
     for (const board of geometry.surfaceBoards) {
@@ -133,16 +137,16 @@ export function ThreeView({ design, geometry, preset, presetRequest, showFraming
         addLinearMember(model, beam, design.platform.surfaceElevation - 13, 9.25, 4.5, framingMaterial);
       }
       for (const post of geometry.supportPosts) {
-        const height = Math.max(1, post.top);
+        const height = Math.max(1, post.top - design.siteContext.gradeElevation);
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(5.5, height, 5.5), framingMaterial);
-        mesh.position.set(post.x, height / 2, post.z);
+        mesh.position.set(post.x, design.siteContext.gradeElevation + height / 2, post.z);
         mesh.castShadow = true;
         model.add(mesh);
       }
       for (const post of geometry.landingSupportPosts) {
-        const height = Math.max(1, post.top);
+        const height = Math.max(1, post.top - design.siteContext.gradeElevation);
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(5.5, height, 5.5), framingMaterial);
-        mesh.position.set(post.x, height / 2, post.z);
+        mesh.position.set(post.x, design.siteContext.gradeElevation + height / 2, post.z);
         mesh.castShadow = true;
         model.add(mesh);
       }
@@ -252,7 +256,7 @@ export function ThreeView({ design, geometry, preset, presetRequest, showFraming
       scene.traverse((object: any) => {
         if (object instanceof THREE.Mesh) object.geometry.dispose();
       });
-      for (const material of [deckingMaterial, framingMaterial, railMaterial]) material.dispose();
+      for (const material of [deckingMaterial, framingMaterial, railMaterial, houseMaterial]) material.dispose();
       mount.removeChild(renderer.domElement);
       cameraRef.current = null;
       controlsRef.current = null;

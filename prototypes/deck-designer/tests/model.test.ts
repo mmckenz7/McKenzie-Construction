@@ -5,6 +5,7 @@ import { deriveGeometry } from "../src/geometry";
 import { deriveQuantities } from "../src/quantities";
 import { createHistory, designHistoryReducer } from "../src/history";
 import { dimensionsFromHandle, snapDimension } from "../src/editor";
+import { formatFeetInches } from "../src/PlanView";
 import { deriveDesignNotices } from "../src/notices";
 import { GENERIC_DECK_TEMPLATES, applyTemplateToDesign, duplicateDesign, getDeckTemplate } from "../src/templates";
 import { RENDER_QUALITY_POLICIES } from "../src/renderQuality";
@@ -19,6 +20,7 @@ describe("golden design fixtures", () => {
     const design = normalizeDesign(fixture.design);
     const geometry = deriveGeometry(design);
     const actual = {
+      schemaVersion: design.schemaVersion,
       fingerprint: designFingerprint(design),
       footprint: geometry.footprint,
       edgeIds: geometry.platformEdges.map((edge) => edge.id),
@@ -27,6 +29,9 @@ describe("golden design fixtures", () => {
       railSegmentCount: geometry.railSegments.length,
       stairTreadCount: geometry.stairTreads.length,
       stairStringerCount: geometry.stairStringers.length,
+      gradeElevation: design.siteContext.gradeElevation,
+      houseWallPanelCount: geometry.houseWallPanels.length,
+      houseOpeningCount: geometry.houseOpenings.length,
       landingCenter: geometry.landing?.center ?? null,
       landingRailSegmentCount: geometry.landingRailSegments.length,
       landingRailPostCount: geometry.landingRailPosts.length,
@@ -89,6 +94,11 @@ describe("local 3D quality policy", () => {
 });
 
 describe("direct plan editing", () => {
+  it("formats grade references below the local datum without floor-sign ambiguity", () => {
+    expect(formatFeetInches(-6)).toBe("−0′ 6″");
+    expect(formatFeetInches(-18)).toBe("−1′ 6″");
+  });
+
   it("snaps dimensions deterministically", () => {
     expect(snapDimension(194.9, 6)).toBe(192);
     expect(snapDimension(195.1, 6)).toBe(198);
@@ -128,6 +138,7 @@ describe("deterministic design checks", () => {
     expect(notices.map((notice) => notice.id)).toEqual([
       "open-elevated-edge:left",
       "open-elevated-edge:right",
+      "house-attachment-unverified",
       "stairs-without-landing",
     ]);
     expect(notices.every((notice) => notice.message.length > 20)).toBe(true);
@@ -135,7 +146,9 @@ describe("deterministic design checks", () => {
 
   it("does not invent open-edge review flags below the prototype threshold", () => {
     const design = updateDesign(DEFAULT_DESIGN, { surfaceElevation: 24, railingEdges: [] });
-    expect(deriveDesignNotices(design, deriveGeometry(design))).toEqual([]);
+    expect(deriveDesignNotices(design, deriveGeometry(design)).map((notice) => notice.id)).toEqual([
+      "house-attachment-unverified",
+    ]);
   });
 
   it("explains narrow L-legs and a shallow recorded landing", () => {
@@ -153,7 +166,7 @@ describe("deterministic design checks", () => {
   });
 });
 
-describe("DeckDesignV1 normalization", () => {
+describe("DeckDesign normalization", () => {
   it("normalizes to an immutable, stable document", () => {
     const first = normalizeDesign(JSON.parse(JSON.stringify(DEFAULT_DESIGN)));
     const second = normalizeDesign(JSON.parse(stableDesignJson(first)));
@@ -165,10 +178,45 @@ describe("DeckDesignV1 normalization", () => {
   });
 
   it("rejects unsupported versions, units, shapes, and unsafe numbers", () => {
-    expect(() => normalizeDesign({ ...DEFAULT_DESIGN, schemaVersion: 2 })).toThrow(/version 1/);
+    expect(() => normalizeDesign({ ...DEFAULT_DESIGN, schemaVersion: 3 })).toThrow(/version 2/);
     expect(() => normalizeDesign({ ...DEFAULT_DESIGN, units: "ft" })).toThrow(/inches/);
     expect(() => normalizeDesign({ ...DEFAULT_DESIGN, platform: { ...DEFAULT_DESIGN.platform, kind: "circle" } })).toThrow(/rectangle or l-shape/);
     expect(() => normalizeDesign({ ...DEFAULT_DESIGN, platform: { ...DEFAULT_DESIGN.platform, width: Number.NaN } })).toThrow(/between/);
+  });
+
+  it("migrates schema v1 JSON to an explicit conceptual site context", () => {
+    const legacy = JSON.parse(JSON.stringify(DEFAULT_DESIGN));
+    legacy.schemaVersion = 1;
+    delete legacy.siteContext;
+    const migrated = normalizeDesign(legacy);
+    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.siteContext).toEqual({
+      gradeElevation: 0,
+      houseWalls: [{
+        id: "house-wall-1",
+        start: { x: -60, z: 0 },
+        end: { x: 252, z: 0 },
+        baseElevation: 0,
+        height: 120,
+        attachment: "unknown",
+        openings: [],
+      }],
+    });
+  });
+
+  it("rejects overlapping or out-of-bounds house openings", () => {
+    const wall = DEFAULT_DESIGN.siteContext.houseWalls[0];
+    const withOpenings = (openings: unknown[]) => ({
+      ...DEFAULT_DESIGN,
+      siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: [{ ...wall, openings }] },
+    });
+    expect(() => normalizeDesign(withOpenings([
+      { id: "door-1", kind: "door", offset: 60, width: 36, sillHeight: 0, height: 80 },
+      { id: "window-1", kind: "window", offset: 80, width: 36, sillHeight: 36, height: 48 },
+    ]))).toThrow(/must not overlap/);
+    expect(() => normalizeDesign(withOpenings([
+      { id: "door-1", kind: "door", offset: 300, width: 36, sillHeight: 0, height: 80 },
+    ]))).toThrow(/must fit within house wall/);
   });
 
   it("increments revision and rounds edited facts to hundredths", () => {
@@ -309,6 +357,38 @@ describe("deterministic geometry", () => {
     expect(deriveGeometry(design).platformEdges.map((edge) => edge.id)).toEqual([
       "front", "left", "right", "notch-horizontal", "notch-vertical",
     ]);
+  });
+
+  it("projects recorded house openings into deterministic wall panels", () => {
+    const wall = DEFAULT_DESIGN.siteContext.houseWalls[0];
+    const design = updateDesign(DEFAULT_DESIGN, {
+      houseAttachment: "ledger",
+      houseOpenings: [{ id: "door-1", kind: "door", offset: 120, width: 36, sillHeight: 0, height: 80 }],
+    });
+    const geometry = deriveGeometry(design);
+    expect(geometry.houseOpenings).toEqual([{
+      id: "door-1",
+      wallId: wall.id,
+      kind: "door",
+      start: { x: 60, z: 0 },
+      end: { x: 96, z: 0 },
+      sillElevation: 0,
+      height: 80,
+    }]);
+    expect(geometry.houseWallPanels.map((panel) => ({ id: panel.id, height: panel.height }))).toEqual([
+      { id: "house-wall-1-full-0", height: 120 },
+      { id: "house-wall-1-above-door-1", height: 40 },
+      { id: "house-wall-1-full-156", height: 120 },
+    ]);
+  });
+
+  it("uses recorded grade for stair rise and stringer endpoints", () => {
+    const design = updateDesign(DEFAULT_DESIGN, { gradeElevation: 12, stairEnabled: true });
+    const geometry = deriveGeometry(design);
+    expect(geometry.stairRise).toBe(36);
+    expect(geometry.stairTreads).toHaveLength(5);
+    expect(geometry.stairStringers.every((stringer) => stringer.end.y === 12)).toBe(true);
+    expect(deriveQuantities(design, geometry).find((line) => line.id === "stair-tread-count")?.quantity).toBe(5);
   });
 });
 

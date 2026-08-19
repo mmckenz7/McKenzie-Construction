@@ -13,12 +13,13 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 
 ## Current Phase A boundary
 
-- Authoritative, versioned rectangle or parametric L-shape design JSON in inches
+- Authoritative DeckDesign v2 JSON in inches with deterministic migration from local v1 files
 - Exact width, projection, and deck-surface elevation inputs
 - Deterministic 2D plan, procedural 3D, and basic quantities
 - Simple decking, joists, beam, posts, and railings
 - Any-free-edge conceptual stairs with an explicit railing opening
 - Deterministic conceptual stair side-stringer paths in 2D, 3D, and quantities
+- Recorded grade, house-wall/attachment context, and an editable conceptual door or window opening
 - Optional top landing with deterministic orientation and area
 - Conceptual landing side rails, rail posts, and outer support locations
 - Command-based undo and redo

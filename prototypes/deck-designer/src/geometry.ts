@@ -1,4 +1,4 @@
-import type { DeckDesignV1, DeckEdgeId } from "./model";
+import type { DeckDesign, DeckEdgeId, HouseAttachment, HouseOpeningKind } from "./model";
 
 export type Point2 = Readonly<{ x: number; z: number }>;
 export type Point3 = Readonly<{ x: number; y: number; z: number }>;
@@ -40,9 +40,23 @@ export type Landing = Readonly<{
   rotationY: number;
 }>;
 type RailSegment = LinearMember & Readonly<{ edgeId: DeckEdgeId }>;
+export type HouseWallPanel = LinearMember & Readonly<{
+  wallId: string;
+  baseElevation: number;
+  height: number;
+  attachment: HouseAttachment;
+}>;
+export type HouseOpeningProjection = LinearMember & Readonly<{
+  wallId: string;
+  kind: HouseOpeningKind;
+  sillElevation: number;
+  height: number;
+}>;
 
 export type DeckGeometry = Readonly<{
   footprint: readonly Point2[];
+  houseWallPanels: readonly HouseWallPanel[];
+  houseOpenings: readonly HouseOpeningProjection[];
   platformEdges: readonly PlatformEdge[];
   surfaceBoards: readonly LinearMember[];
   joists: readonly LinearMember[];
@@ -53,6 +67,7 @@ export type DeckGeometry = Readonly<{
   stairOpening: LinearMember | null;
   stairTreads: readonly StairTread[];
   stairStringers: readonly StairStringer[];
+  stairRise: number;
   landing: Landing | null;
   landingRailSegments: readonly LinearMember[];
   landingRailPosts: readonly Post[];
@@ -67,7 +82,7 @@ function evenlySpacedPositions(length: number, maximumSpacing: number): readonly
   return Object.freeze(Array.from({ length: bays + 1 }, (_, index) => (length * index) / bays));
 }
 
-function platformEdges(design: DeckDesignV1): readonly PlatformEdge[] {
+function platformEdges(design: DeckDesign): readonly PlatformEdge[] {
   const { width, projection, kind, cutoutWidth, cutoutDepth } = design.platform;
   const innerX = width - cutoutWidth;
   const innerZ = projection - cutoutDepth;
@@ -98,10 +113,49 @@ function platformEdges(design: DeckDesignV1): readonly PlatformEdge[] {
   ]);
 }
 
-export function deriveGeometry(design: DeckDesignV1): DeckGeometry {
+export function deriveGeometry(design: DeckDesign): DeckGeometry {
   const { width, projection, surfaceElevation, kind, cutoutWidth, cutoutDepth } = design.platform;
   const { boardWidth, gap } = design.construction.decking;
   const { joistSpacing, beamInset, maxPostSpacing } = design.construction.framing;
+  const gradeElevation = design.siteContext.gradeElevation;
+  const houseWallPanels: HouseWallPanel[] = [];
+  const houseOpenings: HouseOpeningProjection[] = [];
+  for (const wall of design.siteContext.houseWalls) {
+    const wallLength = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+    const wallDx = (wall.end.x - wall.start.x) / wallLength;
+    const wallDz = (wall.end.z - wall.start.z) / wallLength;
+    const wallPoint = (distance: number) => point(wall.start.x + wallDx * distance, wall.start.z + wallDz * distance);
+    const addPanel = (suffix: string, startDistance: number, endDistance: number, baseElevation: number, height: number) => {
+      if (endDistance <= startDistance || height <= 0) return;
+      houseWallPanels.push(Object.freeze({
+        id: `${wall.id}-${suffix}`,
+        wallId: wall.id,
+        start: wallPoint(startDistance),
+        end: wallPoint(endDistance),
+        baseElevation,
+        height,
+        attachment: wall.attachment,
+      }));
+    };
+    let cursor = 0;
+    for (const opening of wall.openings) {
+      addPanel(`full-${cursor}`, cursor, opening.offset, wall.baseElevation, wall.height);
+      addPanel(`below-${opening.id}`, opening.offset, opening.offset + opening.width, wall.baseElevation, opening.sillHeight);
+      const openingTop = wall.baseElevation + opening.sillHeight + opening.height;
+      addPanel(`above-${opening.id}`, opening.offset, opening.offset + opening.width, openingTop, wall.baseElevation + wall.height - openingTop);
+      houseOpenings.push(Object.freeze({
+        id: opening.id,
+        wallId: wall.id,
+        kind: opening.kind,
+        start: wallPoint(opening.offset),
+        end: wallPoint(opening.offset + opening.width),
+        sillElevation: wall.baseElevation + opening.sillHeight,
+        height: opening.height,
+      }));
+      cursor = opening.offset + opening.width;
+    }
+    addPanel(`full-${cursor}`, cursor, wallLength, wall.baseElevation, wall.height);
+  }
   const boardRows = Math.ceil(projection / (boardWidth + gap));
   const surfaceBoards = Array.from({ length: boardRows }, (_, index) => {
     const z = Math.min(projection - boardWidth / 2, boardWidth / 2 + index * (boardWidth + gap));
@@ -173,8 +227,9 @@ export function deriveGeometry(design: DeckDesignV1): DeckGeometry {
       }));
     }
   }
-  const riserCount = stair.enabled ? Math.ceil(surfaceElevation / stair.maxRiserHeight) : 0;
-  const actualRise = riserCount > 0 ? surfaceElevation / riserCount : 0;
+  const stairRise = surfaceElevation - gradeElevation;
+  const riserCount = stair.enabled ? Math.ceil(stairRise / stair.maxRiserHeight) : 0;
+  const actualRise = riserCount > 0 ? stairRise / riserCount : 0;
   const landingOffset = stair.enabled && stair.landingEnabled ? stair.landingDepth : 0;
   const stairCenterOnEdge = positionOnEdge(stair.offset + stair.width / 2);
   const stairRotationY = -Math.atan2(stairDz, stairDx);
@@ -193,7 +248,7 @@ export function deriveGeometry(design: DeckDesignV1): DeckGeometry {
         id: `stair-tread-${index + 1}`,
         x: center.x,
         z: center.z,
-        y: Math.max(0, surfaceElevation - actualRise * (index + 1)),
+        y: Math.max(gradeElevation, surfaceElevation - actualRise * (index + 1)),
         width: stair.width,
         depth: stair.treadDepth,
         rise: actualRise,
@@ -219,7 +274,7 @@ export function deriveGeometry(design: DeckDesignV1): DeckGeometry {
         ),
         end: point3(
           stairCenterOnEdge.x + stairDx * stringerSideOffset * side + stairEdge.outward.x * (landingOffset + stairRun),
-          0,
+          gradeElevation,
           stairCenterOnEdge.z + stairDz * stringerSideOffset * side + stairEdge.outward.z * (landingOffset + stairRun),
         ),
       })))
@@ -279,6 +334,8 @@ export function deriveGeometry(design: DeckDesignV1): DeckGeometry {
           point(0, 0), point(width, 0), point(width, innerZ),
           point(innerX, innerZ), point(innerX, projection), point(0, projection),
         ]),
+    houseWallPanels: Object.freeze(houseWallPanels),
+    houseOpenings: Object.freeze(houseOpenings),
     platformEdges: edges,
     surfaceBoards: Object.freeze(surfaceBoards),
     joists: Object.freeze(joists),
@@ -291,6 +348,7 @@ export function deriveGeometry(design: DeckDesignV1): DeckGeometry {
       : null,
     stairTreads,
     stairStringers,
+    stairRise,
     landing,
     landingRailSegments,
     landingRailPosts,

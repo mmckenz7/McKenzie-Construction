@@ -1,4 +1,4 @@
-import { DEFAULT_DESIGN, normalizeDesign, type DeckDesignV1 } from "./model";
+import { DEFAULT_DESIGN, normalizeDesign, type DeckDesign } from "./model";
 
 export type DeckTemplateId = "compact-ground" | "elevated-rectangle" | "l-shape-landing";
 
@@ -6,23 +6,29 @@ export type DeckTemplate = Readonly<{
   id: DeckTemplateId;
   label: string;
   description: string;
-  design: DeckDesignV1;
+  design: DeckDesign;
 }>;
 
 function templateDesign(
   id: DeckTemplateId,
   name: string,
-  platform: Partial<DeckDesignV1["platform"]>,
+  platform: Partial<DeckDesign["platform"]>,
   construction: {
-    railingEdges: DeckDesignV1["construction"]["railing"]["enabledEdges"];
-    stairs?: Partial<DeckDesignV1["construction"]["stairs"]>;
+    railingEdges: DeckDesign["construction"]["railing"]["enabledEdges"];
+    stairs?: Partial<DeckDesign["construction"]["stairs"]>;
   },
-): DeckDesignV1 {
+): DeckDesign {
+  const width = platform.width ?? DEFAULT_DESIGN.platform.width;
+  const primaryWall = DEFAULT_DESIGN.siteContext.houseWalls[0];
   return normalizeDesign({
     ...DEFAULT_DESIGN,
     id: `template-${id}`,
     name,
     platform: { ...DEFAULT_DESIGN.platform, ...platform },
+    siteContext: {
+      ...DEFAULT_DESIGN.siteContext,
+      houseWalls: [{ ...primaryWall, end: { ...primaryWall.end, x: width + 60 } }],
+    },
     construction: {
       ...DEFAULT_DESIGN.construction,
       railing: { ...DEFAULT_DESIGN.construction.railing, enabledEdges: construction.railingEdges },
@@ -80,7 +86,7 @@ export function getDeckTemplate(templateId: DeckTemplateId): DeckTemplate {
   return template;
 }
 
-export function applyTemplateToDesign(design: DeckDesignV1, templateId: DeckTemplateId): DeckDesignV1 {
+export function applyTemplateToDesign(design: DeckDesign, templateId: DeckTemplateId): DeckDesign {
   const template = getDeckTemplate(templateId).design;
   return normalizeDesign({
     ...template,
@@ -89,7 +95,7 @@ export function applyTemplateToDesign(design: DeckDesignV1, templateId: DeckTemp
   });
 }
 
-export function duplicateDesign(design: DeckDesignV1, newId: string): DeckDesignV1 {
+export function duplicateDesign(design: DeckDesign, newId: string): DeckDesign {
   const baseName = design.name.replace(/\s+copy$/i, "");
   const copyName = `${baseName.slice(0, 115).trimEnd()} copy`;
   return normalizeDesign({

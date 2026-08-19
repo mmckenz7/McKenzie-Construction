@@ -1,7 +1,9 @@
-export const DESIGN_SCHEMA_VERSION = 1 as const;
+export const DESIGN_SCHEMA_VERSION = 2 as const;
 export type DeckEdgeId = "front" | "left" | "right" | "notch-horizontal" | "notch-vertical";
+export type HouseOpeningKind = "door" | "window";
+export type HouseAttachment = "unknown" | "ledger" | "non-ledger";
 
-export type DeckDesignV1 = Readonly<{
+export type DeckDesign = Readonly<{
   schemaVersion: typeof DESIGN_SCHEMA_VERSION;
   id: string;
   name: string;
@@ -13,6 +15,25 @@ export type DeckDesignV1 = Readonly<{
     surfaceElevation: number;
     cutoutWidth: number;
     cutoutDepth: number;
+  }>;
+  siteContext: Readonly<{
+    gradeElevation: number;
+    houseWalls: readonly Readonly<{
+      id: string;
+      start: Readonly<{ x: number; z: number }>;
+      end: Readonly<{ x: number; z: number }>;
+      baseElevation: number;
+      height: number;
+      attachment: HouseAttachment;
+      openings: readonly Readonly<{
+        id: string;
+        kind: HouseOpeningKind;
+        offset: number;
+        width: number;
+        sillHeight: number;
+        height: number;
+      }>[];
+    }>[];
   }>;
   construction: Readonly<{
     decking: Readonly<{ boardWidth: number; gap: number }>;
@@ -44,13 +65,30 @@ export type DeckDesignV1 = Readonly<{
 
 const EDGE_ORDER: readonly DeckEdgeId[] = ["front", "left", "right", "notch-horizontal", "notch-vertical"];
 
-export function availableEdgeIds(kind: DeckDesignV1["platform"]["kind"]): readonly DeckEdgeId[] {
+export function availableEdgeIds(kind: DeckDesign["platform"]["kind"]): readonly DeckEdgeId[] {
   return kind === "l-shape"
     ? EDGE_ORDER
     : EDGE_ORDER.filter((edge) => edge !== "notch-horizontal" && edge !== "notch-vertical");
 }
 
-export const DEFAULT_DESIGN: DeckDesignV1 = Object.freeze({
+function defaultSiteContext(deckWidth: number): DeckDesign["siteContext"] {
+  return Object.freeze({
+    gradeElevation: 0,
+    houseWalls: Object.freeze([
+      Object.freeze({
+        id: "house-wall-1",
+        start: Object.freeze({ x: -60, z: 0 }),
+        end: Object.freeze({ x: deckWidth + 60, z: 0 }),
+        baseElevation: 0,
+        height: 120,
+        attachment: "unknown" as const,
+        openings: Object.freeze([]),
+      }),
+    ]),
+  });
+}
+
+export const DEFAULT_DESIGN: DeckDesign = Object.freeze({
   schemaVersion: DESIGN_SCHEMA_VERSION,
   id: "local-deck-001",
   name: "Back deck concept",
@@ -63,6 +101,7 @@ export const DEFAULT_DESIGN: DeckDesignV1 = Object.freeze({
     cutoutWidth: 48,
     cutoutDepth: 48,
   }),
+  siteContext: defaultSiteContext(192),
   construction: Object.freeze({
     decking: Object.freeze({ boardWidth: 5.5, gap: 0.25 }),
     framing: Object.freeze({ joistSpacing: 16, beamInset: 24, maxPostSpacing: 72 }),
@@ -112,7 +151,7 @@ function integerInRange(value: unknown, label: string, min: number, max: number)
   return value as number;
 }
 
-function normalizeEdges(value: unknown, kind: DeckDesignV1["platform"]["kind"]): readonly DeckEdgeId[] {
+function normalizeEdges(value: unknown, kind: DeckDesign["platform"]["kind"]): readonly DeckEdgeId[] {
   if (!Array.isArray(value) || value.some((edge) => !EDGE_ORDER.includes(edge as DeckEdgeId))) {
     throw new TypeError("construction.railing.enabledEdges contains an unsupported edge.");
   }
@@ -121,7 +160,7 @@ function normalizeEdges(value: unknown, kind: DeckDesignV1["platform"]["kind"]):
 }
 
 function edgeLength(
-  platform: DeckDesignV1["platform"],
+  platform: DeckDesign["platform"],
   edgeId: DeckEdgeId,
 ): number {
   if (edgeId === "front") return platform.kind === "l-shape" ? platform.width - platform.cutoutWidth : platform.width;
@@ -131,8 +170,17 @@ function edgeLength(
   return platform.cutoutDepth;
 }
 
-export function normalizeDesign(input: unknown): DeckDesignV1 {
-  const root = record(input, "design");
+export function normalizeDesign(input: unknown): DeckDesign {
+  const incoming = record(input, "design");
+  const incomingPlatform = record(incoming.platform, "platform");
+  const migratedSiteContext = defaultSiteContext(
+    typeof incomingPlatform.width === "number" && Number.isFinite(incomingPlatform.width)
+      ? incomingPlatform.width
+      : DEFAULT_DESIGN.platform.width,
+  );
+  const root = incoming.schemaVersion === 1
+    ? { ...incoming, schemaVersion: DESIGN_SCHEMA_VERSION, siteContext: migratedSiteContext }
+    : incoming;
   if (root.schemaVersion !== DESIGN_SCHEMA_VERSION) {
     throw new RangeError(`Only design schema version ${DESIGN_SCHEMA_VERSION} is supported.`);
   }
@@ -143,6 +191,7 @@ export function normalizeDesign(input: unknown): DeckDesignV1 {
     throw new TypeError("Platform kind must be rectangle or l-shape.");
   }
   const construction = record(root.construction, "construction");
+  const siteContext = record(root.siteContext, "siteContext");
   const decking = record(construction.decking, "construction.decking");
   const framing = record(construction.framing, "construction.framing");
   const railing = record(construction.railing, "construction.railing");
@@ -194,12 +243,87 @@ export function normalizeDesign(input: unknown): DeckDesignV1 {
     throw new RangeError(`Stair opening must fit on the ${normalizedStairs.edgeId} edge.`);
   }
 
+  const normalizedGradeElevation = numberInRange(siteContext.gradeElevation, "siteContext.gradeElevation", -120, 120);
+  if (normalizedGradeElevation > normalizedPlatform.surfaceElevation - 6) {
+    throw new RangeError("siteContext.gradeElevation must remain at least 6 inches below the deck surface.");
+  }
+  if (!Array.isArray(siteContext.houseWalls) || siteContext.houseWalls.length < 1 || siteContext.houseWalls.length > 8) {
+    throw new RangeError("siteContext.houseWalls must contain from 1 through 8 walls.");
+  }
+  const normalizedWalls = siteContext.houseWalls.map((value, wallIndex) => {
+    const wall = record(value, `siteContext.houseWalls[${wallIndex}]`);
+    const start = record(wall.start, `siteContext.houseWalls[${wallIndex}].start`);
+    const end = record(wall.end, `siteContext.houseWalls[${wallIndex}].end`);
+    const normalizedStart = Object.freeze({
+      x: numberInRange(start.x, `siteContext.houseWalls[${wallIndex}].start.x`, -2400, 2400),
+      z: numberInRange(start.z, `siteContext.houseWalls[${wallIndex}].start.z`, -2400, 2400),
+    });
+    const normalizedEnd = Object.freeze({
+      x: numberInRange(end.x, `siteContext.houseWalls[${wallIndex}].end.x`, -2400, 2400),
+      z: numberInRange(end.z, `siteContext.houseWalls[${wallIndex}].end.z`, -2400, 2400),
+    });
+    const wallLength = Math.hypot(normalizedEnd.x - normalizedStart.x, normalizedEnd.z - normalizedStart.z);
+    if (wallLength < 24) throw new RangeError(`siteContext.houseWalls[${wallIndex}] must be at least 24 inches long.`);
+    const height = numberInRange(wall.height, `siteContext.houseWalls[${wallIndex}].height`, 48, 360);
+    if (wall.attachment !== "unknown" && wall.attachment !== "ledger" && wall.attachment !== "non-ledger") {
+      throw new TypeError(`siteContext.houseWalls[${wallIndex}].attachment is unsupported.`);
+    }
+    if (!Array.isArray(wall.openings) || wall.openings.length > 24) {
+      throw new RangeError(`siteContext.houseWalls[${wallIndex}].openings must contain no more than 24 openings.`);
+    }
+    const openings = wall.openings.map((value, openingIndex) => {
+      const opening = record(value, `siteContext.houseWalls[${wallIndex}].openings[${openingIndex}]`);
+      if (opening.kind !== "door" && opening.kind !== "window") {
+        throw new TypeError(`siteContext.houseWalls[${wallIndex}].openings[${openingIndex}].kind is unsupported.`);
+      }
+      const normalizedOpening = {
+        id: text(opening.id, `siteContext.houseWalls[${wallIndex}].openings[${openingIndex}].id`, 80),
+        kind: opening.kind as HouseOpeningKind,
+        offset: numberInRange(opening.offset, `siteContext.houseWalls[${wallIndex}].openings[${openingIndex}].offset`, 0, 4800),
+        width: numberInRange(opening.width, `siteContext.houseWalls[${wallIndex}].openings[${openingIndex}].width`, 12, 240),
+        sillHeight: numberInRange(opening.sillHeight, `siteContext.houseWalls[${wallIndex}].openings[${openingIndex}].sillHeight`, 0, 240),
+        height: numberInRange(opening.height, `siteContext.houseWalls[${wallIndex}].openings[${openingIndex}].height`, 12, 240),
+      };
+      if (normalizedOpening.offset + normalizedOpening.width > wallLength) {
+        throw new RangeError(`Opening ${normalizedOpening.id} must fit within house wall ${wall.id}.`);
+      }
+      if (normalizedOpening.sillHeight + normalizedOpening.height > height) {
+        throw new RangeError(`Opening ${normalizedOpening.id} must fit within the height of house wall ${wall.id}.`);
+      }
+      return Object.freeze(normalizedOpening);
+    }).sort((a, b) => a.offset - b.offset || a.id.localeCompare(b.id));
+    if (new Set(openings.map((opening) => opening.id)).size !== openings.length) {
+      throw new TypeError(`Openings on house wall ${wall.id} must have unique IDs.`);
+    }
+    for (let index = 1; index < openings.length; index += 1) {
+      if (openings[index].offset < openings[index - 1].offset + openings[index - 1].width) {
+        throw new RangeError(`Openings on house wall ${wall.id} must not overlap.`);
+      }
+    }
+    return Object.freeze({
+      id: text(wall.id, `siteContext.houseWalls[${wallIndex}].id`, 80),
+      start: normalizedStart,
+      end: normalizedEnd,
+      baseElevation: numberInRange(wall.baseElevation, `siteContext.houseWalls[${wallIndex}].baseElevation`, -120, 240),
+      height,
+      attachment: wall.attachment as HouseAttachment,
+      openings: Object.freeze(openings),
+    });
+  }).sort((a, b) => a.id.localeCompare(b.id));
+  if (new Set(normalizedWalls.map((wall) => wall.id)).size !== normalizedWalls.length) {
+    throw new TypeError("siteContext.houseWalls IDs must be unique.");
+  }
+
   return Object.freeze({
     schemaVersion: DESIGN_SCHEMA_VERSION,
     id: text(root.id, "id", 80),
     name: text(root.name, "name"),
     units: "in",
     platform: Object.freeze(normalizedPlatform),
+    siteContext: Object.freeze({
+      gradeElevation: normalizedGradeElevation,
+      houseWalls: Object.freeze(normalizedWalls),
+    }),
     construction: Object.freeze({
       decking: Object.freeze({
         boardWidth: numberInRange(decking.boardWidth, "construction.decking.boardWidth", 2, 12),
@@ -224,7 +348,7 @@ export function normalizeDesign(input: unknown): DeckDesignV1 {
 }
 
 export function updateDesign(
-  design: DeckDesignV1,
+  design: DeckDesign,
   update: {
     name?: string;
     width?: number;
@@ -242,8 +366,12 @@ export function updateDesign(
     stairEdgeId?: DeckEdgeId;
     landingEnabled?: boolean;
     landingDepth?: number;
+    gradeElevation?: number;
+    houseWallHeight?: number;
+    houseAttachment?: HouseAttachment;
+    houseOpenings?: DeckDesign["siteContext"]["houseWalls"][number]["openings"];
   },
-): DeckDesignV1 {
+): DeckDesign {
   const nextKind = update.kind ?? design.platform.kind;
   const inheritedRailingEdges = update.kind === "l-shape" && design.platform.kind === "rectangle"
     ? [
@@ -263,6 +391,18 @@ export function updateDesign(
       surfaceElevation: update.surfaceElevation ?? design.platform.surfaceElevation,
       cutoutWidth: update.cutoutWidth ?? design.platform.cutoutWidth,
       cutoutDepth: update.cutoutDepth ?? design.platform.cutoutDepth,
+    },
+    siteContext: {
+      ...design.siteContext,
+      gradeElevation: update.gradeElevation ?? design.siteContext.gradeElevation,
+      houseWalls: design.siteContext.houseWalls.map((wall, index) => index === 0
+        ? {
+            ...wall,
+            height: update.houseWallHeight ?? wall.height,
+            attachment: update.houseAttachment ?? wall.attachment,
+            openings: update.houseOpenings ?? wall.openings,
+          }
+        : wall),
     },
     construction: {
       ...design.construction,
@@ -293,16 +433,16 @@ export function updateDesign(
   });
 }
 
-export function stableDesignJson(design: DeckDesignV1): string {
+export function stableDesignJson(design: DeckDesign): string {
   return JSON.stringify(normalizeDesign(design), null, 2);
 }
 
-export function designFingerprint(design: DeckDesignV1): string {
+export function designFingerprint(design: DeckDesign): string {
   const value = stableDesignJson(design);
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return `v1-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+  return `v${DESIGN_SCHEMA_VERSION}-${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }

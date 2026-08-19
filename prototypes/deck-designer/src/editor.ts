@@ -1,4 +1,4 @@
-import type { DeckDesignV1 } from "./model";
+import type { DeckDesign } from "./model";
 
 export type PlatformHandle = "width" | "projection" | "cutout";
 export type PlatformDimensionUpdate = Readonly<{
@@ -19,13 +19,13 @@ export function snapDimension(value: number, increment: number): number {
   return Math.round((value / increment) + Number.EPSILON) * increment;
 }
 
-function stairSpan(design: DeckDesignV1, edgeId: DeckDesignV1["construction"]["stairs"]["edgeId"]): number {
+function stairSpan(design: DeckDesign, edgeId: DeckDesign["construction"]["stairs"]["edgeId"]): number {
   const stairs = design.construction.stairs;
   return stairs.enabled && stairs.edgeId === edgeId ? stairs.offset + stairs.width : 0;
 }
 
 export function dimensionsFromHandle(
-  design: DeckDesignV1,
+  design: DeckDesign,
   handle: PlatformHandle,
   point: Readonly<{ x: number; z: number }>,
   snapIncrement: number,

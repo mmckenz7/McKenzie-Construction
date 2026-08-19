@@ -1,7 +1,7 @@
 // @ts-ignore The production root intentionally does not install this isolated prototype package's test runner.
 import { describe, expect, it } from "vitest";
 import { deriveGeometry } from "../src/geometry";
-import { DEFAULT_DESIGN, designFingerprint, normalizeDesign, stableDesignJson, updateDesign, type DeckDesignV1 } from "../src/model";
+import { DEFAULT_DESIGN, designFingerprint, normalizeDesign, stableDesignJson, updateDesign, type DeckDesign } from "../src/model";
 import { deriveQuantities } from "../src/quantities";
 
 function polygonArea(points: readonly Readonly<{ x: number; z: number }>[]): number {
@@ -11,7 +11,7 @@ function polygonArea(points: readonly Readonly<{ x: number; z: number }>[]): num
   }, 0)) / 2;
 }
 
-function assertProjectionInvariants(design: DeckDesignV1): void {
+function assertProjectionInvariants(design: DeckDesign): void {
   const normalized = normalizeDesign(design);
   const first = deriveGeometry(normalized);
   const second = deriveGeometry(normalized);
@@ -40,10 +40,13 @@ function assertProjectionInvariants(design: DeckDesignV1): void {
     const stairEdge = first.platformEdges.find((edge) => edge.id === normalized.construction.stairs.edgeId);
     expect(stairEdge).toBeDefined();
     expect(normalized.construction.stairs.offset + normalized.construction.stairs.width).toBeLessThanOrEqual(stairEdge!.length);
-    expect(first.stairTreads.length).toBe(Math.ceil(normalized.platform.surfaceElevation / normalized.construction.stairs.maxRiserHeight));
+    expect(first.stairTreads.length).toBe(Math.ceil(
+      (normalized.platform.surfaceElevation - normalized.siteContext.gradeElevation) /
+      normalized.construction.stairs.maxRiserHeight,
+    ));
     expect(first.stairStringers).toHaveLength(2);
     expect(first.stairStringers.every((stringer) =>
-      stringer.start.y === normalized.platform.surfaceElevation && stringer.end.y === 0
+      stringer.start.y === normalized.platform.surfaceElevation && stringer.end.y === normalized.siteContext.gradeElevation
     )).toBe(true);
   } else {
     expect(first.stairStringers).toHaveLength(0);

@@ -1,22 +1,22 @@
-import { normalizeDesign, type DeckDesignV1 } from "./model";
+import { normalizeDesign, type DeckDesign } from "./model";
 
 export type DesignHistory = Readonly<{
-  past: readonly DeckDesignV1[];
-  present: DeckDesignV1;
-  future: readonly DeckDesignV1[];
+  past: readonly DeckDesign[];
+  present: DeckDesign;
+  future: readonly DeckDesign[];
 }>;
 
 export type HistoryAction =
-  | Readonly<{ type: "apply"; design: DeckDesignV1 }>
+  | Readonly<{ type: "apply"; design: DeckDesign }>
   | Readonly<{ type: "undo" }>
   | Readonly<{ type: "redo" }>
-  | Readonly<{ type: "reset"; design: DeckDesignV1 }>;
+  | Readonly<{ type: "reset"; design: DeckDesign }>;
 
-export function createHistory(design: DeckDesignV1): DesignHistory {
+export function createHistory(design: DeckDesign): DesignHistory {
   return Object.freeze({ past: Object.freeze([]), present: normalizeDesign(design), future: Object.freeze([]) });
 }
 
-function restoreSnapshot(snapshot: DeckDesignV1, current: DeckDesignV1): DeckDesignV1 {
+function restoreSnapshot(snapshot: DeckDesign, current: DeckDesign): DeckDesign {
   return normalizeDesign({
     ...snapshot,
     metadata: { ...snapshot.metadata, revision: current.metadata.revision + 1 },

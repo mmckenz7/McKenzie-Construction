@@ -7,8 +7,10 @@ import {
   normalizeDesign,
   stableDesignJson,
   updateDesign,
-  type DeckDesignV1,
+  type DeckDesign,
   type DeckEdgeId,
+  type HouseAttachment,
+  type HouseOpeningKind,
 } from "./model";
 import { deriveQuantities } from "./quantities";
 import { createHistory, designHistoryReducer } from "./history";
@@ -25,7 +27,8 @@ import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
 import "./styles.css";
 
-const STORAGE_KEY = "mckenzie-deck-designer:v1:current";
+const STORAGE_KEY = "mckenzie-deck-designer:v2:current";
+const LEGACY_STORAGE_KEY = "mckenzie-deck-designer:v1:current";
 const ThreeView = lazy(async () => {
   const module = await import("./ThreeView");
   return { default: module.ThreeView };
@@ -37,9 +40,9 @@ function createLocalDesignId(): string {
     : `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function loadInitialDesign(): DeckDesignV1 {
+function loadInitialDesign(): DeckDesign {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
     return saved ? normalizeDesign(JSON.parse(saved)) : DEFAULT_DESIGN;
   } catch {
     return DEFAULT_DESIGN;
@@ -52,9 +55,9 @@ function App() {
     loadInitialDesign(),
     createHistory,
   );
-  const [previewDesign, setPreviewDesign] = useState<DeckDesignV1 | null>(null);
+  const [previewDesign, setPreviewDesign] = useState<DeckDesign | null>(null);
   const design = previewDesign ?? history.present;
-  const applyDesign = (next: DeckDesignV1) => {
+  const applyDesign = (next: DeckDesign) => {
     setPreviewDesign(null);
     dispatchHistory({ type: "apply", design: next });
   };
@@ -100,7 +103,7 @@ function App() {
   };
 
   const applyNumber = (
-    field: "width" | "projection" | "surfaceElevation" | "joistSpacing" | "cutoutWidth" | "cutoutDepth" | "stairOffset" | "stairWidth" | "treadDepth" | "landingDepth",
+    field: "width" | "projection" | "surfaceElevation" | "joistSpacing" | "cutoutWidth" | "cutoutDepth" | "stairOffset" | "stairWidth" | "treadDepth" | "landingDepth" | "gradeElevation" | "houseWallHeight",
     raw: string,
   ) => {
     const value = Number(raw);
@@ -109,6 +112,41 @@ function App() {
       setMessage("Design updated from authoritative dimensions.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "That value is not supported.");
+    }
+  };
+
+  const primaryWall = design.siteContext.houseWalls[0];
+  const primaryOpening = primaryWall.openings[0] ?? null;
+  const primaryWallLength = Math.hypot(
+    primaryWall.end.x - primaryWall.start.x,
+    primaryWall.end.z - primaryWall.start.z,
+  );
+  const addHouseOpening = (kind: HouseOpeningKind) => {
+    const width = kind === "door" ? 36 : 48;
+    const opening = {
+      id: `${kind}-1`,
+      kind,
+      offset: Math.max(0, Math.round((primaryWallLength - width) / 2)),
+      width,
+      sillHeight: kind === "door" ? 0 : 36,
+      height: kind === "door" ? 80 : 48,
+    } as const;
+    try {
+      applyDesign(updateDesign(design, { houseOpenings: [opening] }));
+      setMessage(`Conceptual ${kind} opening added to ${primaryWall.id}; field verification required.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "House opening update failed.");
+    }
+  };
+  const updatePrimaryOpening = (update: Partial<DeckDesign["siteContext"]["houseWalls"][number]["openings"][number]>) => {
+    if (!primaryOpening) return;
+    try {
+      applyDesign(updateDesign(design, {
+        houseOpenings: primaryWall.openings.map((opening, index) => index === 0 ? { ...opening, ...update } : opening),
+      }));
+      setMessage("Conceptual house opening updated from recorded dimensions.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "House opening update failed.");
     }
   };
 
@@ -319,7 +357,60 @@ function App() {
           )}
 
           <div className="section-heading compact">
-            <span>02</span><div><p>Railing edges</p><small>Attached edge remains open</small></div>
+            <span>02</span><div><p>House &amp; grade</p><small>Conceptual recorded context</small></div>
+          </div>
+          <div className="field-grid">
+            <DimensionField label="Grade elevation" value={design.siteContext.gradeElevation} onCommit={(value) => applyNumber("gradeElevation", value)} />
+            <DimensionField label="Wall height" value={primaryWall.height} onCommit={(value) => applyNumber("houseWallHeight", value)} />
+          </div>
+          <label className="field full house-attachment-field">
+            <span>Attachment intent</span>
+            <select
+              value={primaryWall.attachment}
+              onChange={(event) => {
+                const attachment = event.target.value as HouseAttachment;
+                try {
+                  applyDesign(updateDesign(design, { houseAttachment: attachment }));
+                  setMessage(`House attachment intent recorded as ${attachment}; no structural conclusion is implied.`);
+                } catch (error) {
+                  setMessage(error instanceof Error ? error.message : "Attachment update failed.");
+                }
+              }}
+            >
+              <option value="unknown">Unknown / verify</option>
+              <option value="ledger">Ledger intent</option>
+              <option value="non-ledger">Non-ledger intent</option>
+            </select>
+          </label>
+          {!primaryOpening ? (
+            <div className="house-opening-actions">
+              <button onClick={() => addHouseOpening("door")}>Add door</button>
+              <button onClick={() => addHouseOpening("window")}>Add window</button>
+            </div>
+          ) : (
+            <section className="house-opening-card" aria-label="House opening">
+              <div><strong>{primaryOpening.kind}</strong><button onClick={() => {
+                applyDesign(updateDesign(design, { houseOpenings: primaryWall.openings.slice(1) }));
+                setMessage("Conceptual house opening removed.");
+              }}>Remove</button></div>
+              <label className="field full">
+                <span>Opening type</span>
+                <select value={primaryOpening.kind} onChange={(event) => updatePrimaryOpening({ kind: event.target.value as HouseOpeningKind })}>
+                  <option value="door">Door</option>
+                  <option value="window">Window</option>
+                </select>
+              </label>
+              <div className="field-grid">
+                <DimensionField label="Wall offset" value={primaryOpening.offset} onCommit={(value) => updatePrimaryOpening({ offset: Number(value) })} />
+                <DimensionField label="Opening width" value={primaryOpening.width} onCommit={(value) => updatePrimaryOpening({ width: Number(value) })} />
+                <DimensionField label="Sill height" value={primaryOpening.sillHeight} onCommit={(value) => updatePrimaryOpening({ sillHeight: Number(value) })} />
+                <DimensionField label="Opening height" value={primaryOpening.height} onCommit={(value) => updatePrimaryOpening({ height: Number(value) })} />
+              </div>
+            </section>
+          )}
+
+          <div className="section-heading compact">
+            <span>03</span><div><p>Railing edges</p><small>Attached edge remains open</small></div>
           </div>
           <div className="toggle-grid">
             {geometry.platformEdges.map((edge) => (
@@ -347,7 +438,7 @@ function App() {
           </div>
 
           <div className="section-heading compact">
-            <span>03</span><div><p>Stairs &amp; landing</p><small>Explicit edge attachment</small></div>
+            <span>04</span><div><p>Stairs &amp; landing</p><small>Explicit edge attachment</small></div>
           </div>
           <button
             className={design.construction.stairs.enabled ? "stair-toggle active" : "stair-toggle"}

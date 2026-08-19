@@ -5,6 +5,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 ## Phase A — deterministic rectangle foundation
 
 - [x] One versioned, unit-explicit authoritative design document
+- [x] Deterministic local v1-to-v2 design migration
 - [x] Exact width, projection, and surface elevation
 - [x] Deterministic normalization and validation
 - [x] 2D measured plan
@@ -30,7 +31,8 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [ ] Angle constraints, alignment guides, and broader object selection
 - [x] Undo/redo command history with monotonic design revisions
 - [x] Local duplicate command and initial generic deck templates
-- [ ] House walls, openings, grade references, and attachment conditions
+- [x] Initial grade, house-wall, opening, and attachment-intent foundation
+- [ ] Multi-wall direct editing and multiple-opening UI
 - [x] Property-style invariant matrix across rectangle, L-shape, stair, and landing combinations
 - [ ] Randomized/generative fuzzing beyond the deterministic matrix
 - [x] Initial versioned rectangle and L-shape golden fixtures

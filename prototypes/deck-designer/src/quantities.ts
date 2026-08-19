@@ -1,4 +1,4 @@
-import type { DeckDesignV1 } from "./model";
+import type { DeckDesign } from "./model";
 import type { DeckGeometry } from "./geometry";
 
 export type QuantityLine = Readonly<{
@@ -12,7 +12,7 @@ export type QuantityLine = Readonly<{
 const feet = (inches: number) => Math.round((inches / 12) * 100) / 100;
 const squareFeet = (squareInches: number) => Math.round((squareInches / 144) * 100) / 100;
 
-export function deriveQuantities(design: DeckDesignV1, geometry: DeckGeometry): readonly QuantityLine[] {
+export function deriveQuantities(design: DeckDesign, geometry: DeckGeometry): readonly QuantityLine[] {
   const { width, projection, kind, cutoutWidth, cutoutDepth } = design.platform;
   const platformSquareInches = width * projection - (kind === "l-shape" ? cutoutWidth * cutoutDepth : 0);
   const boardInches = geometry.surfaceBoards.reduce(
@@ -119,7 +119,7 @@ export function deriveQuantities(design: DeckDesignV1, geometry: DeckGeometry): 
             label: "Stair treads",
             quantity: geometry.stairTreads.length,
             unit: "each" as const,
-            explanation: `${design.construction.stairs.edgeId} edge: ceiling of ${design.platform.surfaceElevation} in elevation ÷ ${design.construction.stairs.maxRiserHeight} in maximum riser`,
+            explanation: `${design.construction.stairs.edgeId} edge: ceiling of ${geometry.stairRise} in deck-to-grade rise ÷ ${design.construction.stairs.maxRiserHeight} in maximum riser`,
           }),
           Object.freeze({
             id: "stair-run",
@@ -147,7 +147,7 @@ export function deriveQuantities(design: DeckDesignV1, geometry: DeckGeometry): 
               0,
             )),
             unit: "lin ft" as const,
-            explanation: `Two conceptual side paths across ${geometry.stairTreads.length * design.construction.stairs.treadDepth} in run and ${design.platform.surfaceElevation} in rise`,
+            explanation: `Two conceptual side paths across ${geometry.stairTreads.length * design.construction.stairs.treadDepth} in run and ${geometry.stairRise} in deck-to-grade rise`,
           }),
           ...(geometry.landing
             ? [

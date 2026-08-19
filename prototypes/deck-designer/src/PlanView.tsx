@@ -1,10 +1,10 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import type { DeckDesignV1, DeckEdgeId } from "./model";
+import type { DeckDesign, DeckEdgeId } from "./model";
 import type { DeckGeometry } from "./geometry";
 import { dimensionsFromHandle, type PlatformDimensionUpdate, type PlatformHandle } from "./editor";
 
 type Props = {
-  design: DeckDesignV1;
+  design: DeckDesign;
   geometry: DeckGeometry;
   showFraming: boolean;
   snapIncrement: number;
@@ -22,6 +22,8 @@ export function PlanView({ design, geometry, showFraming, snapIncrement, onDimen
   const margin = Math.max(width, projection) * 0.18;
   const projectedPoints = [
     ...geometry.footprint,
+    ...geometry.houseWallPanels.flatMap((panel) => [panel.start, panel.end]),
+    ...geometry.houseOpenings.flatMap((opening) => [opening.start, opening.end]),
     ...geometry.stairTreads.flatMap((tread) => tread.corners),
     ...(geometry.landing?.corners ?? []),
   ];
@@ -119,7 +121,7 @@ export function PlanView({ design, geometry, showFraming, snapIncrement, onDimen
       className="plan-svg"
       viewBox={`0 0 ${viewWidth} ${viewHeight}`}
       role="img"
-      aria-label={`Measured plan of a ${width} inch by ${projection} inch ${design.platform.kind} deck`}
+      aria-label={`Measured plan of a ${width} inch by ${projection} inch ${design.platform.kind} deck at grade elevation ${design.siteContext.gradeElevation} inches`}
     >
       <defs>
         <pattern id="grid" width="12" height="12" patternUnits="userSpaceOnUse">
@@ -130,8 +132,13 @@ export function PlanView({ design, geometry, showFraming, snapIncrement, onDimen
         </marker>
       </defs>
       <rect width={viewWidth} height={viewHeight} fill="url(#grid)" />
-      <rect x={x(0) - 12} y={y(0) - 8} width={width + 24} height="8" fill="#c8c2b5" />
-      <text x={x(width / 2)} y={y(0) - 13} textAnchor="middle" className="plan-house-label">HOUSE / ATTACHED EDGE</text>
+      {geometry.houseWallPanels.map((panel) => (
+        <line key={panel.id} x1={x(panel.start.x)} y1={y(panel.start.z)} x2={x(panel.end.x)} y2={y(panel.end.z)} className="plan-house-wall" />
+      ))}
+      {geometry.houseOpenings.map((opening) => (
+        <line key={`${opening.wallId}-${opening.id}`} x1={x(opening.start.x)} y1={y(opening.start.z)} x2={x(opening.end.x)} y2={y(opening.end.z)} className={`plan-house-opening ${opening.kind}`} />
+      ))}
+      <text x={x(width / 2)} y={y(0) - 13} textAnchor="middle" className="plan-house-label">HOUSE CONTEXT · GRADE {formatFeetInches(design.siteContext.gradeElevation)}</text>
       <polygon
         points={geometry.footprint.map((vertex) => `${x(vertex.x)},${y(vertex.z)}`).join(" ")}
         className="plan-platform"
@@ -205,7 +212,9 @@ export function PlanView({ design, geometry, showFraming, snapIncrement, onDimen
 }
 
 export function formatFeetInches(inches: number): string {
-  const feet = Math.floor(inches / 12);
-  const remainder = Math.round((inches - feet * 12) * 100) / 100;
-  return `${feet}′ ${remainder}″`;
+  const sign = inches < 0 ? "−" : "";
+  const absolute = Math.abs(inches);
+  const feet = Math.floor(absolute / 12);
+  const remainder = Math.round((absolute - feet * 12) * 100) / 100;
+  return `${sign}${feet}′ ${remainder}″`;
 }
