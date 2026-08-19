@@ -145,10 +145,10 @@ export default function KnoxvilleDeckBuilderPage() {
                 </Link>
 
                 <a
-                  href="tel:8652633811"
+                  href="tel:8654333325"
                   className="inline-flex items-center justify-center rounded-lg border border-white/30 bg-white/10 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/20"
                 >
-                  Call (865) 263-3811
+                  Call (865) 433-3325
                 </a>
               </div>
             </div>

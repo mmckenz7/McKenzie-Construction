@@ -155,10 +155,10 @@ export default function HomePage() {
 
             <div className="mt-6">
               <a
-                href="tel:+18652633811"
+                href="tel:+18654333325"
                 className="text-sm font-bold text-zinc-200 transition hover:text-white"
               >
-                Call 865-263-3811
+                Call 865-433-3325
               </a>
             </div>
           </div>
@@ -544,8 +544,8 @@ export default function HomePage() {
             </p>
 
             <div className="mt-7 flex flex-col gap-3 text-sm font-semibold sm:flex-row sm:gap-8">
-              <a href="tel:+18652633811">
-                Call: 865-263-3811
+              <a href="tel:+18654333325">
+                Call: 865-433-3325
               </a>
 
               <a href="mailto:info@mckenzie-builds.com">
@@ -649,9 +649,9 @@ export default function HomePage() {
               <div className="mt-4 space-y-3 text-zinc-400">
                 <a
                   className="block hover:text-white"
-                  href="tel:+18652633811"
+                  href="tel:+18654333325"
                 >
-                  865-263-3811
+                  865-433-3325
                 </a>
 
                 <a
@@ -672,16 +672,23 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="mx-auto mt-10 max-w-7xl border-t border-white/10 px-5 pt-6 text-xs text-zinc-500 sm:px-8">
-          © {new Date().getFullYear()} McKenzie Construction. All
-          rights reserved.
+        <div className="mx-auto mt-10 flex max-w-7xl flex-col gap-4 border-t border-white/10 px-5 pt-6 text-xs text-zinc-500 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
+          <p>
+            © {new Date().getFullYear()} McKenzie Construction. All
+            rights reserved.
+          </p>
+          <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link className="hover:text-white" href="/privacy">Privacy</Link>
+            <Link className="hover:text-white" href="/sms-terms">SMS Terms</Link>
+            <Link className="hover:text-white" href="/sms-consent">SMS Consent</Link>
+          </nav>
         </div>
       </footer>
 
       {/* MOBILE STICKY CTA */}
       <div className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-2 border-t border-zinc-300 bg-white p-2 shadow-2xl sm:hidden">
         <a
-          href="tel:+18652633811"
+          href="tel:+18654333325"
           className="flex min-h-12 items-center justify-center text-sm font-black"
         >
           CALL NOW

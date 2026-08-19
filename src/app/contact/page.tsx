@@ -58,10 +58,10 @@ export default async function ContactPage() {
             </h2>
 
             <a
-              href="tel:8652633811"
+              href="tel:8654333325"
               className="mt-5 inline-flex min-h-12 items-center justify-center bg-zinc-950 px-6 text-sm font-black uppercase tracking-wide text-white transition hover:bg-zinc-800"
             >
-              Call 865-263-3811
+              Call 865-433-3325
             </a>
           </div>
 
