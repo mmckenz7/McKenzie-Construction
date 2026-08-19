@@ -27,8 +27,8 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Keyboard/click edge selection with contextual railing and stair actions
 - Deterministic, explainable conceptual review notices
 - Three generic geometry templates plus a local duplicate-design command
-- Versioned rectangle and L-shape golden fixtures for deterministic regression checks
-- Seeded generative geometry/quantity corpus that replays 250 valid parameter combinations
+- Versioned rectangle, L-shape, and multi-wall/opening golden fixtures for deterministic regression checks
+- Seeded generative corpus that replays 250 valid projections and 120 invalid-input rejection cases
 - Orbit, pan, zoom, and camera presets
 - Lazy-loaded 3D runtime with enforced initial, largest-chunk, and total JavaScript budgets
 - Economy, balanced, and detailed local 3D quality tiers that never alter design facts

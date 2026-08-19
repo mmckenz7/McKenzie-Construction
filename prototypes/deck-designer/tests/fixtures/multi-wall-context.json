@@ -1,0 +1,70 @@
+{
+  "fixtureVersion": 1,
+  "design": {
+    "schemaVersion": 2,
+    "id": "local-deck-001",
+    "name": "Multi-wall context concept",
+    "units": "in",
+    "platform": { "kind": "rectangle", "width": 192, "projection": 144, "surfaceElevation": 48, "cutoutWidth": 48, "cutoutDepth": 48 },
+    "siteContext": {
+      "gradeElevation": 0,
+      "houseWalls": [
+        {
+          "id": "house-wall-1",
+          "start": { "x": -60, "z": 0 },
+          "end": { "x": 252, "z": 0 },
+          "baseElevation": 0,
+          "height": 120,
+          "attachment": "ledger",
+          "openings": [{ "id": "door-1", "kind": "door", "offset": 120, "width": 36, "sillHeight": 0, "height": 80 }]
+        },
+        {
+          "id": "house-wall-2",
+          "start": { "x": -60, "z": 0 },
+          "end": { "x": -60, "z": 204 },
+          "baseElevation": -6,
+          "height": 126,
+          "attachment": "non-ledger",
+          "openings": [{ "id": "window-1", "kind": "window", "offset": 78, "width": 48, "sillHeight": 36, "height": 48 }]
+        }
+      ]
+    },
+    "construction": {
+      "decking": { "boardWidth": 5.5, "gap": 0.25 },
+      "framing": { "joistSpacing": 16, "beamInset": 24, "maxPostSpacing": 72 },
+      "railing": { "height": 36, "enabledEdges": ["front", "left", "right"] },
+      "stairs": { "enabled": false, "edgeId": "front", "offset": 48, "width": 48, "treadDepth": 10, "maxRiserHeight": 7.75, "landingEnabled": false, "landingDepth": 48 }
+    },
+    "metadata": { "status": "conceptual", "revision": 2 }
+  },
+  "expected": {
+    "schemaVersion": 2,
+    "fingerprint": "v2-2f86c705",
+    "footprint": [{ "x": 0, "z": 0 }, { "x": 192, "z": 0 }, { "x": 192, "z": 144 }, { "x": 0, "z": 144 }],
+    "edgeIds": ["front", "left", "right"],
+    "boardCount": 26,
+    "joistCount": 13,
+    "railSegmentCount": 3,
+    "stairTreadCount": 0,
+    "stairStringerCount": 0,
+    "gradeElevation": 0,
+    "houseWallPanelCount": 7,
+    "houseOpeningCount": 2,
+    "landingCenter": null,
+    "landingRailSegmentCount": 0,
+    "landingRailPostCount": 0,
+    "landingSupportPostCount": 0,
+    "quantities": {
+      "platform-area": { "quantity": 192, "unit": "sq ft" },
+      "deck-board-rows": { "quantity": 26, "unit": "each" },
+      "decking-linear-feet": { "quantity": 416, "unit": "lin ft" },
+      "joist-count": { "quantity": 13, "unit": "each" },
+      "joist-linear-feet": { "quantity": 156, "unit": "lin ft" },
+      "beam-linear-feet": { "quantity": 16, "unit": "lin ft" },
+      "support-post-count": { "quantity": 4, "unit": "each" },
+      "railing-linear-feet": { "quantity": 40, "unit": "lin ft" },
+      "railing-post-count": { "quantity": 8, "unit": "each" },
+      "surface-screw-allowance": { "quantity": 676, "unit": "each" }
+    }
+  }
+}

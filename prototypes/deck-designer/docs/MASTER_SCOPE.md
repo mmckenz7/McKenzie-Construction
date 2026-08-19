@@ -36,7 +36,8 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Multi-wall add/select/edit/remove controls with per-wall openings
 - [x] Property-style invariant matrix across rectangle, L-shape, stair, and landing combinations
 - [x] Seeded generative fuzz corpus across valid platform, framing, stair, landing, and quantity combinations
-- [x] Initial versioned rectangle and L-shape golden fixtures
+- [x] Seeded invalid-input rejection corpus for geometry and site-context constraints
+- [x] Versioned rectangle, L-shape, and multi-wall/opening golden fixtures
 
 ## Phase C — configuration depth and polish
 

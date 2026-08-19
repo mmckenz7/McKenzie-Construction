@@ -178,3 +178,45 @@ describe("property-style deterministic projection matrix", () => {
     expect(cases).toBe(250);
   });
 });
+
+describe("seeded invalid-input rejection corpus", () => {
+  it("fails closed for reproducible invalid geometry and site-context facts", () => {
+    const random = seededRandom(0xBAD5EED);
+    const cases = 120;
+    for (let index = 0; index < cases; index += 1) {
+      const invalidAction = [
+        () => updateDesign(DEFAULT_DESIGN, { width: randomBetween(random, 0, 47.99) }),
+        () => updateDesign(DEFAULT_DESIGN, { projection: randomBetween(random, 0, 47.99) }),
+        () => updateDesign(DEFAULT_DESIGN, {
+          surfaceElevation: 60,
+          gradeElevation: randomBetween(random, 54.01, 60),
+        }),
+        () => updateDesign(DEFAULT_DESIGN, {
+          kind: "l-shape",
+          width: 144,
+          cutoutWidth: randomBetween(random, 120, 144),
+        }),
+        () => updateDesign(DEFAULT_DESIGN, { joistSpacing: randomBetween(random, 0, 7.99) }),
+        () => updateDesign(DEFAULT_DESIGN, {
+          stairEnabled: true,
+          stairWidth: 48,
+          stairOffset: randomBetween(random, 144.01, 180),
+        }),
+        () => updateDesign(DEFAULT_DESIGN, {
+          houseWalls: [
+            DEFAULT_DESIGN.siteContext.houseWalls[0],
+            { ...DEFAULT_DESIGN.siteContext.houseWalls[0] },
+          ],
+        }),
+        () => updateDesign(DEFAULT_DESIGN, {
+          houseOpenings: [
+            { id: "door-1", kind: "door", offset: 60, width: 48, sillHeight: 0, height: 80 },
+            { id: "window-1", kind: "window", offset: randomBetween(random, 61, 107), width: 48, sillHeight: 36, height: 48 },
+          ],
+        }),
+      ][index % 8];
+      expect(invalidAction).toThrow();
+    }
+    expect(cases).toBe(120);
+  });
+});

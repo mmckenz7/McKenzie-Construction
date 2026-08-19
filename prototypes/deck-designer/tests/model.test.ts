@@ -12,9 +12,10 @@ import { RENDER_QUALITY_POLICIES } from "../src/renderQuality";
 import { createHouseOpening, createHouseWall } from "../src/siteContext";
 import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
 import lShapeLandingFixture from "./fixtures/l-shape-landing.json";
+import multiWallContextFixture from "./fixtures/multi-wall-context.json";
 
 describe("golden design fixtures", () => {
-  const fixtures = [rectangleFoundationFixture, lShapeLandingFixture];
+  const fixtures = [rectangleFoundationFixture, lShapeLandingFixture, multiWallContextFixture];
 
   it.each(fixtures)("keeps $design.name geometry and quantities stable", (fixture) => {
     expect(fixture.fixtureVersion).toBe(1);
