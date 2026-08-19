@@ -4,7 +4,7 @@ Status: isolated kernel research only. This does not change `DeckDesign v2`, pro
 
 An isolated `modelV3` migration spike now exercises the proposed contract without switching the application or local-storage format. It migrates v1/v2 rectangle and L-shape designs into `platforms[]`, canonical outer/hole rings, geometric edge conditions, and edge-referenced rail/stair intent. The former L cutout becomes a concave outer ring; no redundant width/projection/cutout facts survive inside the v3 platform.
 
-A non-mutating region-replacement planner compares a proposed ring with the recorded v3 platform. It lists automatic one-to-one remaps, new edges, and blocking impacts. Ambiguous or missing edges block only when they carry house-attachment, active-railing, or enabled-stair intent; otherwise new free geometry can proceed without inventing an attachment decision.
+A non-mutating region-replacement planner compares a proposed ring with the recorded v3 platform. It lists automatic one-to-one remaps, new edges, and blocking impacts. Ambiguous or missing edges block when they carry house-attachment, active-railing, or any recorded stair-edge intent; otherwise new free geometry can proceed without inventing an attachment decision. A separate immutable command applies only safe plans, remaps references, defaults genuinely new edges to free, and advances the design revision exactly once. Review-required plans remain unapplied and return their complete impact evidence.
 
 ## Proposed future authoritative facts
 
