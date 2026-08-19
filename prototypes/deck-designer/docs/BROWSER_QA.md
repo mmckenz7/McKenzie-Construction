@@ -14,6 +14,15 @@ The smoke check found and corrected a flex/grid feedback loop caused by percenta
 
 Remaining Phase A visual-quality gap: durable golden screenshot automation and checks in additional browser engines.
 
+## 2026-08-19 v3 polygon and movable-stair check
+
+- Existing v2 local state migrated to the new v3 key and loaded as a four-corner polygon; the prior v2 key remained untouched by automated tests.
+- Explicit outline unlock cleared protected edge options before geometry edits.
+- Added one rectangular offset and then a second offset on another edge, producing a valid 12-corner outline; 2D, 3D, and deterministic area updated together.
+- Attached stairs to an exact geometric edge and changed the bounded stair position to 72 inches; the plan and 3D stair run updated without changing quantity semantics.
+- Desktop visual inspection confirmed editable corner handles, the orange stair handle, the two-offset outline, and matching procedural 3D geometry.
+- Existing responsive rules remain unchanged: the visual workspace is sticky only above 1050 pixels and returns to normal flow at tablet/mobile widths.
+
 ## 2026-08-19 sidebar clarity and sticky workspace check
 
 - Replaced drafting jargon in the primary controls with plain-language deck width, distance-from-house, deck height, ground, railing, and stair labels.

@@ -1,7 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { DeckDesign, DeckEdgeId } from "./model";
 import type { DeckGeometry } from "./geometry";
-import { dimensionsFromHandle, type PlatformDimensionUpdate, type PlatformHandle } from "./editor";
+import { dimensionsFromHandle, stairOffsetFromPoint, type PlatformDimensionUpdate, type PlatformHandle } from "./editor";
 
 type Props = {
   design: DeckDesign;
@@ -11,13 +11,15 @@ type Props = {
   onDimensionPreview: (update: PlatformDimensionUpdate) => void;
   onDimensionCommit: (update: PlatformDimensionUpdate) => void;
   onDimensionCancel: () => void;
+  onStairOffsetPreview: (offset: number) => void;
+  onStairOffsetCommit: (offset: number) => void;
   selectedEdgeId: DeckEdgeId | null;
   onSelectEdge: (edgeId: DeckEdgeId) => void;
 };
 
-export function PlanView({ design, geometry, showFraming, snapIncrement, onDimensionPreview, onDimensionCommit, onDimensionCancel, selectedEdgeId, onSelectEdge }: Props) {
+export function PlanView({ design, geometry, showFraming, snapIncrement, onDimensionPreview, onDimensionCommit, onDimensionCancel, onStairOffsetPreview, onStairOffsetCommit, selectedEdgeId, onSelectEdge }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [activeHandle, setActiveHandle] = useState<PlatformHandle | null>(null);
+  const [activeHandle, setActiveHandle] = useState<PlatformHandle | "stairs" | null>(null);
   const { width, projection } = design.platform;
   const margin = Math.max(width, projection) * 0.18;
   const projectedPoints = [
@@ -79,6 +81,33 @@ export function PlanView({ design, geometry, showFraming, snapIncrement, onDimen
     if (event.key === "ArrowUp") point.z -= snapIncrement;
     if (event.key === "ArrowDown") point.z += snapIncrement;
     onDimensionCommit(dimensionsFromHandle(design, handle, point, snapIncrement));
+  };
+  const stairEdge = geometry.platformEdges.find((edge) => edge.id === design.construction.stairs.edgeId) ?? null;
+  const stairHandlePoint = stairEdge ? (() => {
+    const centerDistance = design.construction.stairs.offset + design.construction.stairs.width / 2;
+    const scale = centerDistance / stairEdge.length;
+    return {
+      x: stairEdge.start.x + (stairEdge.end.x - stairEdge.start.x) * scale,
+      z: stairEdge.start.z + (stairEdge.end.z - stairEdge.start.z) * scale,
+    };
+  })() : null;
+  const updateStairFromPointer = (event: PointerEvent<SVGCircleElement>, commit: boolean) => {
+    const point = pointFromEvent(event);
+    if (!point || !stairEdge) return;
+    const offset = stairOffsetFromPoint(stairEdge, design.construction.stairs.width, point, snapIncrement);
+    if (commit) onStairOffsetCommit(offset);
+    else onStairOffsetPreview(offset);
+  };
+  const nudgeStairs = (event: KeyboardEvent<SVGCircleElement>) => {
+    if (!stairEdge || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    const horizontal = Math.abs(stairEdge.end.x - stairEdge.start.x) >= Math.abs(stairEdge.end.z - stairEdge.start.z);
+    if (horizontal && !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    if (!horizontal && !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    const forward = horizontal ? event.key === "ArrowRight" : event.key === "ArrowDown";
+    const direction = (horizontal ? stairEdge.end.x >= stairEdge.start.x : stairEdge.end.z >= stairEdge.start.z) ? 1 : -1;
+    const delta = (forward ? 1 : -1) * direction * snapIncrement;
+    onStairOffsetCommit(Math.min(stairEdge.length - design.construction.stairs.width, Math.max(0, design.construction.stairs.offset + delta)));
   };
   const renderHandle = (handle: PlatformHandle, label: string) => {
     const point = handlePoint(handle);
@@ -207,6 +236,35 @@ export function PlanView({ design, geometry, showFraming, snapIncrement, onDimen
         {renderHandle("projection", "Projection handle")}
         {design.platform.kind === "l-shape" && renderHandle("cutout", "Cutout corner handle")}
       </g>
+      {design.construction.stairs.enabled && stairHandlePoint && (
+        <circle
+          cx={x(stairHandlePoint.x)}
+          cy={y(stairHandlePoint.z)}
+          r={activeHandle === "stairs" ? 7 : 6}
+          className={`stair-move-handle${activeHandle === "stairs" ? " active" : ""}`}
+          role="button"
+          tabIndex={0}
+          aria-label={`Move stairs along the ${stairEdge?.label.toLowerCase()} edge; drag or use arrow keys; snaps to ${snapIncrement} inches`}
+          onKeyDown={nudgeStairs}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setActiveHandle("stairs");
+          }}
+          onPointerMove={(event) => {
+            if (activeHandle === "stairs" && event.currentTarget.hasPointerCapture(event.pointerId)) updateStairFromPointer(event, false);
+          }}
+          onPointerUp={(event) => {
+            if (activeHandle !== "stairs") return;
+            updateStairFromPointer(event, true);
+            event.currentTarget.releasePointerCapture(event.pointerId);
+            setActiveHandle(null);
+          }}
+          onPointerCancel={() => {
+            setActiveHandle(null);
+            onDimensionCancel();
+          }}
+        />
+      )}
     </svg>
   );
 }

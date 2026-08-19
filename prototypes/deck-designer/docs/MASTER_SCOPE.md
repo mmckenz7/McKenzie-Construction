@@ -21,7 +21,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 ## Phase B — richer single-level editing
 
 - [x] Parametric L-shape cutout with deterministic 2D/3D/quantity projections
-- [ ] Custom edges, arbitrary cutouts, and general polygon validation
+- [x] Custom polygon corners and repeatable rectangular offsets with general polygon validation
 - [x] Stable free-edge identities for rectangle and L-shape platforms
 - [x] Any-edge straight stairs with explicit attachment and railing-opening facts
 - [x] Optional deterministic top landing
@@ -30,13 +30,14 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [ ] Turn, intermediate-landing, and multi-flight configurations
 - [x] Edge selection with contextual railing/stair actions and explainable conceptual warnings
 - [x] Drag handles and selectable grid snapping for rectangle and L-cutout dimensions
+- [x] Direct bounded stair movement along exact v3 geometric edges
 - [ ] Angle constraints, alignment guides, and broader object selection
 - [x] Prototype-only canonical custom-polygon kernel and contract spike (not yet part of DeckDesign)
 - [x] Prototype-only contained-hole region kernel with subtractive area and split member intervals
 - [x] Prototype-only concave triangulation and deterministic board/joist segmentation around holes
 - [x] Prototype-only neutral polygon measurement/quantity report with explicit classification and warnings
 - [x] Prototype-only geometric edge identity experiment with localized edit stability
-- [x] Test-only DeckDesign v3 migration spike for canonical platforms and edge conditions; application remains on v2
+- [x] DeckDesign v3 migration and browser-local authority for canonical platforms and edge conditions
 - [x] Non-mutating v3 region-edit planner with explicit attachment impact review
 - [x] Immutable safe-only v3 region replacement command with monotonic revision
 - [x] Test-only v3 apply/undo/redo history with monotonic revision restoration
@@ -58,7 +59,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [ ] Multiple levels and inter-level connections
 - [x] Prototype-only deterministic multi-platform projection and quantity aggregation
 - [x] Prototype-only immutable duplicate/remove platform commands with history coverage
-- [x] Written v3 browser/local-state activation contract proposed for controller review
+- [x] Controller-approved v3 browser/local-state activation with preserved v2 fallback
 - [ ] Board direction, picture frames, borders/inlays
 - [ ] Fascia, skirting, post wraps, lighting, drainage, covers/pergolas
 - [ ] Improved framing intent and explainable clash/constraint warnings

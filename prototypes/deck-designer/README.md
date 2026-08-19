@@ -11,9 +11,9 @@ npm run dev
 
 Open the local URL Vite prints. Use `npm run validate` for the complete deterministic, isolation, bundle-budget, and golden-fixture validation sequence.
 
-## Current Phase A boundary
+## Current isolated prototype boundary
 
-- Authoritative DeckDesign v2 JSON in inches with deterministic migration from local v1 files
+- Authoritative DeckDesign v3 JSON in inches with deterministic migration from local v1/v2 files
 - Exact width, projection, and deck-surface elevation inputs
 - Deterministic 2D plan, procedural 3D, and basic quantities
 - Simple decking, joists, beam, posts, and railings
@@ -24,6 +24,8 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Conceptual landing side rails, rail posts, and outer support locations
 - Command-based undo and redo
 - Direct plan handles for width, projection, and L-cutout dimensions with selectable 1, 6, or 12 inch snapping
+- Flexible polygon corner handles, exact corner coordinates, and repeatable rectangular offsets
+- Direct stair movement along exact geometric edges with bounds and grid snapping
 - Keyboard/click edge selection with contextual railing and stair actions
 - Deterministic, explainable conceptual review notices
 - Three generic geometry templates plus a local duplicate-design command
@@ -38,7 +40,5 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/MASTER_SCOPE.md](docs/MASTER_SCOPE.md).
 Responsive browser evidence is recorded in [docs/BROWSER_QA.md](docs/BROWSER_QA.md).
-The future custom-outline semantics are being proven separately in [docs/CUSTOM_POLYGON_SPIKE.md](docs/CUSTOM_POLYGON_SPIKE.md) before any DeckDesign version change.
-The browser application and local-storage format remain on DeckDesign v2; `modelV3.ts` is a test-only migration contract spike and is not imported by the UI.
-
-The proposed isolated switch criteria and rollback plan are recorded in [`docs/V3_APPLICATION_ACTIVATION_CONTRACT.md`](docs/V3_APPLICATION_ACTIVATION_CONTRACT.md). No v3 browser activation is implemented until that gate is accepted.
+The custom-outline semantics and rejection behavior are recorded in [docs/CUSTOM_POLYGON_SPIKE.md](docs/CUSTOM_POLYGON_SPIKE.md).
+The isolated v3 browser/local-state activation was controller-approved and implemented under [`docs/V3_APPLICATION_ACTIVATION_CONTRACT.md`](docs/V3_APPLICATION_ACTIVATION_CONTRACT.md). The previous v2 local value remains an untouched fallback; no shared or remote persistence was introduced.

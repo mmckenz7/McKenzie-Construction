@@ -27,6 +27,9 @@ import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
 import { createHouseOpening, createHouseWall } from "./siteContext";
 import "./styles.css";
+import { V3App } from "./V3App";
+import { migrateDeckDesignToV3, type DeckDesignV3 } from "./modelV3";
+import { loadDeckDesignV3, saveDeckDesignV3 } from "./storageV3";
 
 const STORAGE_KEY = "mckenzie-deck-designer:v2:current";
 const LEGACY_STORAGE_KEY = "mckenzie-deck-designer:v1:current";
@@ -50,7 +53,7 @@ function loadInitialDesign(): DeckDesign {
   }
 }
 
-function App() {
+function LegacyApp({ onOpenCornerEditor }: { onOpenCornerEditor: (design: DeckDesign) => void }) {
   const [history, dispatchHistory] = useReducer(
     designHistoryReducer,
     loadInitialDesign(),
@@ -102,6 +105,26 @@ function App() {
     } catch (error) {
       setPreviewDesign(null);
       setMessage(error instanceof Error ? error.message : "Plan edit was not supported.");
+    }
+  };
+
+  const previewStairOffset = (offset: number) => {
+    try {
+      setPreviewDesign(updateDesign(history.present, { stairOffset: offset }));
+    } catch {
+      // The drag remains at the last valid position on the selected edge.
+    }
+  };
+
+  const commitStairOffset = (offset: number) => {
+    try {
+      const next = updateDesign(history.present, { stairOffset: offset });
+      setPreviewDesign(null);
+      dispatchHistory({ type: "apply", design: next });
+      setMessage(`Stairs moved to ${formatFeetInches(offset)} from the start of the selected edge.`);
+    } catch (error) {
+      setPreviewDesign(null);
+      setMessage(error instanceof Error ? error.message : "Stair movement was not supported.");
     }
   };
 
@@ -300,6 +323,8 @@ function App() {
               >{kind === "rectangle" ? "Rectangle" : "L-shape"}</button>
             ))}
           </div>
+          <button className="primary full-action corner-editor-launch" onClick={() => onOpenCornerEditor(design)}>Open flexible corner editor</button>
+          <p className="section-help">Use this for stepped decks with more than one offset. It upgrades this local concept to the v3 polygon model.</p>
           <p className="section-help">Deck width runs left to right along the house. Distance from house controls how far the deck extends into the yard.</p>
           <div className="field-grid">
             <DimensionField label="Deck width" value={design.platform.width} onCommit={(value) => applyNumber("width", value)} />
@@ -593,6 +618,8 @@ function App() {
               onDimensionPreview={previewPlatformDimensions}
               onDimensionCommit={commitPlatformDimensions}
               onDimensionCancel={() => setPreviewDesign(null)}
+              onStairOffsetPreview={previewStairOffset}
+              onStairOffsetCommit={commitStairOffset}
               selectedEdgeId={selectedEdgeId}
               onSelectEdge={(edgeId) => {
                 setSelectedEdgeId(edgeId);
@@ -652,6 +679,23 @@ function App() {
       </section>
     </main>
   );
+}
+
+function App() {
+  const initial = useMemo(() => loadDeckDesignV3(localStorage), []);
+  const [v3Design, setV3Design] = useState<DeckDesignV3 | null>(initial.design);
+  const [v3Message, setV3Message] = useState(initial.message);
+  if (v3Design) return <V3App initialDesign={v3Design} initialMessage={v3Message} />;
+  return <LegacyApp onOpenCornerEditor={(legacy) => {
+    try {
+      const migrated = migrateDeckDesignToV3(legacy);
+      saveDeckDesignV3(localStorage, migrated);
+      setV3Message("Upgraded this local design to v3. Exact edge references are protected until you explicitly unlock outline editing.");
+      setV3Design(migrated);
+    } catch (error) {
+      setV3Message(error instanceof Error ? error.message : "The corner editor could not be opened.");
+    }
+  }} />;
 }
 
 function DimensionField({ label, value, onCommit }: { label: string; value: number; onCommit: (value: string) => void }) {

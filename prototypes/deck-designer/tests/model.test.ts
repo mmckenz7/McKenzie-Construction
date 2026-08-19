@@ -4,7 +4,7 @@ import { DEFAULT_DESIGN, designFingerprint, normalizeDesign, stableDesignJson, u
 import { deriveGeometry } from "../src/geometry";
 import { deriveQuantities } from "../src/quantities";
 import { createHistory, designHistoryReducer } from "../src/history";
-import { dimensionsFromHandle, snapDimension } from "../src/editor";
+import { dimensionsFromHandle, snapDimension, stairOffsetFromPoint } from "../src/editor";
 import { formatFeetInches } from "../src/PlanView";
 import { deriveDesignNotices } from "../src/notices";
 import { GENERIC_DECK_TEMPLATES, applyTemplateToDesign, duplicateDesign, getDeckTemplate } from "../src/templates";
@@ -167,6 +167,16 @@ describe("direct plan editing", () => {
       stairWidth: 48,
     });
     expect(dimensionsFromHandle(notchStairs, "cutout", { x: 190, z: 96 }, 6).cutoutWidth).toBe(48);
+  });
+
+  it("moves stairs deterministically along horizontal and vertical edges", () => {
+    const geometry = deriveGeometry(updateDesign(DEFAULT_DESIGN, { stairEnabled: true }));
+    const front = geometry.platformEdges.find((edge) => edge.id === "front")!;
+    const right = geometry.platformEdges.find((edge) => edge.id === "right")!;
+    expect(stairOffsetFromPoint(front, 48, { x: 101, z: 144 }, 6)).toBe(78);
+    expect(stairOffsetFromPoint(front, 48, { x: -100, z: 144 }, 6)).toBe(0);
+    expect(stairOffsetFromPoint(front, 48, { x: 500, z: 144 }, 6)).toBe(144);
+    expect(stairOffsetFromPoint(right, 48, { x: 192, z: 91 }, 6)).toBe(66);
   });
 });
 

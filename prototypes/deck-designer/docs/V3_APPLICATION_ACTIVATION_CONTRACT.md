@@ -1,6 +1,6 @@
 # DeckDesign v3 isolated application activation contract
 
-Status: proposed for Master Technical Controller review. This contract authorizes only an internal model switch inside `prototypes/deck-designer/`. It does not authorize production integration, shared code, APIs, databases, cloud storage, catalogs, estimating, deployment promotion, or workflow changes.
+Status: accepted by the Master Technical Controller and activated inside the isolated prototype on 2026-08-19. This contract authorizes only an internal model switch inside `prototypes/deck-designer/`. It does not authorize production integration, shared code, APIs, databases, cloud storage, catalogs, estimating, deployment promotion, or workflow changes.
 
 ## Purpose
 

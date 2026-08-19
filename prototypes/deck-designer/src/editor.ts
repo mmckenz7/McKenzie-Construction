@@ -1,4 +1,9 @@
 import type { DeckDesign } from "./model";
+type EditableEdge = Readonly<{
+  start: Readonly<{ x: number; z: number }>;
+  end: Readonly<{ x: number; z: number }>;
+  length: number;
+}>;
 
 export type PlatformHandle = "width" | "projection" | "cutout";
 export type PlatformDimensionUpdate = Readonly<{
@@ -17,6 +22,22 @@ export function snapDimension(value: number, increment: number): number {
     throw new RangeError("Snap values must be finite and the increment must be positive.");
   }
   return Math.round((value / increment) + Number.EPSILON) * increment;
+}
+
+export function stairOffsetFromPoint(
+  edge: EditableEdge,
+  stairWidth: number,
+  point: Readonly<{ x: number; z: number }>,
+  snapIncrement: number,
+): number {
+  const alongX = (edge.end.x - edge.start.x) / edge.length;
+  const alongZ = (edge.end.z - edge.start.z) / edge.length;
+  const centerDistance = (point.x - edge.start.x) * alongX + (point.z - edge.start.z) * alongZ;
+  return clamp(
+    snapDimension(centerDistance - stairWidth / 2, snapIncrement),
+    0,
+    edge.length - stairWidth,
+  );
 }
 
 function stairSpan(design: DeckDesign, edgeId: DeckDesign["construction"]["stairs"]["edgeId"]): number {
