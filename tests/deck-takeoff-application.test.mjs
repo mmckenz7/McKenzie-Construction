@@ -156,6 +156,11 @@ test("Lowe's defaults are read-only, tenant-authorized, and bound to exact produ
   assert.match(ui, /One side/);
   assert.match(ui, /Both sides/);
   assert.match(ui, /Wood railing allowance/);
+  assert.match(ui, /const DEFAULT_WOOD_RAILING_RATE = "25"/);
+  assert.match(
+    ui,
+    /saved\.woodRailingRate === null[\s\S]*DEFAULT_WOOD_RAILING_RATE/,
+  );
   assert.match(ui, /stairProjectionFeet \* sides/);
   assert.match(ui, /buildDefaultCableRailingPackage/);
   assert.match(suggestionProvider, /manufacturedRailing && \(!manufacturer \|\| !productLine\)/);

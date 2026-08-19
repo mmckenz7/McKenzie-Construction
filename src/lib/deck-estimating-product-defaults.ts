@@ -9,6 +9,56 @@ import {
 } from "@/lib/deck-railing-system";
 
 const PRICE_CHECKED_AT = "2026-08-19T00:00:00.000Z";
+const COMPOSITE_GROOVED_ESTIMATE = 79.98;
+const COMPOSITE_SQUARE_EDGE_ESTIMATE = 90;
+
+const COMPOSITE_DEFAULTS = {
+  brown: {
+    name: "Whiskey Barrel",
+    productLine: "Select Whiskey Barrel",
+    groovedUrl:
+      "https://www.lowes.com/pd/Trex-Select-1-in-x-6-in-x-16-ft-Whiskey-Barrel-Grooved-Composite-Deck-board/5017400727",
+    squareUrl:
+      "https://www.lowes.com/pd/Trex-Select-1-in-x-6-in-x-16-ft-Whiskey-Barrel-Square-Composite-Deck-board/5017400701",
+    priceBasis: "cached_retail",
+  },
+  gray: {
+    name: "Pebble Grey",
+    productLine: "Select Pebble Grey",
+    groovedUrl:
+      "https://www.lowes.com/pd/Trex-Select-0-82-in-x-5-5-in-5-5-in-x-16-ft-Pebble-Grey-Grooved-Composite-Deck-Board/5013822305",
+    squareUrl:
+      "https://www.lowes.com/pd/Trex-Select-1-in-x-6-in-x-16-ft-Pebble-Grey-Square-Composite-Deck-board/5013822299",
+    priceBasis: "catalog_estimate",
+  },
+  cedar: {
+    name: "Toasted Sand",
+    productLine: "Enhance Naturals Toasted Sand",
+    groovedUrl:
+      "https://www.lowes.com/pd/Trex-Enhance-Naturals-16-ft-Toasted-Sand-Grooved-Composite-Deck-Board/1000763612",
+    squareUrl:
+      "https://www.lowes.com/pd/Trex-Enhance-Naturals-1-in-x-6-in-x-16-ft-Toasted-Sand-Composite-Deck-board/1000841786",
+    priceBasis: "catalog_estimate",
+  },
+  redwood: {
+    name: "Spiced Rum",
+    productLine: "Transcend Spiced Rum",
+    groovedUrl:
+      "https://www.lowes.com/pd/Trex-Transcend-16-ft-Spiced-Rum-Grooved-Composite-Deck-Board/1000715238",
+    squareUrl:
+      "https://www.lowes.com/pd/Trex-Transcend-16-ft-Spiced-Rum-Composite-Deck-Board/1000714256",
+    priceBasis: "catalog_estimate",
+  },
+  coastal: {
+    name: "Island Mist",
+    productLine: "Transcend Island Mist",
+    groovedUrl:
+      "https://www.lowes.com/pd/Trex-Transcend-16-ft-Island-Mist-Grooved-Composite-Deck-Board/1000712902",
+    squareUrl:
+      "https://www.lowes.com/pd/Trex-Transcend-16-ft-Island-Mist-Composite-Deck-Board/1000713010",
+    priceBasis: "catalog_estimate",
+  },
+} as const;
 
 function estimatingDefault(
   product: DeckLowesSuggestion,
@@ -18,7 +68,10 @@ function estimatingDefault(
     ...product,
     catalogMaterialId: null,
     priceBasis,
-    priceCheckedAt: product.unitCost ? PRICE_CHECKED_AT : null,
+    priceCheckedAt:
+      product.unitCost && priceBasis === "cached_retail"
+        ? PRICE_CHECKED_AT
+        : null,
   };
 }
 
@@ -27,63 +80,65 @@ export function deckEstimatingProductDefaults(args: Readonly<{
   woodScrewCoverageSquareFeetPerPack: number | null;
 }>) {
   const products: DeckProductSuggestion[] = [];
-  if (
-    args.request.deckingFamily === "composite" &&
-    args.request.compositeColor === "brown"
-  ) {
+  if (args.request.deckingFamily === "composite" && args.request.compositeColor) {
+    const selected = COMPOSITE_DEFAULTS[args.request.compositeColor];
+    const cachedRetail = selected.priceBasis === "cached_retail";
     products.push(
       estimatingDefault(
         {
           kind: "deck_board_grooved",
           description:
-            "Trex Select 1-in x 6-in x 16-ft Whiskey Barrel grooved composite deck board",
-          unitCost: 79.98,
-          sourceUrl:
-            "https://www.lowes.com/pd/Trex-Select-1-in-x-6-in-x-16-ft-Whiskey-Barrel-Grooved-Composite-Deck-board/5017400727",
+            `Trex ${selected.productLine} 1-in x 6-in x 16-ft grooved composite deck board`,
+          unitCost: COMPOSITE_GROOVED_ESTIMATE,
+          sourceUrl: selected.groovedUrl,
           stockLengthFeet: 16,
           coverageSquareFeetPerPack: null,
           manufacturer: "Trex",
-          productLine: "Select Whiskey Barrel",
-          reason:
-            "Saved public retail estimating price for the matching grooved field board, checked for the North Knoxville Lowe's on August 19, 2026.",
+          productLine: selected.productLine,
+          reason: cachedRetail
+            ? "Saved public retail estimating price for the matching grooved field board, checked for the North Knoxville Lowe's on August 19, 2026."
+            : `McKenzie 16-ft composite-board estimating baseline applied to the exact Trex ${selected.name} grooved SKU. Refresh the public price before presentation.`,
         },
-        "cached_retail",
+        selected.priceBasis,
       ),
       estimatingDefault(
         {
           kind: "deck_board_square_edge",
           description:
-            "Trex Select 1-in x 6-in x 16-ft Whiskey Barrel square-edge composite deck board",
-          unitCost: 90,
-          sourceUrl:
-            "https://www.lowes.com/pd/Trex-Select-1-in-x-6-in-x-16-ft-Whiskey-Barrel-Square-Composite-Deck-board/5017400701",
+            `Trex ${selected.productLine} 1-in x 6-in x 16-ft square-edge composite deck board`,
+          unitCost: COMPOSITE_SQUARE_EDGE_ESTIMATE,
+          sourceUrl: selected.squareUrl,
           stockLengthFeet: 16,
           coverageSquareFeetPerPack: null,
           manufacturer: "Trex",
-          productLine: "Select Whiskey Barrel",
-          reason:
-            "Saved public retail estimating price for matching picture-frame, divider, and stair-edge stock, checked for the North Knoxville Lowe's on August 19, 2026.",
+          productLine: selected.productLine,
+          reason: cachedRetail
+            ? "Saved public retail estimating price for matching picture-frame, divider, and stair-edge stock, checked for the North Knoxville Lowe's on August 19, 2026."
+            : `McKenzie 16-ft square-edge estimating baseline applied to the exact Trex ${selected.name} border, divider, and stair-edge SKU. Refresh the public price before presentation.`,
         },
-        "cached_retail",
+        selected.priceBasis,
       ),
     );
   }
   if (args.request.deckingFamily === "wood") {
     products.push(
-      estimatingDefault({
-        kind: "deck_board",
-        description:
-          "Severe Weather 5/4-in x 6-in x 16-ft pressure-treated Southern yellow pine deck board",
-        unitCost: null,
-        sourceUrl:
-          "https://www.lowes.com/pd/Severe-Weather-Pressure-Treated-Deck-Board/3185451",
-        stockLengthFeet: 16,
-        coverageSquareFeetPerPack: null,
-        manufacturer: "Severe Weather",
-        productLine: "Pressure Treated",
-        reason:
-          "Saved McKenzie wood-decking default. Confirm the Clinton Highway retail price before presenting the estimate.",
-      }),
+      estimatingDefault(
+        {
+          kind: "deck_board",
+          description:
+            "Severe Weather 5/4-in x 6-in x 16-ft pressure-treated Southern yellow pine deck board",
+          unitCost: 18.98,
+          sourceUrl:
+            "https://www.lowes.com/pd/Severe-Weather-Pressure-Treated-Deck-Board/3185451",
+          stockLengthFeet: 16,
+          coverageSquareFeetPerPack: null,
+          manufacturer: "Severe Weather",
+          productLine: "Pressure Treated",
+          reason:
+            "McKenzie estimating baseline for the saved Clinton Highway wood-decking SKU. Refresh the public retail price before presentation.",
+        },
+        "catalog_estimate",
+      ),
       estimatingDefault(
         {
           kind: "deck_fastener",

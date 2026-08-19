@@ -234,6 +234,13 @@ export function mergeDeckProductSuggestions(
 ) {
   const limits: Record<DeckLowesSuggestion["kind"], number> = { deck_board: 3, deck_board_grooved: 1, deck_board_square_edge: 1, deck_fastener: 1, railing_section: 3, railing_level_kit: 1, railing_level_post: 1, railing_stair_kit: 1, railing_stair_lower_post: 1, railing_cable_pack: 1, railing_cable_end_post: 1 };
   const merged: DeckProductSuggestion[] = [];
+  const basisRank: Record<DeckEstimatingPriceBasis, number> = {
+    live_public_retail: 5,
+    current_retail: 4,
+    cached_retail: 3,
+    catalog_estimate: 2,
+    unpriced: 1,
+  };
   for (const kind of ["deck_board", "deck_board_grooved", "deck_board_square_edge", "deck_fastener", "railing_section", "railing_level_kit", "railing_level_post", "railing_stair_kit", "railing_stair_lower_post", "railing_cable_pack", "railing_cable_end_post"] as const) {
     const byUrl = new Map<string, DeckProductSuggestion>();
     for (const item of [...curated, ...live].filter((candidate) => candidate.kind === kind)) {
@@ -245,7 +252,8 @@ export function mergeDeckProductSuggestions(
       ...[...byUrl.values()]
         .sort(
           (left, right) =>
-            Number(Boolean(right.unitCost)) - Number(Boolean(left.unitCost)),
+            Number(Boolean(right.unitCost)) - Number(Boolean(left.unitCost)) ||
+            basisRank[right.priceBasis] - basisRank[left.priceBasis],
         )
         .slice(0, limits[kind]),
     );

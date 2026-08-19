@@ -101,6 +101,8 @@ const COMPOSITE_COLORS: readonly {
   { key: "coastal", label: "Coastal", swatch: "#9ba8a5" },
 ] as const;
 
+const DEFAULT_WOOD_RAILING_RATE = "25";
+
 const input =
   "mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100";
 const primary =
@@ -398,7 +400,9 @@ export function DeckTakeoffPlanner({
     useState<CompositeColor>("brown");
   const [railingFamily, setRailingFamily] = useState<RailingFamily>("wood");
   const [stairRailSides, setStairRailSides] = useState<1 | 2>(2);
-  const [woodRailingRate, setWoodRailingRate] = useState("");
+  const [woodRailingRate, setWoodRailingRate] = useState(
+    DEFAULT_WOOD_RAILING_RATE,
+  );
   const [activeScopeKey, setActiveScopeKey] = useState<CompleteRebuildLineKey>(
     COMPLETE_REBUILD_LINE_KEYS[0],
   );
@@ -795,7 +799,9 @@ export function DeckTakeoffPlanner({
         setRailingFamily(saved.railingFamily);
         setStairRailSides(saved.stairRailSides);
         setWoodRailingRate(
-          saved.woodRailingRate === null ? "" : String(saved.woodRailingRate),
+          saved.woodRailingRate === null
+            ? DEFAULT_WOOD_RAILING_RATE
+            : String(saved.woodRailingRate),
         );
         setPlan((current) => ({
           ...current,

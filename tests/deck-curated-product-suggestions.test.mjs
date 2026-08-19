@@ -170,3 +170,20 @@ test("a different live priced match is offered before an unpriced saved match", 
   assert.equal(merged[0].sourceUrl, live[0].sourceUrl);
   assert.equal(merged[0].unitCost, 21.98);
 });
+
+test("a live public price outranks a saved catalog estimate", () => {
+  const estimated = [{
+    kind: "deck_board",
+    sourceUrl: "https://www.lowes.com/pd/saved/1",
+    unitCost: 18.98,
+    priceBasis: "catalog_estimate",
+  }];
+  const live = [{
+    kind: "deck_board",
+    sourceUrl: "https://www.lowes.com/pd/live/2",
+    unitCost: 19.98,
+    priceBasis: "live_public_retail",
+  }];
+  const merged = mergeDeckProductSuggestions(estimated, live);
+  assert.equal(merged[0].sourceUrl, live[0].sourceUrl);
+});

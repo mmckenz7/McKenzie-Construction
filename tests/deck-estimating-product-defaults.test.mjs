@@ -26,14 +26,15 @@ runInNewContext(transformed, {
 });
 const { deckEstimatingProductDefaults } = testModule.exports;
 
-test("wood defaults include a traceable board and cached screw price with calculated coverage", () => {
+test("wood defaults include priced traceable boards and screws with calculated coverage", () => {
   const products = deckEstimatingProductDefaults({
     request: { deckingFamily: "wood", compositeColor: null, railingFamily: "none" },
     woodScrewCoverageSquareFeetPerPack: 190,
   });
   const board = products.find((item) => item.kind === "deck_board");
   const screws = products.find((item) => item.kind === "deck_fastener");
-  assert.equal(board.unitCost, null);
+  assert.equal(board.unitCost, 18.98);
+  assert.equal(board.priceBasis, "catalog_estimate");
   assert.equal(board.stockLengthFeet, 16);
   assert.equal(screws.unitCost, 25.8);
   assert.equal(screws.coverageSquareFeetPerPack, 190);
@@ -57,14 +58,32 @@ test("brown composite defaults keep matching grooved and square-edge boards with
   assert.equal(square.priceBasis, "cached_retail");
 });
 
+test("every composite color has matching grooved and square-edge Trex estimating prices", () => {
+  for (const compositeColor of ["brown", "gray", "cedar", "redwood", "coastal"]) {
+    const products = deckEstimatingProductDefaults({
+      request: { deckingFamily: "composite", compositeColor, railingFamily: "none" },
+      woodScrewCoverageSquareFeetPerPack: null,
+    });
+    const grooved = products.find((item) => item.kind === "deck_board_grooved");
+    const square = products.find((item) => item.kind === "deck_board_square_edge");
+    assert.equal(grooved.unitCost, 79.98, compositeColor);
+    assert.equal(square.unitCost, 90, compositeColor);
+    assert.equal(grooved.manufacturer, "Trex", compositeColor);
+    assert.equal(grooved.productLine, square.productLine, compositeColor);
+    assert.match(grooved.sourceUrl, /^https:\/\/www\.lowes\.com\/pd\//, compositeColor);
+    assert.match(square.sourceUrl, /^https:\/\/www\.lowes\.com\/pd\//, compositeColor);
+  }
+});
+
 test("aluminum defaults preserve one compatible product line and only claim observed prices", () => {
   const products = deckEstimatingProductDefaults({
     request: { deckingFamily: "composite", compositeColor: "gray", railingFamily: "metal" },
     woodScrewCoverageSquareFeetPerPack: null,
   });
-  assert.equal(products.length, 4);
-  assert.ok(products.every((item) => item.manufacturer === "Deckorators"));
-  assert.ok(products.every((item) => item.productLine === "Contemporary"));
-  assert.equal(products.find((item) => item.kind === "railing_level_kit").unitCost, 374.65);
-  assert.equal(products.find((item) => item.kind === "railing_stair_kit").unitCost, null);
+  const railing = products.filter((item) => item.kind.startsWith("railing_"));
+  assert.equal(railing.length, 4);
+  assert.ok(railing.every((item) => item.manufacturer === "Deckorators"));
+  assert.ok(railing.every((item) => item.productLine === "Contemporary"));
+  assert.equal(railing.find((item) => item.kind === "railing_level_kit").unitCost, 374.65);
+  assert.equal(railing.find((item) => item.kind === "railing_stair_kit").unitCost, null);
 });
