@@ -19,7 +19,7 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Simple decking, joists, beam, posts, and railings
 - Any-free-edge conceptual stairs with an explicit railing opening
 - Deterministic conceptual stair side-stringer paths in 2D, 3D, and quantities
-- Recorded grade, house-wall/attachment context, and multiple selectable conceptual door/window openings
+- Recorded grade, multiple editable house walls/attachment intent, and multiple selectable conceptual door/window openings per wall
 - Optional top landing with deterministic orientation and area
 - Conceptual landing side rails, rail posts, and outer support locations
 - Command-based undo and redo

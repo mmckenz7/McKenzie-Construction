@@ -3,6 +3,26 @@ import type { DeckDesign, HouseOpeningKind } from "./model";
 type HouseWall = DeckDesign["siteContext"]["houseWalls"][number];
 type HouseOpening = HouseWall["openings"][number];
 
+export function createHouseWall(design: DeckDesign): HouseWall {
+  if (design.siteContext.houseWalls.length >= 8) throw new RangeError("A design can contain no more than 8 house walls.");
+  let sequence = 1;
+  while (design.siteContext.houseWalls.some((wall) => wall.id === `house-wall-${sequence}`)) sequence += 1;
+  const first = design.siteContext.houseWalls[0];
+  const useSideWall = design.siteContext.houseWalls.length === 1;
+  const offset = -24 * (design.siteContext.houseWalls.length - 1);
+  return Object.freeze({
+    id: `house-wall-${sequence}`,
+    start: Object.freeze(useSideWall ? { ...first.start } : { x: -60, z: offset }),
+    end: Object.freeze(useSideWall
+      ? { x: first.start.x, z: design.platform.projection + 60 }
+      : { x: design.platform.width + 60, z: offset }),
+    baseElevation: design.siteContext.gradeElevation,
+    height: first.height,
+    attachment: "unknown" as const,
+    openings: Object.freeze([]),
+  });
+}
+
 export function createHouseOpening(wall: HouseWall, kind: HouseOpeningKind): HouseOpening {
   const width = kind === "door" ? 36 : 48;
   const wallLength = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);

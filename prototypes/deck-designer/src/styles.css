@@ -63,8 +63,8 @@ button:hover { transform: translateY(-1px); }
 .snap-field { margin-top: 14px; }
 .edge-select-field { margin-top: 10px; }
 .house-attachment-field { margin-top: 12px; }
-.house-opening-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.house-opening-actions button, .house-opening-card button { border-color: #aebbb2; background: white; color: #34473f; font-size: 10px; }
+.house-wall-actions, .house-opening-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.house-wall-actions button, .house-opening-actions button, .house-opening-card button { border-color: #aebbb2; background: white; color: #34473f; font-size: 10px; }
 .house-opening-card { margin-top: 10px; padding: 10px; border: 1px solid #cbd4cd; border-radius: 8px; background: #f1f4f0; }
 .house-opening-card > div:first-child { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: #42554b; font-size: 10px; text-transform: capitalize; }
 .house-opening-empty { margin: 8px 0 0; color: #78857e; font-size: 9px; }

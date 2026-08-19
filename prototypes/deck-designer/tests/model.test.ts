@@ -9,7 +9,7 @@ import { formatFeetInches } from "../src/PlanView";
 import { deriveDesignNotices } from "../src/notices";
 import { GENERIC_DECK_TEMPLATES, applyTemplateToDesign, duplicateDesign, getDeckTemplate } from "../src/templates";
 import { RENDER_QUALITY_POLICIES } from "../src/renderQuality";
-import { createHouseOpening } from "../src/siteContext";
+import { createHouseOpening, createHouseWall } from "../src/siteContext";
 import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
 import lShapeLandingFixture from "./fixtures/l-shape-landing.json";
 
@@ -95,6 +95,23 @@ describe("local 3D quality policy", () => {
 });
 
 describe("house opening commands", () => {
+  it("adds a deterministic side wall and caps the prototype wall count", () => {
+    const wall = createHouseWall(DEFAULT_DESIGN);
+    expect(wall).toEqual({
+      id: "house-wall-2",
+      start: { x: -60, z: 0 },
+      end: { x: -60, z: 204 },
+      baseElevation: 0,
+      height: 120,
+      attachment: "unknown",
+      openings: [],
+    });
+    expect(() => createHouseWall({
+      ...DEFAULT_DESIGN,
+      siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: Array.from({ length: 8 }, (_, index) => ({ ...wall, id: `wall-${index}` })) },
+    })).toThrow(/no more than 8/);
+  });
+
   it("places the first opening centrally and later openings in the first valid gap", () => {
     const wall = DEFAULT_DESIGN.siteContext.houseWalls[0];
     const first = createHouseOpening(wall, "door");

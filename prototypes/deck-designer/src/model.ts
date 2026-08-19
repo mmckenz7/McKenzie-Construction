@@ -370,6 +370,7 @@ export function updateDesign(
     houseWallHeight?: number;
     houseAttachment?: HouseAttachment;
     houseOpenings?: DeckDesign["siteContext"]["houseWalls"][number]["openings"];
+    houseWalls?: DeckDesign["siteContext"]["houseWalls"];
   },
 ): DeckDesign {
   const nextKind = update.kind ?? design.platform.kind;
@@ -395,7 +396,7 @@ export function updateDesign(
     siteContext: {
       ...design.siteContext,
       gradeElevation: update.gradeElevation ?? design.siteContext.gradeElevation,
-      houseWalls: design.siteContext.houseWalls.map((wall, index) => index === 0
+      houseWalls: update.houseWalls ?? design.siteContext.houseWalls.map((wall, index) => index === 0
         ? {
             ...wall,
             height: update.houseWallHeight ?? wall.height,

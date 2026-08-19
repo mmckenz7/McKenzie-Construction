@@ -14,7 +14,7 @@ The design document is authoritative. Render meshes, SVG elements, and quantitie
 
 Phase A established a single rectangular platform; later isolated slices added an L-shape expressed as a front-right rectangular cutout and explicit site context. Numeric facts are normalized to hundredths of an inch, bounded, and rejected if non-finite. Construction and attachment intent is explicit but does not assert structural adequacy, code compliance, field conditions, or product availability. Local schema-v1 JSON is deterministically migrated to v2 with a conceptual grade-zero wall context; unsupported future versions fail closed.
 
-The UI directly edits grade and the primary wall's height, attachment intent, and multiple non-overlapping door/window openings. The schema and projections accept multiple walls, but direct multi-wall authoring remains backlog work.
+The UI directly adds, selects, edits, and removes up to eight conceptual house-wall segments. Each wall records endpoints, base elevation, height, attachment intent, and multiple non-overlapping door/window openings. These remain site-context facts only and require field verification.
 
 ## Current prototype JSON shape
 

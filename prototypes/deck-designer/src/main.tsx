@@ -25,7 +25,7 @@ import {
 } from "./templates";
 import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
-import { createHouseOpening } from "./siteContext";
+import { createHouseOpening, createHouseWall } from "./siteContext";
 import "./styles.css";
 
 const STORAGE_KEY = "mckenzie-deck-designer:v2:current";
@@ -70,6 +70,7 @@ function App() {
   const [snapIncrement, setSnapIncrement] = useState(6);
   const [selectedEdgeId, setSelectedEdgeId] = useState<DeckEdgeId | null>(null);
   const [templateId, setTemplateId] = useState<DeckTemplateId>("compact-ground");
+  const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const geometry = useMemo(() => deriveGeometry(design), [design]);
@@ -105,7 +106,7 @@ function App() {
   };
 
   const applyNumber = (
-    field: "width" | "projection" | "surfaceElevation" | "joistSpacing" | "cutoutWidth" | "cutoutDepth" | "stairOffset" | "stairWidth" | "treadDepth" | "landingDepth" | "gradeElevation" | "houseWallHeight",
+    field: "width" | "projection" | "surfaceElevation" | "joistSpacing" | "cutoutWidth" | "cutoutDepth" | "stairOffset" | "stairWidth" | "treadDepth" | "landingDepth" | "gradeElevation",
     raw: string,
   ) => {
     const value = Number(raw);
@@ -117,33 +118,42 @@ function App() {
     }
   };
 
-  const primaryWall = design.siteContext.houseWalls[0];
-  const primaryOpening = primaryWall.openings.find((opening) => opening.id === selectedOpeningId)
-    ?? primaryWall.openings[0]
+  const selectedWall = design.siteContext.houseWalls.find((wall) => wall.id === selectedWallId)
+    ?? design.siteContext.houseWalls[0];
+  const selectedOpening = selectedWall.openings.find((opening) => opening.id === selectedOpeningId)
+    ?? selectedWall.openings[0]
     ?? null;
   useEffect(() => {
-    if (primaryOpening?.id !== selectedOpeningId) setSelectedOpeningId(primaryOpening?.id ?? null);
-  }, [primaryOpening?.id, selectedOpeningId]);
+    if (selectedWall.id !== selectedWallId) setSelectedWallId(selectedWall.id);
+  }, [selectedWall.id, selectedWallId]);
+  useEffect(() => {
+    if (selectedOpening?.id !== selectedOpeningId) setSelectedOpeningId(selectedOpening?.id ?? null);
+  }, [selectedOpening?.id, selectedOpeningId, selectedWall.id]);
+  const updateSelectedWall = (update: Partial<DeckDesign["siteContext"]["houseWalls"][number]>) => {
+    try {
+      applyDesign(updateDesign(design, {
+        houseWalls: design.siteContext.houseWalls.map((wall) => wall.id === selectedWall.id ? { ...wall, ...update } : wall),
+      }));
+      setMessage(`House wall ${selectedWall.id} updated from recorded conceptual facts.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "House wall update failed.");
+    }
+  };
   const addHouseOpening = (kind: HouseOpeningKind) => {
     try {
-      const opening = createHouseOpening(primaryWall, kind);
-      applyDesign(updateDesign(design, { houseOpenings: [...primaryWall.openings, opening] }));
+      const opening = createHouseOpening(selectedWall, kind);
+      updateSelectedWall({ openings: [...selectedWall.openings, opening] });
       setSelectedOpeningId(opening.id);
-      setMessage(`Conceptual ${kind} opening added to ${primaryWall.id}; field verification required.`);
+      setMessage(`Conceptual ${kind} opening added to ${selectedWall.id}; field verification required.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "House opening update failed.");
     }
   };
-  const updatePrimaryOpening = (update: Partial<DeckDesign["siteContext"]["houseWalls"][number]["openings"][number]>) => {
-    if (!primaryOpening) return;
-    try {
-      applyDesign(updateDesign(design, {
-        houseOpenings: primaryWall.openings.map((opening) => opening.id === primaryOpening.id ? { ...opening, ...update } : opening),
-      }));
-      setMessage("Conceptual house opening updated from recorded dimensions.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "House opening update failed.");
-    }
+  const updateSelectedOpening = (update: Partial<DeckDesign["siteContext"]["houseWalls"][number]["openings"][number]>) => {
+    if (!selectedOpening) return;
+    updateSelectedWall({
+      openings: selectedWall.openings.map((opening) => opening.id === selectedOpening.id ? { ...opening, ...update } : opening),
+    });
   };
 
   const toggleRail = (edge: DeckEdgeId) => {
@@ -355,22 +365,64 @@ function App() {
           <div className="section-heading compact">
             <span>02</span><div><p>House &amp; grade</p><small>Conceptual recorded context</small></div>
           </div>
+          <label className="field full">
+            <span>Edit house wall</span>
+            <select
+              aria-label="House wall selection"
+              value={selectedWall.id}
+              onChange={(event) => {
+                setSelectedWallId(event.target.value);
+                setSelectedOpeningId(null);
+              }}
+            >
+              {design.siteContext.houseWalls.map((wall) => (
+                <option key={wall.id} value={wall.id}>{wall.id} · {wall.attachment}</option>
+              ))}
+            </select>
+          </label>
+          <div className="house-wall-actions">
+            <button
+              disabled={design.siteContext.houseWalls.length >= 8}
+              onClick={() => {
+                try {
+                  const wall = createHouseWall(design);
+                  applyDesign(updateDesign(design, { houseWalls: [...design.siteContext.houseWalls, wall] }));
+                  setSelectedWallId(wall.id);
+                  setSelectedOpeningId(null);
+                  setMessage(`${wall.id} added as conceptual site context; verify all coordinates in the field.`);
+                } catch (error) {
+                  setMessage(error instanceof Error ? error.message : "House wall could not be added.");
+                }
+              }}
+            >Add wall</button>
+            <button
+              disabled={design.siteContext.houseWalls.length === 1}
+              onClick={() => {
+                const remaining = design.siteContext.houseWalls.filter((wall) => wall.id !== selectedWall.id);
+                applyDesign(updateDesign(design, { houseWalls: remaining }));
+                setSelectedWallId(remaining[0]?.id ?? null);
+                setSelectedOpeningId(null);
+                setMessage(`${selectedWall.id} removed from conceptual site context.`);
+              }}
+            >Remove wall</button>
+          </div>
           <div className="field-grid">
             <DimensionField label="Grade elevation" value={design.siteContext.gradeElevation} onCommit={(value) => applyNumber("gradeElevation", value)} />
-            <DimensionField label="Wall height" value={primaryWall.height} onCommit={(value) => applyNumber("houseWallHeight", value)} />
+            <DimensionField label="Wall base" value={selectedWall.baseElevation} onCommit={(value) => updateSelectedWall({ baseElevation: Number(value) })} />
+            <DimensionField label="Wall height" value={selectedWall.height} onCommit={(value) => updateSelectedWall({ height: Number(value) })} />
+            <DimensionField label="Start X" value={selectedWall.start.x} onCommit={(value) => updateSelectedWall({ start: { ...selectedWall.start, x: Number(value) } })} />
+            <DimensionField label="Start Z" value={selectedWall.start.z} onCommit={(value) => updateSelectedWall({ start: { ...selectedWall.start, z: Number(value) } })} />
+            <DimensionField label="End X" value={selectedWall.end.x} onCommit={(value) => updateSelectedWall({ end: { ...selectedWall.end, x: Number(value) } })} />
+            <DimensionField label="End Z" value={selectedWall.end.z} onCommit={(value) => updateSelectedWall({ end: { ...selectedWall.end, z: Number(value) } })} />
           </div>
           <label className="field full house-attachment-field">
             <span>Attachment intent</span>
             <select
-              value={primaryWall.attachment}
+              value={selectedWall.attachment}
               onChange={(event) => {
                 const attachment = event.target.value as HouseAttachment;
-                try {
-                  applyDesign(updateDesign(design, { houseAttachment: attachment }));
-                  setMessage(`House attachment intent recorded as ${attachment}; no structural conclusion is implied.`);
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : "Attachment update failed.");
-                }
+                updateSelectedWall({ attachment });
+                setMessage(`${selectedWall.id} attachment intent recorded as ${attachment}; no structural conclusion is implied.`);
               }}
             >
               <option value="unknown">Unknown / verify</option>
@@ -382,33 +434,33 @@ function App() {
             <button onClick={() => addHouseOpening("door")}>Add door</button>
             <button onClick={() => addHouseOpening("window")}>Add window</button>
           </div>
-          {primaryOpening ? (
+          {selectedOpening ? (
             <section className="house-opening-card" aria-label="House opening">
-              <div><strong>{primaryOpening.kind}</strong><button onClick={() => {
-                applyDesign(updateDesign(design, { houseOpenings: primaryWall.openings.filter((opening) => opening.id !== primaryOpening.id) }));
+              <div><strong>{selectedOpening.kind}</strong><button onClick={() => {
+                updateSelectedWall({ openings: selectedWall.openings.filter((opening) => opening.id !== selectedOpening.id) });
                 setSelectedOpeningId(null);
-                setMessage("Conceptual house opening removed.");
+                setMessage(`Conceptual house opening removed from ${selectedWall.id}.`);
               }}>Remove</button></div>
               <label className="field full">
                 <span>Edit opening</span>
-                <select aria-label="House opening selection" value={primaryOpening.id} onChange={(event) => setSelectedOpeningId(event.target.value)}>
-                  {primaryWall.openings.map((opening) => (
+                <select aria-label="House opening selection" value={selectedOpening.id} onChange={(event) => setSelectedOpeningId(event.target.value)}>
+                  {selectedWall.openings.map((opening) => (
                     <option key={opening.id} value={opening.id}>{opening.id} · {opening.kind}</option>
                   ))}
                 </select>
               </label>
               <label className="field full">
                 <span>Opening type</span>
-                <select value={primaryOpening.kind} onChange={(event) => updatePrimaryOpening({ kind: event.target.value as HouseOpeningKind })}>
+                <select value={selectedOpening.kind} onChange={(event) => updateSelectedOpening({ kind: event.target.value as HouseOpeningKind })}>
                   <option value="door">Door</option>
                   <option value="window">Window</option>
                 </select>
               </label>
               <div className="field-grid">
-                <DimensionField label="Wall offset" value={primaryOpening.offset} onCommit={(value) => updatePrimaryOpening({ offset: Number(value) })} />
-                <DimensionField label="Opening width" value={primaryOpening.width} onCommit={(value) => updatePrimaryOpening({ width: Number(value) })} />
-                <DimensionField label="Sill height" value={primaryOpening.sillHeight} onCommit={(value) => updatePrimaryOpening({ sillHeight: Number(value) })} />
-                <DimensionField label="Opening height" value={primaryOpening.height} onCommit={(value) => updatePrimaryOpening({ height: Number(value) })} />
+                <DimensionField label="Wall offset" value={selectedOpening.offset} onCommit={(value) => updateSelectedOpening({ offset: Number(value) })} />
+                <DimensionField label="Opening width" value={selectedOpening.width} onCommit={(value) => updateSelectedOpening({ width: Number(value) })} />
+                <DimensionField label="Sill height" value={selectedOpening.sillHeight} onCommit={(value) => updateSelectedOpening({ sillHeight: Number(value) })} />
+                <DimensionField label="Opening height" value={selectedOpening.height} onCommit={(value) => updateSelectedOpening({ height: Number(value) })} />
               </div>
             </section>
           ) : <p className="house-opening-empty">No door or window recorded.</p>}
