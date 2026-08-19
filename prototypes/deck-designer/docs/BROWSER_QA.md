@@ -23,6 +23,7 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Desktop visual inspection confirmed editable corner handles, the orange stair handle, the two-offset outline, and matching procedural 3D geometry.
 - Existing responsive rules remain unchanged: the visual workspace is sticky only above 1050 pixels and returns to normal flow at tablet/mobile widths.
 - Follow-up usability check exposed a hidden prerequisite: the offset action could appear clickable while protected edge references or a missing edge selection blocked it. The control now presents explicit unlock/select/add steps, disables unavailable actions, and keeps the current requirement beside the button.
+- A second follow-up found that clearing the now-obsolete edge selection after a successful region edit looked like a failed action. The action now changes to “Offset added ✓” and explains that a new edge is required only when adding another offset.
 
 ## 2026-08-19 sidebar clarity and sticky workspace check
 
