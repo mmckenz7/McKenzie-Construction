@@ -16,6 +16,8 @@ A separate v3 accessory projection emits traceable railing, stair, stringer, and
 
 A design-level v3 projection now sorts and projects each recorded platform independently, then aggregates compatible quantity keys with platform and source-geometry traceability. It records platform elevations but deliberately does not infer inter-platform stairs, connections, clashes, or structural relationships.
 
+Prototype-only immutable platform commands can duplicate an existing platform at an exact elevation or remove one while retaining at least one platform. Both operations advance revisions, participate in undo/redo history, and explicitly avoid inferring inter-level connections.
+
 ## Proposed future authoritative facts
 
 A future design version may replace shape-specific dimensions with one open outer ring of 3–24 `{ x, z }` vertices in inches. The closing vertex is omitted. Normalization rounds to hundredths of an inch, enforces positive winding, and rotates the ring to a stable lowest-`z`/lowest-`x` start vertex. Adjacent duplicates, redundant collinear vertices, self-intersections, out-of-bounds coordinates, and areas below four square feet fail closed.
