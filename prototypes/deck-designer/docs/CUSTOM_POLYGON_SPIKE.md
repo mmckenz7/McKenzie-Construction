@@ -14,6 +14,8 @@ The v3 free-edge geometry projection now derives railing segments/posts, stair o
 
 A separate v3 accessory projection emits traceable railing, stair, stringer, and landing quantity lines with explicit takeoff-candidate or visualization classification. Structural counts, products, pricing, labor, waste, and commercial calculations remain outside the report and outside this prototype track.
 
+A design-level v3 projection now sorts and projects each recorded platform independently, then aggregates compatible quantity keys with platform and source-geometry traceability. It records platform elevations but deliberately does not infer inter-platform stairs, connections, clashes, or structural relationships.
+
 ## Proposed future authoritative facts
 
 A future design version may replace shape-specific dimensions with one open outer ring of 3–24 `{ x, z }` vertices in inches. The closing vertex is omitted. Normalization rounds to hundredths of an inch, enforces positive winding, and rotates the ring to a stable lowest-`z`/lowest-`x` start vertex. Adjacent duplicates, redundant collinear vertices, self-intersections, out-of-bounds coordinates, and areas below four square feet fail closed.
