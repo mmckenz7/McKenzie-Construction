@@ -49,6 +49,14 @@ test("SMS consent page preserves the approved script and website boundary", () =
   assert.match(consent, /verbally or by text/);
 });
 
+test("SMS consent page alone provides the visible START text action", () => {
+  assert.match(consent, /Text START to 865-433-3325/);
+  assert.match(consent, /Send START to 865-433-3325/);
+  assert.match(consent, /href="sms:\+18654333325\?body=START"/);
+  assert.equal(privacy.includes("body=START"), false);
+  assert.equal(terms.includes("body=START"), false);
+});
+
 test("both public footer variants expose all three compliance routes", () => {
   for (const source of [reusableFooter, homePage]) {
     assert.match(source, /href="\/privacy"/);
