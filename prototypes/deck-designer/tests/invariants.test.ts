@@ -11,12 +11,28 @@ function polygonArea(points: readonly Readonly<{ x: number; z: number }>[]): num
   }, 0)) / 2;
 }
 
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state += 0x6D2B79F5;
+    let value = state;
+    value = Math.imul(value ^ value >>> 15, value | 1);
+    value ^= value + Math.imul(value ^ value >>> 7, value | 61);
+    return ((value ^ value >>> 14) >>> 0) / 4_294_967_296;
+  };
+}
+
+const randomBetween = (random: () => number, minimum: number, maximum: number): number =>
+  Math.round((minimum + random() * (maximum - minimum)) * 100) / 100;
+
 function assertProjectionInvariants(design: DeckDesign): void {
   const normalized = normalizeDesign(design);
   const first = deriveGeometry(normalized);
   const second = deriveGeometry(normalized);
   const quantities = deriveQuantities(normalized, first);
+  const repeatedQuantities = deriveQuantities(normalized, second);
   expect(second).toEqual(first);
+  expect(repeatedQuantities).toEqual(quantities);
   expect(stableDesignJson(normalized)).toBe(stableDesignJson(normalizeDesign(JSON.parse(stableDesignJson(normalized)))));
   expect(designFingerprint(normalized)).toBe(designFingerprint(normalized));
   expect(new Set(first.platformEdges.map((edge) => edge.id)).size).toBe(first.platformEdges.length);
@@ -117,5 +133,48 @@ describe("property-style deterministic projection matrix", () => {
         assertProjectionInvariants(design);
       }
     }
+  });
+
+  it("replays a seeded fuzz corpus across valid geometry and quantity combinations", () => {
+    const random = seededRandom(0x4D434B5A);
+    const cases = 250;
+    for (let index = 0; index < cases; index += 1) {
+      const kind = random() < 0.5 ? "rectangle" as const : "l-shape" as const;
+      const width = randomBetween(random, 72, 600);
+      const projection = randomBetween(random, 72, 360);
+      const cutoutWidth = randomBetween(random, 12, Math.min(480, Math.max(12, width - 24.01)));
+      const cutoutDepth = randomBetween(random, 12, Math.min(480, Math.max(12, projection - 24.01)));
+      const surfaceElevation = randomBetween(random, 12, 120);
+      const gradeElevation = randomBetween(random, -36, surfaceElevation - 6);
+      const base = updateDesign(DEFAULT_DESIGN, {
+        kind,
+        width,
+        projection,
+        surfaceElevation,
+        gradeElevation,
+        cutoutWidth,
+        cutoutDepth,
+        joistSpacing: randomBetween(random, 8, 24),
+        railingEdges: kind === "rectangle"
+          ? ["front", "left", "right"]
+          : ["front", "left", "right", "notch-horizontal", "notch-vertical"],
+      });
+      const edges = deriveGeometry(base).platformEdges;
+      const stairEdge = edges[Math.floor(random() * edges.length)];
+      const stairWidth = Math.min(96, Math.max(30, Math.floor(stairEdge.length)));
+      const stairEnabled = stairEdge.length >= 30 && random() < 0.75;
+      const maximumOffset = Math.max(0, Math.floor((stairEdge.length - stairWidth) * 100) / 100);
+      const design = updateDesign(base, {
+        stairEnabled,
+        stairEdgeId: stairEdge.id,
+        stairWidth,
+        stairOffset: stairEnabled ? randomBetween(random, 0, maximumOffset) : 0,
+        treadDepth: randomBetween(random, 9, 14),
+        landingEnabled: stairEnabled && random() < 0.5,
+        landingDepth: randomBetween(random, 24, 120),
+      });
+      assertProjectionInvariants(design);
+    }
+    expect(cases).toBe(250);
   });
 });
