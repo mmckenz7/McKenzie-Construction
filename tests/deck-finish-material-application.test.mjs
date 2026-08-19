@@ -16,6 +16,10 @@ const migration = readFileSync(
   "supabase/migrations/20260819110000_deck_finish_material_applications.sql",
   "utf8",
 );
+const permissionFix = readFileSync(
+  "supabase/migrations/20260819120000_fix_deck_finish_application_permissions.sql",
+  "utf8",
+);
 const planner = readFileSync(
   "src/components/estimates/deck-takeoff-planner.tsx",
   "utf8",
@@ -157,6 +161,28 @@ test("finish-cost persistence is tenant-scoped, immutable, idempotent, and exact
   assert.match(migration, /revoke all on function public\.apply_reviewed_deck_finish_materials[\s\S]*from public,anon,authenticated/);
   assert.match(migration, /grant execute on function public\.apply_reviewed_deck_finish_materials[\s\S]*to service_role/);
   assert.doesNotMatch(migration, /grant execute[\s\S]*to authenticated/);
+});
+
+test("finish-cost application can call the private calculation persistence helper", () => {
+  assert.match(permissionFix, /^begin;[\s\S]*commit;\s*$/);
+  assert.match(
+    permissionFix,
+    /alter function public\.apply_reviewed_deck_finish_materials\([\s\S]*\) security definer;/,
+  );
+  assert.match(
+    permissionFix,
+    /revoke all on function public\.apply_reviewed_deck_finish_materials\([\s\S]*from public,anon,authenticated;/,
+  );
+  assert.match(
+    permissionFix,
+    /grant execute on function public\.apply_reviewed_deck_finish_materials\([\s\S]*to service_role;/,
+  );
+  assert.doesNotMatch(permissionFix, /grant execute[\s\S]*to authenticated/);
+  assert.match(migration, /get_effective_user_access/);
+  assert.match(migration, /assert_single_company_fence_estimate_scope/);
+  assert.match(migration, /requested_expected_calculation_revision/);
+  assert.match(migration, /requested_preview_binding/);
+  assert.match(migration, /requested_idempotency_key/);
 });
 
 test("UI adds the visible finish subtotal now and full takeoff skips those keys later", () => {
