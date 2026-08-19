@@ -37,3 +37,4 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Conceptual output only; not structural engineering or construction documents
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/MASTER_SCOPE.md](docs/MASTER_SCOPE.md).
+The future custom-outline semantics are being proven separately in [docs/CUSTOM_POLYGON_SPIKE.md](docs/CUSTOM_POLYGON_SPIKE.md) before any DeckDesign version change.
