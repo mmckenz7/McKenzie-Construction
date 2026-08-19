@@ -22,6 +22,7 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Attached stairs to an exact geometric edge and changed the bounded stair position to 72 inches; the plan and 3D stair run updated without changing quantity semantics.
 - Desktop visual inspection confirmed editable corner handles, the orange stair handle, the two-offset outline, and matching procedural 3D geometry.
 - Existing responsive rules remain unchanged: the visual workspace is sticky only above 1050 pixels and returns to normal flow at tablet/mobile widths.
+- Follow-up usability check exposed a hidden prerequisite: the offset action could appear clickable while protected edge references or a missing edge selection blocked it. The control now presents explicit unlock/select/add steps, disables unavailable actions, and keeps the current requirement beside the button.
 
 ## 2026-08-19 sidebar clarity and sticky workspace check
 

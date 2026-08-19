@@ -146,6 +146,10 @@ button:hover { transform: translateY(-1px); }
 .corner-row input { width: 100%; padding: 7px; border: 1px solid var(--line); border-radius: 6px; }
 .corner-row button { grid-column: 1 / -1; }
 .review-card small { display: block; margin-top: 8px; }
+.review-card .primary { width: 100%; }
+.offset-action-status { margin: 8px 0 0; padding: 9px 10px; border-radius: 8px; background: #fff4df; color: #744716; font-size: 12px; font-weight: 700; }
+.offset-action-status.ready { background: #e7f1d0; color: #294d28; }
+.full-action:disabled { cursor: not-allowed; opacity: .5; }
 .three-framing { margin: 8px 16px 12px; }
 .three-card { min-height: 0; }
 .three-mount { flex: 1; min-height: 0; cursor: grab; }
