@@ -22,6 +22,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 
 - [x] Parametric L-shape cutout with deterministic 2D/3D/quantity projections
 - [x] Custom polygon corners and repeatable rectangular offsets with general polygon validation
+- [x] Click-to-add corner placement and attached-endpoint segment dragging
 - [x] Stable free-edge identities for rectangle and L-shape platforms
 - [x] Any-edge straight stairs with explicit attachment and railing-opening facts
 - [x] Optional deterministic top landing
