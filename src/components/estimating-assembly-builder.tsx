@@ -71,7 +71,10 @@ function slug(value: string) {
 
 function materialLabel(material: Material) {
   const price = Number(material.effective_unit_cost ?? material.unit_cost);
-  return `${[material.brand, material.product_line, material.description].filter(Boolean).join(" — ")} ($${price.toFixed(2)}/${material.unit})`;
+  const priceLabel = Number.isFinite(price) && price > 0
+    ? `$${price.toFixed(2)}/${material.unit}`
+    : "Price not set";
+  return `${[material.brand, material.product_line, material.description].filter(Boolean).join(" — ")} (${priceLabel})`;
 }
 
 export function EstimatingAssemblyBuilder() {
