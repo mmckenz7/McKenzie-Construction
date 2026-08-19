@@ -6,6 +6,10 @@ const migration = fs.readFileSync(
   new URL("../supabase/migrations/20260819150000_estimating_cost_book_assemblies.sql", import.meta.url),
   "utf8",
 );
+const productMigration = fs.readFileSync(
+  new URL("../supabase/migrations/20260819160000_deck_cost_book_curated_products.sql", import.meta.url),
+  "utf8",
+);
 const route = fs.readFileSync(
   new URL("../src/app/api/estimating-assemblies/route.ts", import.meta.url),
   "utf8",
@@ -89,4 +93,29 @@ test("starter packages preserve product-system and field-review boundaries", () 
   assert.match(component, /General deck screws never substitute for structural fasteners/);
   assert.match(component, /quantityBasis: "manual_review"/);
   assert.match(component, /Review notes/);
+});
+
+test("curated deck products publish exact identities without inventing prices", () => {
+  assert.match(productMigration, /MCK-DECK-PT-BOARD-16/);
+  assert.match(productMigration, /MCK-DECK-DECKPLUS-625/);
+  assert.match(productMigration, /MCK-DECK-TREX-SELECT-WHISKEY-GROOVED-16/);
+  assert.match(productMigration, /MCK-DECK-TREX-SELECT-WHISKEY-SQUARE-16/);
+  assert.match(productMigration, /MCK-RAIL-DECKORATORS-CONTEMP-LEVEL-8/);
+  assert.match(productMigration, /MCK-RAIL-DECKORATORS-CABLE-PACK-10/);
+  assert.match(productMigration, /MCK-FRAMING-PT-2X8X16/);
+  assert.match(productMigration, /MCK-FRAMING-PT-2X10X16/);
+  assert.match(productMigration, /MCK-FRAMING-PT-2X12X16/);
+  assert.match(productMigration, /MCK-FRAMING-PT-6X6X12/);
+  assert.match(productMigration, /MCK-HARDWARE-SIMPSON-LUS210Z/);
+  assert.match(productMigration, /MCK-HARDWARE-SIMPSON-ABA66Z/);
+  assert.match(productMigration, /MCK-HARDWARE-SIMPSON-PB66Z/);
+  assert.match(productMigration, /'deck_board_grooved'/);
+  assert.match(productMigration, /'deck_board_square_edge'/);
+  assert.match(productMigration, /'framing_lumber'/);
+  assert.match(productMigration, /'structural_hardware'/);
+  assert.match(productMigration, /'price_status', 'not_verified'/);
+  assert.match(productMigration, /seed\.unit,[\s\S]*?0,[\s\S]*?seed\.waste_percent/);
+  assert.doesNotMatch(productMigration, /material_supplier_prices|supplier_offer_observation_prices/);
+  assert.match(productMigration, /metadata = public\.material_catalog\.metadata \|\| excluded\.metadata/);
+  assert.match(productMigration, /on conflict \(mckenzie_product_code\) where mckenzie_product_code is not null/);
 });
