@@ -38,6 +38,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Non-mutating v3 region-edit planner with explicit attachment impact review
 - [x] Immutable safe-only v3 region replacement command with monotonic revision
 - [x] Test-only v3 apply/undo/redo history with monotonic revision restoration
+- [x] Golden v2-to-v3 equivalence gate for core area/decking/joist projections
 - [x] Undo/redo command history with monotonic design revisions
 - [x] Local duplicate command and initial generic deck templates
 - [x] Initial grade, house-wall, opening, and attachment-intent foundation

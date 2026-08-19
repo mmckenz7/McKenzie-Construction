@@ -8,6 +8,8 @@ A non-mutating region-replacement planner compares a proposed ring with the reco
 
 The test-only v3 history reducer stores immutable snapshots and guarantees strictly increasing revisions across apply, undo, and redo. Undo/redo restore recorded platform facts as new revisions rather than moving the authoritative revision backward.
 
+A migration-equivalence gate compares every golden v1/v2 fixture with its v3 polygon projection. Platform area, decking linear feet, joist linear feet, and joist count must remain identical; site-context-only changes must not alter those platform material projections.
+
 ## Proposed future authoritative facts
 
 A future design version may replace shape-specific dimensions with one open outer ring of 3–24 `{ x, z }` vertices in inches. The closing vertex is omitted. Normalization rounds to hundredths of an inch, enforces positive winding, and rotates the ring to a stable lowest-`z`/lowest-`x` start vertex. Adjacent duplicates, redundant collinear vertices, self-intersections, out-of-bounds coordinates, and areas below four square feet fail closed.
