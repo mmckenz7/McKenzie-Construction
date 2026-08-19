@@ -51,6 +51,14 @@ type Assembly = Readonly<{
   }>>;
 }>;
 
+type StarterTemplate = Readonly<{
+  key: string;
+  name: string;
+  summary: string;
+  description: string;
+  components: readonly ComponentDraft[];
+}>;
+
 const emptyComponent = (index: number): ComponentDraft => ({
   componentKey: `component_${index + 1}`,
   label: "",
@@ -64,6 +72,149 @@ const emptyComponent = (index: number): ComponentDraft => ({
   compatibilityGroup: "",
   sourceNotes: "",
 });
+
+const starterComponent = (
+  componentKey: string,
+  label: string,
+  changes: Partial<ComponentDraft> = {},
+): ComponentDraft => ({
+  ...emptyComponent(0),
+  componentKey,
+  label,
+  unit: "square foot",
+  wastePercent: "0",
+  sourceNotes: "Choose the exact approved product or verified cost source before activating this assembly.",
+  ...changes,
+});
+
+const STARTER_TEMPLATES: readonly StarterTemplate[] = [
+  {
+    key: "pressure_treated_wood_decking",
+    name: "Pressure-treated wood decking",
+    summary: "Field boards, border boards, fasteners, and installation labor.",
+    description: "Reusable pressure-treated decking finish package. Final board count depends on the reviewed layout and selected stock lengths.",
+    components: [
+      starterComponent("pt_field_decking", "Pressure-treated field decking", { wastePercent: "10" }),
+      starterComponent("pt_square_edge_border", "Square-edge picture-frame, stair, and butt-joint boards", { quantityBasis: "per_linear_foot", unit: "linear foot", wastePercent: "10", required: false }),
+      starterComponent("pt_deck_fasteners", "Compatible deck-board fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", sourceNotes: "Verify substrate, exposure, coating, and board-manufacturer requirements. Ordinary deck screws are not structural connector fasteners." }),
+      starterComponent("pt_decking_labor", "Decking installation labor", { costType: "labor", materialCatalogId: null, wastePercent: "0" }),
+    ],
+  },
+  {
+    key: "composite_decking_system",
+    name: "Composite decking — grooved field and square-edge border",
+    summary: "Separates grooved field boards from square-edge picture framing and joints.",
+    description: "One compatible composite product line with grooved field boards, square-edge borders and joints, fastening systems, fascia, and labor.",
+    components: [
+      starterComponent("composite_grooved_field", "Grooved composite field boards", { wastePercent: "10", compatibilityGroup: "composite_decking_product_line" }),
+      starterComponent("composite_square_edge", "Square-edge picture-frame, stair, and butt-joint boards", { quantityBasis: "per_linear_foot", unit: "linear foot", wastePercent: "10", compatibilityGroup: "composite_decking_product_line", sourceNotes: "Required wherever the approved layout exposes board edges or creates a picture-frame divider at a butt joint." }),
+      starterComponent("composite_hidden_fasteners", "Compatible hidden-fastener system", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "composite_decking_product_line" }),
+      starterComponent("composite_face_fasteners", "Compatible plugs and face fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "composite_decking_product_line" }),
+      starterComponent("composite_fascia", "Compatible fascia boards", { quantityBasis: "per_linear_foot", unit: "linear foot", wastePercent: "10", required: false, compatibilityGroup: "composite_decking_product_line" }),
+      starterComponent("composite_decking_labor", "Composite decking installation labor", { costType: "labor", materialCatalogId: null, wastePercent: "0" }),
+    ],
+  },
+  {
+    key: "wood_railing_system",
+    name: "Wood railing — deck and stair sides",
+    summary: "Guard runs, posts, caps, attachments, stair sides, and labor.",
+    description: "Wood railing package with separate deck and stair quantities. Stair rail must record whether one side or both sides are included.",
+    components: [
+      starterComponent("wood_guard_run", "Wood guard-rail run", { quantityBasis: "per_linear_foot", unit: "linear foot", wastePercent: "10" }),
+      starterComponent("wood_guard_posts", "Wood guard posts", { quantityBasis: "per_count", unit: "post" }),
+      starterComponent("wood_post_caps", "Wood post caps", { quantityBasis: "per_count", unit: "cap" }),
+      starterComponent("wood_guard_attachments", "Guard blocking and attachment hardware", { quantityBasis: "manual_review", quantityFactor: "", unit: "package" }),
+      starterComponent("wood_stair_rail_sides", "Wood stair rail — selected side count", { quantityBasis: "per_linear_foot", unit: "linear foot", sourceNotes: "Confirm one stair side or both stair sides. Quantity is the sloped rail length multiplied by the selected side count." }),
+      starterComponent("wood_railing_labor", "Wood railing installation labor", { costType: "labor", materialCatalogId: null, quantityBasis: "per_linear_foot", unit: "linear foot" }),
+    ],
+  },
+  {
+    key: "aluminum_railing_system",
+    name: "Aluminum railing — complete compatible system",
+    summary: "Level kits, posts, caps, brackets, stair kits, and stair posts from one line.",
+    description: "Complete aluminum railing system. Every component must use the same manufacturer and compatible product line; one stair kit covers one stair side only.",
+    components: [
+      starterComponent("aluminum_level_kits", "Compatible level rail kits", { quantityBasis: "per_linear_foot", unit: "linear foot", compatibilityGroup: "aluminum_railing_product_line", sourceNotes: "Convert reviewed run lengths to whole kits only after the selected kit length is known." }),
+      starterComponent("aluminum_posts", "Compatible level and corner posts", { quantityBasis: "per_count", unit: "post", compatibilityGroup: "aluminum_railing_product_line" }),
+      starterComponent("aluminum_post_caps", "Compatible post caps", { quantityBasis: "per_count", unit: "cap", compatibilityGroup: "aluminum_railing_product_line" }),
+      starterComponent("aluminum_brackets", "Compatible brackets and manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "aluminum_railing_product_line" }),
+      starterComponent("aluminum_stair_kits", "Compatible stair rail kits — one kit per side", { quantityBasis: "per_count", unit: "kit", compatibilityGroup: "aluminum_railing_product_line", sourceNotes: "Compare the measured sloped stair-rail length with the selected kit length and confirm one side or both sides." }),
+      starterComponent("aluminum_stair_posts", "Compatible stair posts", { quantityBasis: "per_count", unit: "post", compatibilityGroup: "aluminum_railing_product_line" }),
+      starterComponent("aluminum_railing_labor", "Aluminum railing installation labor", { costType: "labor", materialCatalogId: null, quantityBasis: "per_linear_foot", unit: "linear foot" }),
+    ],
+  },
+  {
+    key: "cable_railing_system",
+    name: "Cable railing — complete compatible system",
+    summary: "Posts, top rail, cable, fittings, corners, stairs, and labor from one system.",
+    description: "Complete cable railing system. Posts, rails, cable, tensioners, fittings, corners, and stair components must remain within one compatible manufacturer system.",
+    components: [
+      starterComponent("cable_posts", "Compatible cable railing posts", { quantityBasis: "per_count", unit: "post", compatibilityGroup: "cable_railing_product_line" }),
+      starterComponent("cable_top_rail", "Compatible top rail", { quantityBasis: "per_linear_foot", unit: "linear foot", compatibilityGroup: "cable_railing_product_line" }),
+      starterComponent("cable_infill", "Compatible cable infill", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "cable_railing_product_line" }),
+      starterComponent("cable_fittings", "Compatible tensioners, fittings, and terminals", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "cable_railing_product_line" }),
+      starterComponent("cable_corner_hardware", "Compatible corner and end hardware", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "cable_railing_product_line" }),
+      starterComponent("cable_stair_system", "Compatible stair cable package — selected side count", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "cable_railing_product_line", sourceNotes: "Confirm one stair side or both sides and use the selected system's stair instructions." }),
+      starterComponent("cable_railing_labor", "Cable railing installation labor", { costType: "labor", materialCatalogId: null, quantityBasis: "per_linear_foot", unit: "linear foot" }),
+    ],
+  },
+  {
+    key: "primary_deck_framing",
+    name: "Primary deck framing",
+    summary: "Ledger or rim, joists, beams, posts, blocking, and framing labor.",
+    description: "Structural framing package populated from a reviewed framing plan. The Cost Book does not invent member sizes, spans, counts, or attachment details.",
+    components: [
+      starterComponent("framing_ledger_rim", "Ledger, rim, and edge framing", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity", sourceNotes: "Use only the reviewed structural plan; visible existing conditions are reference evidence." }),
+      starterComponent("framing_joists", "Sized joists and trimmers", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
+      starterComponent("framing_beams", "Sized beam or support system", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
+      starterComponent("framing_posts", "Sized posts and supports", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
+      starterComponent("framing_blocking", "Blocking and bracing", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
+      starterComponent("framing_labor", "Framing installation labor", { costType: "labor", materialCatalogId: null, quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed labor quantity" }),
+    ],
+  },
+  {
+    key: "footings_structural_hardware",
+    name: "Footings and structural hardware",
+    summary: "Concrete, bases, anchors, hangers, caps, ledger hardware, and ties.",
+    description: "Foundation and structural connector package from a reviewed plan and compatible manufacturer schedules. General deck screws never substitute for structural fasteners.",
+    components: [
+      starterComponent("footing_concrete", "Concrete for reviewed footing and pier geometry", { quantityBasis: "manual_review", quantityFactor: "", unit: "cubic yard" }),
+      starterComponent("post_bases_anchors", "Post bases, anchors, and manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "structural_connector_schedule" }),
+      starterComponent("joist_hangers", "Joist hangers and manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "structural_connector_schedule" }),
+      starterComponent("post_caps", "Post caps and manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "structural_connector_schedule" }),
+      starterComponent("ledger_hardware", "Ledger fasteners, washers, flashing, and lateral ties", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "structural_connector_schedule" }),
+      starterComponent("beam_joist_hardware", "Beam-ply and joist-to-beam connectors", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "structural_connector_schedule" }),
+    ],
+  },
+  {
+    key: "stairs_landings",
+    name: "Stairs and landings",
+    summary: "Stringers, treads, risers, landing framing, footings, rails, and labor.",
+    description: "Stair and landing package populated only after reviewed stair geometry and connection details exist.",
+    components: [
+      starterComponent("stair_stringers", "Reviewed stair stringers", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
+      starterComponent("stair_treads_risers", "Stair treads and risers", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
+      starterComponent("landing_framing", "Landing framing and decking", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
+      starterComponent("landing_foundations", "Landing posts, footings, and concrete", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
+      starterComponent("stair_connectors", "Stair and landing connectors with manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "stair_connector_schedule" }),
+      starterComponent("stair_rails", "Stair rail package — selected side count", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", sourceNotes: "Confirm one stair side or both sides before calculating purchase quantities." }),
+      starterComponent("stair_labor", "Stair and landing labor", { costType: "labor", materialCatalogId: null, quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed labor quantity" }),
+    ],
+  },
+  {
+    key: "jobsite_general_conditions",
+    name: "Demolition, delivery, equipment, and labor",
+    summary: "Common project costs kept separate from finish materials.",
+    description: "Reusable general-conditions package for demolition, disposal, delivery, equipment, and project labor. Review applicability for every job.",
+    components: [
+      starterComponent("demolition_disposal", "Demolition and disposal", { costType: "labor", materialCatalogId: null, quantityBasis: "per_square_foot", unit: "square foot" }),
+      starterComponent("dumpster", "Dumpster or disposal container", { costType: "subcontractor", materialCatalogId: null, quantityBasis: "fixed_each", unit: "allowance", required: false }),
+      starterComponent("material_delivery", "Material delivery", { costType: "subcontractor", materialCatalogId: null, quantityBasis: "fixed_each", unit: "delivery" }),
+      starterComponent("equipment_rental", "Equipment and rental allowance", { costType: "equipment", materialCatalogId: null, quantityBasis: "fixed_each", unit: "allowance", required: false }),
+      starterComponent("project_labor", "Remaining project labor", { costType: "labor", materialCatalogId: null, quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed labor quantity" }),
+    ],
+  },
+];
 
 function slug(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 64);
@@ -115,6 +266,11 @@ export function EstimatingAssemblyBuilder() {
   useEffect(() => { void load(); }, [load]);
 
   const selected = useMemo(() => assemblies.find((assembly) => assembly.id === selectedId) ?? null, [assemblies, selectedId]);
+  const missingProductCount = useMemo(
+    () => components.filter((component) => component.costType === "material" && !component.materialCatalogId).length,
+    [components],
+  );
+  const basicFieldsReady = Boolean(name.trim() && assemblyKey.trim() && tradeCode.trim());
 
   function clearEditor() {
     setSelectedId(null);
@@ -153,6 +309,22 @@ export function EstimatingAssemblyBuilder() {
       })));
     setNotice(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function loadStarterTemplate(template: StarterTemplate) {
+    setSelectedId(null);
+    setName(template.name);
+    setAssemblyKey(template.key);
+    setTradeCode("deck");
+    setDescription(template.description);
+    setStatus("draft");
+    setRevision(null);
+    setComponents(template.components.map((component) => ({ ...component })));
+    setNotice({
+      type: "success",
+      message: `${template.name} loaded for review. Choose exact catalog products and verify the rules before saving.`,
+    });
+    window.requestAnimationFrame(() => document.getElementById("assembly-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
   function updateComponent(index: number, changes: Partial<ComponentDraft>) {
@@ -213,8 +385,30 @@ export function EstimatingAssemblyBuilder() {
 
       {notice ? <div role="status" className={`mt-5 rounded-lg border px-4 py-3 text-sm font-medium ${notice.type === "success" ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-red-300 bg-red-50 text-red-900"}`}>{notice.message}</div> : null}
 
+      <section className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 sm:p-6" aria-labelledby="starter-library-title">
+        <div className="max-w-3xl">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Start here</p>
+          <h2 id="starter-library-title" className="mt-1 text-xl font-bold text-slate-950">Starter review library</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-700">
+            These are unsaved review templates—not approved products, prices, or structural facts. Load one, review its components, choose the exact catalog products, then save it to the company Cost Book.
+          </p>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {STARTER_TEMPLATES.map((template) => (
+            <article key={template.key} className="flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="font-bold text-slate-950">{template.name}</h3>
+              <p className="mt-2 flex-1 text-sm leading-5 text-slate-600">{template.summary}</p>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{template.components.length} components · products still need review</p>
+              <button type="button" onClick={() => loadStarterTemplate(template)} className="mt-4 min-h-11 w-full rounded-lg border border-blue-300 bg-blue-50 px-4 text-sm font-bold text-blue-950 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
+                Review template
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+        <section id="assembly-editor" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           <h2 className="text-xl font-bold text-slate-950">{selected ? `Edit ${selected.name}` : "Build an assembly"}</h2>
           <p className="mt-1 text-sm text-slate-600">Keep the name plain: “Composite decking — grooved field boards” or “Aluminum railing — complete compatible system.”</p>
 
@@ -257,12 +451,14 @@ export function EstimatingAssemblyBuilder() {
                   <label className="text-sm font-semibold text-slate-800">Waste %<input type="number" min="0" max="100" step="0.1" value={component.wastePercent} onChange={(event) => updateComponent(index, { wastePercent: event.target.value })} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950" /></label>
                   <label className="text-sm font-semibold text-slate-800">Compatibility group<input value={component.compatibilityGroup} onChange={(event) => updateComponent(index, { compatibilityGroup: event.target.value })} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950" placeholder="trex_transcend_lineage" /></label>
                   <label className="flex min-h-11 items-center gap-2 self-end text-sm font-semibold text-slate-800"><input type="checkbox" checked={component.required} onChange={(event) => updateComponent(index, { required: event.target.checked })} className="h-5 w-5" />Required in this package</label>
+                  <label className="text-sm font-semibold text-slate-800 md:col-span-2">Review notes<textarea value={component.sourceNotes} onChange={(event) => updateComponent(index, { sourceNotes: event.target.value })} className="mt-1 min-h-20 w-full rounded-lg border border-slate-300 bg-white p-3 font-normal text-slate-950" placeholder="What must be verified before this component is used?" /></label>
                 </div>
               </article>
             ))}
           </div>
 
-          <button type="button" disabled={saving} onClick={() => void save()} className="mt-6 min-h-12 w-full rounded-lg bg-blue-700 px-5 text-base font-bold text-white hover:bg-blue-800 disabled:bg-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">{saving ? "Saving…" : status === "active" ? "Save active assembly" : "Save draft assembly"}</button>
+          {missingProductCount > 0 ? <p role="status" className="mt-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">Choose {missingProductCount} approved catalog product{missingProductCount === 1 ? "" : "s"} before saving. The template remains an unsaved review draft until then.</p> : null}
+          <button type="button" disabled={saving || missingProductCount > 0 || !basicFieldsReady} onClick={() => void save()} className="mt-4 min-h-12 w-full rounded-lg bg-blue-700 px-5 text-base font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">{saving ? "Saving…" : status === "active" ? "Save active assembly" : "Save draft assembly"}</button>
         </section>
 
         <aside className="rounded-xl border border-slate-200 bg-slate-50 p-4 xl:self-start">
