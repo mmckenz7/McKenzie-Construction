@@ -51,6 +51,27 @@ export function Footer() {
           >
             Contact
           </Link>
+
+          <Link
+            href="/privacy"
+            className="transition hover:text-brand-green"
+          >
+            Privacy
+          </Link>
+
+          <Link
+            href="/sms-terms"
+            className="transition hover:text-brand-green"
+          >
+            SMS Terms
+          </Link>
+
+          <Link
+            href="/sms-consent"
+            className="transition hover:text-brand-green"
+          >
+            SMS Consent
+          </Link>
         </div>
       </div>
     </footer>

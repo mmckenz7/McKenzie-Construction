@@ -37,10 +37,10 @@ export default function ThankYouPage() {
             </a>
 
             <a
-              href="tel:+18652633811"
+              href="tel:+18654333325"
               className="inline-flex min-h-14 items-center justify-center border border-white/30 px-7 text-sm font-black text-white transition hover:bg-white hover:text-black"
             >
-              CALL 865-263-3811
+              CALL 865-433-3325
             </a>
           </div>
         </div>
