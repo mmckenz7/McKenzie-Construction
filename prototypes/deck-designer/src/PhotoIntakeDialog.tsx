@@ -108,7 +108,7 @@ export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
   const start = () => {
     try {
       const normalized = normalizeConfirmedPhotoFacts(draft);
-      const confirmedOuter = normalized.layoutIntent === "non-standard" ? validatePhotoTrace(traceOuter, normalized.width) : undefined;
+      const confirmedOuter = normalized.layoutIntent === "non-standard" ? validatePhotoTrace(traceOuter) : undefined;
       if (normalized.layoutIntent === "non-standard" && (!confirmedOuter || isRectangleTrace(confirmedOuter, normalized.width, normalized.projection))) {
         throw new RangeError("Add and adjust at least one offset before starting a non-standard design.");
       }

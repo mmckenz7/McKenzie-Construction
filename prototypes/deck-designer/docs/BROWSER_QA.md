@@ -55,3 +55,4 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - The calibrated house-attachment edge and its two corners are visibly fixed during tracing. Other corners and edge handles remain editable, and invalid polygon edits continue to fail through shared prototype normalization.
 - At a 390 × 844 viewport, the full-screen dialog remained within the 375-pixel document width, trace controls collapsed to one column, and explicit edge actions measured 44 pixels high. No page-level horizontal overflow was present.
 - Direct SVG edge tapping remains a shortcut; explicit 44-pixel edge buttons were added after semantic browser QA found SVG-only activation unreliable.
+- Follow-up corner-alignment QA removed the overly strict original house endpoints: both house-line corner handles are now movable along `z = 0`, and an adjacent corner landing on that line collapses the redundant middle point into one straight attachment edge.

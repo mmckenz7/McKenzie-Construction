@@ -53,11 +53,23 @@ describe("local-only photo-assisted start", () => {
     expect(reviewConfirmedPhotoFacts({ designName: "Photo trace", layoutIntent: "non-standard", width: 144, projection: 144, surfaceElevation: 48, doorWidth: 72, attachment: "ledger" }, true).outlineWarning).toBeNull();
   });
 
-  it("keeps the calibrated house edge fixed and rejects an unchanged rectangle", () => {
+  it("keeps one straight house edge while allowing an aligned corner to extend it", () => {
     const rectangle = rectangleTrace(144, 144);
     expect(isRectangleTrace(rectangle, 144, 144)).toBe(true);
-    expect(validatePhotoTrace(rectangle, 144)).toEqual(rectangle);
-    expect(() => validatePhotoTrace([{ x: 6, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 144 }, { x: 0, z: 144 }], 144)).toThrow(/house-attachment edge/i);
+    expect(validatePhotoTrace(rectangle)).toEqual(rectangle);
+    const extended = [{ x: -24, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 144 }, { x: -24, z: 144 }];
+    expect(validatePhotoTrace(extended)).toEqual(extended);
+    const alignedStep = [{ x: 0, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 144 }, { x: 0, z: 144 }, { x: 0, z: 60 }, { x: -24, z: 60 }, { x: -24, z: 0 }];
+    expect(validatePhotoTrace(alignedStep)).toEqual([{ x: -24, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 144 }, { x: 0, z: 144 }, { x: 0, z: 60 }, { x: -24, z: 60 }]);
+    expect(() => validatePhotoTrace([{ x: 0, z: 6 }, { x: 144, z: 6 }, { x: 144, z: 144 }, { x: 0, z: 144 }])).toThrow(/house line/i);
+  });
+
+  it("records the extended aligned edge as the exact house attachment", () => {
+    const outer = [{ x: -24, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 144 }, { x: -24, z: 144 }];
+    const next = createDesignFromConfirmedPhotoFacts(base, { designName: "Aligned corner", layoutIntent: "non-standard", width: 144, projection: 144, surfaceElevation: 48, doorWidth: null, attachment: "ledger" }, outer);
+    const house = next.platforms[0].edgeConditions.find((condition) => condition.condition === "house_attachment");
+    expect(house?.attachment).toBe("ledger");
+    expect(next.platforms[0].region.outer).toEqual(outer);
   });
 
   it("carries the existing height only when the intake leaves height unknown", () => {

@@ -29,12 +29,31 @@ export function isRectangleTrace(outer: readonly PolygonPoint[], width: number, 
     Math.abs(point.x - rectangle[index].x) < .01 && Math.abs(point.z - rectangle[index].z) < .01);
 }
 
-export function validatePhotoTrace(outer: readonly PolygonPoint[], width: number): readonly PolygonPoint[] {
-  const normalized = normalizePolygonRegion({ outer, holes: [] }).outer;
-  const houseStart = normalized[0];
-  const houseEnd = normalized[1];
-  if (Math.abs(houseStart.x) > .01 || Math.abs(houseStart.z) > .01 || Math.abs(houseEnd.x - width) > .01 || Math.abs(houseEnd.z) > .01) {
-    throw new RangeError("The house-attachment edge must remain the confirmed width and position.");
+function mergeCollinearTraceCorners(outer: readonly PolygonPoint[]): readonly PolygonPoint[] {
+  const merged = [...outer];
+  let changed = true;
+  while (changed && merged.length > 3) {
+    changed = false;
+    for (let index = 0; index < merged.length; index += 1) {
+      const previous = merged[(index - 1 + merged.length) % merged.length];
+      const current = merged[index];
+      const next = merged[(index + 1) % merged.length];
+      const cross = (current.x - previous.x) * (next.z - current.z) - (current.z - previous.z) * (next.x - current.x);
+      if (Math.abs(cross) < .01) {
+        merged.splice(index, 1);
+        changed = true;
+        break;
+      }
+    }
+  }
+  return Object.freeze(merged.map((point) => Object.freeze({ ...point })));
+}
+
+export function validatePhotoTrace(outer: readonly PolygonPoint[]): readonly PolygonPoint[] {
+  const normalized = normalizePolygonRegion({ outer: mergeCollinearTraceCorners(outer), holes: [] }).outer;
+  const houseEdges = deriveGeometricPolygonEdges(normalized).filter((edge) => Math.abs(edge.start.z) < .01 && Math.abs(edge.end.z) < .01);
+  if (houseEdges.length !== 1) {
+    throw new RangeError("The outline must keep one straight edge along the house line.");
   }
   return normalized;
 }
@@ -46,6 +65,8 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, onChange,
   const [activePhoto, setActivePhoto] = useState(0);
   const [active, setActive] = useState<string | null>(null);
   const edges = useMemo(() => deriveGeometricPolygonEdges(outer), [outer]);
+  const houseEdgeIndex = edges.findIndex((edge) => Math.abs(edge.start.z) < .01 && Math.abs(edge.end.z) < .01);
+  const fixedHouseCorners = new Set(houseEdgeIndex < 0 ? [] : [houseEdgeIndex, (houseEdgeIndex + 1) % outer.length]);
   const minX = Math.min(0, ...outer.map((point) => point.x));
   const maxX = Math.max(width, ...outer.map((point) => point.x));
   const minZ = Math.min(0, ...outer.map((point) => point.z));
@@ -62,11 +83,11 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, onChange,
     return Object.freeze({ x: snap(local.x + minX - margin), z: snap(local.y + minZ - margin) });
   };
   const accept = (candidate: readonly PolygonPoint[]) => {
-    try { onChange(validatePhotoTrace(candidate, width)); onError(""); }
+    try { onChange(validatePhotoTrace(candidate)); onError(""); }
     catch (error) { onError(error instanceof Error ? error.message : "That outline is not valid."); }
   };
   const addOffset = (index: number) => {
-    if (index === 0) { onError("The highlighted house edge stays fixed. Add offsets to another edge."); return; }
+    if (index === houseEdgeIndex) { onError("Keep the highlighted house line straight. Add offsets to another edge."); return; }
     try {
       const edge = edges[index];
       accept(addBumpoutOnEdge(outer, index, { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 }, snapIncrement));
@@ -86,13 +107,16 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, onChange,
         <defs><pattern id="trace-grid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#a9b4ad" strokeWidth=".4" /></pattern></defs>
         <rect width="100%" height="100%" fill="url(#trace-grid)" />
         <polygon points={outer.map((point) => `${x(point.x)},${y(point.z)}`).join(" ")} className="trace-platform" />
-        {edges.map((edge, index) => <g key={edge.id}><line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className={index === 0 ? "trace-house-edge" : "trace-edge"} /><line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className="trace-edge-hit" role="button" tabIndex={0} aria-label={index === 0 ? "Fixed house attachment edge" : `Add rectangular offset on edge ${index + 1}`} onClick={() => addOffset(index)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); addOffset(index); } }} />{index !== 0 && (() => {
+        {edges.map((edge, index) => <g key={edge.id}><line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className={index === houseEdgeIndex ? "trace-house-edge" : "trace-edge"} /><line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className="trace-edge-hit" role="button" tabIndex={0} aria-label={index === houseEdgeIndex ? "Straight house attachment edge" : `Add rectangular offset on edge ${index + 1}`} onClick={() => addOffset(index)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); addOffset(index); } }} />{index !== houseEdgeIndex && (() => {
           const midpoint = Object.freeze({ x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 });
           return <rect x={x(midpoint.x) - 6} y={y(midpoint.z) - 6} width="12" height="12" rx="3" className="trace-segment-handle" role="button" tabIndex={0} aria-label={`Move edge ${index + 1}`} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); dragStart.current = outer; segmentDrag.current = { index, midpoint, outward: edge.outward }; setActive(`segment-${index}`); }} onPointerMove={(event) => { if (active !== `segment-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const point = pointFromClient(event.clientX, event.clientY); const origin = segmentDrag.current; if (!point || !origin) return; try { accept(movePolygonSegment(dragStart.current ?? outer, index, (point.x - origin.midpoint.x) * origin.outward.x + (point.z - origin.midpoint.z) * origin.outward.z, snapIncrement, false)); } catch { /* reject preview */ } }} onPointerUp={(event) => { event.currentTarget.releasePointerCapture(event.pointerId); dragStart.current = null; segmentDrag.current = null; setActive(null); }} onPointerCancel={cancelDrag} />;
         })()}</g>)}
-        {outer.map((point, index) => <circle key={index} cx={x(point.x)} cy={y(point.z)} r="7" className={`trace-corner${index < 2 ? " fixed" : ""}`} role="button" tabIndex={index < 2 ? -1 : 0} aria-label={index < 2 ? `Fixed house corner ${index + 1}` : `Move corner ${index + 1}`} onPointerDown={index < 2 ? undefined : (event: PointerEvent<SVGCircleElement>) => { event.currentTarget.setPointerCapture(event.pointerId); dragStart.current = outer; setActive(`corner-${index}`); }} onPointerMove={index < 2 ? undefined : (event: PointerEvent<SVGCircleElement>) => { if (active !== `corner-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const next = pointFromClient(event.clientX, event.clientY); if (!next) return; try { accept(movePolygonCorner(dragStart.current ?? outer, index, next, false, snapIncrement)); } catch { /* reject preview */ } }} onPointerUp={index < 2 ? undefined : (event: PointerEvent<SVGCircleElement>) => { event.currentTarget.releasePointerCapture(event.pointerId); dragStart.current = null; setActive(null); }} onPointerCancel={cancelDrag} />)}
+        {outer.map((point, index) => {
+          const houseCorner = fixedHouseCorners.has(index);
+          return <circle key={index} cx={x(point.x)} cy={y(point.z)} r="7" className={`trace-corner${houseCorner ? " house" : ""}`} role="button" tabIndex={0} aria-label={`${houseCorner ? "Move house-line" : "Move"} corner ${index + 1}`} onPointerDown={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.setPointerCapture(event.pointerId); dragStart.current = outer; setActive(`corner-${index}`); }} onPointerMove={(event: PointerEvent<SVGCircleElement>) => { if (active !== `corner-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const next = pointFromClient(event.clientX, event.clientY); if (!next) return; const constrained = houseCorner ? Object.freeze({ x: next.x, z: 0 }) : next; try { accept(movePolygonCorner(dragStart.current ?? outer, index, constrained, false, snapIncrement)); } catch { /* reject preview */ } }} onPointerUp={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.releasePointerCapture(event.pointerId); dragStart.current = null; setActive(null); }} onPointerCancel={cancelDrag} />;
+        })}
       </svg>
-      <div className="trace-edge-buttons" aria-label="Add outline offset">{edges.slice(1).map((edge, offsetIndex) => <button key={edge.id} onClick={() => addOffset(offsetIndex + 1)}>Add offset to edge {offsetIndex + 2}</button>)}</div>
+      <div className="trace-edge-buttons" aria-label="Add outline offset">{edges.map((edge, index) => index === houseEdgeIndex ? null : <button key={edge.id} onClick={() => addOffset(index)}>Add offset to edge {index + 1}</button>)}</div>
       <p><span className="trace-dot round" /> Drag round corner handles. <span className="trace-dot square" /> Drag square edge handles. Tap an edge to add an offset.</p>
     </section>
   </div>;

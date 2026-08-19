@@ -111,7 +111,7 @@ button:hover { transform: translateY(-1px); }
 .trace-house-edge { stroke: #b85c36; stroke-width: 4; }
 .trace-edge-hit { fill: none; stroke: transparent; stroke-width: 14; cursor: copy; }
 .trace-corner { fill: #efff77; stroke: #214b3b; stroke-width: 2.5; cursor: grab; }
-.trace-corner.fixed { fill: #f0a36e; cursor: not-allowed; }
+.trace-corner.house { fill: #f0a36e; }
 .trace-segment-handle { fill: white; stroke: #2e6150; stroke-width: 2.5; cursor: grab; }
 .trace-plan > p { margin: 8px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
 .trace-dot { display: inline-block; width: 10px; height: 10px; margin: 0 2px 0 6px; border: 2px solid #2e6150; background: #efff77; vertical-align: -2px; }

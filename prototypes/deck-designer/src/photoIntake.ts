@@ -117,10 +117,11 @@ export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: C
   if (!confirmedOuter) return migrated;
   if (normalized.layoutIntent !== "non-standard") throw new TypeError("A traced outline requires non-standard layout intent.");
   const region = normalizePolygonRegion({ outer: confirmedOuter, holes: [] });
-  const expectedHouseEdgeId = geometricPolygonEdgeId({ x: 0, z: 0 }, { x: normalized.width, z: 0 });
   const edges = deriveGeometricPolygonEdges(region.outer);
-  if (!edges.some((edge) => edge.id === expectedHouseEdgeId)) throw new RangeError("The traced outline must preserve the confirmed house edge.");
-  const freeEdges = edges.filter((edge) => edge.id !== expectedHouseEdgeId);
+  const houseEdges = edges.filter((edge) => Math.abs(edge.start.z) < .01 && Math.abs(edge.end.z) < .01);
+  if (houseEdges.length !== 1) throw new RangeError("The traced outline must preserve one straight edge along the house line.");
+  const houseEdgeId = geometricPolygonEdgeId(houseEdges[0].start, houseEdges[0].end);
+  const freeEdges = edges.filter((edge) => edge.id !== houseEdgeId);
   if (freeEdges.length === 0) throw new RangeError("The traced outline must expose a free edge.");
   const stairEdge = [...freeEdges].sort((first, second) => second.length - first.length || first.id.localeCompare(second.id))[0];
   const platform = migrated.platforms[0];
@@ -129,7 +130,7 @@ export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: C
     platforms: [{
       ...platform,
       region,
-      edgeConditions: edges.map((edge) => ({ edgeId: edge.id, condition: edge.id === expectedHouseEdgeId ? "house_attachment" : "free", attachment: edge.id === expectedHouseEdgeId ? normalized.attachment : "none" })),
+      edgeConditions: edges.map((edge) => ({ edgeId: edge.id, condition: edge.id === houseEdgeId ? "house_attachment" : "free", attachment: edge.id === houseEdgeId ? normalized.attachment : "none" })),
       construction: {
         ...platform.construction,
         railing: { ...platform.construction.railing, enabledEdgeIds: freeEdges.map((edge) => edge.id) },
