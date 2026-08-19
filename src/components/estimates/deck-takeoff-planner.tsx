@@ -2386,6 +2386,10 @@ export function DeckTakeoffPlanner({
   const observedMeasurement = (...keys: string[]) =>
     blueprintVisitSeed.observedMeasurements
       .filter((item) => keys.includes(item.key))
+      .filter((item) => {
+        const numericParts = item.value.match(/-?\d+(?:\.\d+)?/g)?.map(Number);
+        return !numericParts?.length || numericParts.some((value) => value !== 0);
+      })
       .map((item) =>
         `${item.key.replaceAll("_", " ")}: ${item.value} ${item.unit}`,
       );
@@ -2671,6 +2675,9 @@ export function DeckTakeoffPlanner({
               (candidate) => candidate.key === key,
             );
             const complete = scopeLineComplete(key);
+            const knownFact = scopeVisitEvidence(key).find(
+              (fact) => !fact.startsWith("The site visit did not establish"),
+            );
             return (
               <button
                 key={key}
@@ -2688,6 +2695,11 @@ export function DeckTakeoffPlanner({
                 >
                   {scopeLineStatus(key)}
                 </span>
+                {knownFact ? (
+                  <span className="mt-1 block text-xs leading-5 text-slate-600">
+                    Site fact: {knownFact}
+                  </span>
+                ) : null}
               </button>
             );
           })}

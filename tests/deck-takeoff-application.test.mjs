@@ -145,6 +145,8 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /quantity: "1", unit: "job"/);
   assert.match(ui, /Final member size, plies, span, and bearing follow the reviewed plan/);
   assert.match(ui, /Site visit recorded this deck as attached to the house/);
+  assert.match(ui, /Site fact: \{knownFact\}/);
+  assert.match(ui, /numericParts\.some\(\(value\) => value !== 0\)/);
   assert.match(ui, /requirement === "required"\) return \[key, "include"\]/);
   assert.match(ui, /COMPLETE_REBUILD_LINE_KEYS\.map/);
   assert.match(ui, /Next category/);
