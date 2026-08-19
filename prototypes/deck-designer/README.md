@@ -23,6 +23,8 @@ Open the local URL Vite prints. Use `npm test` and `npm run build` for validatio
 - Direct plan handles for width, projection, and L-cutout dimensions with selectable 1, 6, or 12 inch snapping
 - Keyboard/click edge selection with contextual railing and stair actions
 - Deterministic, explainable conceptual review notices
+- Three generic geometry templates plus a local duplicate-design command
+- Versioned rectangle and L-shape golden fixtures for deterministic regression checks
 - Orbit, pan, zoom, and camera presets
 - Browser local save plus JSON download/upload
 - Conceptual output only; not structural engineering or construction documents

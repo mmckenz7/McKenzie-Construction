@@ -1,0 +1,55 @@
+{
+  "fixtureVersion": 1,
+  "design": {
+    "schemaVersion": 1,
+    "id": "local-deck-001",
+    "name": "Back deck concept",
+    "units": "in",
+    "platform": {
+      "kind": "rectangle",
+      "width": 192,
+      "projection": 144,
+      "surfaceElevation": 48,
+      "cutoutWidth": 48,
+      "cutoutDepth": 48
+    },
+    "construction": {
+      "decking": { "boardWidth": 5.5, "gap": 0.25 },
+      "framing": { "joistSpacing": 16, "beamInset": 24, "maxPostSpacing": 72 },
+      "railing": { "height": 36, "enabledEdges": ["front", "left", "right"] },
+      "stairs": {
+        "enabled": false,
+        "edgeId": "front",
+        "offset": 48,
+        "width": 48,
+        "treadDepth": 10,
+        "maxRiserHeight": 7.75,
+        "landingEnabled": false,
+        "landingDepth": 48
+      }
+    },
+    "metadata": { "status": "conceptual", "revision": 1 }
+  },
+  "expected": {
+    "fingerprint": "v1-ef9cab65",
+    "footprint": [{ "x": 0, "z": 0 }, { "x": 192, "z": 0 }, { "x": 192, "z": 144 }, { "x": 0, "z": 144 }],
+    "edgeIds": ["front", "left", "right"],
+    "boardCount": 26,
+    "joistCount": 13,
+    "railSegmentCount": 3,
+    "stairTreadCount": 0,
+    "landingCenter": null,
+    "quantities": {
+      "platform-area": { "quantity": 192, "unit": "sq ft" },
+      "deck-board-rows": { "quantity": 26, "unit": "each" },
+      "decking-linear-feet": { "quantity": 416, "unit": "lin ft" },
+      "joist-count": { "quantity": 13, "unit": "each" },
+      "joist-linear-feet": { "quantity": 156, "unit": "lin ft" },
+      "beam-linear-feet": { "quantity": 16, "unit": "lin ft" },
+      "support-post-count": { "quantity": 4, "unit": "each" },
+      "railing-linear-feet": { "quantity": 40, "unit": "lin ft" },
+      "railing-post-count": { "quantity": 8, "unit": "each" },
+      "surface-screw-allowance": { "quantity": 676, "unit": "each" }
+    }
+  }
+}

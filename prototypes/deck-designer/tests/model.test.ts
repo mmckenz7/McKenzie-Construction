@@ -6,6 +6,70 @@ import { deriveQuantities } from "../src/quantities";
 import { createHistory, designHistoryReducer } from "../src/history";
 import { dimensionsFromHandle, snapDimension } from "../src/editor";
 import { deriveDesignNotices } from "../src/notices";
+import { GENERIC_DECK_TEMPLATES, applyTemplateToDesign, duplicateDesign, getDeckTemplate } from "../src/templates";
+import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
+import lShapeLandingFixture from "./fixtures/l-shape-landing.json";
+
+describe("golden design fixtures", () => {
+  const fixtures = [rectangleFoundationFixture, lShapeLandingFixture];
+
+  it.each(fixtures)("keeps $design.name geometry and quantities stable", (fixture) => {
+    expect(fixture.fixtureVersion).toBe(1);
+    const design = normalizeDesign(fixture.design);
+    const geometry = deriveGeometry(design);
+    const actual = {
+      fingerprint: designFingerprint(design),
+      footprint: geometry.footprint,
+      edgeIds: geometry.platformEdges.map((edge) => edge.id),
+      boardCount: geometry.surfaceBoards.length,
+      joistCount: geometry.joists.length,
+      railSegmentCount: geometry.railSegments.length,
+      stairTreadCount: geometry.stairTreads.length,
+      landingCenter: geometry.landing?.center ?? null,
+      quantities: Object.fromEntries(
+        deriveQuantities(design, geometry).map((line) => [line.id, { quantity: line.quantity, unit: line.unit }]),
+      ),
+    };
+    expect(actual).toEqual(fixture.expected);
+  });
+});
+
+describe("generic design templates", () => {
+  it("normalizes every template and keeps the set product-agnostic", () => {
+    expect(GENERIC_DECK_TEMPLATES.map((template) => template.id)).toEqual([
+      "compact-ground",
+      "elevated-rectangle",
+      "l-shape-landing",
+    ]);
+    for (const template of GENERIC_DECK_TEMPLATES) {
+      expect(normalizeDesign(template.design)).toEqual(template.design);
+      expect(stableDesignJson(template.design)).not.toMatch(/manufacturer|product|sku|price|cost|margin/i);
+    }
+  });
+
+  it("applies a template as one revision while preserving design identity", () => {
+    const applied = applyTemplateToDesign(DEFAULT_DESIGN, "l-shape-landing");
+    expect(applied.id).toBe(DEFAULT_DESIGN.id);
+    expect(applied.metadata.revision).toBe(2);
+    expect(applied.platform.kind).toBe("l-shape");
+    expect(applied.construction.stairs.edgeId).toBe("right");
+    expect(applied.construction.stairs.landingEnabled).toBe(true);
+  });
+
+  it("duplicates facts into a new local identity with a fresh revision", () => {
+    const source = applyTemplateToDesign(DEFAULT_DESIGN, "elevated-rectangle");
+    const copy = duplicateDesign(source, "local-copy-001");
+    expect(copy.id).toBe("local-copy-001");
+    expect(copy.name).toBe("Elevated entertaining concept copy");
+    expect(copy.metadata.revision).toBe(1);
+    expect(copy.platform).toEqual(source.platform);
+    expect(copy.construction).toEqual(source.construction);
+  });
+
+  it("rejects unknown template identifiers", () => {
+    expect(() => getDeckTemplate("unknown" as never)).toThrow(/Unknown deck template/);
+  });
+});
 
 describe("direct plan editing", () => {
   it("snaps dimensions deterministically", () => {

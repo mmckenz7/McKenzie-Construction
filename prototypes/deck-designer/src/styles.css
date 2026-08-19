@@ -39,11 +39,16 @@ button:hover { transform: translateY(-1px); }
 .workspace { display: grid; grid-template-columns: 294px minmax(0, 1fr); min-height: 640px; }
 .controls-panel { padding: 25px 20px 22px; background: var(--paper); border-right: 1px solid var(--line); }
 .section-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+.section-heading.template-heading { margin-bottom: 10px; }
 .section-heading.compact { margin-top: 26px; margin-bottom: 12px; }
 .section-heading > span { color: #789083; font-size: 11px; font-weight: 600; }
 .section-heading p { margin: 0 0 2px; font-size: 13px; font-weight: 700; }
 .section-heading small { color: var(--muted); font-size: 11px; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 10px; }
+.template-card { margin-bottom: 25px; padding: 11px; border: 1px solid #d0d7d1; border-radius: 9px; background: #f3f5f1; }
+.template-card p { margin: 0 0 10px; color: #657169; font-size: 9px; line-height: 1.45; }
+.template-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.template-actions button { padding: 8px 5px; border-color: #aebbb2; background: white; color: #2e463b; font-size: 9px; font-weight: 700; }
 .shape-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 14px; }
 .shape-switch button { padding: 8px; border-color: #ccd2cc; background: white; color: #526058; font-size: 11px; }
 .shape-switch button.active { background: #dfe8e1; color: #173b2d; border-color: #688273; font-weight: 700; }

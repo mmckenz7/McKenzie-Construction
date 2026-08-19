@@ -1,0 +1,58 @@
+{
+  "fixtureVersion": 1,
+  "design": {
+    "schemaVersion": 1,
+    "id": "local-deck-001",
+    "name": "L-shape landing concept",
+    "units": "in",
+    "platform": {
+      "kind": "l-shape",
+      "width": 240,
+      "projection": 180,
+      "surfaceElevation": 54,
+      "cutoutWidth": 72,
+      "cutoutDepth": 60
+    },
+    "construction": {
+      "decking": { "boardWidth": 5.5, "gap": 0.25 },
+      "framing": { "joistSpacing": 16, "beamInset": 24, "maxPostSpacing": 72 },
+      "railing": { "height": 36, "enabledEdges": ["front", "left", "right", "notch-horizontal", "notch-vertical"] },
+      "stairs": {
+        "enabled": true,
+        "edgeId": "right",
+        "offset": 36,
+        "width": 48,
+        "treadDepth": 10,
+        "maxRiserHeight": 7.75,
+        "landingEnabled": true,
+        "landingDepth": 48
+      }
+    },
+    "metadata": { "status": "conceptual", "revision": 2 }
+  },
+  "expected": {
+    "fingerprint": "v1-2faa2fb8",
+    "footprint": [{ "x": 0, "z": 0 }, { "x": 240, "z": 0 }, { "x": 240, "z": 120 }, { "x": 168, "z": 120 }, { "x": 168, "z": 180 }, { "x": 0, "z": 180 }],
+    "edgeIds": ["front", "left", "right", "notch-horizontal", "notch-vertical"],
+    "boardCount": 32,
+    "joistCount": 16,
+    "railSegmentCount": 6,
+    "stairTreadCount": 7,
+    "landingCenter": { "x": 264, "z": 60 },
+    "quantities": {
+      "platform-area": { "quantity": 270, "unit": "sq ft" },
+      "deck-board-rows": { "quantity": 32, "unit": "each" },
+      "decking-linear-feet": { "quantity": 574, "unit": "lin ft" },
+      "joist-count": { "quantity": 16, "unit": "each" },
+      "joist-linear-feet": { "quantity": 215, "unit": "lin ft" },
+      "beam-linear-feet": { "quantity": 14, "unit": "lin ft" },
+      "support-post-count": { "quantity": 4, "unit": "each" },
+      "railing-linear-feet": { "quantity": 46, "unit": "lin ft" },
+      "railing-post-count": { "quantity": 12, "unit": "each" },
+      "surface-screw-allowance": { "quantity": 914, "unit": "each" },
+      "stair-tread-count": { "quantity": 7, "unit": "each" },
+      "stair-run": { "quantity": 5.83, "unit": "lin ft" },
+      "stair-landing-area": { "quantity": 16, "unit": "sq ft" }
+    }
+  }
+}

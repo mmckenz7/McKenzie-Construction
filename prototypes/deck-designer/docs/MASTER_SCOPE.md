@@ -27,9 +27,10 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Drag handles and selectable grid snapping for rectangle and L-cutout dimensions
 - [ ] Angle constraints, alignment guides, and broader object selection
 - [x] Undo/redo command history with monotonic design revisions
-- [ ] Duplicate/copy and common McKenzie templates
+- [x] Local duplicate command and initial generic deck templates
 - [ ] House walls, openings, grade references, and attachment conditions
-- [ ] Property-based tests and expanded golden fixtures
+- [ ] Property-based tests
+- [x] Initial versioned rectangle and L-shape golden fixtures
 
 ## Phase C — configuration depth and polish
 

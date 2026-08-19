@@ -15,10 +15,22 @@ import { createHistory, designHistoryReducer } from "./history";
 import { PlanView, formatFeetInches } from "./PlanView";
 import type { PlatformDimensionUpdate } from "./editor";
 import { deriveDesignNotices } from "./notices";
+import {
+  GENERIC_DECK_TEMPLATES,
+  applyTemplateToDesign,
+  duplicateDesign,
+  type DeckTemplateId,
+} from "./templates";
 import { ThreeView, type CameraPreset } from "./ThreeView";
 import "./styles.css";
 
 const STORAGE_KEY = "mckenzie-deck-designer:v1:current";
+
+function createLocalDesignId(): string {
+  return typeof crypto.randomUUID === "function"
+    ? `local-${crypto.randomUUID()}`
+    : `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 function loadInitialDesign(): DeckDesignV1 {
   try {
@@ -47,6 +59,7 @@ function App() {
   const [presetRequest, setPresetRequest] = useState(0);
   const [snapIncrement, setSnapIncrement] = useState(6);
   const [selectedEdgeId, setSelectedEdgeId] = useState<DeckEdgeId | null>(null);
+  const [templateId, setTemplateId] = useState<DeckTemplateId>("compact-ground");
   const fileInput = useRef<HTMLInputElement>(null);
   const geometry = useMemo(() => deriveGeometry(design), [design]);
   const quantities = useMemo(() => deriveQuantities(design, geometry), [design, geometry]);
@@ -168,6 +181,45 @@ function App() {
 
       <div className="workspace">
         <aside className="controls-panel">
+          <div className="section-heading template-heading">
+            <span>00</span>
+            <div><p>Guided start</p><small>Generic geometry only</small></div>
+          </div>
+          <section className="template-card" aria-label="Deck templates">
+            <label className="field full">
+              <span>Template</span>
+              <select value={templateId} onChange={(event) => setTemplateId(event.target.value as DeckTemplateId)}>
+                {GENERIC_DECK_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}
+              </select>
+            </label>
+            <p>{GENERIC_DECK_TEMPLATES.find((template) => template.id === templateId)?.description}</p>
+            <div className="template-actions">
+              <button
+                onClick={() => {
+                  try {
+                    applyDesign(applyTemplateToDesign(design, templateId));
+                    setSelectedEdgeId(null);
+                    setMessage("Generic template applied as one undoable design command.");
+                  } catch (error) {
+                    setMessage(error instanceof Error ? error.message : "Template could not be applied.");
+                  }
+                }}
+              >Apply template</button>
+              <button
+                onClick={() => {
+                  try {
+                    const copy = duplicateDesign(design, createLocalDesignId());
+                    setPreviewDesign(null);
+                    dispatchHistory({ type: "reset", design: copy });
+                    setSelectedEdgeId(null);
+                    setMessage("Created a new local design identity from the current facts.");
+                  } catch (error) {
+                    setMessage(error instanceof Error ? error.message : "Design could not be duplicated.");
+                  }
+                }}
+              >Duplicate design</button>
+            </div>
+          </section>
           <div className="section-heading">
             <span>01</span>
             <div><p>Authoritative design</p><small>Single-level foundation</small></div>
