@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Footer } from "@/components/footer";
 import { Navigation } from "@/components/navigation";
+import type { ProjectRequestType } from "@/components/project-request-form";
 import { TrackedPhoneLink } from "@/components/tracked-phone-link";
 
 type ServiceDetail = {
@@ -20,6 +21,7 @@ type ServiceLandingPageProps = {
   headline: string;
   introduction: string;
   path: string;
+  projectType: ProjectRequestType;
   planningDetails: ServiceDetail[];
   processDetails: ServiceDetail[];
   serviceName: string;
@@ -44,11 +46,13 @@ export function ServiceLandingPage({
   headline,
   introduction,
   path,
+  projectType,
   planningDetails,
   processDetails,
   serviceName,
   summary,
 }: ServiceLandingPageProps) {
+  const consultationHref = `/contact?projectType=${encodeURIComponent(projectType)}`;
   const serviceSchema = {
     "@context": "https://schema.org",
     "@type": "Service",
@@ -110,7 +114,7 @@ export function ServiceLandingPage({
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/contact"
+                href={consultationHref}
                 className="inline-flex min-h-12 items-center justify-center rounded-lg bg-lime-400 px-6 py-3 text-sm font-bold text-slate-950 transition hover:bg-lime-300"
               >
                 Request a Consultation
@@ -222,7 +226,7 @@ export function ServiceLandingPage({
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Link
-                href="/contact"
+                href={consultationHref}
                 className="inline-flex min-h-12 items-center justify-center rounded-lg bg-lime-400 px-6 py-3 text-sm font-bold text-slate-950 transition hover:bg-lime-300"
               >
                 Request a Consultation

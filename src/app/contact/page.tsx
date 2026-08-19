@@ -1,7 +1,51 @@
+import type { Metadata } from "next";
+
 import { ProjectRequestForm } from "@/components/project-request-form";
+import type { ProjectRequestType } from "@/components/project-request-form";
 import { TrackedPhoneLink } from "@/components/tracked-phone-link";
 
-export default function ContactPage() {
+export const metadata: Metadata = {
+  title: "Request a Construction Consultation in Knoxville",
+  description:
+    "Tell McKenzie Construction about your deck, covered outdoor living, screened porch, renovation, or exterior residential project in Knoxville and East Tennessee.",
+  alternates: { canonical: "/contact" },
+  openGraph: {
+    title: "Request a Consultation | McKenzie Construction",
+    description:
+      "Share your project goals and request a consultation with McKenzie Construction in Knoxville, Tennessee.",
+    url: "/contact",
+    type: "website",
+  },
+};
+
+const supportedProjectTypes = new Set<ProjectRequestType>([
+  "New Deck",
+  "Deck Replacement",
+  "Covered Outdoor Living",
+  "Screened Porch",
+  "Railing or Stairs",
+  "Pergola",
+  "Exterior Residential Project",
+  "Other",
+]);
+
+function readProjectType(value: string | string[] | undefined) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return supportedProjectTypes.has(value as ProjectRequestType)
+    ? (value as ProjectRequestType)
+    : "";
+}
+
+export default async function ContactPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ projectType?: string | string[] }>;
+}) {
+  const defaultProjectType = readProjectType((await searchParams).projectType);
+
   return (
     <main className="bg-white text-zinc-950">
       <section className="border-b border-zinc-200 bg-zinc-950 text-white">
@@ -29,7 +73,13 @@ export default function ContactPage() {
 
       <section className="bg-white">
         <div className="mx-auto max-w-5xl px-6 py-12 lg:px-8 lg:py-16">
-          <ProjectRequestForm />
+          {defaultProjectType ? (
+            <div className="mb-6 border border-lime-300 bg-lime-50 px-5 py-4 text-sm leading-6 text-slate-800">
+              We started the form with <strong>{defaultProjectType}</strong>{" "}
+              based on the service you were viewing. You can change it below.
+            </div>
+          ) : null}
+          <ProjectRequestForm defaultProjectType={defaultProjectType} />
         </div>
       </section>
 

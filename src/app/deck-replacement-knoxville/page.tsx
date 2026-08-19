@@ -47,6 +47,7 @@ export default function DeckReplacementKnoxvillePage() {
       summary="McKenzie Construction plans deck replacements around the existing home, current site conditions, access to the yard, material preferences, and the complete scope—not just the surface boards."
       introduction="A deck replacement begins with understanding what is present and what should change. The existing footprint, framing, stairs, railing, elevations, drainage, and access all affect the practical replacement plan."
       path="/deck-replacement-knoxville"
+      projectType="Deck Replacement"
       serviceName="Deck replacement in Knoxville, Tennessee"
       planningDetails={[
         {

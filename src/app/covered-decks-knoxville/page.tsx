@@ -47,6 +47,7 @@ export default function CoveredDecksKnoxvillePage() {
       summary="McKenzie Construction plans covered decks and protected outdoor living areas around the home, the property, weather exposure, access, drainage, and the way the space will be used."
       introduction="A covered deck connects deck construction with roof planning, water management, house conditions, stairs, railings, lighting, and everyday circulation. Those parts need to be considered as one project rather than separate add-ons."
       path="/covered-decks-knoxville"
+      projectType="Covered Outdoor Living"
       serviceName="Covered deck construction in Knoxville, Tennessee"
       planningDetails={[
         {

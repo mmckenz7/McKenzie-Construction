@@ -47,6 +47,7 @@ export default function CompositeDecksKnoxvillePage() {
       summary="McKenzie Construction builds composite decks and replacement decks with coordinated board layout, borders, fascia, stairs, fastening, and railing selections."
       introduction="Composite decking is not just a color choice. Board dimensions, framing spacing, board direction, stair details, trim, fastening, and railing transitions need to be considered together before final material quantities are prepared."
       path="/composite-decks-knoxville"
+      projectType="New Deck"
       serviceName="Composite deck construction in Knoxville, Tennessee"
       planningDetails={[
         {

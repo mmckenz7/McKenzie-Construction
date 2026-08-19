@@ -1,8 +1,29 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 
 import { Footer } from "@/components/footer";
 import { Navigation } from "@/components/navigation";
+
+export const metadata: Metadata = {
+  title: "Island Ford Deck & Outdoor Living Project",
+  description:
+    "See McKenzie Construction's completed Island Ford project in Lake City, Tennessee, including a rear wood deck, stairs, entry decks, landscaping, and site improvements.",
+  alternates: { canonical: "/projects/island-ford" },
+  openGraph: {
+    title: "Island Ford Deck & Outdoor Living Project",
+    description:
+      "A completed residential construction, deck, stair, landscaping, and site-improvement project by McKenzie Construction.",
+    url: "/projects/island-ford",
+    type: "article",
+    images: [
+      {
+        url: "/projects/island-ford/08F626F4-F8F9-4B55-B3E5-723253E28102_1_105_c.jpeg",
+        alt: "Rear wood deck and stairs at the Island Ford project",
+      },
+    ],
+  },
+};
 
 const galleryImages = [
   {
@@ -28,8 +49,32 @@ const galleryImages = [
 ];
 
 export default function IslandFordProjectPage() {
+  const projectSchema = {
+    "@context": "https://schema.org",
+    "@type": "CreativeWork",
+    name: "Island Ford Modular Home & Outdoor Living",
+    description:
+      "Completed modular-home installation, exterior work, entry decks, rear wood deck, stairs, landscaping, gravel access, and site improvements in Lake City, Tennessee.",
+    url: "https://www.mckenzie-builds.com/projects/island-ford",
+    image:
+      "https://www.mckenzie-builds.com/projects/island-ford/08F626F4-F8F9-4B55-B3E5-723253E28102_1_105_c.jpeg",
+    creator: {
+      "@type": "HomeAndConstructionBusiness",
+      name: "McKenzie Construction",
+      url: "https://www.mckenzie-builds.com",
+    },
+    contentLocation: {
+      "@type": "Place",
+      name: "Lake City, Tennessee",
+    },
+  };
+
   return (
     <div className="min-h-screen bg-brand-gray text-brand-charcoal">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(projectSchema) }}
+      />
       <Navigation />
 
       <main>

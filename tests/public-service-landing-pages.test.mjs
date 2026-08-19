@@ -41,8 +41,31 @@ test("shared service template keeps visible FAQs aligned with search data and le
   assert.match(source, /"@type": "FAQPage"/);
   assert.match(source, /faqs\.map/);
   assert.match(source, /Request a Consultation/);
+  assert.match(source, /projectType/);
+  assert.match(source, /encodeURIComponent\(projectType\)/);
   assert.match(source, /Call or Text \(865\) 433-3325/);
   assert.match(source, /View Completed Work/);
+});
+
+test("service intent carries into an editable contact form", () => {
+  const contact = read("src/app/contact/page.tsx");
+  const form = read("src/components/project-request-form.tsx");
+
+  assert.match(contact, /readProjectType/);
+  assert.match(contact, /supportedProjectTypes/);
+  assert.match(contact, /defaultProjectType=\{defaultProjectType\}/);
+  assert.match(contact, /You can change it below/);
+  assert.match(form, /defaultValue=\{defaultProjectType\}/);
+  assert.doesNotMatch(contact, /dangerouslySetInnerHTML.*projectType/s);
+});
+
+test("completed project page has canonical metadata and matching project data", () => {
+  const source = read("src/app/projects/island-ford/page.tsx");
+
+  assert.match(source, /canonical: "\/projects\/island-ford"/);
+  assert.match(source, /"@type": "CreativeWork"/);
+  assert.match(source, /Lake City, Tennessee/);
+  assert.match(source, /McKenzie Construction/);
 });
 
 test("new services are discoverable through internal links and sitemap", () => {
