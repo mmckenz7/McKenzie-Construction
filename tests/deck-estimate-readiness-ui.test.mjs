@@ -41,11 +41,11 @@ test("shows one focused Deck stage at a time with a truthful next action", () =>
     "Current step:",
     "Site visit",
     "Deck shape",
-    "Structural plan",
-    "Takeoff and price",
+    "Framing",
+    "Materials",
     "Proposal",
     "Review and send estimate",
-    "only the approved shape moves into structural design",
+    "The approved shape feeds the framing plan",
     "Nothing is sent automatically",
   ]) assert.match(builder, new RegExp(copy, "i"));
   assert.match(guidedVisit, /Continue to human takeoff/);
@@ -89,8 +89,9 @@ test("gates Deck OH&P and customer-link creation on real readiness", () => {
 
 test("completed field work opens a Deck-specific true-cost workspace", () => {
   for (const copy of [
-    "Takeoff and true-cost workspace",
-    "Saved field measurements and notes",
+    "Choose finish materials",
+    "Review true costs",
+    "Choose the visible decking and railing finishes",
     "Create Deck construction section",
   ]) assert.match(builder, new RegExp(copy, "i"));
   assert.match(builder, /Continue to OH&amp;P/);

@@ -77,8 +77,8 @@ test("generated concept has an explicit non-promotable source type and parent st
   assert.match(migration, /requested_payload->>'sourceType'<>'generated_estimating_concept'/);
   assert.match(builder, /type DeckStructureReadiness = "not_ready" \| "preliminary_geometry" \| "approved_plan"/);
   assert.match(builder, /structureReadiness === "preliminary_geometry" \? "Preliminary"/);
-  assert.match(builder, /structureReadiness === "preliminary_geometry" \? "Geometry ready"/);
-  assert.match(builder, /saved preliminary footprint geometry/);
-  assert.match(builder, /A saved preliminary concept may open geometry review/);
+  assert.match(builder, /structureReadiness === "preliminary_geometry" \? "Ready for finishes"/);
+  assert.match(builder, /exact footprint and preliminary quantities are saved/);
+  assert.match(builder, /Choose decking and railing finishes for the saved footprint/);
   assert.doesNotMatch(builder, /structureReady \? "Approved"/);
 });

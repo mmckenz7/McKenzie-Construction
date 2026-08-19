@@ -418,6 +418,8 @@ export function DeckTakeoffPlanner({
   const [finishDraftLoading, setFinishDraftLoading] = useState(false);
   const customPlanSaveKey = useRef("");
   const finishDraftSaveKey = useRef("");
+  const finishApplicationId = useRef("");
+  const finishApplicationKey = useRef("");
   const productRequestSequence = useRef(0);
   const appliedDefaults = useRef(false);
   const layoutDetailsRef = useRef<HTMLDetailsElement>(null);
@@ -1646,6 +1648,7 @@ export function DeckTakeoffPlanner({
           .filter(
             (line) =>
               line.key === "custom_decking" ||
+              line.key === "custom_decking_square_edge" ||
               line.key === "custom_railing",
           )
           .map((line) => ({
@@ -1679,9 +1682,10 @@ export function DeckTakeoffPlanner({
       const body = (await response.json()) as {
         success?: boolean;
         error?: string;
+        id?: string;
         selectionRevision?: number;
       };
-      if (!response.ok || !body.success || !body.selectionRevision)
+      if (!response.ok || !body.success || !body.id || !body.selectionRevision)
         throw new Error(
           body.error || "The working finish selections could not be saved.",
         );
@@ -1690,11 +1694,93 @@ export function DeckTakeoffPlanner({
       setNotice(
         "Working finish selections and estimating costs saved. They will return after refresh; they are not customer-ready estimate lines yet.",
       );
+      return { id: body.id, selectionRevision: body.selectionRevision };
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
           : "The working finish selections could not be saved.",
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function addFinishMaterialsToEstimate() {
+    setError("");
+    setNotice("");
+    try {
+      const saved = await saveWorkingFinishSelection();
+      if (!saved)
+        throw new Error("Save the current Deck shape and finish selections first.");
+      setPending(true);
+      const previewResponse = await fetch(
+        `/api/estimates/${encodeURIComponent(estimateId)}/deck-finish-materials`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            visitId,
+            finishSelectionRevisionId: saved.id,
+            expectedFinishSelectionRevision: saved.selectionRevision,
+          }),
+        },
+      );
+      const finishPreview = (await previewResponse.json()) as {
+        success?: boolean;
+        error?: string;
+        version?: string;
+        previewBinding?: string;
+        materialSubtotal?: number;
+      };
+      if (
+        !previewResponse.ok ||
+        !finishPreview.success ||
+        !finishPreview.version ||
+        !finishPreview.previewBinding
+      )
+        throw new Error(
+          finishPreview.error || "The finish-material subtotal could not be prepared.",
+        );
+      if (!finishApplicationId.current)
+        finishApplicationId.current = crypto.randomUUID();
+      if (!finishApplicationKey.current)
+        finishApplicationKey.current = crypto.randomUUID();
+      const applyResponse = await fetch(
+        `/api/estimates/${encodeURIComponent(estimateId)}/deck-finish-materials`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            visitId,
+            finishSelectionRevisionId: saved.id,
+            expectedFinishSelectionRevision: saved.selectionRevision,
+            expectedCalculationRevision: calculationRevision,
+            applicationId: finishApplicationId.current,
+            idempotencyKey: finishApplicationKey.current,
+            applicationVersion: finishPreview.version,
+            previewBinding: finishPreview.previewBinding,
+          }),
+        },
+      );
+      const body = (await applyResponse.json()) as EstimateBuilderEnvelope & {
+        success?: boolean;
+        error?: string;
+        materialSubtotal?: number;
+      };
+      if (!applyResponse.ok || !body.success)
+        throw new Error(body.error || "Finish-material costs could not be added.");
+      finishApplicationId.current = "";
+      finishApplicationKey.current = "";
+      onApplied(body);
+      setNotice(
+        `$${Number(body.materialSubtotal ?? finishPreview.materialSubtotal ?? 0).toFixed(2)} of reviewed finish materials was added to the estimate. Framing, hardware, labor, and margin remain separate.`,
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Finish-material costs could not be added.",
       );
     } finally {
       setPending(false);
@@ -2719,6 +2805,29 @@ export function DeckTakeoffPlanner({
       ? [plan.additionalLines.find((line) => line.key === "custom_railing")]
       : []),
   ].filter((line): line is FixedLine => Boolean(line));
+  const finishLineTotal = (line: FixedLine) => {
+    const quantity = Number(line.quantity);
+    const unitCost = Number(line.unitCost);
+    return Number.isFinite(quantity) &&
+      quantity > 0 &&
+      Number.isFinite(unitCost) &&
+      unitCost > 0
+      ? quantity * unitCost
+      : 0;
+  };
+  const customFinishMaterialsReady =
+    customFinishLines.length > 0 &&
+    customFinishLines.every(
+      (line) =>
+        line.description.trim() &&
+        line.unit.trim() &&
+        line.sourceReference.trim() &&
+        finishLineTotal(line) > 0,
+    );
+  const customFinishMaterialSubtotal = customFinishLines.reduce(
+    (total, line) => total + finishLineTotal(line),
+    0,
+  );
   const customStructuralDraft = useMemo(
     () =>
       approvedShape
@@ -3707,6 +3816,37 @@ export function DeckTakeoffPlanner({
               );
             })}
           </div>
+          <section className="mt-4 rounded-lg border border-emerald-500 bg-emerald-950 p-4 text-emerald-50">
+            <p className="text-xs font-black uppercase tracking-wide text-emerald-300">
+              Finish material estimate
+            </p>
+            <div className="mt-2 space-y-2">
+              {customFinishLines.map((line) => (
+                <div
+                  key={`${line.key}-subtotal`}
+                  className="flex items-start justify-between gap-3 text-sm"
+                >
+                  <span>{line.description || line.key.replaceAll("_", " ")}</span>
+                  <strong className="whitespace-nowrap">
+                    {finishLineTotal(line) > 0
+                      ? `$${finishLineTotal(line).toFixed(2)}`
+                      : "Needs price"}
+                  </strong>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-end justify-between gap-3 border-t border-emerald-700 pt-3">
+              <span className="font-black">Selected finish subtotal</span>
+              <span className="text-2xl font-black">
+                ${customFinishMaterialSubtotal.toFixed(2)}
+              </span>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-emerald-200">
+              This includes only the reviewed decking and railing materials shown
+              above. Framing, hardware, labor, tax, waste not already included,
+              overhead, and profit remain separate.
+            </p>
+          </section>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
@@ -3730,17 +3870,26 @@ export function DeckTakeoffPlanner({
             <button
               type="button"
               className={`w-full ${primary}`}
-              disabled={disabled || pending}
-              onClick={() => void requestPreview()}
+              disabled={
+                disabled ||
+                pending ||
+                finishDraftLoading ||
+                !savedCustomPlan ||
+                !customFinishMaterialsReady
+              }
+              onClick={() => void addFinishMaterialsToEstimate()}
             >
               {pending
-                ? "Calculating…"
-                : "Calculate custom quantities and costs"}
+                ? "Adding finish costs…"
+                : customFinishMaterialsReady
+                  ? `Add $${customFinishMaterialSubtotal.toFixed(2)} finish materials to estimate`
+                  : "Complete quantities and prices above"}
             </button>
           </div>
           <p className="mt-2 text-xs leading-5 text-slate-300">
             Saving keeps these selections and working prices available after a
-            refresh. It does not add incomplete costs to the customer estimate.
+            refresh. The second button adds only the complete finish-material
+            subtotal now; it does not wait for framing or labor.
           </p>
         </section>
       ) : null}

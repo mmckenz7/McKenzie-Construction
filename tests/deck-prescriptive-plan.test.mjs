@@ -1230,7 +1230,7 @@ test("blueprint facts seed confirmations and UI renders real geometry markers", 
     planner,
     /!customApprovedFootprint \? \([\s\S]*3\. Automatic railing/,
   );
-  assert.match(planner, /Calculate custom quantities and costs/);
+  assert.match(planner, /customFinishMaterialSubtotal\.toFixed\(2\)[\s\S]*finish materials to estimate/);
   assert.match(planner, /Priced so far/);
   assert.match(planner, /This is a working subtotal/);
   assert.match(planner, /Known costs are calculated below/);

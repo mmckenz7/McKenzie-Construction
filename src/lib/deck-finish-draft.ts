@@ -1,6 +1,10 @@
-export const DECK_FINISH_DRAFT_VERSION = "custom-deck-finish-draft-v1" as const;
+export const DECK_FINISH_DRAFT_VERSION = "custom-deck-finish-draft-v2" as const;
 
-export const DECK_FINISH_LINE_KEYS = ["custom_decking", "custom_railing"] as const;
+export const DECK_FINISH_LINE_KEYS = [
+  "custom_decking",
+  "custom_decking_square_edge",
+  "custom_railing",
+] as const;
 
 export type DeckFinishLineKey = (typeof DECK_FINISH_LINE_KEYS)[number];
 
@@ -61,7 +65,8 @@ export function parseDeckFinishDraftSnapshot(value: unknown): DeckFinishDraftSna
   const source = value as Record<string, unknown>;
   if (!exactKeys(source, ["version", "deckingFamily", "compositeColor", "railingFamily", "stairRailSides", "woodRailingRate", "board", "lines"]))
     throw new TypeError("The saved finish selection contains unsupported fields.");
-  if (source.version !== DECK_FINISH_DRAFT_VERSION)
+  const legacyV1 = source.version === "custom-deck-finish-draft-v1";
+  if (!legacyV1 && source.version !== DECK_FINISH_DRAFT_VERSION)
     throw new TypeError("The saved finish selection version is unsupported.");
   if (source.deckingFamily !== "wood" && source.deckingFamily !== "composite")
     throw new TypeError("The saved decking family is invalid.");
@@ -77,7 +82,12 @@ export function parseDeckFinishDraftSnapshot(value: unknown): DeckFinishDraftSna
   const board = source.board as Record<string, unknown>;
   if (!exactKeys(board, ["actualWidthInches", "gapInches", "stockLengthFeet", "wastePercent"]))
     throw new TypeError("The saved board settings contain unsupported fields.");
-  if (!Array.isArray(source.lines) || source.lines.length !== DECK_FINISH_LINE_KEYS.length)
+  if (
+    !Array.isArray(source.lines) ||
+    (legacyV1
+      ? source.lines.length !== 2
+      : source.lines.length !== DECK_FINISH_LINE_KEYS.length)
+  )
     throw new TypeError("The saved finish lines are invalid.");
   const lines = source.lines.map((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value))
@@ -100,8 +110,29 @@ export function parseDeckFinishDraftSnapshot(value: unknown): DeckFinishDraftSna
       catalogMaterialId,
     });
   });
-  if (new Set(lines.map((line) => line.key)).size !== DECK_FINISH_LINE_KEYS.length)
-    throw new TypeError("The saved finish lines must contain decking and railing once each.");
+  const expectedKeys = legacyV1
+    ? ["custom_decking", "custom_railing"]
+    : [...DECK_FINISH_LINE_KEYS];
+  if (
+    new Set(lines.map((line) => line.key)).size !== expectedKeys.length ||
+    expectedKeys.some((key) => !lines.some((line) => line.key === key))
+  )
+    throw new TypeError("The saved finish lines are incomplete.");
+  const normalizedLines = legacyV1
+    ? [
+        lines.find((line) => line.key === "custom_decking")!,
+        Object.freeze({
+          key: "custom_decking_square_edge" as const,
+          description: "Square-edge picture-frame and divider boards",
+          quantity: null,
+          unit: "ea",
+          unitCost: null,
+          sourceReference: "",
+          catalogMaterialId: null,
+        }),
+        lines.find((line) => line.key === "custom_railing")!,
+      ]
+    : lines;
   return Object.freeze({
     version: DECK_FINISH_DRAFT_VERSION,
     deckingFamily: source.deckingFamily,
@@ -115,6 +146,6 @@ export function parseDeckFinishDraftSnapshot(value: unknown): DeckFinishDraftSna
       stockLengthFeet: optionalNumber(board.stockLengthFeet, 1000),
       wastePercent: optionalNumber(board.wastePercent, 100) ?? 0,
     }),
-    lines: Object.freeze(lines),
+    lines: Object.freeze(normalizedLines),
   });
 }

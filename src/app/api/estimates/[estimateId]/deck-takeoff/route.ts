@@ -812,13 +812,39 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       throw new TypeError(
         "The reviewed Deck takeoff changed or still needs input.",
       );
+    const finishApplication = await supabase
+      .from("deck_estimate_finish_material_applications")
+      .select("id")
+      .eq("company_id", prepared.auth.companyId)
+      .eq("estimate_id", prepared.estimateId)
+      .eq("visit_id", body.visitId as string)
+      .maybeSingle();
+    if (finishApplication.error)
+      throw new Error("Previously applied Deck finish costs could not be checked.");
+    const appliedFinishKeys = new Set<string>();
+    if (finishApplication.data) {
+      const finishLines = await supabase
+        .from("deck_estimate_finish_material_application_lines")
+        .select("line_key")
+        .eq("application_id", finishApplication.data.id);
+      if (finishLines.error)
+        throw new Error("Previously applied Deck finish costs could not be checked.");
+      for (const line of finishLines.data ?? []) appliedFinishKeys.add(line.line_key);
+    }
+    const remainingPreviewLines = preview.lines.filter(
+      (line) => !appliedFinishKeys.has(line.key),
+    );
+    if (!remainingPreviewLines.length)
+      throw new TypeError(
+        "All reviewed Deck takeoff costs were already added to this estimate.",
+      );
     const sectionId = randomUUID();
     const firstSort =
       state.items.reduce(
         (maximum, item) => Math.max(maximum, item.sortOrder),
         -1,
       ) + 1;
-    const newItems: CanonicalEstimateItem[] = preview.lines.map(
+    const newItems: CanonicalEstimateItem[] = remainingPreviewLines.map(
       (line, index) => ({
         id: randomUUID(),
         sectionId,
@@ -873,7 +899,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       },
       disclosures: preview.disclosures,
       plan: prepared.plan,
-      lines: preview.lines.map((line, index) => ({
+      finishMaterialKeysAlreadyApplied: [...appliedFinishKeys].sort(),
+      lines: remainingPreviewLines.map((line, index) => ({
         ...line,
         estimateLineItemId: newItems[index].id,
       })),

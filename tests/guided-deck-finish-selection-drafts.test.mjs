@@ -41,14 +41,16 @@ test("working finish selections are append-only, tenant-scoped, revision-fenced,
 });
 
 test("finish selection schema is exact and stores incomplete working costs without inventing values", () => {
+  assert.match(parser, /custom-deck-finish-draft-v2/);
   assert.match(parser, /custom-deck-finish-draft-v1/);
   assert.match(parser, /custom_decking/);
+  assert.match(parser, /custom_decking_square_edge/);
   assert.match(parser, /custom_railing/);
   assert.match(parser, /quantity: number \| null/);
   assert.match(parser, /unitCost: number \| null/);
   assert.match(parser, /catalogMaterialId: string \| null/);
   assert.match(parser, /Number\.isFinite/);
-  assert.match(parser, /saved finish lines must contain decking and railing once each/i);
+  assert.match(parser, /saved finish lines are incomplete/i);
   assert.match(migration, /jsonb_array_length\(requested->'lines'\)<>2/);
   assert.match(migration, /count\(distinct value->>'key'\)/);
 });
