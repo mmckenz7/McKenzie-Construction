@@ -167,8 +167,8 @@ test("Lowe's defaults are read-only, tenant-authorized, and bound to exact produ
   assert.match(suggestionRoute, /woodScrewCoverageSquareFeetPerPack/);
   assert.match(suggestionRoute, /liveLookupStatus/);
   assert.match(suggestionRoute, /unpricedKinds/);
-  assert.match(suggestionRoute, /return !saved;/);
-  assert.doesNotMatch(suggestionRoute, /return !saved\?\.unitCost;/);
+  assert.match(suggestionRoute, /deckProductKindsNeedingRefresh/);
+  assert.match(suggestionRoute, /unpricedDeckProductKinds/);
   assert.match(estimatingDefaults, /Clinton Highway/);
   assert.match(estimatingDefaults, /25\.8/);
   assert.match(ui, /Load products and estimating costs/);

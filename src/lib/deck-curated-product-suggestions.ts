@@ -40,6 +40,27 @@ export type DeckFinishRequest = Readonly<{
   railingFamily: "wood" | "metal" | "cable" | "none";
 }>;
 
+export function deckProductKindsNeedingRefresh(
+  requiredKinds: readonly DeckLowesSuggestion["kind"][],
+  products: readonly Pick<DeckProductSuggestion, "kind" | "unitCost">[],
+) {
+  return requiredKinds.filter((kind) => {
+    const matches = products.filter((product) => product.kind === kind);
+    return matches.length === 0 || !matches.some((product) => product.unitCost);
+  });
+}
+
+export function unpricedDeckProductKinds(
+  requiredKinds: readonly DeckLowesSuggestion["kind"][],
+  products: readonly Pick<DeckProductSuggestion, "kind" | "unitCost">[],
+) {
+  return requiredKinds.filter(
+    (kind) =>
+      products.some((product) => product.kind === kind) &&
+      !products.some((product) => product.kind === kind && product.unitCost),
+  );
+}
+
 const CURRENT_RETAIL_DAYS = 30;
 
 function text(value: unknown) {
@@ -216,7 +237,14 @@ export function mergeDeckProductSuggestions(
       const existing = byUrl.get(key);
       if (!existing || (!existing.unitCost && item.unitCost)) byUrl.set(key, item);
     }
-    merged.push(...[...byUrl.values()].slice(0, limits[kind]));
+    merged.push(
+      ...[...byUrl.values()]
+        .sort(
+          (left, right) =>
+            Number(Boolean(right.unitCost)) - Number(Boolean(left.unitCost)),
+        )
+        .slice(0, limits[kind]),
+    );
   }
   return merged;
 }

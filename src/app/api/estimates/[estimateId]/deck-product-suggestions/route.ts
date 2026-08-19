@@ -5,9 +5,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { findDeckLowesDefaults, DeckLowesSuggestionError } from "@/lib/deck-lowes-product-suggestions";
 import type { DeckLowesSuggestion } from "@/lib/deck-lowes-product-suggestions";
 import {
+  deckProductKindsNeedingRefresh,
   enrichLiveDeckProducts,
   mergeDeckProductSuggestions,
   selectCuratedDeckProducts,
+  unpricedDeckProductKinds,
   type CuratedDeckMaterial,
   type CuratedDeckPrice,
 } from "@/lib/deck-curated-product-suggestions";
@@ -135,10 +137,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       "deck_fastener",
       ...railingKinds,
     ];
-    const refreshKinds = requiredKinds.filter((kind) => {
-      const saved = savedProducts.find((product) => product.kind === kind);
-      return !saved;
-    });
+    const refreshKinds = deckProductKindsNeedingRefresh(
+      requiredKinds,
+      savedProducts,
+    );
 
     let live = [] as ReturnType<typeof enrichLiveDeckProducts>;
     let liveLookupStatus: "not_needed" | "completed" | "unavailable" =
@@ -163,9 +165,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (!products.length) throw new DeckLowesSuggestionError("invalid_result");
     const productKinds = new Set(products.map((product) => product.kind));
     const missingKinds = requiredKinds.filter((kind) => !productKinds.has(kind));
-    const unpricedKinds = requiredKinds.filter((kind) =>
-      products.some((product) => product.kind === kind && !product.unitCost),
-    );
+    const unpricedKinds = unpricedDeckProductKinds(requiredKinds, products);
     return NextResponse.json({
       success: true,
       version: "deck-curated-estimating-products-v1",

@@ -23,7 +23,12 @@ runInNewContext(transformed, {
   Map,
   Set,
 });
-const { selectCuratedDeckProducts, mergeDeckProductSuggestions } = testModule.exports;
+const {
+  deckProductKindsNeedingRefresh,
+  mergeDeckProductSuggestions,
+  selectCuratedDeckProducts,
+  unpricedDeckProductKinds,
+} = testModule.exports;
 
 const material = (overrides = {}) => ({
   id: "11111111-1111-4111-8111-111111111111",
@@ -125,4 +130,43 @@ test("a live price refresh replaces the same saved unpriced product page", () =>
   const merged = mergeDeckProductSuggestions(curated, live);
   assert.equal(merged.length, 1);
   assert.equal(merged[0].unitCost, 19.98);
+});
+
+test("saved products with no price are refreshed and any priced match clears the gap", () => {
+  const required = ["deck_board", "deck_fastener"];
+  const saved = [
+    { kind: "deck_board", unitCost: null },
+    { kind: "deck_fastener", unitCost: 25.8 },
+  ];
+  assert.deepEqual(deckProductKindsNeedingRefresh(required, saved), [
+    "deck_board",
+  ]);
+  assert.deepEqual(unpricedDeckProductKinds(required, saved), ["deck_board"]);
+
+  const refreshed = [
+    ...saved,
+    { kind: "deck_board", unitCost: 19.98 },
+  ];
+  assert.deepEqual(deckProductKindsNeedingRefresh(required, refreshed), []);
+  assert.deepEqual(unpricedDeckProductKinds(required, refreshed), []);
+});
+
+test("a different live priced match is offered before an unpriced saved match", () => {
+  const curated = [
+    {
+      kind: "deck_board",
+      sourceUrl: "https://www.lowes.com/pd/saved/1",
+      unitCost: null,
+    },
+  ];
+  const live = [
+    {
+      kind: "deck_board",
+      sourceUrl: "https://www.lowes.com/pd/live/2",
+      unitCost: 21.98,
+    },
+  ];
+  const merged = mergeDeckProductSuggestions(curated, live);
+  assert.equal(merged[0].sourceUrl, live[0].sourceUrl);
+  assert.equal(merged[0].unitCost, 21.98);
 });
