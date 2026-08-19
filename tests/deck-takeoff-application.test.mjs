@@ -108,6 +108,10 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(builder, /deck-estimate-light/);
   assert.match(globalStyles, /\.platform-content \.deck-estimate-light \.bg-white \{ background-color: #ffffff !important; \}/);
   assert.match(globalStyles, /\.platform-content \.deck-estimate-light input,[\s\S]*background: #ffffff !important; color: #0f172a !important;/);
+  assert.match(ui, /aria-controls="deck-scope-category-editor"/);
+  assert.match(ui, /onClick=\{\(\) => openScopeCategory\(key\)\}/);
+  assert.match(ui, /scopeEditorRef\.current[\s\S]*scrollIntoView/);
+  assert.match(ui, /querySelector<HTMLElement>\("select, input, button"\)[\s\S]*focus\(\{ preventScroll: true \}\)/);
   assert.match(
     ui,
     /requestedRailing === "wood"[\s\S]*quantity: woodRailingFeet\.toFixed\(2\)/,

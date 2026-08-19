@@ -427,6 +427,7 @@ export function DeckTakeoffPlanner({
   const productRequestSequence = useRef(0);
   const appliedDefaults = useRef(false);
   const layoutDetailsRef = useRef<HTMLDetailsElement>(null);
+  const scopeEditorRef = useRef<HTMLFieldSetElement>(null);
   const fieldDimensions = useMemo(
     () => deckFieldDimensions(visitItems),
     [visitItems],
@@ -2379,6 +2380,24 @@ export function DeckTakeoffPlanner({
     activeScopeKey,
     visitItems,
   );
+  const openScopeCategory = (key: CompleteRebuildLineKey) => {
+    setActiveScopeKey(key);
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() => {
+        const editor = scopeEditorRef.current;
+        if (!editor) return;
+        editor
+          .querySelector<HTMLElement>("select, input, button")
+          ?.focus({ preventScroll: true });
+        editor.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "auto"
+            : "smooth",
+          block: "start",
+        });
+      }),
+    );
+  };
   const scopeLineComplete = (key: CompleteRebuildLineKey) => {
     const requirement = completeRebuildScopeRequirement(key, visitItems);
     const decision = plan.scopeDecisions[key];
@@ -2547,8 +2566,9 @@ export function DeckTakeoffPlanner({
               <button
                 key={key}
                 type="button"
+                aria-controls="deck-scope-category-editor"
                 className={`min-h-16 rounded-md border p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 ${activeScopeKey === key ? "border-blue-700 bg-blue-50" : complete ? "border-emerald-400 bg-emerald-50" : "border-slate-300 bg-white"}`}
-                onClick={() => setActiveScopeKey(key)}
+                onClick={() => openScopeCategory(key)}
               >
                 <span className="block text-sm font-black text-slate-950">
                   {complete ? "✓ " : ""}
@@ -2568,7 +2588,7 @@ export function DeckTakeoffPlanner({
             className={input}
             value={activeScopeKey}
             onChange={(event) =>
-              setActiveScopeKey(event.target.value as CompleteRebuildLineKey)
+              openScopeCategory(event.target.value as CompleteRebuildLineKey)
             }
           >
             {plan.additionalLines.map((line) => (
@@ -2583,7 +2603,12 @@ export function DeckTakeoffPlanner({
         </Field>
       </div>
       {activeScopeLine ? (
-        <fieldset className="mt-3 rounded-lg border border-slate-300 p-3">
+        <fieldset
+          id="deck-scope-category-editor"
+          ref={scopeEditorRef}
+          tabIndex={-1}
+          className="mt-3 scroll-mt-28 rounded-lg border border-slate-300 bg-white p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+        >
           <legend className="px-1 font-bold text-slate-900">
             {activeScopeLine.description}
           </legend>
@@ -2799,7 +2824,7 @@ export function DeckTakeoffPlanner({
               className={primary}
               disabled={activeScopeIndex === 0}
               onClick={() =>
-                setActiveScopeKey(
+                openScopeCategory(
                   COMPLETE_REBUILD_LINE_KEYS[activeScopeIndex - 1],
                 )
               }
@@ -2813,7 +2838,7 @@ export function DeckTakeoffPlanner({
                 activeScopeIndex === COMPLETE_REBUILD_LINE_KEYS.length - 1
               }
               onClick={() =>
-                setActiveScopeKey(
+                openScopeCategory(
                   COMPLETE_REBUILD_LINE_KEYS[activeScopeIndex + 1],
                 )
               }
