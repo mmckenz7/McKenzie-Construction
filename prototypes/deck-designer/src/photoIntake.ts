@@ -1,5 +1,7 @@
 import { DEFAULT_DESIGN, normalizeDesign, updateDesign, type HouseAttachment } from "./model";
 import { migrateDeckDesignToV3, type DeckDesignV3 } from "./modelV3";
+import { deriveGeometricPolygonEdges, geometricPolygonEdgeId, type PolygonPoint } from "./polygon";
+import { normalizePolygonRegion } from "./polygonRegion";
 
 export type ConfirmedPhotoFacts = Readonly<{
   designName: string;
@@ -51,7 +53,7 @@ export function normalizeConfirmedPhotoFacts(facts: ConfirmedPhotoFacts): Confir
   });
 }
 
-export function reviewConfirmedPhotoFacts(facts: ConfirmedPhotoFacts): PhotoIntakeReview {
+export function reviewConfirmedPhotoFacts(facts: ConfirmedPhotoFacts, outlineConfirmed = false): PhotoIntakeReview {
   const normalized = normalizeConfirmedPhotoFacts(facts);
   return Object.freeze({
     confirmed: Object.freeze([
@@ -66,9 +68,9 @@ export function reviewConfirmedPhotoFacts(facts: ConfirmedPhotoFacts): PhotoInta
       ...(normalized.doorWidth === null ? ["Door width and wall position are not recorded."] : ["Door position is not recorded, so the opening is not placed automatically."]),
       ...(normalized.attachment === "unknown" ? ["House attachment remains unknown."] : ["Visible and concealed attachment conditions still require field verification."]),
       "Photos are reference evidence only and do not generate authoritative geometry.",
-      ...(normalized.layoutIntent === "non-standard" ? ["The starting rectangle is only the confirmed overall envelope; edit the outline before relying on quantities."] : []),
+      ...(normalized.layoutIntent === "non-standard" && outlineConfirmed ? ["The non-standard outline was manually traced and confirmed; field measurements still control final dimensions."] : []),
     ]),
-    outlineWarning: normalized.layoutIntent === "non-standard"
+    outlineWarning: normalized.layoutIntent === "non-standard" && !outlineConfirmed
       ? "Non-standard outline is not confirmed. The first rectangle is an editable overall-size envelope."
       : null,
   });
@@ -96,7 +98,7 @@ export function reviewPhotoCoverage(
   return Object.freeze({ addedCount, missingRecommendedRoles, message });
 }
 
-export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: ConfirmedPhotoFacts): DeckDesignV3 {
+export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: ConfirmedPhotoFacts, confirmedOuter?: readonly PolygonPoint[]): DeckDesignV3 {
   const normalized = normalizeConfirmedPhotoFacts(facts);
   const currentElevation = base.platforms[0]?.elevation ?? DEFAULT_DESIGN.platform.surfaceElevation;
   const legacy = updateDesign(DEFAULT_DESIGN, {
@@ -107,9 +109,32 @@ export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: C
     surfaceElevation: normalized.surfaceElevation ?? currentElevation,
     houseAttachment: normalized.attachment,
   });
-  return migrateDeckDesignToV3(normalizeDesign({
+  const migrated = migrateDeckDesignToV3(normalizeDesign({
     ...legacy,
     id: base.id,
     metadata: { ...legacy.metadata, revision: base.metadata.revision + 1 },
   }));
+  if (!confirmedOuter) return migrated;
+  if (normalized.layoutIntent !== "non-standard") throw new TypeError("A traced outline requires non-standard layout intent.");
+  const region = normalizePolygonRegion({ outer: confirmedOuter, holes: [] });
+  const expectedHouseEdgeId = geometricPolygonEdgeId({ x: 0, z: 0 }, { x: normalized.width, z: 0 });
+  const edges = deriveGeometricPolygonEdges(region.outer);
+  if (!edges.some((edge) => edge.id === expectedHouseEdgeId)) throw new RangeError("The traced outline must preserve the confirmed house edge.");
+  const freeEdges = edges.filter((edge) => edge.id !== expectedHouseEdgeId);
+  if (freeEdges.length === 0) throw new RangeError("The traced outline must expose a free edge.");
+  const stairEdge = [...freeEdges].sort((first, second) => second.length - first.length || first.id.localeCompare(second.id))[0];
+  const platform = migrated.platforms[0];
+  return migrateDeckDesignToV3({
+    ...migrated,
+    platforms: [{
+      ...platform,
+      region,
+      edgeConditions: edges.map((edge) => ({ edgeId: edge.id, condition: edge.id === expectedHouseEdgeId ? "house_attachment" : "free", attachment: edge.id === expectedHouseEdgeId ? normalized.attachment : "none" })),
+      construction: {
+        ...platform.construction,
+        railing: { ...platform.construction.railing, enabledEdgeIds: freeEdges.map((edge) => edge.id) },
+        stairs: { ...platform.construction.stairs, enabled: false, edgeId: stairEdge.id, offset: 0 },
+      },
+    }],
+  });
 }

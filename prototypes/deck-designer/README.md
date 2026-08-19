@@ -37,7 +37,8 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Economy, balanced, and detailed local 3D quality tiers that never alter design facts
 - Build-time isolation guard against imports outside the prototype, network calls, and environment access
 - Browser local save plus JSON download/upload
-- Optional six-angle plus additional-photo local intake with non-blocking coverage guidance and confirmed dimension/attachment review; images are session-only and never enter design JSON
+- Optional six-angle plus additional-photo local intake with non-blocking coverage guidance and confirmed dimension/attachment review
+- Side-by-side local photo reference and touch-capable outline tracing; only the explicitly confirmed polygon enters DeckDesign v3, while images remain session-only and never enter design JSON
 - Conceptual output only; not structural engineering or construction documents
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/MASTER_SCOPE.md](docs/MASTER_SCOPE.md).

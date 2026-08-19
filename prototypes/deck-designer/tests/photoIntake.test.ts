@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { migrateDeckDesignToV3 } from "../src/modelV3";
 import { DEFAULT_DESIGN } from "../src/model";
 import { createDesignFromConfirmedPhotoFacts, normalizeConfirmedPhotoFacts, reviewConfirmedPhotoFacts, reviewPhotoCoverage } from "../src/photoIntake";
+import { isRectangleTrace, rectangleTrace, validatePhotoTrace } from "../src/PhotoOutlineTracer";
+import { derivePlatformGeometryV3 } from "../src/geometryV3";
+import { deriveDeckAccessoryProjectionV3, stableDeckAccessoryProjectionV3Json } from "../src/quantityProjectionV3";
 
 const base = migrateDeckDesignToV3(DEFAULT_DESIGN);
 
@@ -23,6 +26,38 @@ describe("local-only photo-assisted start", () => {
     expect(next.platforms[0].edgeConditions.find((condition) => condition.condition === "house_attachment")?.attachment).toBe("ledger");
     expect(next.siteContext.houseWalls[0].openings).toEqual([]);
     expect(next.metadata.revision).toBe(base.metadata.revision + 1);
+  });
+
+  it("creates a confirmed non-standard polygon instead of a rectangle envelope", () => {
+    const base = migrateDeckDesignToV3(DEFAULT_DESIGN);
+    const outer = [{ x: 0, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 72 }, { x: 96, z: 72 }, { x: 96, z: 144 }, { x: 0, z: 144 }];
+    const next = createDesignFromConfirmedPhotoFacts(base, {
+      designName: "Photo trace",
+      layoutIntent: "non-standard",
+      width: 144,
+      projection: 144,
+      surfaceElevation: 48,
+      doorWidth: 72,
+      attachment: "ledger",
+    }, outer);
+    expect(next.platforms[0].region.outer).toEqual(outer);
+    expect(next.platforms[0].region.outer).toHaveLength(6);
+    expect(next.platforms[0].construction.stairs.enabled).toBe(false);
+    expect(derivePlatformGeometryV3(next, "platform-1").footprint).toEqual(outer);
+    const firstProjection = deriveDeckAccessoryProjectionV3(next, "platform-1");
+    const replayedProjection = deriveDeckAccessoryProjectionV3(createDesignFromConfirmedPhotoFacts(base, {
+      designName: "Photo trace", layoutIntent: "non-standard", width: 144, projection: 144,
+      surfaceElevation: 48, doorWidth: 72, attachment: "ledger",
+    }, outer), "platform-1");
+    expect(stableDeckAccessoryProjectionV3Json(firstProjection)).toBe(stableDeckAccessoryProjectionV3Json(replayedProjection));
+    expect(reviewConfirmedPhotoFacts({ designName: "Photo trace", layoutIntent: "non-standard", width: 144, projection: 144, surfaceElevation: 48, doorWidth: 72, attachment: "ledger" }, true).outlineWarning).toBeNull();
+  });
+
+  it("keeps the calibrated house edge fixed and rejects an unchanged rectangle", () => {
+    const rectangle = rectangleTrace(144, 144);
+    expect(isRectangleTrace(rectangle, 144, 144)).toBe(true);
+    expect(validatePhotoTrace(rectangle, 144)).toEqual(rectangle);
+    expect(() => validatePhotoTrace([{ x: 6, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 144 }, { x: 0, z: 144 }], 144)).toThrow(/house-attachment edge/i);
   });
 
   it("carries the existing height only when the intake leaves height unknown", () => {

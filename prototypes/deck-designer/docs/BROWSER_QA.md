@@ -46,3 +46,12 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Non-standard follow-up expanded intake to six guided angles (wide, connection, left corner, right corner, stairs/grade, elevated overview) plus up to six additional images. Selecting non-standard immediately listed the five missing recommended angles, retained the zero-photo/manual path, and changed the handoff to “Start editable outline.”
 - The non-standard handoff created a 20 × 18-foot overall envelope with a persistent outline warning beside the controls and a separate warning that quantity cards represent the envelope only. The expanded desktop dialog had no horizontal overflow and all ten visible actions remained at least 44 CSS pixels high.
 - The photo dialog is now lazy-loaded in its own 3.0 KiB gzip chunk; the initial entry returned below its enforced 90 KiB gzip budget.
+
+## 2026-08-19 photo-reference outline tracing check
+
+- Selected the non-standard path and confirmed the main action remains disabled while the calibrated outline is still a rectangle.
+- Added an offset using the explicit edge action, confirmed the action became enabled, and created an eight-corner DeckDesign v3 polygon rather than a rectangle envelope.
+- Confirmed the accepted polygon immediately drove the measured 2D plan, procedural 3D model, and deterministic quantity projection; no image pixels or inferred measurements entered the design.
+- The calibrated house-attachment edge and its two corners are visibly fixed during tracing. Other corners and edge handles remain editable, and invalid polygon edits continue to fail through shared prototype normalization.
+- At a 390 × 844 viewport, the full-screen dialog remained within the 375-pixel document width, trace controls collapsed to one column, and explicit edge actions measured 44 pixels high. No page-level horizontal overflow was present.
+- Direct SVG edge tapping remains a shortcut; explicit 44-pixel edge buttons were added after semantic browser QA found SVG-only activation unreliable.

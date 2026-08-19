@@ -12,6 +12,7 @@ import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
 import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment } from "./polygonEditorV3";
 import { createDesignFromConfirmedPhotoFacts, type ConfirmedPhotoFacts, type PhotoIntakeReview } from "./photoIntake";
+import type { PolygonPoint } from "./polygon";
 
 const ThreeViewV3 = lazy(async () => ({ default: (await import("./ThreeViewV3")).ThreeViewV3 }));
 const PhotoIntake = lazy(async () => ({ default: (await import("./PhotoIntakeDialog")).PhotoIntake }));
@@ -149,8 +150,8 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
     doorWidth: null,
     attachment: platform.edgeConditions.find((condition) => condition.condition === "house_attachment")?.attachment as "unknown" | "ledger" | "non-ledger" | undefined ?? "unknown",
   };
-  const startFromPhotos = (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number) => {
-    const next = createDesignFromConfirmedPhotoFacts(history.present, facts);
+  const startFromPhotos = (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number, confirmedOuter?: readonly PolygonPoint[]) => {
+    const next = createDesignFromConfirmedPhotoFacts(history.present, facts, confirmedOuter);
     setPreview(null);
     dispatch({ type: "reset", design: next });
     setSelectedPlatformId(next.platforms[0].id);
@@ -160,7 +161,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
     setPhotoStartSummary(Object.freeze({ photoCount, review }));
     setPhotoIntakeOpen(false);
     setMessage(facts.layoutIntent === "non-standard"
-      ? `Photo-assisted start created a ${formatFeetInches(facts.width)} × ${formatFeetInches(facts.projection)} editable envelope. Shape the non-standard outline before relying on quantities.`
+      ? `Photo-reference tracing created a confirmed ${next.platforms[0].region.outer.length}-corner outline from your entries and edits.`
       : `Photo-assisted start created a ${formatFeetInches(facts.width)} × ${formatFeetInches(facts.projection)} rectangle from confirmed entries only.`);
   };
 
@@ -170,7 +171,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
     <section className="warning"><strong>Conceptual design — not for construction.</strong> Corner geometry and quantities are deterministic; structure, connections, code, and field dimensions still require qualified review.</section>
     <div className="workspace"><aside className="controls-panel">
       <div className="section-heading"><span>01</span><div><p>Deck outline</p><small>Move corners or add rectangular offsets</small></div></div>
-      {photoStartSummary && <section className={`photo-start-summary${photoStartSummary.review.outlineWarning ? " needs-outline" : ""}`}><strong>Photo-assisted start</strong><p>{photoStartSummary.photoCount} local photo{photoStartSummary.photoCount === 1 ? "" : "s"} reviewed. Geometry came only from confirmed entries.</p>{photoStartSummary.review.outlineWarning && <p className="outline-warning">{photoStartSummary.review.outlineWarning}</p>}<small>{photoStartSummary.review.fieldVerification.length} field-verification note{photoStartSummary.review.fieldVerification.length === 1 ? "" : "s"} remain. Photo previews were released after review.</small><button onClick={() => setPhotoIntakeOpen(true)}>Start another photo review</button></section>}
+      {photoStartSummary && <section className={`photo-start-summary${photoStartSummary.review.outlineWarning ? " needs-outline" : ""}`}><strong>Photo-assisted start</strong><p>{photoStartSummary.photoCount} local photo{photoStartSummary.photoCount === 1 ? "" : "s"} reviewed. Geometry came only from confirmed entries and manual tracing.</p>{photoStartSummary.review.outlineWarning && <p className="outline-warning">{photoStartSummary.review.outlineWarning}</p>}<small>{photoStartSummary.review.fieldVerification.length} field-verification note{photoStartSummary.review.fieldVerification.length === 1 ? "" : "s"} remain. Photo previews were released after review.</small><button onClick={() => setPhotoIntakeOpen(true)}>Start another photo review</button></section>}
       <div className="shape-switch"><button onClick={() => applyTemplate("rectangle")}>Rectangle</button><button onClick={() => applyTemplate("l-shape")}>L-shape</button></div>
       <label className="field full"><span>Design name</span><input value={design.name} onChange={(event) => { try { apply(normalizeDeckDesignV3({ ...history.present, name: event.target.value, metadata: { ...history.present.metadata, revision: history.present.metadata.revision + 1 } }), "Design name updated."); } catch { /* retain */ } }} /></label>
       {design.platforms.length > 1 && <label className="field full"><span>Platform to edit</span><select value={platform.id} onChange={(event) => { setSelectedPlatformId(event.target.value); setSelectedEdgeId(null); }} >{design.platforms.map((item) => <option key={item.id} value={item.id}>{item.id} · {formatFeetInches(item.elevation)} high</option>)}</select></label>}

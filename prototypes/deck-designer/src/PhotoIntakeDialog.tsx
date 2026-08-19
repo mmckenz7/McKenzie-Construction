@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { HouseAttachment } from "./model";
 import { normalizeConfirmedPhotoFacts, reviewConfirmedPhotoFacts, reviewPhotoCoverage, type ConfirmedPhotoFacts, type GuidedPhotoRole, type PhotoIntakeReview } from "./photoIntake";
+import { isRectangleTrace, PhotoOutlineTracer, rectangleTrace, validatePhotoTrace } from "./PhotoOutlineTracer";
+import type { PolygonPoint } from "./polygon";
 
 type LocalPhoto = Readonly<{ name: string; url: string }>;
 type Props = Readonly<{
   initialFacts: ConfirmedPhotoFacts;
   onCancel: () => void;
-  onStartDesign: (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number) => void;
+  onStartDesign: (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number, confirmedOuter?: readonly PolygonPoint[]) => void;
 }>;
 
 const PHOTO_SLOTS: readonly Readonly<{ role: GuidedPhotoRole; title: string; help: string }>[] = [
@@ -35,6 +37,7 @@ export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
   const [surfaceElevation, setSurfaceElevation] = useState(initialFacts.surfaceElevation === null ? "" : String(initialFacts.surfaceElevation));
   const [doorWidth, setDoorWidth] = useState(initialFacts.doorWidth === null ? "" : feet(initialFacts.doorWidth));
   const [attachment, setAttachment] = useState<HouseAttachment>(initialFacts.attachment);
+  const [traceOuter, setTraceOuter] = useState<readonly PolygonPoint[]>(() => rectangleTrace(initialFacts.width, initialFacts.projection));
   const [error, setError] = useState("");
   useEffect(() => () => { for (const url of urls.current) URL.revokeObjectURL(url); }, []);
 
@@ -51,6 +54,16 @@ export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
   try { review = reviewConfirmedPhotoFacts(draft); } catch { /* show validation only when submitted */ }
   const guidedRoles = Object.keys(photos) as GuidedPhotoRole[];
   const coverage = reviewPhotoCoverage(layoutIntent, guidedRoles, additionalPhotos.length);
+  const numericWidth = parseFeet(width);
+  const numericProjection = parseFeet(projection);
+  const allPhotos = [...Object.values(photos), ...additionalPhotos].filter((photo): photo is LocalPhoto => Boolean(photo));
+  const traced = layoutIntent === "non-standard" && Number.isFinite(numericWidth) && Number.isFinite(numericProjection) && !isRectangleTrace(traceOuter, numericWidth, numericProjection);
+
+  useEffect(() => {
+    if (Number.isFinite(numericWidth) && Number.isFinite(numericProjection) && numericWidth >= 48 && numericProjection >= 48) {
+      setTraceOuter(rectangleTrace(numericWidth, numericProjection));
+    }
+  }, [numericProjection, numericWidth]);
 
   const choosePhoto = (role: GuidedPhotoRole, file: File | undefined) => {
     if (!file) return;
@@ -95,7 +108,11 @@ export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
   const start = () => {
     try {
       const normalized = normalizeConfirmedPhotoFacts(draft);
-      onStartDesign(normalized, reviewConfirmedPhotoFacts(normalized), coverage.addedCount);
+      const confirmedOuter = normalized.layoutIntent === "non-standard" ? validatePhotoTrace(traceOuter, normalized.width) : undefined;
+      if (normalized.layoutIntent === "non-standard" && (!confirmedOuter || isRectangleTrace(confirmedOuter, normalized.width, normalized.projection))) {
+        throw new RangeError("Add and adjust at least one offset before starting a non-standard design.");
+      }
+      onStartDesign(normalized, reviewConfirmedPhotoFacts(normalized, Boolean(confirmedOuter)), coverage.addedCount, confirmedOuter);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Review the confirmed dimensions before starting.");
     }
@@ -117,8 +134,9 @@ export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
         <label className="field full"><span>Connection to house</span><select value={attachment} onChange={(event) => setAttachment(event.target.value as HouseAttachment)}><option value="unknown">Unknown / field verify</option><option value="ledger">Ledger attached</option><option value="non-ledger">Freestanding / non-ledger</option></select></label>
       </div></section>
       <section><div className="photo-step"><span>3</span><div><strong>Review before creating geometry</strong><small>No photo-derived measurement is applied automatically.</small></div></div>{review ? <div className="photo-review"><div><strong>Confirmed</strong>{review.confirmed.map((item) => <p key={item}>✓ {item}</p>)}</div><div><strong>Still verify</strong>{review.fieldVerification.map((item) => <p key={item}>• {item}</p>)}</div></div> : <p className="photo-review-error">Enter a valid deck width and distance from the house.</p>}</section>
+      {layoutIntent === "non-standard" && Number.isFinite(numericWidth) && Number.isFinite(numericProjection) && <section><div className="photo-step"><span>4</span><div><strong>Trace and confirm the real outline</strong><small>Use the photos beside the measured plan. This step—not the photo pixels—creates geometry.</small></div></div><PhotoOutlineTracer width={numericWidth} projection={numericProjection} photos={allPhotos} outer={traceOuter} onChange={setTraceOuter} onError={setError} /><div className={`trace-status${traced ? " ready" : ""}`} role="status"><strong>{traced ? `Outline ready · ${traceOuter.length} confirmed corners` : "The outline is still a rectangle"}</strong><span>{traced ? "Start the design when the corners match the job." : "Tap a non-house edge to add an offset, then drag its handles into position."}</span></div></section>}
     </div>
-    <footer><div><strong>{coverage.addedCount} photo{coverage.addedCount === 1 ? "" : "s"} added</strong><small>You can start with zero photos and enter dimensions manually.</small></div><div><button onClick={onCancel}>Keep current design</button><button className="primary" onClick={start}>{layoutIntent === "non-standard" ? "Start editable outline" : "Start rectangle design"}</button></div></footer>
+    <footer><div><strong>{coverage.addedCount} photo{coverage.addedCount === 1 ? "" : "s"} added</strong><small>{layoutIntent === "non-standard" ? "A changed outline is required before starting." : "You can start with zero photos and enter dimensions manually."}</small></div><div><button onClick={onCancel}>Keep current design</button><button className="primary" disabled={layoutIntent === "non-standard" && !traced} onClick={start}>{layoutIntent === "non-standard" ? "Start from confirmed outline" : "Start rectangle design"}</button></div></footer>
     {error && <p className="photo-error" role="alert">{error}</p>}
   </section></div>;
 }
