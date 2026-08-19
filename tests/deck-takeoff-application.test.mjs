@@ -98,10 +98,12 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "Equipment and rentals",
     "This estimate replaces the entire deck,[\\s\\S]*including decking, framing,[\\s\\S]*supports, and footings",
   ]) assert.match(ui, new RegExp(copy, "i"));
-  assert.match(ui, /bg-slate-950[\s\S]*Finish selections/);
-  assert.match(ui, /deckingFamily === value[\s\S]*bg-blue-950/);
-  assert.match(ui, /compositeColor === color\.key[\s\S]*bg-blue-950/);
-  assert.match(ui, /railingFamily === value[\s\S]*bg-blue-950/);
+  assert.match(ui, /border-slate-300 bg-white[\s\S]*Finish selections/);
+  assert.match(ui, /deckingFamily === value[\s\S]*bg-blue-50/);
+  assert.match(ui, /compositeColor === color\.key[\s\S]*bg-blue-50/);
+  assert.match(ui, /railingFamily === value[\s\S]*bg-blue-50/);
+  assert.match(ui, /Matching products for the custom footprint[\s\S]*border-slate-300 bg-white/);
+  assert.match(ui, /Finish material estimate[\s\S]*bg-emerald-50/);
   assert.match(
     ui,
     /requestedRailing === "wood"[\s\S]*quantity: woodRailingFeet\.toFixed\(2\)/,

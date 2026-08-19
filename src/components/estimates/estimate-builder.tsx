@@ -436,8 +436,8 @@ export function EstimateBuilder({
       {!showDeckWorkflow || deckWorkspaceStage !== "site_visit" ? <><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Summary label="Customer total" value={formatCents(calculation.customerTotalCents as string | null | undefined)} />{"directCostCents" in calculation ? <Summary label="Direct cost" value={formatCents(calculation.directCostCents as string | null | undefined)} /> : null}{"grossProfitCents" in calculation ? <Summary label="Gross profit" value={formatCents(calculation.grossProfitCents as string | null | undefined)} /> : null}{"grossMarginPercent" in calculation ? <Summary label="Gross margin" value={calculation.grossMarginPercent === null ? "—" : `${String(calculation.grossMarginPercent)}%`} /> : null}</div><div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold"><span className="rounded-full bg-slate-100 px-3 py-1">Costs {state.capabilities.canViewCosts ? "visible" : "hidden"}</span><span className="rounded-full bg-slate-100 px-3 py-1">Profit {state.capabilities.canViewProfit ? "visible" : "hidden"}</span></div></> : null}
     </header>
 
-    {error ? <div role="alert" className="estimate-save-toast fixed right-6 top-24 z-[80] max-w-md border border-red-400 bg-red-950 p-4 text-sm font-semibold text-red-100 shadow-2xl">{error}</div> : null}
-    {notice ? <div role="status" className="estimate-save-toast fixed right-6 top-24 z-[80] max-w-md border border-emerald-400 bg-emerald-950 p-4 text-sm font-semibold text-emerald-100 shadow-2xl">{notice}</div> : null}
+    {error ? <div role="alert" className="estimate-save-toast fixed right-6 top-24 z-[80] max-w-md border border-red-300 bg-red-50 p-4 text-sm font-semibold text-red-950 shadow-2xl">{error}</div> : null}
+    {notice ? <div role="status" className="estimate-save-toast fixed right-6 top-24 z-[80] max-w-md border border-emerald-300 bg-emerald-50 p-4 text-sm font-semibold text-emerald-950 shadow-2xl">{notice}</div> : null}
 
     {reloadRequirement ? <div role="alert" className="border border-amber-300 bg-amber-50 p-5 text-amber-950"><p className="font-bold">Editing is disabled until the latest estimate is loaded.</p><p className="mt-1 text-sm">The displayed state may be out of date. Revision {reloadRequirement.minimumAcceptableRevision} or newer is required. Retrying reload performs a read only and will not repeat your previous change.</p><button disabled={pending} className={`mt-3 ${primary}`} onClick={() => void retryReload()}>{pending ? "Reloading…" : "Retry reload"}</button></div> : null}
 
@@ -522,7 +522,7 @@ export function EstimateBuilder({
       </section>;
     })}</div> : null}
     {(!showDeckWorkflow || deckWorkspaceStage === "takeoff") && !state.sections.length ? <div className="border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">Add a section to begin organizing the estimate.</div> : null}
-    {(!showDeckWorkflow || deckWorkspaceStage === "takeoff") && state.capabilities.canViewProfit && presentationDraft ? <section id={showDeckWorkflow ? "deck-pricing-workspace" : undefined} className={`scroll-mt-24 rounded-2xl border-2 bg-white p-6 shadow-sm ${showDeckWorkflow && !deckPricingReady ? "border-slate-300 opacity-75" : "border-emerald-700"}`}>
+    {(!showDeckWorkflow || deckWorkspaceStage === "takeoff") && state.capabilities.canViewProfit && presentationDraft ? <section id={showDeckWorkflow ? "deck-pricing-workspace" : undefined} className={`scroll-mt-24 rounded-2xl border bg-white p-6 shadow-sm ${showDeckWorkflow && !deckPricingReady ? "border-slate-300" : "border-emerald-500"}`}>
       <form onSubmit={submitPricing}>
         <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-700">Bottom-line pricing</p><h2 className="mt-2 text-2xl font-bold text-slate-950">Set the job price</h2><p className="mt-1 text-sm text-slate-600">Set OH&amp;P only after verified field work and positive true-cost lines, then choose how the finished price appears to the customer.</p></div><div className="grid grid-cols-3 gap-3 text-right"><Summary label="Raw costs" value={formatCents(directCostCents)} /><Summary label="OH&P" value={formatCents(ohpPreview)} /><Summary label="Customer price" value={formatCents(customerPricePreview)} /></div></div>
         {showDeckWorkflow && !deckPricingReady ? <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950">OH&amp;P is locked until the completed Deck visit has a full reviewed takeoff with positive framing, hardware, labor, and other required true-cost lines. Saved finish materials remain in the estimate.</p> : null}
@@ -542,9 +542,9 @@ export function EstimateBuilder({
         {!state.estimate.presentation.schemaAvailable ? <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">Saving the customer display requires the prepared estimate presentation database migration.</p> : null}
       </form>
 
-      <details className="mt-5 overflow-hidden rounded-xl border border-slate-300 bg-slate-950 text-slate-100">
-        <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 font-bold"><span>Preview customer estimate</span><span>{formatCents(calculation.customerTotalCents as string | null | undefined)} ▾</span></summary>
-        <div className="border-t border-slate-800"><div className="grid grid-cols-[1fr_auto] border-b border-slate-800 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500"><span>Description</span><span>Price</span></div>{customerPresentation?.rows.length ? customerPresentation.rows.map((row) => <div key={row.id} className="grid grid-cols-[1fr_auto] gap-4 border-b border-slate-800 px-4 py-4 last:border-0"><div><p className="font-semibold text-slate-100">{row.description}</p>{row.quantity && row.unit ? <p className="mt-1 text-xs text-slate-400">{row.quantity} {row.unit}</p> : null}</div><strong>{formatCents(row.totalCents)}</strong></div>) : <p className="p-5 text-sm text-slate-400">Add and save priced line items to build the customer preview.</p>}</div>
+      <details className="mt-5 overflow-hidden rounded-xl border border-slate-300 bg-slate-50 text-slate-950">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"><span>Preview customer estimate</span><span>{formatCents(calculation.customerTotalCents as string | null | undefined)} ▾</span></summary>
+        <div className="border-t border-slate-300 bg-white"><div className="grid grid-cols-[1fr_auto] border-b border-slate-200 bg-slate-100 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-600"><span>Description</span><span>Price</span></div>{customerPresentation?.rows.length ? customerPresentation.rows.map((row) => <div key={row.id} className="grid grid-cols-[1fr_auto] gap-4 border-b border-slate-200 px-4 py-4 last:border-0"><div><p className="font-semibold text-slate-950">{row.description}</p>{row.quantity && row.unit ? <p className="mt-1 text-xs text-slate-600">{row.quantity} {row.unit}</p> : null}</div><strong>{formatCents(row.totalCents)}</strong></div>) : <p className="p-5 text-sm text-slate-600">Add and save priced line items to build the customer preview.</p>}</div>
       </details>
       <div className="mt-4 flex flex-wrap justify-end gap-3"><Link href={`/sales/estimates/${estimateId}/preview`} className={secondary}>Open printable customer preview</Link>{showDeckWorkflow && deckProposalReady ? <button type="button" className={primary} onClick={() => openDeckWorkspaceStage("proposal")}>Review and send estimate</button> : null}</div>
     </section> : null}
@@ -597,9 +597,9 @@ function DeckJobStageHeader({ activeStage, visitStatus, shapeReady, structureRea
     { key: "proposal", title: "Proposal", status: proposalReady ? "Ready" : "Waiting", enabled: proposalReady },
   ];
   const current = stageContent[activeStage];
-  return <section aria-labelledby="deck-job-stage-title" className="sticky top-20 z-30 rounded-xl border-2 border-blue-700 bg-white p-4 shadow-lg sm:static sm:p-5">
+  return <section aria-labelledby="deck-job-stage-title" className="sticky top-20 z-30 rounded-xl border border-slate-300 bg-white p-4 shadow-lg sm:static sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><p className="text-xs font-black uppercase tracking-[.16em] text-blue-700">Deck job</p><h2 id="deck-job-stage-title" className="mt-1 text-xl font-black text-slate-950">Current step: {current.title}</h2></div>
+      <div><p className="text-xs font-black uppercase tracking-[.16em] text-slate-600">Deck job</p><h2 id="deck-job-stage-title" className="mt-1 text-xl font-black text-slate-950">Current step: {current.title}</h2></div>
       <p className="max-w-2xl text-sm leading-6 text-slate-700">{current.instruction}</p>
     </div>
     <ol className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">{stages.map((stage, index) => <li key={stage.key}><button
@@ -607,7 +607,7 @@ function DeckJobStageHeader({ activeStage, visitStatus, shapeReady, structureRea
       aria-current={activeStage === stage.key ? "step" : undefined}
       disabled={!stage.enabled}
       onClick={() => onOpenStage(stage.key)}
-      className={`min-h-16 w-full rounded-lg border p-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 disabled:cursor-not-allowed disabled:opacity-50 ${activeStage === stage.key ? "border-blue-700 bg-blue-50" : "border-slate-300 bg-white hover:border-blue-500"}`}
+      className={`min-h-16 w-full rounded-lg border p-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-800 disabled:cursor-not-allowed disabled:opacity-50 ${activeStage === stage.key ? "border-slate-900 bg-slate-100" : "border-slate-300 bg-white hover:border-slate-500 hover:bg-slate-50"}`}
     ><span className="block text-xs font-black uppercase tracking-wide text-slate-500">{index + 1}. {stage.title}</span><span className="mt-1 block text-xs font-bold text-slate-950">{stage.status}</span></button></li>)}</ol>
     <p className="mt-3 text-xs font-semibold text-slate-600">The approved shape feeds the framing plan. Framing quantities are reviewed before the separate finish-material screen chooses decking, railing and matching products.</p>
   </section>;
@@ -692,9 +692,9 @@ function DeckTakeoffWorkspace({
     id="deck-takeoff-workspace"
     tabIndex={-1}
     aria-labelledby="deck-takeoff-title"
-    className="scroll-mt-24 rounded-xl border-2 border-emerald-700 bg-white p-5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 sm:p-6"
+    className="scroll-mt-24 rounded-xl border border-slate-300 bg-white p-5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 sm:p-6"
   >
-    <p className="text-xs font-black uppercase tracking-[.16em] text-emerald-700">{workflowPhase === "structure" ? "Step 3 · Build the framing plan" : "Step 4 · Choose finish materials"}</p>
+    <p className="text-xs font-black uppercase tracking-[.16em] text-blue-800">{workflowPhase === "structure" ? "Step 3 · Build the framing plan" : "Step 4 · Choose finish materials"}</p>
     <h2 id="deck-takeoff-title" className="mt-1 text-2xl font-black text-slate-950">{workflowPhase === "structure" ? "Framing plan and quantities" : "Material selections"}</h2>
     {visitStatus !== "completed" ? <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950">Finish the field form before building the Deck estimate.</p> : <>
       <p className="mt-2 text-sm leading-6 text-slate-700">{workflowPhase === "structure" ? "The deck shape is set. Build the framing, supports, footings, stairs and attachment plan, then review its quantities. Finish products and prices stay out of this step." : structureReadiness === "preliminary_geometry" ? "The exact footprint and preliminary quantities are saved. Choose the visible decking and railing finishes here; unresolved structural work remains separate." : "The framing plan supplied the quantities. Now choose decking and railing finishes and match them to current products and prices."}</p>

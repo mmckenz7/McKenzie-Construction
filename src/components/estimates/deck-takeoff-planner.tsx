@@ -2102,14 +2102,14 @@ export function DeckTakeoffPlanner({
   }
 
   const finishSelectionControls = (
-    <section className="mt-5 rounded-xl border-2 border-blue-500 bg-slate-950 p-4 shadow-sm sm:p-5">
-      <p className="text-xs font-black uppercase tracking-[.16em] text-blue-300">
+    <section className="mt-5 rounded-xl border border-slate-300 bg-white p-4 shadow-sm sm:p-5">
+      <p className="text-xs font-black uppercase tracking-[.16em] text-blue-800">
         Finish selections
       </p>
-      <h4 className="mt-1 text-xl font-black text-white">
+      <h4 className="mt-1 text-xl font-black text-slate-950">
         Choose what the customer will see
       </h4>
-      <p className="mt-1 text-sm leading-6 text-slate-300">
+      <p className="mt-1 text-sm leading-6 text-slate-700">
         Framing quantities stay unchanged. These choices select the decking,
         railing, compatible fasteners, and retail estimating prices used for
         the customer options. No Pro discount is assumed; the complete takeoff
@@ -2117,7 +2117,7 @@ export function DeckTakeoffPlanner({
       </p>
 
       <fieldset className="mt-4">
-        <legend className="text-sm font-black text-white">Decking</legend>
+        <legend className="text-sm font-black text-slate-950">Decking</legend>
         <div className="mt-2 grid grid-cols-2 gap-2">
           {(
             [
@@ -2127,7 +2127,7 @@ export function DeckTakeoffPlanner({
           ).map(([value, label, help]) => (
             <label
               key={value}
-              className={`flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border p-3 focus-within:ring-2 focus-within:ring-blue-300 ${deckingFamily === value ? "border-blue-300 bg-blue-950 ring-1 ring-blue-300" : "border-slate-600 bg-slate-900"}`}
+              className={`flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border p-3 transition focus-within:ring-2 focus-within:ring-blue-700 ${deckingFamily === value ? "border-blue-700 bg-blue-50 ring-1 ring-blue-200" : "border-slate-300 bg-slate-50 hover:bg-slate-100"}`}
             >
               <input
                 type="radio"
@@ -2141,8 +2141,8 @@ export function DeckTakeoffPlanner({
                 }}
               />
               <span>
-                <strong className="block text-sm text-white">{label}</strong>
-                <span className="mt-1 block text-xs leading-5 text-slate-300">{help}</span>
+                <strong className="block text-sm text-slate-950">{label}</strong>
+                <span className="mt-1 block text-xs leading-5 text-slate-600">{help}</span>
               </span>
             </label>
           ))}
@@ -2151,14 +2151,14 @@ export function DeckTakeoffPlanner({
 
       {deckingFamily === "composite" ? (
         <fieldset className="mt-4">
-          <legend className="text-sm font-black text-white">
+          <legend className="text-sm font-black text-slate-950">
             Composite color family
           </legend>
           <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
             {COMPOSITE_COLORS.map((color) => (
               <label
                 key={color.key}
-                className={`cursor-pointer rounded-lg border p-2 text-center focus-within:ring-2 focus-within:ring-blue-300 ${compositeColor === color.key ? "border-blue-300 bg-blue-950 ring-1 ring-blue-300" : "border-slate-600 bg-slate-900"}`}
+                className={`cursor-pointer rounded-lg border p-2 text-center transition focus-within:ring-2 focus-within:ring-blue-700 ${compositeColor === color.key ? "border-blue-700 bg-blue-50 ring-1 ring-blue-200" : "border-slate-300 bg-slate-50 hover:bg-slate-100"}`}
               >
                 <input
                   type="radio"
@@ -2179,7 +2179,7 @@ export function DeckTakeoffPlanner({
                   className="mx-auto block h-10 w-10 rounded-md border border-slate-400 shadow-inner"
                   style={{ backgroundColor: color.swatch }}
                 />
-                <span className="mt-1 block text-xs font-bold text-white">
+                <span className="mt-1 block text-xs font-bold text-slate-950">
                   {color.label}
                 </span>
               </label>
@@ -2195,7 +2195,7 @@ export function DeckTakeoffPlanner({
         </p>
       ) : (
         <fieldset className="mt-4">
-          <legend className="text-sm font-black text-white">Railing</legend>
+          <legend className="text-sm font-black text-slate-950">Railing</legend>
           <div className="mt-2 grid grid-cols-3 gap-2">
             {(
               [
@@ -2206,7 +2206,7 @@ export function DeckTakeoffPlanner({
             ).map(([value, label, icon]) => (
               <label
                 key={value}
-                className={`cursor-pointer rounded-lg border p-3 text-center focus-within:ring-2 focus-within:ring-blue-300 ${railingFamily === value ? "border-blue-300 bg-blue-950 ring-1 ring-blue-300" : "border-slate-600 bg-slate-900"}`}
+                className={`cursor-pointer rounded-lg border p-3 text-center transition focus-within:ring-2 focus-within:ring-blue-700 ${railingFamily === value ? "border-blue-700 bg-blue-50 ring-1 ring-blue-200" : "border-slate-300 bg-slate-50 hover:bg-slate-100"}`}
               >
                 <input
                   type="radio"
@@ -2219,10 +2219,10 @@ export function DeckTakeoffPlanner({
                     void findLowesProducts({ railingFamily: value });
                   }}
                 />
-                <span aria-hidden="true" className="block text-3xl leading-none text-slate-200">
+                <span aria-hidden="true" className="block text-3xl leading-none text-slate-700">
                   {icon}
                 </span>
-                <span className="mt-2 block text-sm font-bold text-white">{label}</span>
+                <span className="mt-2 block text-sm font-bold text-slate-950">{label}</span>
               </label>
             ))}
           </div>
@@ -2230,14 +2230,14 @@ export function DeckTakeoffPlanner({
       )}
 
       {railingGeometry.stairsPresent ? (
-        <fieldset className="mt-4 rounded-lg border border-slate-600 bg-slate-950 p-3">
-          <legend className="px-1 text-sm font-black text-white">Stair railing coverage</legend>
-          <p className="mb-2 text-xs leading-5 text-slate-300">
+        <fieldset className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-3">
+          <legend className="px-1 text-sm font-black text-slate-950">Stair railing coverage</legend>
+          <p className="mb-2 text-xs leading-5 text-slate-600">
             Saved stair run: {stairProjectionFeet?.toFixed(1) ?? "unknown"} ft. A stair rail kit is one rail for one side.
           </p>
           <div className="grid grid-cols-2 gap-2">
             {([[1, "One side"], [2, "Both sides"]] as const).map(([sides, label]) => (
-              <label key={sides} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-300 ${stairRailSides === sides ? "border-blue-300 bg-blue-950 text-white" : "border-slate-600 bg-slate-900 text-slate-200"}`}>
+              <label key={sides} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-bold transition focus-within:ring-2 focus-within:ring-blue-700 ${stairRailSides === sides ? "border-blue-700 bg-blue-50 text-slate-950" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"}`}>
                 <input
                   type="radio"
                   name="stair-rail-sides"
@@ -2256,12 +2256,12 @@ export function DeckTakeoffPlanner({
       ) : null}
 
       {railingFamily === "wood" && railingGeometry.railingsPresent !== false ? (
-        <section className="mt-4 rounded-lg border border-emerald-500 bg-slate-950 p-3 text-white">
-          <p className="text-xs font-black uppercase tracking-[.14em] text-emerald-300">Wood railing allowance</p>
-          <p className="mt-1 text-sm leading-6 text-slate-200">
+        <section className="mt-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-slate-950">
+          <p className="text-xs font-black uppercase tracking-[.14em] text-emerald-800">Wood railing allowance</p>
+          <p className="mt-1 text-sm leading-6 text-slate-700">
             {woodRailingFeet.toFixed(1)} total linear ft = {(finishRailingLengthFeet ?? 0).toFixed(1)} ft level rail{railingGeometry.stairsPresent && stairProjectionFeet ? ` + ${stairProjectionFeet.toFixed(1)} ft × ${stairRailSides} stair side${stairRailSides === 1 ? "" : "s"}` : ""}.
           </p>
-          <label className="mt-3 block text-sm font-bold text-white">
+          <label className="mt-3 block text-sm font-bold text-slate-950">
             Estimating material cost per linear foot
             <span className="mt-1 flex min-h-11 items-center rounded-md border border-slate-500 bg-white px-3 text-slate-950 focus-within:ring-2 focus-within:ring-emerald-300">
               <span aria-hidden="true" className="mr-1">$</span>
@@ -2278,28 +2278,28 @@ export function DeckTakeoffPlanner({
       ) : null}
 
       {manufacturedRailingPackage ? (
-        <section className="mt-4 rounded-lg border border-blue-400 bg-slate-900 p-3 text-white">
-          <p className="text-xs font-black uppercase tracking-[.14em] text-blue-300">
+        <section className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-3 text-slate-950">
+          <p className="text-xs font-black uppercase tracking-[.14em] text-blue-800">
             Default complete system
           </p>
           <h5 className="mt-1 text-base font-black">
             {manufacturedRailingPackage.manufacturer} {manufacturedRailingPackage.productLine} · {manufacturedRailingPackage.railHeightInches}-in · {manufacturedRailingPackage.finish}
           </h5>
-          <p className="mt-1 text-xs leading-5 text-slate-300">
+          <p className="mt-1 text-xs leading-5 text-slate-600">
             Every line below stays in this manufacturer and product line. Parts already included in a kit are not counted twice.
           </p>
           <div className="mt-3 space-y-2">
             {manufacturedRailingPackage.lines.map((line) => (
               <article
                 key={line.role}
-                className="rounded-md border border-slate-600 bg-slate-950 p-3"
+                className="rounded-md border border-slate-300 bg-white p-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-black text-white">
+                    <p className="text-sm font-black text-slate-950">
                       {line.quantity} × {line.label}
                     </p>
-                    <p className="mt-1 text-xs leading-5 text-slate-300">
+                    <p className="mt-1 text-xs leading-5 text-slate-600">
                       Includes: {line.includedComponents.join(", ")}
                     </p>
                   </div>
@@ -2312,14 +2312,14 @@ export function DeckTakeoffPlanner({
                 {line.product ? (
                   <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem] sm:items-end">
                     <a
-                      className="inline-flex min-h-11 items-center text-xs font-bold text-blue-300 underline"
+                      className="inline-flex min-h-11 items-center text-xs font-bold text-blue-700 underline"
                       href={line.product.sourceUrl}
                       target="_blank"
                       rel="noreferrer"
                     >
                       Open matching Lowe&apos;s component
                     </a>
-                    <label className="block text-xs font-bold text-white">
+                    <label className="block text-xs font-bold text-slate-950">
                       Retail estimate each
                       <span className="mt-1 flex min-h-11 items-center rounded-md border border-slate-500 bg-white px-2 text-slate-950 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-300">
                         <span aria-hidden="true" className="mr-1">$</span>
@@ -2339,18 +2339,18 @@ export function DeckTakeoffPlanner({
                     </label>
                   </div>
                 ) : (
-                  <p className="mt-2 text-xs font-bold text-amber-300">
+                  <p className="mt-2 text-xs font-bold text-amber-900">
                     Matching component not found yet; the system estimate remains incomplete.
                   </p>
                 )}
               </article>
             ))}
           </div>
-          <p className="mt-3 rounded-md border border-amber-500 bg-amber-950 p-3 text-xs font-bold leading-5 text-amber-100">
+          <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-950">
             Post anchoring fasteners are not included with the post kits. They remain in the structural hardware schedule because the correct anchor depends on the deck framing and approved attachment detail.
           </p>
           <a
-            className="mt-2 inline-block min-h-11 py-2 text-xs font-bold text-blue-300 underline"
+            className="mt-2 inline-block min-h-11 py-2 text-xs font-bold text-blue-700 underline"
             href={manufacturedRailingPackage.installationReference}
             target="_blank"
             rel="noreferrer"
@@ -3437,8 +3437,8 @@ export function DeckTakeoffPlanner({
 
   if (workflowPhase === "structure")
     return (
-      <section className="mt-5 rounded-xl border-2 border-violet-700 bg-violet-50 p-4 sm:p-5">
-        <p className="text-xs font-black uppercase tracking-[.16em] text-violet-800">
+      <section className="mt-5 rounded-xl border border-slate-300 bg-white p-4 shadow-sm sm:p-5">
+        <p className="text-xs font-black uppercase tracking-[.16em] text-blue-800">
           Structural design only
         </p>
         <h3 className="mt-1 text-xl font-black text-slate-950">
@@ -3472,14 +3472,14 @@ export function DeckTakeoffPlanner({
     );
 
   return (
-    <section className="mt-5 rounded-xl border-2 border-blue-500 bg-slate-950 p-4 sm:p-5">
-      <p className="text-xs font-black uppercase tracking-[.16em] text-blue-300">
+    <section className="mt-5 rounded-xl border border-slate-300 bg-slate-50 p-4 shadow-sm sm:p-5">
+      <p className="text-xs font-black uppercase tracking-[.16em] text-blue-800">
         Finish material selections
       </p>
-      <h3 className="mt-1 text-xl font-black text-white">
+      <h3 className="mt-1 text-xl font-black text-slate-950">
         Select decking and railing without cluttering the framing plan
       </h3>
-      <p className="mt-2 text-sm leading-6 text-slate-300">
+      <p className="mt-2 text-sm leading-6 text-slate-700">
         {customApprovedFootprint
           ? "The exact custom footprint, stairs, and preliminary quantities carry forward. Choose only the visible finish families here; unresolved structural work remains tracked separately."
           : "The approved shape and framing quantities carry forward. Choose the visible finish families here, then review the matching products and calculated finish costs."}
@@ -3670,11 +3670,11 @@ export function DeckTakeoffPlanner({
       ) : null}
 
       {customApprovedFootprint ? (
-        <section className="mt-5 rounded-lg border-2 border-blue-500 bg-slate-950 p-4">
-          <h4 className="font-black text-white">
+        <section className="mt-5 rounded-lg border border-slate-300 bg-white p-4 shadow-sm">
+          <h4 className="font-black text-slate-950">
             Matching products for the custom footprint
           </h4>
-          <p className="mt-1 text-sm leading-6 text-slate-300">
+          <p className="mt-1 text-sm leading-6 text-slate-700">
             Choose the finishes above. The app fills the matching Lowe&apos;s
             product and its price source. The approved polygon calculates deck
             area, board count, and level-railing length automatically. Framing
@@ -3682,16 +3682,16 @@ export function DeckTakeoffPlanner({
           </p>
           {customFinishGeometry ? (
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <div className="rounded-lg border border-blue-700 bg-blue-950 p-3 text-blue-50">
-                <p className="text-xs font-black uppercase tracking-wide text-blue-300">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-slate-950">
+                <p className="text-xs font-black uppercase tracking-wide text-blue-800">
                   Approved deck area
                 </p>
                 <p className="mt-1 text-xl font-black">
                   {customFinishGeometry.areaSquareFeet.toFixed(1)} sq ft
                 </p>
               </div>
-              <div className="rounded-lg border border-blue-700 bg-blue-950 p-3 text-blue-50">
-                <p className="text-xs font-black uppercase tracking-wide text-blue-300">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-slate-950">
+                <p className="text-xs font-black uppercase tracking-wide text-blue-800">
                   Level railing
                 </p>
                 <p className="mt-1 text-xl font-black">
@@ -3716,9 +3716,9 @@ export function DeckTakeoffPlanner({
               return (
                 <article
                   key={line.key}
-                  className="rounded-lg border border-slate-600 bg-slate-900 p-3"
+                  className="rounded-lg border border-slate-300 bg-slate-50 p-3"
                 >
-                  <p className="font-black text-white">
+                  <p className="font-black text-slate-950">
                     {isDecking
                       ? deckingFamily === "composite"
                         ? "Grooved field boards"
@@ -3727,20 +3727,20 @@ export function DeckTakeoffPlanner({
                         ? "Square-edge border and divider boards"
                         : "Railing"}
                   </p>
-                  <p className="mt-1 text-sm font-bold leading-6 text-slate-200">
+                  <p className="mt-1 text-sm font-bold leading-6 text-slate-700">
                     {isWoodRailing
                       ? "Wood railing material allowance"
                       : line.description || "Finding a matching product…"}
                   </p>
                   {isWoodRailing ? (
-                    <p className="mt-2 text-sm font-bold text-emerald-300">
+                    <p className="mt-2 text-sm font-bold text-emerald-800">
                       Quantity comes from the approved perimeter and selected
                       stair sides. Enter the estimating cost per linear foot
                       above; no individual railing SKU is required.
                     </p>
                   ) : lowesPage ? (
                     <a
-                      className="mt-2 inline-flex min-h-11 items-center text-sm font-bold text-blue-300 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                      className="mt-2 inline-flex min-h-11 items-center text-sm font-bold text-blue-700 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
                       href={line.sourceReference}
                       target="_blank"
                       rel="noreferrer"
@@ -3748,7 +3748,7 @@ export function DeckTakeoffPlanner({
                       Open Lowe&apos;s product
                     </a>
                   ) : (
-                    <p className="mt-2 text-sm font-bold text-amber-300">
+                    <p className="mt-2 text-sm font-bold text-amber-900">
                       Choose a finish above to find a matching product.
                     </p>
                   )}
@@ -3767,7 +3767,7 @@ export function DeckTakeoffPlanner({
                     >
                       <input
                         aria-describedby={`${line.key}-quantity-help`}
-                        className={`${input} cursor-not-allowed bg-slate-800 text-white`}
+                        className={`${input} cursor-not-allowed bg-slate-100 text-slate-950`}
                         inputMode="decimal"
                         readOnly
                         value={
@@ -3780,7 +3780,7 @@ export function DeckTakeoffPlanner({
                       />
                       <span
                         id={`${line.key}-quantity-help`}
-                        className="mt-1 block text-xs leading-5 text-slate-300"
+                        className="mt-1 block text-xs leading-5 text-slate-600"
                       >
                         {isDecking
                           ? customDeckBoardEstimate
@@ -3794,7 +3794,7 @@ export function DeckTakeoffPlanner({
                       </span>
                     </Field>
                     {priceReady ? (
-                      <div className="rounded-lg border border-emerald-700 bg-emerald-950 p-3 text-sm text-emerald-100">
+                      <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950">
                         <p className="font-black">Estimating retail price</p>
                         <p className="mt-1 text-lg font-black">
                           ${line.unitCost} per {line.unit || "item"}
@@ -3827,8 +3827,8 @@ export function DeckTakeoffPlanner({
                     )}
                   </div>
 
-                  <details className="mt-3 rounded-lg border border-slate-700 bg-slate-950 p-3">
-                    <summary className="min-h-11 cursor-pointer py-2 text-sm font-bold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
+                  <details className="mt-3 rounded-lg border border-slate-300 bg-white p-3">
+                    <summary className="min-h-11 cursor-pointer py-2 text-sm font-bold text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700">
                       Correct product details manually
                     </summary>
                     <div className="mt-2 grid gap-3 sm:grid-cols-3">
@@ -3873,8 +3873,8 @@ export function DeckTakeoffPlanner({
               );
             })}
           </div>
-          <section className="mt-4 rounded-lg border border-emerald-500 bg-emerald-950 p-4 text-emerald-50">
-            <p className="text-xs font-black uppercase tracking-wide text-emerald-300">
+          <section className="mt-4 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-emerald-950">
+            <p className="text-xs font-black uppercase tracking-wide text-emerald-800">
               Finish material estimate
             </p>
             <div className="mt-2 space-y-2">
@@ -3892,13 +3892,13 @@ export function DeckTakeoffPlanner({
                 </div>
               ))}
             </div>
-            <div className="mt-3 flex items-end justify-between gap-3 border-t border-emerald-700 pt-3">
+            <div className="mt-3 flex items-end justify-between gap-3 border-t border-emerald-300 pt-3">
               <span className="font-black">Selected finish subtotal</span>
               <span className="text-2xl font-black">
                 ${customFinishMaterialSubtotal.toFixed(2)}
               </span>
             </div>
-            <p className="mt-2 text-xs leading-5 text-emerald-200">
+            <p className="mt-2 text-xs leading-5 text-emerald-800">
               This includes only the reviewed decking and railing materials shown
               above. Framing, hardware, labor, tax, waste not already included,
               overhead, and profit remain separate.
