@@ -2380,6 +2380,56 @@ export function DeckTakeoffPlanner({
     activeScopeKey,
     visitItems,
   );
+  const activeScopeIncluded =
+    plan.scopeDecisions[activeScopeKey] === "include" ||
+    (activeScopeRequirement === "required" && plan.completeRebuildConfirmed);
+  const observedMeasurement = (...keys: string[]) =>
+    blueprintVisitSeed.observedMeasurements
+      .filter((item) => keys.includes(item.key))
+      .map((item) =>
+        `${item.key.replaceAll("_", " ")}: ${item.value} ${item.unit}`,
+      );
+  const scopeVisitEvidence = (key: CompleteRebuildLineKey) => {
+    let facts: string[] = [];
+    if (key === "ledger_attachment")
+      facts = [
+        railingGeometry.attached === true
+          ? "Site visit recorded this deck as attached to the house."
+          : railingGeometry.attached === false
+            ? "Site visit recorded this deck as freestanding."
+            : "House attachment was not resolved during the site visit.",
+        ...observedMeasurement("ledger_length"),
+      ];
+    else if (key === "joists")
+      facts = observedMeasurement("joist_spacing", "joist_depth");
+    else if (key === "beams") facts = observedMeasurement("beam_depth");
+    else if (key === "posts")
+      facts = observedMeasurement("post_dimensions", "support_spacing");
+    else if (key === "footings")
+      facts = observedMeasurement("exposed_footing_dimensions");
+    else if (key === "stairs")
+      facts = [
+        approvedStairsPresent
+          ? "The approved footprint includes stairs and their saved location."
+          : "The approved footprint has no stairs.",
+        ...observedMeasurement(
+          "stair_width",
+          "total_rise",
+          "tread_depth",
+          "representative_riser",
+          "landing_dimensions",
+        ),
+      ];
+    else if (key === "demolition_disposal" && plan.completeRebuildConfirmed)
+      facts = [
+        "Complete replacement means removal and disposal are part of the working scope.",
+      ];
+    return facts.length
+      ? facts
+      : [
+          "The site visit did not establish this proposed quantity or cost. Add it from the reviewed framing plan, supplier quote, or company cost record.",
+        ];
+  };
   const openScopeCategory = (key: CompleteRebuildLineKey) => {
     setActiveScopeKey(key);
     window.requestAnimationFrame(() =>
@@ -2490,10 +2540,29 @@ export function DeckTakeoffPlanner({
           type="checkbox"
           checked={plan.completeRebuildConfirmed}
           onChange={(event) => {
-            setPlan({
-              ...plan,
-              completeRebuildConfirmed: event.target.checked,
-            });
+            const confirmed = event.target.checked;
+            setPlan((current) => ({
+              ...current,
+              completeRebuildConfirmed: confirmed,
+              scopeDecisions: confirmed
+                ? (Object.fromEntries(
+                    COMPLETE_REBUILD_LINE_KEYS.map((key) => {
+                      const requirement = completeRebuildScopeRequirement(
+                        key,
+                        visitItems,
+                      );
+                      if (requirement === "required") return [key, "include"];
+                      if (
+                        (key === "ledger_attachment" &&
+                          railingGeometry.attached === false) ||
+                        (key === "stairs" && approvedStairsPresent === false)
+                      )
+                        return [key, "not_in_scope"];
+                      return [key, current.scopeDecisions[key]];
+                    }),
+                  ) as DeckTakeoffPlan["scopeDecisions"])
+                : current.scopeDecisions,
+            }));
             setPreview(null);
           }}
         />
@@ -2624,27 +2693,50 @@ export function DeckTakeoffPlanner({
           <p className="mt-2 text-xs leading-5 text-slate-600">
             {LINE_GUIDANCE[activeScopeKey]}
           </p>
-          <Field label="Estimate scope">
-            <select
-              className={input}
-              value={plan.scopeDecisions[activeScopeKey]}
-              disabled={activeScopeRequirement === "applicability_unknown"}
-              onChange={(event) =>
-                updateScopeDecision(
-                  activeScopeKey,
-                  event.target
-                    .value as DeckTakeoffPlan["scopeDecisions"][CompleteRebuildLineKey],
-                )
-              }
+          <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3">
+            <p className="text-xs font-black uppercase tracking-wide text-blue-900">
+              Already known from the site visit and approved shape
+            </p>
+            <ul className="mt-1 space-y-1 text-sm leading-5 text-slate-800">
+              {scopeVisitEvidence(activeScopeKey).map((fact) => (
+                <li key={fact}>• {fact}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs font-bold text-slate-600">
+              Visible existing conditions are reference evidence only. They do
+              not silently become replacement member sizes or hidden connection
+              details.
+            </p>
+          </div>
+          {activeScopeRequirement === "required" ? (
+            <p
+              className={`mt-3 rounded-md border p-3 text-sm font-black ${plan.completeRebuildConfirmed ? "border-emerald-300 bg-emerald-50 text-emerald-950" : "border-amber-300 bg-amber-50 text-amber-950"}`}
             >
-              <option value="">Choose one</option>
-              <option value="include">Include in this estimate</option>
-              {activeScopeRequirement === "optional" ? (
-                <option value="not_in_scope">Not in this estimate</option>
-              ) : null}
-            </select>
-          </Field>
-          {plan.scopeDecisions[activeScopeKey] === "include" ? (
+              {plan.completeRebuildConfirmed
+                ? "Included automatically because this is a complete replacement."
+                : "Confirm complete replacement above and this category will be included automatically."}
+            </p>
+          ) : (
+            <Field label="Is this part of the estimate?">
+              <select
+                className={input}
+                value={plan.scopeDecisions[activeScopeKey]}
+                disabled={activeScopeRequirement === "applicability_unknown"}
+                onChange={(event) =>
+                  updateScopeDecision(
+                    activeScopeKey,
+                    event.target
+                      .value as DeckTakeoffPlan["scopeDecisions"][CompleteRebuildLineKey],
+                  )
+                }
+              >
+                <option value="">Choose one</option>
+                <option value="include">Yes, include it</option>
+                <option value="not_in_scope">No, leave it out</option>
+              </select>
+            </Field>
+          )}
+          {activeScopeIncluded ? (
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {activeScopeKey === "structural_connectors" &&
               plan.framingPlanEvidence ? (
@@ -2743,6 +2835,24 @@ export function DeckTakeoffPlanner({
               {activeScopeKey !== "structural_connectors" ||
               !plan.framingPlanEvidence ? (
                 <>
+                  <div className="sm:col-span-2 lg:col-span-5">
+                    <Field
+                      label="Planned material or work description"
+                      help="Describe what will actually be purchased or performed. Existing visible material is not copied automatically."
+                    >
+                      <input
+                        className={input}
+                        value={activeScopeLine.description}
+                        onChange={(event) =>
+                          updateLine(
+                            activeScopeLine.key,
+                            "description",
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </Field>
+                  </div>
                   <Field label="Reviewed quantity">
                     <input
                       className={input}
