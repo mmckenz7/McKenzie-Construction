@@ -47,6 +47,7 @@ button:hover { transform: translateY(-1px); }
 .section-heading p { margin: 0 0 2px; font-size: 13px; font-weight: 700; }
 .section-heading small { color: var(--muted); font-size: 11px; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 10px; }
+.section-help { margin: -6px 0 13px; color: #6f7b74; font-size: 9px; line-height: 1.5; }
 .template-card { margin-bottom: 25px; padding: 11px; border: 1px solid #d0d7d1; border-radius: 9px; background: #f3f5f1; }
 .template-card p { margin: 0 0 10px; color: #657169; font-size: 9px; line-height: 1.45; }
 .template-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -57,6 +58,7 @@ button:hover { transform: translateY(-1px); }
 .field { display: grid; gap: 6px; }
 .field.full { margin-bottom: 14px; }
 .field > span { color: #55635c; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.field-help { color: #77837c; font-size: 9px; font-weight: 400; line-height: 1.4; text-transform: none; letter-spacing: 0; }
 .field input { width: 100%; min-width: 0; border: 1px solid #ccd2cc; border-radius: 7px; background: white; padding: 10px; outline: none; }
 .field input:focus { border-color: #688273; box-shadow: 0 0 0 3px #dfe8e1; }
 .field select { width: 100%; border: 1px solid #ccd2cc; border-radius: 7px; background: white; padding: 10px; color: #283a32; outline: none; }
@@ -90,6 +92,7 @@ button:hover { transform: translateY(-1px); }
 .stair-toggle.active { background: #f2e8c5; border-color: #c8b76f; color: #5d4b17; }
 .stair-fields { margin-top: 12px; }
 .stair-edge-field { margin-top: 12px; }
+.stair-help { margin-top: -6px; margin-bottom: 0; }
 .landing-toggle { margin: 12px 0 0; }
 .design-facts { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 8px; }
 .design-facts div { display: flex; justify-content: space-between; gap: 10px; font-size: 10px; }
@@ -101,7 +104,7 @@ button:hover { transform: translateY(-1px); }
 .design-notices > small { display: block; margin-top: 5px; color: #818c86; font-size: 8px; line-height: 1.4; }
 .design-notices p { margin: 7px 0 0; padding: 7px 8px; border-left: 3px solid #9aab9f; background: #f0f3ef; color: #59675f; font-size: 9px; line-height: 1.45; }
 .design-notices p.review { border-left-color: #c3973d; background: #f7efd8; color: #66501e; }
-.visual-area { min-width: 0; padding: 18px; display: grid; grid-template-columns: minmax(280px, .85fr) minmax(380px, 1.15fr); align-items: start; gap: 14px; background: #e6e9e4; }
+.visual-area { position: sticky; top: 0; align-self: start; min-width: 0; padding: 18px; display: grid; grid-template-columns: minmax(280px, .85fr) minmax(380px, 1.15fr); align-items: start; gap: 14px; background: #e6e9e4; }
 .view-card { min-width: 0; height: 530px; display: flex; flex-direction: column; overflow: hidden; background: white; border: 1px solid #d3d8d1; border-radius: 12px; box-shadow: 0 5px 20px #182b2210; }
 .card-title { min-height: 57px; padding: 11px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e1e4df; }
 .card-title span { display: block; font-size: 12px; font-weight: 700; }
@@ -151,7 +154,7 @@ button:hover { transform: translateY(-1px); }
 
 @media (max-width: 1050px) {
   .workspace { grid-template-columns: 260px minmax(0, 1fr); }
-  .visual-area { grid-template-columns: 1fr; }
+  .visual-area { position: static; grid-template-columns: 1fr; }
   .quantity-grid { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 720px) {

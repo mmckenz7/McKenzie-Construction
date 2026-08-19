@@ -13,3 +13,10 @@ Scope: isolated DeckDesign v2 browser application before any v3 activation.
 The smoke check found and corrected a flex/grid feedback loop caused by percentage-height visual children inside intrinsically sized grid cards. Visual cards now have bounded responsive heights, and the high-density WebGL drawing buffer is scaled to its mount instead of expanding layout.
 
 Remaining Phase A visual-quality gap: durable golden screenshot automation and checks in additional browser engines.
+
+## 2026-08-19 sidebar clarity and sticky workspace check
+
+- Replaced drafting jargon in the primary controls with plain-language deck width, distance-from-house, deck height, ground, railing, and stair labels.
+- Added short explanations for plan orientation, drag steps, house-wall positions, and stair position.
+- Desktop at 1060 CSS pixels: after 1,350 pixels of page scroll, the 2D/3D workspace remained pinned at viewport top with no console errors.
+- Tablet at 768 × 1024: sticky behavior correctly disabled, content returned to normal flow, and 753-pixel content width matched document width with no horizontal overflow.

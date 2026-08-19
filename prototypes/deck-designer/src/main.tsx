@@ -233,7 +233,7 @@ function App() {
         <aside className="controls-panel">
           <div className="section-heading template-heading">
             <span>00</span>
-            <div><p>Guided start</p><small>Generic geometry only</small></div>
+            <div><p>Start with a layout</p><small>Choose a simple starting point</small></div>
           </div>
           <section className="template-card" aria-label="Deck templates">
             <label className="field full">
@@ -272,7 +272,7 @@ function App() {
           </section>
           <div className="section-heading">
             <span>01</span>
-            <div><p>Authoritative design</p><small>Single-level foundation</small></div>
+            <div><p>Deck size &amp; shape</p><small>Enter exact dimensions in inches</small></div>
           </div>
           <label className="field full">
             <span>Design name</span>
@@ -300,28 +300,30 @@ function App() {
               >{kind === "rectangle" ? "Rectangle" : "L-shape"}</button>
             ))}
           </div>
+          <p className="section-help">Deck width runs left to right along the house. Distance from house controls how far the deck extends into the yard.</p>
           <div className="field-grid">
-            <DimensionField label="Width" value={design.platform.width} onCommit={(value) => applyNumber("width", value)} />
-            <DimensionField label="Projection" value={design.platform.projection} onCommit={(value) => applyNumber("projection", value)} />
-            <DimensionField label="Elevation" value={design.platform.surfaceElevation} onCommit={(value) => applyNumber("surfaceElevation", value)} />
+            <DimensionField label="Deck width" value={design.platform.width} onCommit={(value) => applyNumber("width", value)} />
+            <DimensionField label="Distance from house" value={design.platform.projection} onCommit={(value) => applyNumber("projection", value)} />
+            <DimensionField label="Deck height" value={design.platform.surfaceElevation} onCommit={(value) => applyNumber("surfaceElevation", value)} />
             <DimensionField label="Joist spacing" value={design.construction.framing.joistSpacing} onCommit={(value) => applyNumber("joistSpacing", value)} />
             {design.platform.kind === "l-shape" && (
               <>
-                <DimensionField label="Cutout width" value={design.platform.cutoutWidth} onCommit={(value) => applyNumber("cutoutWidth", value)} />
-                <DimensionField label="Cutout depth" value={design.platform.cutoutDepth} onCommit={(value) => applyNumber("cutoutDepth", value)} />
+                <DimensionField label="L-cutout width" value={design.platform.cutoutWidth} onCommit={(value) => applyNumber("cutoutWidth", value)} />
+                <DimensionField label="L-cutout depth" value={design.platform.cutoutDepth} onCommit={(value) => applyNumber("cutoutDepth", value)} />
               </>
             )}
           </div>
           <label className="field full snap-field">
-            <span>Plan snap</span>
+            <span>Drag step</span>
             <select value={snapIncrement} onChange={(event) => setSnapIncrement(Number(event.target.value))}>
               <option value="1">1 inch · fine</option>
               <option value="6">6 inches · standard</option>
               <option value="12">12 inches · coarse</option>
             </select>
+            <small className="field-help">Controls how far plan handles move with each drag or arrow-key step.</small>
           </label>
           <label className="field full edge-select-field">
-            <span>Edit an edge</span>
+            <span>Select an edge to edit</span>
             <select
               value={selectedEdgeId ?? ""}
               onChange={(event) => {
@@ -363,10 +365,10 @@ function App() {
           )}
 
           <div className="section-heading compact">
-            <span>02</span><div><p>House &amp; grade</p><small>Conceptual recorded context</small></div>
+            <span>02</span><div><p>House &amp; ground</p><small>Optional site context</small></div>
           </div>
           <label className="field full">
-            <span>Edit house wall</span>
+            <span>House wall</span>
             <select
               aria-label="House wall selection"
               value={selectedWall.id}
@@ -406,17 +408,18 @@ function App() {
               }}
             >Remove wall</button>
           </div>
+          <p className="section-help house-help">Left/right positions run along the house. “Away” positions run outward into the yard.</p>
           <div className="field-grid">
-            <DimensionField label="Grade elevation" value={design.siteContext.gradeElevation} onCommit={(value) => applyNumber("gradeElevation", value)} />
-            <DimensionField label="Wall base" value={selectedWall.baseElevation} onCommit={(value) => updateSelectedWall({ baseElevation: Number(value) })} />
+            <DimensionField label="Ground height" value={design.siteContext.gradeElevation} onCommit={(value) => applyNumber("gradeElevation", value)} />
+            <DimensionField label="Wall bottom height" value={selectedWall.baseElevation} onCommit={(value) => updateSelectedWall({ baseElevation: Number(value) })} />
             <DimensionField label="Wall height" value={selectedWall.height} onCommit={(value) => updateSelectedWall({ height: Number(value) })} />
-            <DimensionField label="Start X" value={selectedWall.start.x} onCommit={(value) => updateSelectedWall({ start: { ...selectedWall.start, x: Number(value) } })} />
-            <DimensionField label="Start Z" value={selectedWall.start.z} onCommit={(value) => updateSelectedWall({ start: { ...selectedWall.start, z: Number(value) } })} />
-            <DimensionField label="End X" value={selectedWall.end.x} onCommit={(value) => updateSelectedWall({ end: { ...selectedWall.end, x: Number(value) } })} />
-            <DimensionField label="End Z" value={selectedWall.end.z} onCommit={(value) => updateSelectedWall({ end: { ...selectedWall.end, z: Number(value) } })} />
+            <DimensionField label="Wall start · left/right" value={selectedWall.start.x} onCommit={(value) => updateSelectedWall({ start: { ...selectedWall.start, x: Number(value) } })} />
+            <DimensionField label="Wall start · away" value={selectedWall.start.z} onCommit={(value) => updateSelectedWall({ start: { ...selectedWall.start, z: Number(value) } })} />
+            <DimensionField label="Wall end · left/right" value={selectedWall.end.x} onCommit={(value) => updateSelectedWall({ end: { ...selectedWall.end, x: Number(value) } })} />
+            <DimensionField label="Wall end · away" value={selectedWall.end.z} onCommit={(value) => updateSelectedWall({ end: { ...selectedWall.end, z: Number(value) } })} />
           </div>
           <label className="field full house-attachment-field">
-            <span>Attachment intent</span>
+            <span>Deck-to-house connection</span>
             <select
               value={selectedWall.attachment}
               onChange={(event) => {
@@ -425,9 +428,9 @@ function App() {
                 setMessage(`${selectedWall.id} attachment intent recorded as ${attachment}; no structural conclusion is implied.`);
               }}
             >
-              <option value="unknown">Unknown / verify</option>
-              <option value="ledger">Ledger intent</option>
-              <option value="non-ledger">Non-ledger intent</option>
+              <option value="unknown">Not sure — verify later</option>
+              <option value="ledger">Ledger connection planned</option>
+              <option value="non-ledger">Freestanding / no ledger</option>
             </select>
           </label>
           <div className="house-opening-actions">
@@ -466,7 +469,7 @@ function App() {
           ) : <p className="house-opening-empty">No door or window recorded.</p>}
 
           <div className="section-heading compact">
-            <span>03</span><div><p>Railing edges</p><small>Attached edge remains open</small></div>
+            <span>03</span><div><p>Railing</p><small>Click every edge that needs railing</small></div>
           </div>
           <div className="toggle-grid">
             {geometry.platformEdges.map((edge) => (
@@ -494,7 +497,7 @@ function App() {
           </div>
 
           <div className="section-heading compact">
-            <span>04</span><div><p>Stairs &amp; landing</p><small>Explicit edge attachment</small></div>
+            <span>04</span><div><p>Stairs &amp; landing</p><small>Choose where the stairs connect</small></div>
           </div>
           <button
             className={design.construction.stairs.enabled ? "stair-toggle active" : "stair-toggle"}
@@ -512,7 +515,7 @@ function App() {
           {design.construction.stairs.enabled && (
             <>
               <label className="field full stair-edge-field">
-                <span>Attachment edge</span>
+                <span>Stairs attach to</span>
                 <select
                   value={design.construction.stairs.edgeId}
                   onChange={(event) => {
@@ -537,10 +540,11 @@ function App() {
                   ))}
                 </select>
               </label>
+              <p className="section-help stair-help">Stair position is measured from the beginning of the selected edge.</p>
               <div className="field-grid stair-fields">
-                <DimensionField label="Stair offset" value={design.construction.stairs.offset} onCommit={(value) => applyNumber("stairOffset", value)} />
+                <DimensionField label="Stair position" value={design.construction.stairs.offset} onCommit={(value) => applyNumber("stairOffset", value)} />
                 <DimensionField label="Stair width" value={design.construction.stairs.width} onCommit={(value) => applyNumber("stairWidth", value)} />
-                <DimensionField label="Tread depth" value={design.construction.stairs.treadDepth} onCommit={(value) => applyNumber("treadDepth", value)} />
+                <DimensionField label="Step depth" value={design.construction.stairs.treadDepth} onCommit={(value) => applyNumber("treadDepth", value)} />
                 {design.construction.stairs.landingEnabled && (
                   <DimensionField label="Landing depth" value={design.construction.stairs.landingDepth} onCommit={(value) => applyNumber("landingDepth", value)} />
                 )}
