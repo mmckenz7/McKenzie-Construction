@@ -2,6 +2,7 @@ import { useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEven
 import { stairOffsetFromPoint } from "./editor";
 import type { DeckPlatformGeometryV3 } from "./geometryV3";
 import type { DeckPlatformV3 } from "./modelV3";
+import { formatFeetInches } from "./PlanView";
 
 type Point = Readonly<{ x: number; z: number }>;
 type Props = {
@@ -22,6 +23,17 @@ type Props = {
 };
 
 const snap = (value: number, increment: number) => Math.round(value / increment) * increment;
+
+export function planEdgeDimensionLabel(edge: Readonly<{ start: Point; end: Point; length: number; outward: Point }>, offset = 18) {
+  const rawAngle = Math.atan2(edge.end.z - edge.start.z, edge.end.x - edge.start.x) * 180 / Math.PI;
+  const angle = rawAngle > 90 ? rawAngle - 180 : rawAngle < -90 ? rawAngle + 180 : rawAngle;
+  return Object.freeze({
+    x: (edge.start.x + edge.end.x) / 2 + edge.outward.x * offset,
+    z: (edge.start.z + edge.end.z) / 2 + edge.outward.z * offset,
+    angle,
+    text: formatFeetInches(edge.length),
+  });
+}
 
 export function PlanViewV3({ platform, geometry, snapIncrement, selectedEdgeId, onSelectEdge, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, addCornerMode, onAddCorner, onSegmentPreview, onSegmentCommit }: Props) {
   const ref = useRef<SVGSVGElement>(null);
@@ -94,6 +106,12 @@ export function PlanViewV3({ platform, geometry, snapIncrement, selectedEdgeId, 
         { x: edge.start.x - edge.outward.x * hit, z: edge.start.z - edge.outward.z * hit },
       ];
       return <g key={edge.id}>{selectedEdgeId === edge.id && <line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className="plan-selected-edge" />}<polygon points={hitPoints.map((point) => `${x(point.x)},${y(point.z)}`).join(" ")} className="v3-edge" role="button" tabIndex={0} aria-label={addCornerMode ? `Add bumpout on segment ${index + 1}` : `Select segment ${index + 1}`} onClick={(event) => addCornerMode ? addCornerFromClick(index, event) : onSelectEdge(edge.id)} onKeyDown={(event) => { if (event.key !== "Enter" && event.key !== " ") return; event.preventDefault(); if (addCornerMode) onAddCorner(index, midpoint); else onSelectEdge(edge.id); }} /></g>;
+    })}
+    {geometry.platformEdges.map((edge) => {
+      const label = planEdgeDimensionLabel(edge);
+      const labelX = x(label.x);
+      const labelY = y(label.z);
+      return <text key={`dimension-${edge.id}`} x={labelX} y={labelY} transform={`rotate(${label.angle} ${labelX} ${labelY})`} className="v3-edge-dimension">{label.text}</text>;
     })}
     {!addCornerMode && geometry.platformEdges.map((edge, index) => {
       const midpoint = { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 };

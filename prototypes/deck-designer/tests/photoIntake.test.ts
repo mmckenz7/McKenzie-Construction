@@ -7,6 +7,7 @@ import { isRectangleTrace, moveTraceCornerToFeet, moveTraceSegmentToFeet, rectan
 import { deriveGeometricPolygonEdges } from "../src/polygon";
 import { derivePlatformGeometryV3 } from "../src/geometryV3";
 import { deriveDeckAccessoryProjectionV3, stableDeckAccessoryProjectionV3Json } from "../src/quantityProjectionV3";
+import { planEdgeDimensionLabel } from "../src/PlanViewV3";
 
 const base = migrateDeckDesignToV3(DEFAULT_DESIGN);
 
@@ -88,6 +89,11 @@ describe("local-only photo-assisted start", () => {
     expect(moved[2]).toEqual({ x: 240, z: 132 });
     expect(moved[3]).toEqual({ x: 120, z: 132 });
     expect(deriveGeometricPolygonEdges(moved).map((edge) => edge.length)).toEqual([240, 132, 120, 42, 120, 90]);
+  });
+
+  it("places the right-side length outside the edge and keeps it readable", () => {
+    const right = deriveGeometricPolygonEdges(rectangleTrace(240, 144))[1];
+    expect(planEdgeDimensionLabel(right)).toEqual({ x: 258, z: 72, angle: 90, text: "12′ 0″" });
   });
 
   it("resizes a tapped segment to an exact length while keeping its following side attached", () => {

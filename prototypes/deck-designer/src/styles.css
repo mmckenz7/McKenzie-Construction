@@ -128,6 +128,7 @@ button:hover { transform: translateY(-1px); }
 .trace-segment-handle { fill: white; stroke: #2e6150; stroke-width: 2.5; cursor: grab; }
 .trace-corner.selected, .trace-segment-handle.selected { stroke: #2367c9; stroke-width: 4; }
 .trace-dimension-label { fill: #29483c; stroke: white; stroke-width: 3px; paint-order: stroke; font-size: 8px; font-weight: 800; pointer-events: none; text-anchor: middle; }
+.v3-edge-dimension { fill: #29483c; stroke: white; stroke-width: 3px; paint-order: stroke; font-size: 8px; font-weight: 800; pointer-events: none; text-anchor: middle; dominant-baseline: middle; }
 .trace-dimension-hit { fill: transparent; stroke: none; cursor: pointer; }
 .trace-dimension-editor { display: grid; grid-template-columns: minmax(150px, 1.4fr) repeat(2, minmax(110px, 1fr)); gap: 8px; align-items: end; margin-top: 9px; padding: 10px; border: 1px solid #aebdb2; border-radius: 8px; background: #eef3ed; }
 .trace-dimension-editor strong, .trace-dimension-editor small { display: block; }
