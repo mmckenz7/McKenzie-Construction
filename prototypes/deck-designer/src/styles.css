@@ -105,28 +105,32 @@ button:hover { transform: translateY(-1px); }
 .trace-plan-heading button { min-height: 44px; }
 .trace-heading-actions { display: flex; gap: 6px; }
 .trace-heading-actions button:disabled { cursor: not-allowed; opacity: .4; }
+.trace-guide { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+.trace-guide span { padding: 7px 8px; border-radius: 7px; background: #eef3ed; color: #395348; font-size: 8px; font-weight: 750; }
+.trace-guide b { display: inline-grid; width: 18px; height: 18px; margin-right: 4px; place-items: center; border-radius: 50%; background: #214b3b; color: white; }
+.trace-view-actions { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.trace-view-actions button { min-width: 44px; min-height: 44px; padding: 6px 10px; font-weight: 800; }
+.trace-view-actions small { margin-left: auto; color: var(--muted); font-size: 8px; }
 .trace-plan svg { display: block; width: 100%; height: 360px; border: 1px solid #d8ded9; border-radius: 8px; touch-action: none; }
 .trace-edge-buttons { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; padding-bottom: 2px; }
 .trace-edge-buttons button { min-width: 128px; min-height: 44px; flex: 1 0 auto; border-color: #aab8ae; background: #f5f7f4; color: #28483b; font-size: 9px; font-weight: 750; }
 .trace-platform { fill: #ceb085; stroke: none; }
 .trace-edge, .trace-house-edge { fill: none; stroke: #244d3e; stroke-width: 2.5; }
 .trace-house-edge { stroke: #b85c36; stroke-width: 4; }
-.trace-edge-hit { fill: none; stroke: transparent; stroke-width: 14; cursor: copy; }
+.trace-edge.highlighted, .trace-house-edge.highlighted { stroke: #8ca919; stroke-width: 6; }
+.trace-edge-hit { fill: none; stroke: transparent; stroke-width: 22; cursor: copy; }
 .trace-corner { fill: #efff77; stroke: #214b3b; stroke-width: 2.5; cursor: grab; }
 .trace-corner.house { fill: #f0a36e; }
 .trace-segment-handle { fill: white; stroke: #2e6150; stroke-width: 2.5; cursor: grab; }
 .trace-corner.selected, .trace-segment-handle.selected { stroke: #2367c9; stroke-width: 4; }
 .trace-dimension-label { fill: #29483c; stroke: white; stroke-width: 3px; paint-order: stroke; font-size: 8px; font-weight: 800; pointer-events: none; text-anchor: middle; }
+.trace-dimension-hit { fill: transparent; stroke: none; cursor: pointer; }
 .trace-dimension-editor { display: grid; grid-template-columns: minmax(150px, 1.4fr) repeat(2, minmax(110px, 1fr)); gap: 8px; align-items: end; margin-top: 9px; padding: 10px; border: 1px solid #aebdb2; border-radius: 8px; background: #eef3ed; }
 .trace-dimension-editor strong, .trace-dimension-editor small { display: block; }
 .trace-dimension-editor strong { font-size: 11px; }
 .trace-dimension-editor small { margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.35; }
 .trace-dimension-editor label span { display: block; margin-bottom: 4px; color: #52645a; font-size: 8px; font-weight: 800; text-transform: uppercase; }
 .trace-dimension-editor input { width: 100%; min-height: 44px; padding: 8px; border: 1px solid #aeb9b1; border-radius: 7px; background: white; font-size: 14px; }
-.trace-length-readout { min-width: 120px; padding: 8px 10px; border: 1px solid #aeb9b1; border-radius: 7px; background: white; }
-.trace-length-readout span, .trace-length-readout strong { display: block; }
-.trace-length-readout span { margin-bottom: 3px; color: #52645a; font-size: 8px; font-weight: 800; text-transform: uppercase; }
-.trace-length-readout strong { font-size: 14px; }
 .trace-plan > p { margin: 8px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
 .trace-dot { display: inline-block; width: 10px; height: 10px; margin: 0 2px 0 6px; border: 2px solid #2e6150; background: #efff77; vertical-align: -2px; }
 .trace-dot.round { margin-left: 0; border-radius: 50%; }
@@ -304,6 +308,9 @@ button:hover { transform: translateY(-1px); }
   .photo-intake > header { padding: 15px; }
   .photo-intake-content { padding: 16px; }
   .photo-slot-grid, .photo-facts-grid, .photo-review, .photo-trace-workspace { grid-template-columns: 1fr; }
+  .trace-guide { grid-template-columns: 1fr; }
+  .trace-view-actions { flex-wrap: wrap; }
+  .trace-view-actions small { width: 100%; margin-left: 0; }
   .trace-reference > img, .trace-no-photo { height: 220px; min-height: 220px; }
   .trace-plan svg { height: 330px; }
   .trace-dimension-editor { grid-template-columns: 1fr 1fr; }

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { migrateDeckDesignToV3 } from "../src/modelV3";
 import { DEFAULT_DESIGN } from "../src/model";
 import { createDesignFromConfirmedPhotoFacts, normalizeConfirmedPhotoFacts, reviewConfirmedPhotoFacts, reviewPhotoCoverage } from "../src/photoIntake";
-import { isRectangleTrace, moveTraceCornerToFeet, moveTraceSegmentToFeet, rectangleTrace, validatePhotoTrace } from "../src/PhotoOutlineTracer";
+import { isRectangleTrace, moveTraceCornerToFeet, moveTraceSegmentToFeet, rectangleTrace, resizeTraceSegmentToFeet, validatePhotoTrace } from "../src/PhotoOutlineTracer";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
 import { derivePlatformGeometryV3 } from "../src/geometryV3";
 import { deriveDeckAccessoryProjectionV3, stableDeckAccessoryProjectionV3Json } from "../src/quantityProjectionV3";
@@ -88,6 +88,15 @@ describe("local-only photo-assisted start", () => {
     expect(moved[2]).toEqual({ x: 240, z: 132 });
     expect(moved[3]).toEqual({ x: 120, z: 132 });
     expect(deriveGeometricPolygonEdges(moved).map((edge) => edge.length)).toEqual([240, 132, 120, 42, 120, 90]);
+  });
+
+  it("resizes a tapped segment to an exact length while keeping its following side attached", () => {
+    const stepped = [{ x: 0, z: 0 }, { x: 240, z: 0 }, { x: 240, z: 144 }, { x: 120, z: 144 }, { x: 120, z: 90 }, { x: 0, z: 90 }];
+    const resized = resizeTraceSegmentToFeet(stepped, 2, 8);
+    expect(resized[2]).toEqual({ x: 240, z: 144 });
+    expect(resized[3]).toEqual({ x: 144, z: 144 });
+    expect(resized[4]).toEqual({ x: 144, z: 90 });
+    expect(deriveGeometricPolygonEdges(resized).map((edge) => edge.length)).toEqual([240, 144, 96, 54, 144, 90]);
   });
 
   it("carries the existing height only when the intake leaves height unknown", () => {
