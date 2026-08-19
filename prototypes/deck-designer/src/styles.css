@@ -119,6 +119,7 @@ button:hover { transform: translateY(-1px); }
 .three-card { min-height: 530px; }
 .three-mount { flex: 1; min-height: 470px; cursor: grab; }
 .three-mount:active { cursor: grabbing; }
+.three-loading { flex: 1; min-height: 470px; display: grid; place-items: center; color: #66736c; font-size: 11px; letter-spacing: .02em; }
 .camera-buttons { display: flex; gap: 4px; }
 .camera-buttons button { padding: 6px 8px; border-color: #d5dad4; background: #f6f7f4; color: #5e6963; font-size: 9px; text-transform: capitalize; }
 .camera-buttons button.active { background: var(--forest); color: white; border-color: var(--forest); }

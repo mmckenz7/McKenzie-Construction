@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { StrictMode, Suspense, lazy, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { deriveGeometry } from "./geometry";
 import {
@@ -21,10 +21,14 @@ import {
   duplicateDesign,
   type DeckTemplateId,
 } from "./templates";
-import { ThreeView, type CameraPreset } from "./ThreeView";
+import type { CameraPreset } from "./ThreeView";
 import "./styles.css";
 
 const STORAGE_KEY = "mckenzie-deck-designer:v1:current";
+const ThreeView = lazy(async () => {
+  const module = await import("./ThreeView");
+  return { default: module.ThreeView };
+});
 
 function createLocalDesignId(): string {
   return typeof crypto.randomUUID === "function"
@@ -453,7 +457,9 @@ function App() {
                 ))}
               </div>
             </div>
-            <ThreeView design={design} geometry={geometry} preset={preset} presetRequest={presetRequest} showFraming={showFraming} />
+            <Suspense fallback={<div className="three-loading" role="status">Preparing interactive 3D view…</div>}>
+              <ThreeView design={design} geometry={geometry} preset={preset} presetRequest={presetRequest} showFraming={showFraming} />
+            </Suspense>
           </article>
         </section>
       </div>

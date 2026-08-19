@@ -71,3 +71,7 @@ The future adapter should emit a neutral payload rather than catalog items or es
 - Review state kept outside the design document: reviewer, accepted/replaced quantity, catalog selection, and rationale.
 
 Semantic mismatches to resolve before integration include inches versus catalog selling units; continuous geometry versus purchasable stock lengths; generic assembly intent versus manufacturer system compatibility; visualization allowances versus estimate-grade waste/fastening policy; design revision versus estimate revision; and quantity replacement/approval ownership. The current product/cost generator owns review and product matching, Material Catalog owns approved product and price facts, and Estimating Core owns labor, waste, margin, and commercial totals.
+
+## Performance boundary
+
+The editor shell and deterministic 2D/quantity projections load independently of the Three.js runtime. The 3D view is a lazy browser chunk with a visible status fallback. A post-build check enforces gzip budgets of 90 KiB for the initial entry, 170 KiB for the largest JavaScript chunk, and 220 KiB for all JavaScript combined. These are prototype regression limits, not production service-level guarantees; later device testing can tighten them or define explicit quality tiers.

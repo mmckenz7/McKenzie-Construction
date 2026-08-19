@@ -41,7 +41,8 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [ ] Fascia, skirting, post wraps, lighting, drainage, covers/pergolas
 - [ ] Improved framing intent and explainable clash/constraint warnings
 - [ ] PBR material library, licensed asset pipeline, GLB metadata, LOD/compression
-- [ ] Quality tiers, performance budgets, accessibility, tablet interaction
+- [x] Enforced initial-entry, largest-chunk, and total JavaScript performance budgets
+- [ ] Quality tiers, broader accessibility checks, and tablet interaction
 
 ## Phase D — isolated workflow services (separate approval required)
 
