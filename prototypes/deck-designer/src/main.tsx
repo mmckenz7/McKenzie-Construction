@@ -22,6 +22,7 @@ import {
   type DeckTemplateId,
 } from "./templates";
 import type { CameraPreset } from "./ThreeView";
+import type { RenderQuality } from "./renderQuality";
 import "./styles.css";
 
 const STORAGE_KEY = "mckenzie-deck-designer:v1:current";
@@ -61,6 +62,7 @@ function App() {
   const [showFraming, setShowFraming] = useState(true);
   const [preset, setPreset] = useState<CameraPreset>("perspective");
   const [presetRequest, setPresetRequest] = useState(0);
+  const [renderQuality, setRenderQuality] = useState<RenderQuality>("balanced");
   const [snapIncrement, setSnapIncrement] = useState(6);
   const [selectedEdgeId, setSelectedEdgeId] = useState<DeckEdgeId | null>(null);
   const [templateId, setTemplateId] = useState<DeckTemplateId>("compact-ground");
@@ -451,14 +453,32 @@ function App() {
           <article className="view-card three-card">
             <div className="card-title">
               <div><span>Model view</span><small>3D · orbit, pan &amp; zoom</small></div>
-              <div className="camera-buttons">
-                {(["perspective", "top", "front"] as CameraPreset[]).map((item) => (
-                  <button key={item} onClick={() => setCamera(item)} className={preset === item ? "active" : ""}>{item}</button>
-                ))}
+              <div className="view-tools">
+                <label className="quality-control">
+                  <span className="sr-only">3D quality</span>
+                  <select
+                    aria-label="3D quality"
+                    value={renderQuality}
+                    onChange={(event) => {
+                      const quality = event.target.value as RenderQuality;
+                      setRenderQuality(quality);
+                      setMessage(`3D quality set to ${quality}; design geometry and quantities are unchanged.`);
+                    }}
+                  >
+                    <option value="economy">Economy</option>
+                    <option value="balanced">Balanced</option>
+                    <option value="detailed">Detailed</option>
+                  </select>
+                </label>
+                <div className="camera-buttons">
+                  {(["perspective", "top", "front"] as CameraPreset[]).map((item) => (
+                    <button key={item} onClick={() => setCamera(item)} className={preset === item ? "active" : ""}>{item}</button>
+                  ))}
+                </div>
               </div>
             </div>
             <Suspense fallback={<div className="three-loading" role="status">Preparing interactive 3D view…</div>}>
-              <ThreeView design={design} geometry={geometry} preset={preset} presetRequest={presetRequest} showFraming={showFraming} />
+              <ThreeView design={design} geometry={geometry} preset={preset} presetRequest={presetRequest} showFraming={showFraming} quality={renderQuality} />
             </Suspense>
           </article>
         </section>

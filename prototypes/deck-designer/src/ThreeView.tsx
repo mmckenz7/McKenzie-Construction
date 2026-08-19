@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { DeckDesignV1 } from "./model";
 import type { DeckGeometry, LinearMember, StairStringer } from "./geometry";
+import { RENDER_QUALITY_POLICIES, type RenderQuality } from "./renderQuality";
 
 export type CameraPreset = "perspective" | "top" | "front";
 
@@ -14,6 +15,7 @@ type Props = {
   preset: CameraPreset;
   presetRequest: number;
   showFraming: boolean;
+  quality: RenderQuality;
 };
 
 function addLinearMember(
@@ -51,7 +53,7 @@ function addSlopedMember(
   group.add(mesh);
 }
 
-export function ThreeView({ design, geometry, preset, presetRequest, showFraming }: Props) {
+export function ThreeView({ design, geometry, preset, presetRequest, showFraming, quality }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -60,14 +62,15 @@ export function ThreeView({ design, geometry, preset, presetRequest, showFraming
     const mount = mountRef.current;
     if (!mount) return;
 
+    const policy = RENDER_QUALITY_POLICIES[quality];
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xe8eee9);
     scene.fog = new THREE.Fog(0xe8eee9, 700, 1500);
     const camera = new THREE.PerspectiveCamera(40, 1, 1, 3000);
     cameraRef.current = camera;
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
+    const renderer = new THREE.WebGLRenderer({ antialias: quality !== "economy" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, policy.maxPixelRatio));
+    renderer.shadowMap.enabled = policy.shadows;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
@@ -82,7 +85,7 @@ export function ThreeView({ design, geometry, preset, presetRequest, showFraming
     const sun = new THREE.DirectionalLight(0xffffff, 2.3);
     sun.position.set(-220, 360, 160);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(policy.shadowMapSize, policy.shadowMapSize);
     sun.shadow.camera.left = -500;
     sun.shadow.camera.right = 500;
     sun.shadow.camera.top = 500;
@@ -254,7 +257,7 @@ export function ThreeView({ design, geometry, preset, presetRequest, showFraming
       cameraRef.current = null;
       controlsRef.current = null;
     };
-  }, [design, geometry, showFraming]);
+  }, [design, geometry, quality, showFraming]);
 
   useEffect(() => {
     const camera = cameraRef.current;

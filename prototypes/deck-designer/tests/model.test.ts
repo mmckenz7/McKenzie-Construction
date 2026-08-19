@@ -7,6 +7,7 @@ import { createHistory, designHistoryReducer } from "../src/history";
 import { dimensionsFromHandle, snapDimension } from "../src/editor";
 import { deriveDesignNotices } from "../src/notices";
 import { GENERIC_DECK_TEMPLATES, applyTemplateToDesign, duplicateDesign, getDeckTemplate } from "../src/templates";
+import { RENDER_QUALITY_POLICIES } from "../src/renderQuality";
 import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
 import lShapeLandingFixture from "./fixtures/l-shape-landing.json";
 
@@ -72,6 +73,18 @@ describe("generic design templates", () => {
 
   it("rejects unknown template identifiers", () => {
     expect(() => getDeckTemplate("unknown" as never)).toThrow(/Unknown deck template/);
+  });
+});
+
+describe("local 3D quality policy", () => {
+  it("offers bounded presentation tiers without changing design facts", () => {
+    expect(RENDER_QUALITY_POLICIES).toEqual({
+      economy: { maxPixelRatio: 1, shadows: false, shadowMapSize: 512 },
+      balanced: { maxPixelRatio: 1.5, shadows: true, shadowMapSize: 1024 },
+      detailed: { maxPixelRatio: 2, shadows: true, shadowMapSize: 2048 },
+    });
+    expect(Object.isFrozen(RENDER_QUALITY_POLICIES)).toBe(true);
+    expect(stableDesignJson(DEFAULT_DESIGN)).not.toMatch(/quality|pixelRatio|shadowMap/);
   });
 });
 

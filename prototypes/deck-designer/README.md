@@ -29,6 +29,7 @@ Open the local URL Vite prints. Use `npm test` and `npm run build` for validatio
 - Versioned rectangle and L-shape golden fixtures for deterministic regression checks
 - Orbit, pan, zoom, and camera presets
 - Lazy-loaded 3D runtime with enforced initial, largest-chunk, and total JavaScript budgets
+- Economy, balanced, and detailed local 3D quality tiers that never alter design facts
 - Browser local save plus JSON download/upload
 - Conceptual output only; not structural engineering or construction documents
 
