@@ -4063,14 +4063,18 @@ export function DeckTakeoffPlanner({
         </section>
       ) : null}
 
-      <details className="mt-5 rounded-lg border border-slate-300 bg-white p-4">
+      <details
+        className="mt-5 rounded-lg border border-slate-300 bg-white p-4"
+        open={workflowPhase === "takeoff" && !takeoffApplied}
+      >
         <summary className="min-h-11 cursor-pointer py-2 font-black text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700">
-          Framing costs and remaining estimate items
+          Complete framing, hardware, labor, and remaining costs
         </summary>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          The framing plan supplied the quantities. Open this only to add
-          structural costs, labor, equipment, delivery, or other required
-          estimate details.
+          Finish materials can be saved first, but they do not make a complete
+          estimate. Review each required category here and enter only quantities
+          and costs supported by the framing plan, a quote, or your company cost
+          records.
         </p>
         {completeRebuildScope}
       </details>

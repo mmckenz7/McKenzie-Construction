@@ -69,11 +69,11 @@ test("shows one focused Deck stage at a time with a truthful next action", () =>
 test("gates Deck OH&P and customer-link creation on real readiness", () => {
   assert.match(
     builder,
-    /const deckPricingReady = deckVisitStatus === "completed" && deckTrueCostsReady/,
+    /const deckPricingReady =\s*deckVisitStatus === "completed" &&\s*deckReviewedTakeoffApplied &&\s*deckTrueCostsReady/,
   );
   assert.match(
     builder,
-    /OH&amp;P is locked until the Deck visit is completed and at least one positive true-cost line is saved/,
+    /OH&amp;P is locked until the completed Deck visit has a full reviewed takeoff/,
   );
   assert.match(
     builder,
@@ -95,6 +95,8 @@ test("completed field work opens a Deck-specific true-cost workspace", () => {
     "Create Deck construction section",
   ]) assert.match(builder, new RegExp(copy, "i"));
   assert.match(builder, /Continue to OH&amp;P/);
+  assert.match(builder, /takeoffApplied && trueCostLineCount/);
+  assert.match(builder, /Finish materials are saved, but this is not the complete job cost/);
   for (const category of ["material", "labor", "subcontractor", "equipment", "other"])
     assert.match(builder, new RegExp(`key: "${category}"`));
   assert.match(builder, /Add \{category\.label\}/);

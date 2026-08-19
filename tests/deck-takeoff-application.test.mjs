@@ -69,7 +69,7 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "Composite decking",
     "Composite color family",
     "Cable",
-    "Framing costs and remaining estimate items",
+    "Complete framing, hardware, labor, and remaining costs",
     "Change products, costs, or advanced quantities",
     "Calculate quantities and costs",
     "Estimating retail price per board",
