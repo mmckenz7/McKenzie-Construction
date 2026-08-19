@@ -87,6 +87,7 @@ The future adapter should emit a neutral payload rather than catalog items or es
 - Platform measurements: polygon/level identifier, area, perimeter, elevation, and attached/free edge lengths.
 - Site-context measurements: grade reference, house-wall segments, openings, and attachment intent with field-verification status.
 - Generic quantity lines: stable semantic key, quantity class (`visualization` or `takeoff_candidate`), amount, unit, assembly intent, source geometry references, calculation explanation, and warning codes.
+- The isolated polygon report spike demonstrates these classifications and source references without becoming a production DTO or changing DeckDesign v2.
 - Configuration intent: generic material family, board direction/pattern, railing edge/length intent, stair/landing intent, and framing intent without product IDs or prices.
 - Review state kept outside the design document: reviewer, accepted/replaced quantity, catalog selection, and rationale.
 

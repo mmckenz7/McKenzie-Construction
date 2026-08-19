@@ -12,6 +12,8 @@ An isolated region kernel also proves up to eight strictly contained, non-touchi
 
 The projection spike now triangulates simple concave outer rings with stable triangle IDs and area preservation. It also generates deterministic board and joist segments across a polygon region, splitting members around holes and recording reproducible total lengths. Hole-aware surface triangulation remains intentionally separate and unproven.
 
+A neutral report spike packages net/gross/hole measurements, stable geometry references, and generic quantity lines. Area, perimeter, and decking intent are labeled `takeoff_candidate`; conceptual joist length/count remain `visualization`. Every report carries conceptual, field-verification, and non-structural warnings. It deliberately excludes products, catalogs, suppliers, prices, labor, waste, margin, and estimate calculations.
+
 ## Migration and integration direction
 
 - Rectangle and L-shape facts can migrate deterministically into canonical rings.
