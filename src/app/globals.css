@@ -93,6 +93,39 @@ body {
 .platform-content .estimate-sheet-header { position: static; border-bottom: 1px solid #223047; background: #111d2e; }
 .platform-content .estimate-sheet-row { transition: background-color .15s ease; }
 .platform-content .estimate-sheet-row-dirty { background: color-mix(in srgb, var(--company-primary) 8%, #0d1726); }
+
+/* The Deck estimate is a deliberate light, high-contrast workspace. These
+   scoped rules follow the shared dark shell rules so utility classes, forms,
+   and tables cannot be silently recolored into low-contrast combinations. */
+.platform-content .deck-estimate-light { background: #f1f5f9 !important; color: #0f172a !important; }
+.platform-content .deck-estimate-light .bg-white { background-color: #ffffff !important; }
+.platform-content .deck-estimate-light .bg-slate-50 { background-color: #f8fafc !important; }
+.platform-content .deck-estimate-light .bg-slate-100 { background-color: #f1f5f9 !important; }
+.platform-content .deck-estimate-light .text-slate-950,
+.platform-content .deck-estimate-light .text-slate-900,
+.platform-content .deck-estimate-light .text-slate-800 { color: #0f172a !important; }
+.platform-content .deck-estimate-light .text-slate-700 { color: #334155 !important; }
+.platform-content .deck-estimate-light .text-slate-600 { color: #475569 !important; }
+.platform-content .deck-estimate-light .text-slate-500,
+.platform-content .deck-estimate-light .text-slate-400 { color: #64748b !important; }
+.platform-content .deck-estimate-light .border-slate-100 { border-color: #f1f5f9 !important; }
+.platform-content .deck-estimate-light .border-slate-200 { border-color: #e2e8f0 !important; }
+.platform-content .deck-estimate-light .border-slate-300 { border-color: #cbd5e1 !important; }
+.platform-content .deck-estimate-light input,
+.platform-content .deck-estimate-light select,
+.platform-content .deck-estimate-light textarea { border-color: #94a3b8 !important; background: #ffffff !important; color: #0f172a !important; }
+.platform-content .deck-estimate-light input:focus,
+.platform-content .deck-estimate-light select:focus,
+.platform-content .deck-estimate-light textarea:focus { border-color: #1d4ed8 !important; box-shadow: 0 0 0 3px rgb(29 78 216 / 16%) !important; }
+.platform-content .deck-estimate-light input:disabled,
+.platform-content .deck-estimate-light select:disabled,
+.platform-content .deck-estimate-light textarea:disabled,
+.platform-content .deck-estimate-light input[readonly] { background: #f1f5f9 !important; color: #334155 !important; opacity: 1; }
+.platform-content .deck-estimate-light .estimate-pricing-control { border-color: #cbd5e1; background: #f8fafc; }
+.platform-content .deck-estimate-light .estimate-editor-panel { border-color: #cbd5e1; background: #ffffff; }
+.platform-content .deck-estimate-light .estimate-live-preview-note { border-color: #bfdbfe; background: #eff6ff; color: #1e3a8a; }
+.platform-content .deck-estimate-light .estimate-sheet-header { border-color: #e2e8f0; background: #f8fafc; }
+.platform-content .deck-estimate-light .estimate-sheet-row-dirty { background: #eff6ff; }
 .platform-content .estimate-customer-document { --company-primary: var(--estimate-document-primary); --company-accent: var(--estimate-document-accent); background: #fff !important; color: #0f172a !important; }
 .platform-content .estimate-customer-document .bg-slate-50 { background: #f8fafc !important; }
 .platform-content .estimate-customer-document .bg-slate-950 { background: #020617 !important; }

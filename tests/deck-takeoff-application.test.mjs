@@ -6,6 +6,7 @@ const route = readFileSync("src/app/api/estimates/[estimateId]/deck-takeoff/rout
 const migration = readFileSync("supabase/migrations/20260814100000_deck_reviewed_takeoff_application.sql", "utf8");
 const ui = readFileSync("src/components/estimates/deck-takeoff-planner.tsx", "utf8");
 const builder = readFileSync("src/components/estimates/estimate-builder.tsx", "utf8");
+const globalStyles = readFileSync("src/app/globals.css", "utf8");
 const suggestionRoute = readFileSync("src/app/api/estimates/[estimateId]/deck-product-suggestions/route.ts", "utf8");
 const suggestionProvider = readFileSync("src/lib/deck-lowes-product-suggestions.ts", "utf8");
 const curatedSuggestions = readFileSync("src/lib/deck-curated-product-suggestions.ts", "utf8");
@@ -104,6 +105,9 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /railingFamily === value[\s\S]*bg-blue-50/);
   assert.match(ui, /Matching products for the custom footprint[\s\S]*border-slate-300 bg-white/);
   assert.match(ui, /Finish material estimate[\s\S]*bg-emerald-50/);
+  assert.match(builder, /deck-estimate-light/);
+  assert.match(globalStyles, /\.platform-content \.deck-estimate-light \.bg-white \{ background-color: #ffffff !important; \}/);
+  assert.match(globalStyles, /\.platform-content \.deck-estimate-light input,[\s\S]*background: #ffffff !important; color: #0f172a !important;/);
   assert.match(
     ui,
     /requestedRailing === "wood"[\s\S]*quantity: woodRailingFeet\.toFixed\(2\)/,
