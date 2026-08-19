@@ -190,3 +190,22 @@ test("Lowe's defaults are read-only, tenant-authorized, and bound to exact produ
   assert.match(suggestionProvider, /pathname\.startsWith\("\/pd\/"\)/);
   assert.doesNotMatch(suggestionRoute + suggestionProvider, /insert\(|update\(|delete\(/);
 });
+
+test("custom finish geometry remains visible while product matching is pending", () => {
+  assert.match(ui, /customDeckingCoverageSquareFeet = customFinishGeometry/);
+  assert.match(
+    ui,
+    /customDeckBoardEstimate\s*\? String\(customDeckBoardEstimate\.pieces\)\s*:\s*customDeckingCoverageSquareFeet\?\.toFixed\(2\)/,
+  );
+  assert.match(ui, /customDeckBoardEstimate \? "ea" : "sq ft"/);
+  assert.match(ui, /Calculated decking coverage/);
+  assert.match(
+    ui,
+    /The approved polygon requires[\s\S]*including[\s\S]*waste[\s\S]*converts this to boards/,
+  );
+  assert.match(ui, /nextRailQuantity[\s\S]*woodRailingFeet\.toFixed\(2\)/);
+  assert.match(
+    ui,
+    /railingFamily !== "wood"[\s\S]*line\.sourceReference\.trim\(\)[\s\S]*return line/,
+  );
+});

@@ -456,6 +456,15 @@ export function DeckTakeoffPlanner({
   const finishRailingLengthFeet = customApprovedFootprint
     ? customFinishGeometry?.levelRailingFeet ?? null
     : railingGeometry.railingLengthFeet;
+  const stairProjectionFeet =
+    plan.shapeBinding?.stairPlacement?.projectionFeet ?? null;
+  const woodRailingFeet = Math.max(
+    0,
+    (finishRailingLengthFeet ?? 0) +
+      (railingGeometry.stairsPresent && stairProjectionFeet
+        ? stairProjectionFeet * stairRailSides
+        : 0),
+  );
   const customDeckBoardEstimate = useMemo(() => {
     if (!customFinishGeometry) return null;
     return estimateCustomDeckBoardPieces({
@@ -471,6 +480,63 @@ export function DeckTakeoffPlanner({
     plan.boardGapInches,
     plan.boardStockLengthFeet,
     plan.boardWastePercent,
+  ]);
+  const customDeckingCoverageSquareFeet = customFinishGeometry
+    ? customFinishGeometry.areaSquareFeet *
+      (1 + Math.max(0, Number(plan.boardWastePercent) || 0) / 100)
+    : null;
+
+  useEffect(() => {
+    if (!customApprovedFootprint || !customFinishGeometry) return;
+    setPlan((current) => {
+      const nextDeckQuantity = customDeckBoardEstimate
+        ? String(customDeckBoardEstimate.pieces)
+        : customDeckingCoverageSquareFeet?.toFixed(2) ?? "";
+      const nextDeckUnit = customDeckBoardEstimate ? "ea" : "sq ft";
+      const nextRailQuantity =
+        railingGeometry.railingsPresent === false
+          ? ""
+          : railingFamily === "wood"
+            ? woodRailingFeet.toFixed(2)
+            : finishRailingLengthFeet?.toFixed(2) ?? "";
+      let changed = false;
+      const additionalLines = current.additionalLines.map((line) => {
+        if (line.key === "custom_decking") {
+          if (line.quantity === nextDeckQuantity && line.unit === nextDeckUnit)
+            return line;
+          changed = true;
+          return { ...line, quantity: nextDeckQuantity, unit: nextDeckUnit };
+        }
+        if (line.key === "custom_railing") {
+          if (
+            railingFamily !== "wood" &&
+            line.sourceReference.trim() &&
+            line.quantity &&
+            line.unit
+          )
+            return line;
+          if (line.quantity === nextRailQuantity && line.unit === "ln ft")
+            return line;
+          changed = true;
+          return {
+            ...line,
+            quantity: nextRailQuantity,
+            unit: "ln ft",
+          };
+        }
+        return line;
+      });
+      return changed ? { ...current, additionalLines } : current;
+    });
+  }, [
+    customApprovedFootprint,
+    customDeckBoardEstimate,
+    customDeckingCoverageSquareFeet,
+    customFinishGeometry,
+    finishRailingLengthFeet,
+    railingFamily,
+    railingGeometry.railingsPresent,
+    woodRailingFeet,
   ]);
 
   useEffect(() => {
@@ -1444,15 +1510,6 @@ export function DeckTakeoffPlanner({
         })
       : null;
   const manufacturedRailingPackage = aluminumRailingPackage ?? cableRailingPackage;
-  const stairProjectionFeet = plan.shapeBinding?.stairPlacement?.projectionFeet ?? null;
-  const woodRailingFeet = Math.max(
-    0,
-    (finishRailingLengthFeet ?? 0) +
-      (railingGeometry.stairsPresent && stairProjectionFeet
-        ? stairProjectionFeet * stairRailSides
-        : 0),
-  );
-
   function applyWoodRailingRate(value: string, sides = stairRailSides) {
     setWoodRailingRate(value);
     const rate = Number(value);
@@ -3203,7 +3260,9 @@ export function DeckTakeoffPlanner({
                     <Field
                       label={
                         isDecking
-                          ? "Calculated boards to purchase"
+                          ? customDeckBoardEstimate
+                            ? "Calculated boards to purchase"
+                            : "Calculated decking coverage"
                           : "Calculated railing package quantity"
                       }
                     >
@@ -3214,7 +3273,7 @@ export function DeckTakeoffPlanner({
                         readOnly
                         value={
                           isDecking
-                            ? customDeckBoardEstimate?.pieces ?? ""
+                            ? line.quantity
                             : isWoodRailing
                               ? woodRailingFeet.toFixed(2)
                             : line.quantity
@@ -3227,7 +3286,7 @@ export function DeckTakeoffPlanner({
                         {isDecking
                           ? customDeckBoardEstimate
                             ? `Calculated from the approved polygon, ${plan.boardStockLengthFeet || "selected-length"}-ft boards, and ${plan.boardWastePercent || "0"}% waste.`
-                            : "Select a board product with a known length to calculate this count."
+                            : `The approved polygon requires ${customDeckingCoverageSquareFeet?.toFixed(1) ?? "0"} sq ft including ${plan.boardWastePercent || "0"}% waste. The app converts this to boards when the selected product length is known.`
                           : "Calculated from the exact open-edge perimeter and selected railing system. Stair-side components are included in the system summary."}
                       </span>
                     </Field>
