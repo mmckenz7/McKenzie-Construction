@@ -56,6 +56,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [ ] Multiple levels and inter-level connections
 - [x] Prototype-only deterministic multi-platform projection and quantity aggregation
 - [x] Prototype-only immutable duplicate/remove platform commands with history coverage
+- [x] Written v3 browser/local-state activation contract proposed for controller review
 - [ ] Board direction, picture frames, borders/inlays
 - [ ] Fascia, skirting, post wraps, lighting, drainage, covers/pergolas
 - [ ] Improved framing intent and explainable clash/constraint warnings
