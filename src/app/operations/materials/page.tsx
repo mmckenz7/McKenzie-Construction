@@ -615,6 +615,13 @@ export default function MaterialsPage() {
 
         <div className="flex gap-4 text-sm font-medium">
           <a
+            href="/operations/materials/assemblies"
+            className="text-slate-700 underline underline-offset-4"
+          >
+            Cost book assemblies
+          </a>
+
+          <a
             href="/admin/settings/procurement"
             className="text-slate-700 underline underline-offset-4"
           >
