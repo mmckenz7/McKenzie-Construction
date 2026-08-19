@@ -14,7 +14,8 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Browser local save and JSON import/export
 - [x] Traceable basic quantity projection
 - [x] Focused geometry and quantity determinism tests
-- [ ] Golden visual fixtures and cross-browser checks
+- [ ] Golden visual fixtures and broader cross-browser checks
+- [x] Desktop, tablet, and mobile browser smoke checks with bounded 2D/3D viewport sizing
 
 ## Phase B — richer single-level editing
 

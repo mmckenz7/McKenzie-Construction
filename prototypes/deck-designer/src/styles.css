@@ -101,13 +101,13 @@ button:hover { transform: translateY(-1px); }
 .design-notices > small { display: block; margin-top: 5px; color: #818c86; font-size: 8px; line-height: 1.4; }
 .design-notices p { margin: 7px 0 0; padding: 7px 8px; border-left: 3px solid #9aab9f; background: #f0f3ef; color: #59675f; font-size: 9px; line-height: 1.45; }
 .design-notices p.review { border-left-color: #c3973d; background: #f7efd8; color: #66501e; }
-.visual-area { min-width: 0; padding: 18px; display: grid; grid-template-columns: minmax(280px, .85fr) minmax(380px, 1.15fr); gap: 14px; background: #e6e9e4; }
-.view-card { min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: white; border: 1px solid #d3d8d1; border-radius: 12px; box-shadow: 0 5px 20px #182b2210; }
+.visual-area { min-width: 0; padding: 18px; display: grid; grid-template-columns: minmax(280px, .85fr) minmax(380px, 1.15fr); align-items: start; gap: 14px; background: #e6e9e4; }
+.view-card { min-width: 0; height: 530px; display: flex; flex-direction: column; overflow: hidden; background: white; border: 1px solid #d3d8d1; border-radius: 12px; box-shadow: 0 5px 20px #182b2210; }
 .card-title { min-height: 57px; padding: 11px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e1e4df; }
 .card-title span { display: block; font-size: 12px; font-weight: 700; }
 .card-title small { color: #78837d; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
 .card-title strong { font-size: 10px; color: #637069; }
-.plan-svg { width: 100%; height: 100%; min-height: 470px; }
+.plan-svg { width: 100%; height: auto; min-height: 0; flex: 1; }
 .plan-platform { fill: #d6b590; stroke: #263d33; stroke-width: 1.5; }
 .plan-house-wall { stroke: #c8c2b5; stroke-width: 8; }
 .plan-house-opening { stroke: #6b8277; stroke-width: 5; stroke-dasharray: 3 1; }
@@ -128,8 +128,9 @@ button:hover { transform: translateY(-1px); }
 .dimension-handle { fill: var(--lime); stroke: #173b2d; stroke-width: 1.5; cursor: grab; touch-action: none; }
 .dimension-handle:hover, .dimension-handle:focus, .dimension-handle.active { fill: #f3ff8d; stroke-width: 2.4; outline: none; }
 .dimension-handle.active { cursor: grabbing; }
-.three-card { min-height: 530px; }
-.three-mount { flex: 1; min-height: 470px; cursor: grab; }
+.three-card { min-height: 0; }
+.three-mount { flex: 1; min-height: 0; cursor: grab; }
+.three-mount canvas { display: block; width: 100%; height: 100%; }
 .three-mount:active { cursor: grabbing; }
 .three-loading { flex: 1; min-height: 470px; display: grid; place-items: center; color: #66736c; font-size: 11px; letter-spacing: .02em; }
 .view-tools { display: flex; align-items: center; gap: 8px; }
@@ -160,7 +161,7 @@ button:hover { transform: translateY(-1px); }
   .workspace { display: block; }
   .controls-panel { border-right: 0; border-bottom: 1px solid var(--line); }
   .visual-area { padding: 10px; }
-  .plan-svg, .three-mount { min-height: 380px; }
+  .view-card { height: 438px; }
   .quantity-heading { display: block; }
   .quantity-heading > p { margin-top: 10px; }
   .quantity-grid { grid-template-columns: repeat(2, 1fr); }
