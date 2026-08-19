@@ -4,6 +4,7 @@ import { migrateDeckDesignToV3 } from "../src/modelV3";
 import { DEFAULT_DESIGN } from "../src/model";
 import { createDesignFromConfirmedPhotoFacts, normalizeConfirmedPhotoFacts, reviewConfirmedPhotoFacts, reviewPhotoCoverage } from "../src/photoIntake";
 import { isRectangleTrace, moveTraceCornerToFeet, moveTraceSegmentToFeet, rectangleTrace, validatePhotoTrace } from "../src/PhotoOutlineTracer";
+import { deriveGeometricPolygonEdges } from "../src/polygon";
 import { derivePlatformGeometryV3 } from "../src/geometryV3";
 import { deriveDeckAccessoryProjectionV3, stableDeckAccessoryProjectionV3Json } from "../src/quantityProjectionV3";
 
@@ -79,6 +80,14 @@ describe("local-only photo-assisted start", () => {
     expect(deepened[5].z).toBe(216);
     const exactCorner = moveTraceCornerToFeet(deepened, 4, 10.5, 18);
     expect(exactCorner[4]).toEqual({ x: 126, z: 216 });
+  });
+
+  it("moves both ends of a traced segment and updates both attached side lengths", () => {
+    const stepped = [{ x: 0, z: 0 }, { x: 240, z: 0 }, { x: 240, z: 144 }, { x: 120, z: 144 }, { x: 120, z: 90 }, { x: 0, z: 90 }];
+    const moved = moveTraceSegmentToFeet(stepped, 2, 11);
+    expect(moved[2]).toEqual({ x: 240, z: 132 });
+    expect(moved[3]).toEqual({ x: 120, z: 132 });
+    expect(deriveGeometricPolygonEdges(moved).map((edge) => edge.length)).toEqual([240, 132, 120, 42, 120, 90]);
   });
 
   it("carries the existing height only when the intake leaves height unknown", () => {

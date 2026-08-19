@@ -26,6 +26,8 @@ The tracer displays deterministic feet-and-inches labels on every segment. Selec
 
 Before a traced polygon becomes DeckDesign v3, the dialog owns a bounded local undo stack. Offset creation, each pointer-drag start, each focused exact-dimension edit, and rectangle reset record a prior polygon snapshot. Undo restores only this ephemeral trace state; it does not write history into the design document or interfere with the main editor's monotonic command history.
 
+Photo-tracer segment handles keep stable render identities during a drag. A white square translates both endpoints of its segment as one unit; the neighboring edges remain attached and their dimensions are recalculated from the resulting polygon.
+
 This tracer is not photogrammetry and performs no image analysis or AI calls: images help the user recognize the shape, while only their plan edits record corners. Future perspective calibration, multi-view reconstruction, or AI suggestions must remain reviewable proposals until user confirmation and must not alter this authority boundary.
 
 ## Current prototype JSON shape
