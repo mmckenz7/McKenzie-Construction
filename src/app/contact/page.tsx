@@ -1,4 +1,5 @@
 import { ProjectRequestForm } from "@/components/project-request-form";
+import { TrackedPhoneLink } from "@/components/tracked-phone-link";
 
 export default function ContactPage() {
   return (
@@ -43,12 +44,12 @@ export default function ContactPage() {
               Speak directly with McKenzie Construction.
             </h2>
 
-            <a
-              href="tel:8654333325"
+            <TrackedPhoneLink
+              location="contact_page"
               className="mt-5 inline-flex min-h-12 items-center justify-center bg-zinc-950 px-6 text-sm font-black uppercase tracking-wide text-white transition hover:bg-zinc-800"
             >
-              Call 865-433-3325
-            </a>
+              Call or text 865-433-3325
+            </TrackedPhoneLink>
           </div>
 
           <div>

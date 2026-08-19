@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { HomeNavigation } from "@/components/home-navigation";
+import { TrackedPhoneLink } from "@/components/tracked-phone-link";
 
 const brandGreen = "#8CC63F";
 
@@ -109,13 +110,11 @@ export default function HomePage() {
             />
 
             <p className="mb-5 text-sm font-bold uppercase tracking-[0.25em] text-zinc-300">
-              Knoxville &amp; East Tennessee
+              McKenzie Construction · Knoxville, Tennessee
             </p>
 
-            <h1 className="text-5xl font-black leading-[0.95] tracking-[-0.04em] sm:text-6xl lg:text-8xl">
-              McKenzie
-              <br />
-              Construction
+            <h1 className="max-w-4xl text-5xl font-black leading-[0.95] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
+              Knoxville Deck Builder &amp; Outdoor Living Contractor
             </h1>
 
             <h2
@@ -124,7 +123,7 @@ export default function HomePage() {
                 color: brandGreen,
               }}
             >
-              Crafted Around the Way You Live.
+              Crafted around the way you live.
             </h2>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-200 sm:text-xl">
@@ -141,7 +140,7 @@ export default function HomePage() {
                   backgroundColor: brandGreen,
                 }}
               >
-                START YOUR PROJECT
+                REQUEST A CONSULTATION
                 <span className="ml-3 text-lg">→</span>
               </Link>
 
@@ -154,12 +153,12 @@ export default function HomePage() {
             </div>
 
             <div className="mt-6">
-              <a
-                href="tel:+18654333325"
+              <TrackedPhoneLink
+                location="homepage_hero"
                 className="text-sm font-bold text-zinc-200 transition hover:text-white"
               >
-                Call 865-433-3325
-              </a>
+                Call or text 865-433-3325
+              </TrackedPhoneLink>
             </div>
           </div>
         </div>
@@ -544,9 +543,9 @@ export default function HomePage() {
             </p>
 
             <div className="mt-7 flex flex-col gap-3 text-sm font-semibold sm:flex-row sm:gap-8">
-              <a href="tel:+18654333325">
-                Call: 865-433-3325
-              </a>
+              <TrackedPhoneLink location="homepage_project_cta">
+                Call or text: 865-433-3325
+              </TrackedPhoneLink>
 
               <a href="mailto:info@mckenzie-builds.com">
                 Email: info@mckenzie-builds.com
