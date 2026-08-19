@@ -87,133 +87,41 @@ const starterComponent = (
   ...changes,
 });
 
+const ALUMINUM_RAILING_TEMPLATE: StarterTemplate = {
+  key: "aluminum_railing_system",
+  name: "Aluminum railing — complete compatible system",
+  summary: "Level kits, posts, caps, brackets, stair kits, and stair posts from one line.",
+  description: "Complete aluminum railing system. Every component must use the same manufacturer and compatible product line; one stair kit covers one stair side only.",
+  components: [
+    starterComponent("aluminum_level_kits", "Compatible level rail kits", { quantityBasis: "per_linear_foot", unit: "linear foot", compatibilityGroup: "aluminum_railing_product_line", sourceNotes: "Convert reviewed run lengths to whole kits only after the selected kit length is known." }),
+    starterComponent("aluminum_posts", "Compatible level and corner posts", { quantityBasis: "per_count", unit: "post", compatibilityGroup: "aluminum_railing_product_line" }),
+    starterComponent("aluminum_post_caps", "Compatible post caps", { quantityBasis: "per_count", unit: "cap", compatibilityGroup: "aluminum_railing_product_line" }),
+    starterComponent("aluminum_brackets", "Compatible brackets and manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "aluminum_railing_product_line" }),
+    starterComponent("aluminum_stair_kits", "Compatible stair rail kits — one kit per side", { quantityBasis: "per_count", unit: "kit", compatibilityGroup: "aluminum_railing_product_line", sourceNotes: "Compare the measured sloped stair-rail length with the selected kit length and confirm one side or both sides." }),
+    starterComponent("aluminum_stair_posts", "Compatible stair posts", { quantityBasis: "per_count", unit: "post", compatibilityGroup: "aluminum_railing_product_line" }),
+    starterComponent("aluminum_railing_labor", "Aluminum railing installation labor", { costType: "labor", materialCatalogId: null, quantityBasis: "per_linear_foot", unit: "linear foot" }),
+  ],
+};
+
+const VINYL_RAILING_TEMPLATE: StarterTemplate = {
+  key: "vinyl_railing_system",
+  name: "Vinyl railing — complete compatible system",
+  summary: "Rails, posts, caps, brackets, stair kits, and stair posts from one manufacturer line.",
+  description: "Complete vinyl railing system. Every component must use the same manufacturer and compatible product line; one stair kit covers one stair side only.",
+  components: [
+    starterComponent("vinyl_level_kits", "Compatible level rail kits", { quantityBasis: "per_linear_foot", unit: "linear foot", compatibilityGroup: "vinyl_railing_product_line", sourceNotes: "Convert reviewed run lengths to whole kits only after the selected kit length is known." }),
+    starterComponent("vinyl_posts", "Compatible level and corner posts", { quantityBasis: "per_count", unit: "post", compatibilityGroup: "vinyl_railing_product_line" }),
+    starterComponent("vinyl_post_caps", "Compatible post caps", { quantityBasis: "per_count", unit: "cap", compatibilityGroup: "vinyl_railing_product_line" }),
+    starterComponent("vinyl_brackets", "Compatible brackets and manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "vinyl_railing_product_line" }),
+    starterComponent("vinyl_stair_kits", "Compatible stair rail kits — one kit per side", { quantityBasis: "per_count", unit: "kit", compatibilityGroup: "vinyl_railing_product_line", sourceNotes: "Compare the measured sloped stair-rail length with the selected kit length and confirm one side or both sides." }),
+    starterComponent("vinyl_stair_posts", "Compatible stair posts", { quantityBasis: "per_count", unit: "post", compatibilityGroup: "vinyl_railing_product_line" }),
+    starterComponent("vinyl_railing_labor", "Vinyl railing installation labor", { costType: "labor", materialCatalogId: null, quantityBasis: "per_linear_foot", unit: "linear foot" }),
+  ],
+};
+
 const STARTER_TEMPLATES: readonly StarterTemplate[] = [
-  {
-    key: "pressure_treated_wood_decking",
-    name: "Pressure-treated wood decking",
-    summary: "Field boards, border boards, fasteners, and installation labor.",
-    description: "Reusable pressure-treated decking finish package. Final board count depends on the reviewed layout and selected stock lengths.",
-    components: [
-      starterComponent("pt_field_decking", "Pressure-treated field decking", { wastePercent: "10" }),
-      starterComponent("pt_square_edge_border", "Square-edge picture-frame, stair, and butt-joint boards", { quantityBasis: "per_linear_foot", unit: "linear foot", wastePercent: "10", required: false }),
-      starterComponent("pt_deck_fasteners", "Compatible deck-board fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", sourceNotes: "Verify substrate, exposure, coating, and board-manufacturer requirements. Ordinary deck screws are not structural connector fasteners." }),
-      starterComponent("pt_decking_labor", "Decking installation labor", { costType: "labor", materialCatalogId: null, wastePercent: "0" }),
-    ],
-  },
-  {
-    key: "composite_decking_system",
-    name: "Composite decking — grooved field and square-edge border",
-    summary: "Separates grooved field boards from square-edge picture framing and joints.",
-    description: "One compatible composite product line with grooved field boards, square-edge borders and joints, fastening systems, fascia, and labor.",
-    components: [
-      starterComponent("composite_grooved_field", "Grooved composite field boards", { wastePercent: "10", compatibilityGroup: "composite_decking_product_line" }),
-      starterComponent("composite_square_edge", "Square-edge picture-frame, stair, and butt-joint boards", { quantityBasis: "per_linear_foot", unit: "linear foot", wastePercent: "10", compatibilityGroup: "composite_decking_product_line", sourceNotes: "Required wherever the approved layout exposes board edges or creates a picture-frame divider at a butt joint." }),
-      starterComponent("composite_hidden_fasteners", "Compatible hidden-fastener system", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "composite_decking_product_line" }),
-      starterComponent("composite_face_fasteners", "Compatible plugs and face fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "composite_decking_product_line" }),
-      starterComponent("composite_fascia", "Compatible fascia boards", { quantityBasis: "per_linear_foot", unit: "linear foot", wastePercent: "10", required: false, compatibilityGroup: "composite_decking_product_line" }),
-      starterComponent("composite_decking_labor", "Composite decking installation labor", { costType: "labor", materialCatalogId: null, wastePercent: "0" }),
-    ],
-  },
-  {
-    key: "wood_railing_system",
-    name: "Wood railing — deck and stair sides",
-    summary: "Guard runs, posts, caps, attachments, stair sides, and labor.",
-    description: "Wood railing package with separate deck and stair quantities. Stair rail must record whether one side or both sides are included.",
-    components: [
-      starterComponent("wood_guard_run", "Wood guard-rail run", { quantityBasis: "per_linear_foot", unit: "linear foot", wastePercent: "10" }),
-      starterComponent("wood_guard_posts", "Wood guard posts", { quantityBasis: "per_count", unit: "post" }),
-      starterComponent("wood_post_caps", "Wood post caps", { quantityBasis: "per_count", unit: "cap" }),
-      starterComponent("wood_guard_attachments", "Guard blocking and attachment hardware", { quantityBasis: "manual_review", quantityFactor: "", unit: "package" }),
-      starterComponent("wood_stair_rail_sides", "Wood stair rail — selected side count", { quantityBasis: "per_linear_foot", unit: "linear foot", sourceNotes: "Confirm one stair side or both stair sides. Quantity is the sloped rail length multiplied by the selected side count." }),
-      starterComponent("wood_railing_labor", "Wood railing installation labor", { costType: "labor", materialCatalogId: null, quantityBasis: "per_linear_foot", unit: "linear foot" }),
-    ],
-  },
-  {
-    key: "aluminum_railing_system",
-    name: "Aluminum railing — complete compatible system",
-    summary: "Level kits, posts, caps, brackets, stair kits, and stair posts from one line.",
-    description: "Complete aluminum railing system. Every component must use the same manufacturer and compatible product line; one stair kit covers one stair side only.",
-    components: [
-      starterComponent("aluminum_level_kits", "Compatible level rail kits", { quantityBasis: "per_linear_foot", unit: "linear foot", compatibilityGroup: "aluminum_railing_product_line", sourceNotes: "Convert reviewed run lengths to whole kits only after the selected kit length is known." }),
-      starterComponent("aluminum_posts", "Compatible level and corner posts", { quantityBasis: "per_count", unit: "post", compatibilityGroup: "aluminum_railing_product_line" }),
-      starterComponent("aluminum_post_caps", "Compatible post caps", { quantityBasis: "per_count", unit: "cap", compatibilityGroup: "aluminum_railing_product_line" }),
-      starterComponent("aluminum_brackets", "Compatible brackets and manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "aluminum_railing_product_line" }),
-      starterComponent("aluminum_stair_kits", "Compatible stair rail kits — one kit per side", { quantityBasis: "per_count", unit: "kit", compatibilityGroup: "aluminum_railing_product_line", sourceNotes: "Compare the measured sloped stair-rail length with the selected kit length and confirm one side or both sides." }),
-      starterComponent("aluminum_stair_posts", "Compatible stair posts", { quantityBasis: "per_count", unit: "post", compatibilityGroup: "aluminum_railing_product_line" }),
-      starterComponent("aluminum_railing_labor", "Aluminum railing installation labor", { costType: "labor", materialCatalogId: null, quantityBasis: "per_linear_foot", unit: "linear foot" }),
-    ],
-  },
-  {
-    key: "cable_railing_system",
-    name: "Cable railing — complete compatible system",
-    summary: "Posts, top rail, cable, fittings, corners, stairs, and labor from one system.",
-    description: "Complete cable railing system. Posts, rails, cable, tensioners, fittings, corners, and stair components must remain within one compatible manufacturer system.",
-    components: [
-      starterComponent("cable_posts", "Compatible cable railing posts", { quantityBasis: "per_count", unit: "post", compatibilityGroup: "cable_railing_product_line" }),
-      starterComponent("cable_top_rail", "Compatible top rail", { quantityBasis: "per_linear_foot", unit: "linear foot", compatibilityGroup: "cable_railing_product_line" }),
-      starterComponent("cable_infill", "Compatible cable infill", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "cable_railing_product_line" }),
-      starterComponent("cable_fittings", "Compatible tensioners, fittings, and terminals", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "cable_railing_product_line" }),
-      starterComponent("cable_corner_hardware", "Compatible corner and end hardware", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "cable_railing_product_line" }),
-      starterComponent("cable_stair_system", "Compatible stair cable package — selected side count", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "cable_railing_product_line", sourceNotes: "Confirm one stair side or both sides and use the selected system's stair instructions." }),
-      starterComponent("cable_railing_labor", "Cable railing installation labor", { costType: "labor", materialCatalogId: null, quantityBasis: "per_linear_foot", unit: "linear foot" }),
-    ],
-  },
-  {
-    key: "primary_deck_framing",
-    name: "Primary deck framing",
-    summary: "Ledger or rim, joists, beams, posts, blocking, and framing labor.",
-    description: "Structural framing package populated from a reviewed framing plan. The Cost Book does not invent member sizes, spans, counts, or attachment details.",
-    components: [
-      starterComponent("framing_ledger_rim", "Ledger, rim, and edge framing", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity", sourceNotes: "Use only the reviewed structural plan; visible existing conditions are reference evidence." }),
-      starterComponent("framing_joists", "Sized joists and trimmers", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
-      starterComponent("framing_beams", "Sized beam or support system", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
-      starterComponent("framing_posts", "Sized posts and supports", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
-      starterComponent("framing_blocking", "Blocking and bracing", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
-      starterComponent("framing_labor", "Framing installation labor", { costType: "labor", materialCatalogId: null, quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed labor quantity" }),
-    ],
-  },
-  {
-    key: "footings_structural_hardware",
-    name: "Footings and structural hardware",
-    summary: "Concrete, bases, anchors, hangers, caps, ledger hardware, and ties.",
-    description: "Foundation and structural connector package from a reviewed plan and compatible manufacturer schedules. General deck screws never substitute for structural fasteners.",
-    components: [
-      starterComponent("footing_concrete", "Concrete for reviewed footing and pier geometry", { quantityBasis: "manual_review", quantityFactor: "", unit: "cubic yard" }),
-      starterComponent("post_bases_anchors", "Post bases, anchors, and manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "structural_connector_schedule" }),
-      starterComponent("joist_hangers", "Joist hangers and manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "structural_connector_schedule" }),
-      starterComponent("post_caps", "Post caps and manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "structural_connector_schedule" }),
-      starterComponent("ledger_hardware", "Ledger fasteners, washers, flashing, and lateral ties", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "structural_connector_schedule" }),
-      starterComponent("beam_joist_hardware", "Beam-ply and joist-to-beam connectors", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "structural_connector_schedule" }),
-    ],
-  },
-  {
-    key: "stairs_landings",
-    name: "Stairs and landings",
-    summary: "Stringers, treads, risers, landing framing, footings, rails, and labor.",
-    description: "Stair and landing package populated only after reviewed stair geometry and connection details exist.",
-    components: [
-      starterComponent("stair_stringers", "Reviewed stair stringers", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
-      starterComponent("stair_treads_risers", "Stair treads and risers", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
-      starterComponent("landing_framing", "Landing framing and decking", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
-      starterComponent("landing_foundations", "Landing posts, footings, and concrete", { quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed quantity" }),
-      starterComponent("stair_connectors", "Stair and landing connectors with manufacturer fasteners", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", compatibilityGroup: "stair_connector_schedule" }),
-      starterComponent("stair_rails", "Stair rail package — selected side count", { quantityBasis: "manual_review", quantityFactor: "", unit: "package", sourceNotes: "Confirm one stair side or both sides before calculating purchase quantities." }),
-      starterComponent("stair_labor", "Stair and landing labor", { costType: "labor", materialCatalogId: null, quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed labor quantity" }),
-    ],
-  },
-  {
-    key: "jobsite_general_conditions",
-    name: "Demolition, delivery, equipment, and labor",
-    summary: "Common project costs kept separate from finish materials.",
-    description: "Reusable general-conditions package for demolition, disposal, delivery, equipment, and project labor. Review applicability for every job.",
-    components: [
-      starterComponent("demolition_disposal", "Demolition and disposal", { costType: "labor", materialCatalogId: null, quantityBasis: "per_square_foot", unit: "square foot" }),
-      starterComponent("dumpster", "Dumpster or disposal container", { costType: "subcontractor", materialCatalogId: null, quantityBasis: "fixed_each", unit: "allowance", required: false }),
-      starterComponent("material_delivery", "Material delivery", { costType: "subcontractor", materialCatalogId: null, quantityBasis: "fixed_each", unit: "delivery" }),
-      starterComponent("equipment_rental", "Equipment and rental allowance", { costType: "equipment", materialCatalogId: null, quantityBasis: "fixed_each", unit: "allowance", required: false }),
-      starterComponent("project_labor", "Remaining project labor", { costType: "labor", materialCatalogId: null, quantityBasis: "manual_review", quantityFactor: "", unit: "reviewed labor quantity" }),
-    ],
-  },
+  ALUMINUM_RAILING_TEMPLATE,
+  VINYL_RAILING_TEMPLATE,
 ];
 
 function slug(value: string) {
@@ -372,14 +280,14 @@ export function EstimatingAssemblyBuilder() {
       <header className="flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.14em] text-blue-700">Estimating</p>
-          <h1 className="mt-1 text-3xl font-bold text-slate-950">Cost book assemblies</h1>
+          <h1 className="mt-1 text-3xl font-bold text-slate-950">Compatible railing systems</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
-            Save a complete work package once. A future reviewed takeoff supplies the square feet, linear feet, or count; this assembly supplies the products, labor, equipment, waste, and compatibility rules.
+            Use an assembly only when one manufacturer&apos;s components must work together. Decking, framing, wood railing, cable railing, labor, and equipment are calculated or selected elsewhere.
           </p>
         </div>
         <div className="flex gap-3">
           <a href="/operations/materials" className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900">Product catalog</a>
-          <button type="button" onClick={clearEditor} className="min-h-11 rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">New assembly</button>
+          <button type="button" onClick={clearEditor} className="min-h-11 rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">New system assembly</button>
         </div>
       </header>
 
@@ -388,9 +296,9 @@ export function EstimatingAssemblyBuilder() {
       <section className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 sm:p-6" aria-labelledby="starter-library-title">
         <div className="max-w-3xl">
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Start here</p>
-          <h2 id="starter-library-title" className="mt-1 text-xl font-bold text-slate-950">Starter review library</h2>
+          <h2 id="starter-library-title" className="mt-1 text-xl font-bold text-slate-950">Manufacturer-system starters</h2>
           <p className="mt-2 text-sm leading-6 text-slate-700">
-            These are unsaved review templates—not approved products, prices, or structural facts. Load one, review its components, choose the exact catalog products, then save it to the company Cost Book.
+            Start only with aluminum or vinyl railing, where compatible kits, posts, brackets, caps, and stair parts must stay in one product line. Ordinary deck materials do not need an assembly.
           </p>
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -410,14 +318,14 @@ export function EstimatingAssemblyBuilder() {
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section id="assembly-editor" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           <h2 className="text-xl font-bold text-slate-950">{selected ? `Edit ${selected.name}` : "Build an assembly"}</h2>
-          <p className="mt-1 text-sm text-slate-600">Keep the name plain: “Composite decking — grooved field boards” or “Aluminum railing — complete compatible system.”</p>
+          <p className="mt-1 text-sm text-slate-600">Keep the name plain: “Deckorators Contemporary aluminum railing” or “Freedom vinyl railing.”</p>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-semibold text-slate-800">Assembly name
-              <input value={name} onChange={(event) => { setName(event.target.value); if (!selectedId) setAssemblyKey(slug(event.target.value)); }} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-slate-950" placeholder="Composite decking package" />
+              <input value={name} onChange={(event) => { setName(event.target.value); if (!selectedId) setAssemblyKey(slug(event.target.value)); }} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-slate-950" placeholder="Compatible railing system" />
             </label>
             <label className="text-sm font-semibold text-slate-800">Assembly key
-              <input value={assemblyKey} onChange={(event) => setAssemblyKey(slug(event.target.value))} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm text-slate-950" placeholder="composite_decking" />
+              <input value={assemblyKey} onChange={(event) => setAssemblyKey(slug(event.target.value))} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm text-slate-950" placeholder="manufacturer_railing_system" />
             </label>
             <label className="text-sm font-semibold text-slate-800">Trade
               <input value={tradeCode} onChange={(event) => setTradeCode(event.target.value)} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-slate-950" />

@@ -53,8 +53,8 @@ test("API uses the existing Material Catalog authorization and exact company sco
 });
 
 test("cost-book UI separates reusable quantity logic from the product catalog", () => {
-  assert.match(component, /Cost book assemblies/);
-  assert.match(component, /future reviewed takeoff supplies the square feet, linear feet, or count/);
+  assert.match(component, /Compatible railing systems/);
+  assert.match(component, /Use an assembly only when one manufacturer&apos;s components must work together/);
   assert.match(component, /Choose an approved product/);
   assert.match(component, /effective_unit_cost \?\? material\.unit_cost/);
   assert.match(component, /Price not set/);
@@ -65,32 +65,22 @@ test("cost-book UI separates reusable quantity logic from the product catalog", 
   assert.match(component, /Equipment/);
 });
 
-test("cost-book UI provides unsaved starter packages without inventing approved products", () => {
-  assert.match(component, /Starter review library/);
-  assert.match(component, /unsaved review templates—not approved products, prices, or structural facts/);
-  assert.match(component, /Pressure-treated wood decking/);
-  assert.match(component, /Composite decking — grooved field and square-edge border/);
-  assert.match(component, /Wood railing — deck and stair sides/);
+test("cost-book UI limits onboarding assemblies to compatible manufacturer systems", () => {
+  assert.match(component, /Manufacturer-system starters/);
+  assert.match(component, /Ordinary deck materials do not need an assembly/);
   assert.match(component, /Aluminum railing — complete compatible system/);
-  assert.match(component, /Cable railing — complete compatible system/);
-  assert.match(component, /Primary deck framing/);
-  assert.match(component, /Footings and structural hardware/);
-  assert.match(component, /Stairs and landings/);
-  assert.match(component, /Demolition, delivery, equipment, and labor/);
+  assert.match(component, /Vinyl railing — complete compatible system/);
+  assert.match(component, /const STARTER_TEMPLATES: readonly StarterTemplate\[\] = \[[\s\S]*ALUMINUM_RAILING_TEMPLATE,[\s\S]*VINYL_RAILING_TEMPLATE/);
+  assert.doesNotMatch(component, /LEGACY_STARTER_TEMPLATES/);
   assert.match(component, /materialCatalogId: null/);
   assert.match(component, /missingProductCount/);
   assert.match(component, /Choose \{missingProductCount\} approved catalog product/);
 });
 
-test("starter packages preserve product-system and field-review boundaries", () => {
-  assert.match(component, /Grooved composite field boards/);
-  assert.match(component, /Square-edge picture-frame, stair, and butt-joint boards/);
-  assert.match(component, /composite_decking_product_line/);
+test("system assemblies preserve manufacturer and stair-side compatibility", () => {
   assert.match(component, /aluminum_railing_product_line/);
-  assert.match(component, /cable_railing_product_line/);
-  assert.match(component, /one stair side or both stair sides/i);
-  assert.match(component, /The Cost Book does not invent member sizes, spans, counts, or attachment details/);
-  assert.match(component, /General deck screws never substitute for structural fasteners/);
+  assert.match(component, /vinyl_railing_product_line/);
+  assert.match(component, /confirm one side or both sides/i);
   assert.match(component, /quantityBasis: "manual_review"/);
   assert.match(component, /Review notes/);
 });
