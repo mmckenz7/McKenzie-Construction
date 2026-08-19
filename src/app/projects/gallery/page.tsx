@@ -1,8 +1,30 @@
 import Image from "next/image";
+import Link from "next/link";
+import type { Metadata } from "next";
 
 import { Footer } from "@/components/footer";
 import { Navigation } from "@/components/navigation";
 import { SectionTitle } from "@/components/ui";
+
+export const metadata: Metadata = {
+  title: "Deck & Residential Project Gallery",
+  description:
+    "Browse completed deck, stair, exterior, site-improvement, and residential construction work by McKenzie Construction in East Tennessee.",
+  alternates: { canonical: "/projects/gallery" },
+  openGraph: {
+    title: "Deck & Residential Project Gallery | McKenzie Construction",
+    description:
+      "Completed decks, stairs, exterior improvements, and residential construction work in East Tennessee.",
+    url: "/projects/gallery",
+    type: "website",
+    images: [
+      {
+        url: "/projects/island-ford/05062FD1-CF2E-4F0C-8422-79246C3BAAE8_1_105_c.jpeg",
+        alt: "Completed rear wood deck in Lake City, Tennessee",
+      },
+    ],
+  },
+};
 
 const galleryImages = [
   {
@@ -50,6 +72,36 @@ const galleryImages = [
     alt: "Finished interior room in the Island Ford modular home",
     caption: "Interior finish — Lake City, Tennessee",
   },
+  {
+    src: "/projects/completed-renovations/renovation-one-exterior.jpg",
+    alt: "Completed single-story home exterior with fresh landscaping",
+    caption: "Completed exterior renovation — East Tennessee",
+  },
+  {
+    src: "/projects/completed-renovations/renovation-one-kitchen.jpg",
+    alt: "Renovated kitchen with light cabinets, stone-look counters, and tile backsplash",
+    caption: "Kitchen renovation — East Tennessee",
+  },
+  {
+    src: "/projects/completed-renovations/renovation-one-sunroom.jpg",
+    alt: "Finished sunroom with a wall of windows and new carpet",
+    caption: "Sunroom interior finish — East Tennessee",
+  },
+  {
+    src: "/projects/completed-renovations/renovation-two-exterior.jpg",
+    alt: "Completed cottage exterior with restored entry and landscaping",
+    caption: "Cottage exterior renovation — East Tennessee",
+  },
+  {
+    src: "/projects/completed-renovations/renovation-two-living-room.jpg",
+    alt: "Renovated living room with refinished hardwood floors and fireplace",
+    caption: "Living room and hardwood restoration — East Tennessee",
+  },
+  {
+    src: "/projects/completed-renovations/renovation-two-kitchen.jpg",
+    alt: "Renovated kitchen with wood cabinetry, tile floor, and updated appliances",
+    caption: "Kitchen and interior renovation — East Tennessee",
+  },
 ];
 
 export default function ProjectGalleryPage() {
@@ -86,6 +138,38 @@ export default function ProjectGalleryPage() {
             </figure>
           ))}
         </div>
+
+        <section className="mt-12 rounded-[2rem] border border-brand-charcoal/10 bg-white p-7 shadow-sm sm:p-10">
+          <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-green">
+                Full Project Story
+              </p>
+              <h2 className="mt-3 text-3xl font-semibold">
+                See how the Island Ford deck and site work came together.
+              </h2>
+              <p className="mt-4 max-w-3xl leading-7 text-brand-charcoal/70">
+                Review the completed rear deck, stairs, entry decks, exterior
+                work, landscaping, access, and supporting site improvements in
+                one project case study.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
+              <Link
+                href="/projects/island-ford"
+                className="inline-flex min-h-12 items-center justify-center rounded-full bg-brand-charcoal px-6 text-sm font-semibold text-white transition hover:bg-brand-charcoal/85"
+              >
+                View the Full Project
+              </Link>
+              <Link
+                href="/contact?projectType=New%20Deck"
+                className="inline-flex min-h-12 items-center justify-center rounded-full bg-brand-green px-6 text-sm font-semibold text-brand-charcoal transition hover:opacity-90"
+              >
+                Request a Deck Consultation
+              </Link>
+            </div>
+          </div>
+        </section>
       </main>
 
       <Footer />

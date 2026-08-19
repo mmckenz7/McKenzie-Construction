@@ -68,6 +68,28 @@ test("completed project page has canonical metadata and matching project data", 
   assert.match(source, /McKenzie Construction/);
 });
 
+test("public navigation works on mobile and service pages expose breadcrumbs", () => {
+  const navigation = read("src/components/navigation.tsx");
+  const service = read("src/components/service-landing-page.tsx");
+
+  assert.match(navigation, /aria-label="Mobile navigation"/);
+  assert.match(navigation, /Request a Consultation/);
+  assert.match(navigation, /min-h-11/);
+  assert.match(service, /"@type": "BreadcrumbList"/);
+  assert.match(service, /aria-label="Breadcrumb"/);
+});
+
+test("project gallery has search metadata and a path to consultation", () => {
+  const gallery = read("src/app/projects/gallery/page.tsx");
+
+  assert.match(gallery, /canonical: "\/projects\/gallery"/);
+  assert.match(gallery, /View the Full Project/);
+  assert.match(gallery, /\/contact\?projectType=New%20Deck/);
+  assert.match(gallery, /\/projects\/completed-renovations\/renovation-one-exterior\.jpg/);
+  assert.match(gallery, /\/projects\/completed-renovations\/renovation-two-living-room\.jpg/);
+  assert.doesNotMatch(gallery, /Cecil Avenue|Valley View/);
+});
+
 test("new services are discoverable through internal links and sitemap", () => {
   const sitemap = read("src/app/sitemap.ts");
   const footer = read("src/components/footer.tsx");

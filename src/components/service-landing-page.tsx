@@ -84,6 +84,31 @@ export function ServiceLandingPage({
     })),
   };
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: "https://www.mckenzie-builds.com/",
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Services",
+        item: "https://www.mckenzie-builds.com/services",
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: serviceName,
+        item: `https://www.mckenzie-builds.com${path}`,
+      },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-white text-slate-950">
       <script
@@ -94,12 +119,39 @@ export function ServiceLandingPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
 
       <Navigation />
 
       <main>
         <section className="bg-slate-950 text-white">
           <div className="mx-auto max-w-7xl px-6 py-20 sm:px-8 sm:py-28 lg:px-10">
+            <nav aria-label="Breadcrumb" className="mb-8 text-sm text-slate-300">
+              <ol className="flex flex-wrap items-center gap-2">
+                <li>
+                  <Link href="/" className="transition hover:text-lime-300">
+                    Home
+                  </Link>
+                </li>
+                <li aria-hidden="true">/</li>
+                <li>
+                  <Link
+                    href="/services"
+                    className="transition hover:text-lime-300"
+                  >
+                    Services
+                  </Link>
+                </li>
+                <li aria-hidden="true">/</li>
+                <li aria-current="page" className="text-white">
+                  {serviceName}
+                </li>
+              </ol>
+            </nav>
+
             <p className="text-sm font-bold uppercase tracking-[0.22em] text-lime-400">
               {eyebrow}
             </p>
