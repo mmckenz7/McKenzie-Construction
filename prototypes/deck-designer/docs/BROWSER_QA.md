@@ -25,6 +25,7 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Follow-up usability check exposed a hidden prerequisite: the offset action could appear clickable while protected edge references or a missing edge selection blocked it. The control now presents explicit unlock/select/add steps, disables unavailable actions, and keeps the current requirement beside the button.
 - A second follow-up found that clearing the now-obsolete edge selection after a successful region edit looked like a failed action. The action now changes to “Offset added ✓” and explains that a new edge is required only when adding another offset.
 - Direct-edit follow-up added an armed “Add corner” mode, clickable wide segment targets, persistent round corner handles, and square segment handles. Browser QA added a fifth corner by clicking segment 2, then moved segment 1 by one snap increment; both endpoints moved and the adjacent segments remained connected in 2D/3D.
+- The single-corner default created two diagonal segments, which was unsuitable for typical deck offsets. Click placement now creates a small outward rectangular bumpout: the new center segment remains parallel to the original edge, its sides are perpendicular, and all four inserted corners remain editable.
 
 ## 2026-08-19 sidebar clarity and sticky workspace check
 

@@ -10,7 +10,7 @@ import { formatFeetInches } from "./PlanView";
 import { saveDeckDesignV3 } from "./storageV3";
 import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
-import { addCornerOnEdge, movePolygonSegment } from "./polygonEditorV3";
+import { addBumpoutOnEdge, movePolygonSegment } from "./polygonEditorV3";
 
 const ThreeViewV3 = lazy(async () => ({ default: (await import("./ThreeViewV3")).ThreeViewV3 }));
 type Point = Readonly<{ x: number; z: number }>;
@@ -56,11 +56,11 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
   const moveCorner = (index: number, point: Point, commit: boolean) => replaceRegion(platform.region.outer.map((current, currentIndex) => currentIndex === index ? point : current), commit);
   const addCorner = (edgeIndex: number, point: Point) => {
     try {
-      const outer = addCornerOnEdge(platform.region.outer, edgeIndex, point, snapIncrement);
+      const outer = addBumpoutOnEdge(platform.region.outer, edgeIndex, point, snapIncrement);
       if (replaceRegion(outer, true)) {
         setAddCornerMode(false);
         setOffsetComplete(false);
-        setMessage("Corner added. Drag the new corner, any existing corner, or a square segment handle to refine the outline.");
+        setMessage("Rectangular bumpout added with a parallel outer segment. Drag any round corner or square segment handle to refine it.");
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Corner could not be added.");
@@ -144,8 +144,8 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
       <label className="field full"><span>Drag step</span><select value={snapIncrement} onChange={(event) => setSnapIncrement(Number(event.target.value))}><option value="1">1 inch · fine</option><option value="6">6 inches · standard</option><option value="12">12 inches · coarse</option></select></label>
       <div className="field-grid"><V3NumberField label="Deck height" value={platform.elevation} onCommit={(value) => updatePlatform({ elevation: value }, "Deck height updated.")} /><V3NumberField label="Joist spacing" value={platform.construction.framing.joistSpacing} onCommit={(value) => updateConstruction({ ...platform.construction, framing: { ...platform.construction.framing, joistSpacing: value } }, "Joist layout spacing updated.")} /></div>
       {hasEdgeReferences && <section className="selected-edge-card review-card"><strong>Unlock corner editing</strong><p>The current house, railing, or stair options are attached to exact edges. Unlocking clears those edge options so the outline can change safely.</p><button className="primary" onClick={unlockOutline}>Unlock corner editing</button><small>Stairs are turned off and edge options are cleared. Reattach them after shaping the deck.</small></section>}
-      <button className={`primary full-action add-corner-button${addCornerMode ? " active" : ""}`} disabled={hasEdgeReferences} aria-pressed={addCornerMode} onClick={() => setAddCornerMode((current) => !current)}>{addCornerMode ? "Cancel adding corner" : "Add corner"}</button>
-      <p className={`offset-action-status${addCornerMode ? " ready" : ""}`} role="status">{hasEdgeReferences ? "Unlock corner editing above first." : addCornerMode ? "Now click the outline segment where the new corner should go." : "Drag round corner handles or square segment handles directly in the plan."}</p>
+      <button className={`primary full-action add-corner-button${addCornerMode ? " active" : ""}`} disabled={hasEdgeReferences} aria-pressed={addCornerMode} onClick={() => setAddCornerMode((current) => !current)}>{addCornerMode ? "Cancel adding bumpout" : "Add bumpout"}</button>
+      <p className={`offset-action-status${addCornerMode ? " ready" : ""}`} role="status">{hasEdgeReferences ? "Unlock corner editing above first." : addCornerMode ? "Now click the straight edge where the rectangular bumpout should go." : "Drag round corner handles or square segment handles directly in the plan."}</p>
       <div className="section-heading compact preset-offset-heading"><span>+</span><div><p>Preset rectangular offset</p><small>Optional shortcut for a standard notch</small></div></div>
       <label className="field full"><span>Step 2 · Choose the offset edge</span><select disabled={hasEdgeReferences} value={selectedEdgeId ?? ""} onChange={(event) => { setSelectedEdgeId(event.target.value || null); setOffsetComplete(false); }}><option value="">Select an edge…</option>{geometry.platformEdges.map((edge, index) => <option value={edge.id} key={edge.id}>Edge {index + 1} · {formatFeetInches(edge.length)}</option>)}</select><small className="field-help">You can also click an edge directly in the measured plan.</small></label>
       <button className="primary full-action" disabled={hasEdgeReferences || !selectedEdgeId} title={hasEdgeReferences ? "Unlock corner editing first." : !selectedEdgeId && !offsetComplete ? "Choose an edge first." : undefined} onClick={addOffset}>{offsetComplete ? "Offset added ✓" : "Step 3 · Add rectangular offset"}</button>
