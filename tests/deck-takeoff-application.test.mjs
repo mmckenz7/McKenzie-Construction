@@ -127,6 +127,7 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /Checklist progress/);
   assert.match(ui, /Every required category is shown below/);
   assert.match(ui, /price and source needed/);
+  assert.match(ui, /available · choose whether this is included/);
   assert.match(ui, /COMPLETE_REBUILD_LINE_KEYS\.map/);
   assert.match(ui, /Next category/);
   assert.match(ui, /Deck-board fasteners \(required\)/);

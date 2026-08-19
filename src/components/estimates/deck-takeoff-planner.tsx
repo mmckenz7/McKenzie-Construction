@@ -2430,13 +2430,19 @@ export function DeckTakeoffPlanner({
     const line = plan.additionalLines.find((candidate) => candidate.key === key);
     if (requirement === "applicability_unknown")
       return "Field condition still needs confirmation";
-    if (!decision) return "Choose whether this is included";
+    const quantity = Number(line?.quantity);
+    const quantityReady = Boolean(
+      line && Number.isFinite(quantity) && quantity > 0 && line.unit.trim(),
+    );
+    const quantityLabel = quantityReady ? `${line!.quantity} ${line!.unit}` : "";
+    if (!decision)
+      return quantityReady
+        ? `${quantityLabel} available · choose whether this is included; member or cost details may still be needed`
+        : "Choose whether this is included";
     if (decision === "not_in_scope") return "Not included in this estimate";
     if (!line) return "Material or cost line is missing";
-    const quantity = Number(line.quantity);
-    if (!(Number.isFinite(quantity) && quantity > 0 && line.unit.trim()))
+    if (!quantityReady)
       return "Reviewed quantity is still needed";
-    const quantityLabel = `${line.quantity} ${line.unit}`;
     if (!(Number(line.unitCost) > 0 && line.sourceReference.trim()))
       return `${quantityLabel} calculated or entered · price and source needed`;
     return `${quantityLabel} · ready`;
