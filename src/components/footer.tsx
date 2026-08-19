@@ -32,6 +32,27 @@ export function Footer() {
           </Link>
 
           <Link
+            href="/deck-replacement-knoxville"
+            className="transition hover:text-brand-green"
+          >
+            Deck Replacement
+          </Link>
+
+          <Link
+            href="/composite-decks-knoxville"
+            className="transition hover:text-brand-green"
+          >
+            Composite Decks
+          </Link>
+
+          <Link
+            href="/covered-decks-knoxville"
+            className="transition hover:text-brand-green"
+          >
+            Covered Decks
+          </Link>
+
+          <Link
             href="/projects"
             className="transition hover:text-brand-green"
           >

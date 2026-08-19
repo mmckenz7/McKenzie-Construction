@@ -300,6 +300,44 @@ export default function KnoxvilleDeckBuilderPage() {
           </div>
         </section>
 
+        <section className="border-y border-slate-200 bg-slate-50">
+          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-8 lg:px-10">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-950">
+              Explore the right deck project for your home
+            </h2>
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {[
+                {
+                  href: "/deck-replacement-knoxville",
+                  title: "Deck Replacement",
+                  description: "Replace an aging deck or revise the existing layout.",
+                },
+                {
+                  href: "/composite-decks-knoxville",
+                  title: "Composite Decks",
+                  description: "Compare lower-maintenance finishes and coordinated details.",
+                },
+                {
+                  href: "/covered-decks-knoxville",
+                  title: "Covered Decks",
+                  description: "Plan shade and weather protection as part of the complete space.",
+                },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="rounded-xl border border-slate-200 bg-white p-5 transition hover:border-lime-600"
+                >
+                  <span className="font-bold text-slate-950">{item.title}</span>
+                  <span className="mt-2 block text-sm leading-6 text-slate-600">
+                    {item.description}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section className="bg-slate-950">
           <div className="mx-auto max-w-7xl px-6 py-20 sm:px-8 lg:px-10">
             <div className="max-w-3xl">
