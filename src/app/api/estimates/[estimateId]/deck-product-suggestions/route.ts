@@ -144,6 +144,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const refreshKinds = deckProductKindsNeedingRefresh(
       requiredKinds,
       savedProducts,
+    ).filter(
+      (kind) =>
+        kind !== "deck_fastener" ||
+        savedProducts.every(
+          (product) =>
+            !deckingKinds.includes(product.kind) || !product.unitCost,
+        ),
     );
 
     let live = [] as ReturnType<typeof enrichLiveDeckProducts>;

@@ -169,6 +169,10 @@ test("Lowe's defaults are read-only, tenant-authorized, and bound to exact produ
   assert.match(suggestionRoute, /unpricedKinds/);
   assert.match(suggestionRoute, /deckProductKindsNeedingRefresh/);
   assert.match(suggestionRoute, /unpricedDeckProductKinds/);
+  assert.match(
+    suggestionRoute,
+    /kind !== "deck_fastener"[\s\S]*!deckingKinds\.includes\(product\.kind\) \|\| !product\.unitCost/,
+  );
   assert.match(estimatingDefaults, /Clinton Highway/);
   assert.match(estimatingDefaults, /25\.8/);
   assert.match(ui, /Load products and estimating costs/);
