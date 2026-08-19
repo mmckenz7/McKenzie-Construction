@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL Vite prints. Use `npm test` and `npm run build` for validation.
+Open the local URL Vite prints. Use `npm run validate` for the complete deterministic, isolation, bundle-budget, and golden-fixture validation sequence.
 
 ## Current Phase A boundary
 
@@ -30,6 +30,7 @@ Open the local URL Vite prints. Use `npm test` and `npm run build` for validatio
 - Orbit, pan, zoom, and camera presets
 - Lazy-loaded 3D runtime with enforced initial, largest-chunk, and total JavaScript budgets
 - Economy, balanced, and detailed local 3D quality tiers that never alter design facts
+- Build-time isolation guard against imports outside the prototype, network calls, and environment access
 - Browser local save plus JSON download/upload
 - Conceptual output only; not structural engineering or construction documents
 

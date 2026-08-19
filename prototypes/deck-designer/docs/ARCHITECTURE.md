@@ -4,6 +4,8 @@
 
 Everything under `prototypes/deck-designer/` is an isolated browser application. It does not import from McKenzie OS, call its APIs, use Supabase, or modify shared domain models. `DeckDesignV1` is a prototype-owned contract until the owner and Master Technical Controller approve an integration contract.
 
+The build runs an isolation guard before compilation. It rejects source imports that escape the prototype, unapproved bare imports, browser network primitives, and environment-variable access. This complements scoped-diff review; it does not grant integration authority.
+
 ## Authoritative flow
 
 `DeckDesignV1 JSON -> normalize and validate -> deterministic geometry projection -> 2D + 3D + deterministic quantity projection`

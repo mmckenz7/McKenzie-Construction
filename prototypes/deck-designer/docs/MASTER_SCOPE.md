@@ -74,6 +74,7 @@ AI is never authoritative for geometry, quantities, field measurements, structur
 
 - One design drives every projection.
 - Every derived quantity is reproducible from recorded facts.
+- Every build enforces the prototype import/network/environment isolation boundary.
 - Visualization, estimate, and engineer/permit quantities remain distinct.
 - No unlicensed assets or hard-coded production catalog dump.
 - No production integration without a written contract and explicit approval.
