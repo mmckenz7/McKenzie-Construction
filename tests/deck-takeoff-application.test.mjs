@@ -87,7 +87,7 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
     "I reviewed the build-plan quantities",
     "I reviewed every true cost and its source",
     "Add reviewed takeoff to estimate",
-    "Complete-rebuild scope and planned quantities",
+    "Framing materials, hardware, labor, and remaining costs",
     "Reviewed build-plan source",
     "Ledger and house attachment",
     "Foundations / footings and concrete",
@@ -125,6 +125,9 @@ test("UI keeps calculation, human plan, price evidence, and customer proposal as
   assert.match(ui, /Required for complete rebuild/);
   assert.match(ui, /Only delivery, equipment/);
   assert.match(ui, /Checklist progress/);
+  assert.match(ui, /Every required category is shown below/);
+  assert.match(ui, /price and source needed/);
+  assert.match(ui, /COMPLETE_REBUILD_LINE_KEYS\.map/);
   assert.match(ui, /Next category/);
   assert.match(ui, /Deck-board fasteners \(required\)/);
   assert.match(ui, /Compatibility \/ reviewed-detail verification/);

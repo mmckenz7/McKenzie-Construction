@@ -2424,6 +2424,23 @@ export function DeckTakeoffPlanner({
   };
   const completedScopeCount =
     COMPLETE_REBUILD_LINE_KEYS.filter(scopeLineComplete).length;
+  const scopeLineStatus = (key: CompleteRebuildLineKey) => {
+    const requirement = completeRebuildScopeRequirement(key, visitItems);
+    const decision = plan.scopeDecisions[key];
+    const line = plan.additionalLines.find((candidate) => candidate.key === key);
+    if (requirement === "applicability_unknown")
+      return "Field condition still needs confirmation";
+    if (!decision) return "Choose whether this is included";
+    if (decision === "not_in_scope") return "Not included in this estimate";
+    if (!line) return "Material or cost line is missing";
+    const quantity = Number(line.quantity);
+    if (!(Number.isFinite(quantity) && quantity > 0 && line.unit.trim()))
+      return "Reviewed quantity is still needed";
+    const quantityLabel = `${line.quantity} ${line.unit}`;
+    if (!(Number(line.unitCost) > 0 && line.sourceReference.trim()))
+      return `${quantityLabel} calculated or entered · price and source needed`;
+    return `${quantityLabel} · ready`;
+  };
 
   const completeRebuildScope = (
     <section className="mt-5 rounded-lg border-2 border-amber-400 bg-white p-4">
@@ -2431,12 +2448,14 @@ export function DeckTakeoffPlanner({
         Required before calculation
       </p>
       <h4 className="mt-1 font-black text-slate-950">
-        Complete-rebuild scope and planned quantities
+        Framing materials, hardware, labor, and remaining costs
       </h4>
       <p className="mt-1 text-sm text-slate-600">
-        Complete the checklist one category at a time. Core rebuild work is
-        required. Only delivery, equipment, and conditionally non-applicable
-        ledger or stairs may be marked outside this estimate.
+        Every required category is shown below. Calculated geometry appears
+        immediately; anything the saved shape cannot determine stays plainly
+        marked as needing a reviewed plan, quantity, product, or cost source.
+        Only delivery, equipment, and conditionally non-applicable ledger or
+        stairs may be marked outside this estimate.
       </p>
       <label
         className={`mt-3 flex min-h-11 items-start gap-3 rounded-md border p-3 text-sm font-bold focus-within:ring-2 focus-within:ring-blue-700 ${plan.completeRebuildConfirmed ? "border-emerald-500 bg-emerald-50 text-emerald-950" : "border-amber-400 bg-amber-50 text-amber-950"}`}
@@ -2511,6 +2530,32 @@ export function DeckTakeoffPlanner({
               width: `${(completedScopeCount / COMPLETE_REBUILD_LINE_KEYS.length) * 100}%`,
             }}
           />
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {COMPLETE_REBUILD_LINE_KEYS.map((key) => {
+            const line = plan.additionalLines.find(
+              (candidate) => candidate.key === key,
+            );
+            const complete = scopeLineComplete(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                className={`min-h-16 rounded-md border p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 ${activeScopeKey === key ? "border-blue-700 bg-blue-50" : complete ? "border-emerald-400 bg-emerald-50" : "border-slate-300 bg-white"}`}
+                onClick={() => setActiveScopeKey(key)}
+              >
+                <span className="block text-sm font-black text-slate-950">
+                  {complete ? "✓ " : ""}
+                  {line?.description || key.replaceAll("_", " ")}
+                </span>
+                <span
+                  className={`mt-1 block text-xs font-bold leading-5 ${complete ? "text-emerald-800" : "text-amber-900"}`}
+                >
+                  {scopeLineStatus(key)}
+                </span>
+              </button>
+            );
+          })}
         </div>
         <Field label="Scope category">
           <select
