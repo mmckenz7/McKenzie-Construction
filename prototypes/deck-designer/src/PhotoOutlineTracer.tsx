@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 import { normalizePolygonRegion } from "./polygonRegion";
 import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment } from "./polygonEditorV3";
@@ -88,9 +88,12 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, onChange,
   const segmentDrag = useRef<Readonly<{ index: number; midpoint: PolygonPoint; outward: PolygonPoint }> | null>(null);
   const activeDrag = useRef<string | null>(null);
   const frozenView = useRef<ViewBounds | null>(null);
+  const undoStack = useRef<readonly (readonly PolygonPoint[])[]>([]);
   const [activePhoto, setActivePhoto] = useState(0);
   const [active, setActive] = useState<string | null>(null);
   const [selection, setSelection] = useState<TraceSelection>(null);
+  const [undoCount, setUndoCount] = useState(0);
+  useEffect(() => { undoStack.current = []; setUndoCount(0); setSelection(null); }, [width, projection]);
   const edges = useMemo(() => deriveGeometricPolygonEdges(outer), [outer]);
   const houseEdgeIndex = edges.findIndex((edge) => Math.abs(edge.start.z) < .01 && Math.abs(edge.end.z) < .01);
   const fixedHouseCorners = new Set(houseEdgeIndex < 0 ? [] : [houseEdgeIndex, (houseEdgeIndex + 1) % outer.length]);
@@ -111,15 +114,32 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, onChange,
     const local = point.matrixTransform(matrix.inverse());
     return Object.freeze({ x: snap(local.x + view.minX - view.margin), z: snap(local.y + view.minZ - view.margin) });
   };
-  const accept = (candidate: readonly PolygonPoint[]) => {
-    try { onChange(validatePhotoTrace(candidate)); onError(""); }
-    catch (error) { onError(error instanceof Error ? error.message : "That outline is not valid."); }
+  const remember = (snapshot = outer) => {
+    const frozen = Object.freeze(snapshot.map((point) => Object.freeze({ ...point })));
+    const previous = undoStack.current[undoStack.current.length - 1];
+    if (previous && JSON.stringify(previous) === JSON.stringify(frozen)) return;
+    undoStack.current = Object.freeze([...undoStack.current.slice(-39), frozen]);
+    setUndoCount(undoStack.current.length);
+  };
+  const undo = () => {
+    const previous = undoStack.current[undoStack.current.length - 1];
+    if (!previous) return;
+    undoStack.current = Object.freeze(undoStack.current.slice(0, -1));
+    setUndoCount(undoStack.current.length);
+    setSelection(null);
+    onChange(previous);
+    onError("");
+  };
+  const accept = (candidate: readonly PolygonPoint[]): boolean => {
+    try { onChange(validatePhotoTrace(candidate)); onError(""); return true; }
+    catch (error) { onError(error instanceof Error ? error.message : "That outline is not valid."); return false; }
   };
   const addOffset = (index: number) => {
     if (index === houseEdgeIndex) { onError("Keep the highlighted house line straight. Add offsets to another edge."); return; }
     try {
       const edge = edges[index];
-      accept(addBumpoutOnEdge(outer, index, { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 }, snapIncrement));
+      const accepted = accept(addBumpoutOnEdge(outer, index, { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 }, snapIncrement));
+      if (accepted) remember(outer);
       setSelection(null);
     } catch (error) { onError(error instanceof Error ? error.message : "An offset cannot be added there."); }
   };
@@ -148,7 +168,7 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, onChange,
       <small>Photos are visual references only. The measured plan beside them is the geometry.</small>
     </section>
     <section className="trace-plan">
-      <div className="trace-plan-heading"><div><strong>Confirmed outline</strong><small>{outer.length} corners · 6-inch snap</small></div><button onClick={() => onChange(rectangleTrace(width, projection))}>Reset rectangle</button></div>
+      <div className="trace-plan-heading"><div><strong>Confirmed outline</strong><small>{outer.length} corners · 6-inch snap</small></div><div className="trace-heading-actions"><button disabled={undoCount === 0} onClick={undo}>Undo{undoCount > 0 ? ` (${undoCount})` : ""}</button><button onClick={() => { remember(outer); setSelection(null); onChange(rectangleTrace(width, projection)); }}>Reset rectangle</button></div></div>
       <svg ref={svg} viewBox={`0 0 ${view.width} ${view.height}`} role="img" aria-label={`Photo-reference outline with ${outer.length} corners`}>
         <defs><pattern id="trace-grid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#a9b4ad" strokeWidth=".4" /></pattern></defs>
         <rect width="100%" height="100%" fill="url(#trace-grid)" />
@@ -158,17 +178,17 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, onChange,
           const labelZ = (edge.start.z + edge.end.z) / 2;
           return <g key={edge.id}><line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className={index === houseEdgeIndex ? "trace-house-edge" : "trace-edge"} /><text x={x(labelX)} y={y(labelZ) - 8} className="trace-dimension-label">{formatLength(edge.length)}</text><line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className="trace-edge-hit" role="button" tabIndex={0} aria-label={index === houseEdgeIndex ? "Straight house attachment edge" : `Add rectangular offset on edge ${index + 1}`} onClick={() => addOffset(index)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); addOffset(index); } }} />{index !== houseEdgeIndex && (() => {
           const midpoint = Object.freeze({ x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 });
-          return <rect x={x(midpoint.x) - 6} y={y(midpoint.z) - 6} width="12" height="12" rx="3" className={`trace-segment-handle${selection?.kind === "segment" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`Move edge ${index + 1}`} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); frozenView.current = computedView; dragStart.current = outer; segmentDrag.current = { index, midpoint, outward: edge.outward }; activeDrag.current = `segment-${index}`; setSelection({ kind: "segment", index }); setActive(`segment-${index}`); }} onPointerMove={(event) => { if (activeDrag.current !== `segment-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const point = pointFromClient(event.clientX, event.clientY); const origin = segmentDrag.current; if (!point || !origin) return; try { accept(movePolygonSegment(dragStart.current ?? outer, index, (point.x - origin.midpoint.x) * origin.outward.x + (point.z - origin.midpoint.z) * origin.outward.z, snapIncrement, false)); } catch { /* reject preview */ } }} onPointerUp={(event) => { event.currentTarget.releasePointerCapture(event.pointerId); endDrag(); }} onPointerCancel={cancelDrag} />;
+          return <rect x={x(midpoint.x) - 6} y={y(midpoint.z) - 6} width="12" height="12" rx="3" className={`trace-segment-handle${selection?.kind === "segment" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`Move edge ${index + 1}`} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); remember(outer); frozenView.current = computedView; dragStart.current = outer; segmentDrag.current = { index, midpoint, outward: edge.outward }; activeDrag.current = `segment-${index}`; setSelection({ kind: "segment", index }); setActive(`segment-${index}`); }} onPointerMove={(event) => { if (activeDrag.current !== `segment-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const point = pointFromClient(event.clientX, event.clientY); const origin = segmentDrag.current; if (!point || !origin) return; try { accept(movePolygonSegment(dragStart.current ?? outer, index, (point.x - origin.midpoint.x) * origin.outward.x + (point.z - origin.midpoint.z) * origin.outward.z, snapIncrement, false)); } catch { /* reject preview */ } }} onPointerUp={(event) => { event.currentTarget.releasePointerCapture(event.pointerId); endDrag(); }} onPointerCancel={cancelDrag} />;
         })()}</g>;
         })}
         {outer.map((point, index) => {
           const houseCorner = fixedHouseCorners.has(index);
-          return <circle key={index} cx={x(point.x)} cy={y(point.z)} r="7" className={`trace-corner${houseCorner ? " house" : ""}${selection?.kind === "corner" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`${houseCorner ? "Move house-line" : "Move"} corner ${index + 1}`} onPointerDown={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.setPointerCapture(event.pointerId); frozenView.current = computedView; dragStart.current = outer; activeDrag.current = `corner-${index}`; setSelection({ kind: "corner", index }); setActive(`corner-${index}`); }} onPointerMove={(event: PointerEvent<SVGCircleElement>) => { if (activeDrag.current !== `corner-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const next = pointFromClient(event.clientX, event.clientY); if (!next) return; const constrained = houseCorner ? Object.freeze({ x: next.x, z: 0 }) : next; try { accept(movePolygonCorner(dragStart.current ?? outer, index, constrained, false, snapIncrement)); } catch { /* reject preview */ } }} onPointerUp={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.releasePointerCapture(event.pointerId); endDrag(); }} onPointerCancel={cancelDrag} />;
+          return <circle key={index} cx={x(point.x)} cy={y(point.z)} r="7" className={`trace-corner${houseCorner ? " house" : ""}${selection?.kind === "corner" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`${houseCorner ? "Move house-line" : "Move"} corner ${index + 1}`} onPointerDown={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.setPointerCapture(event.pointerId); remember(outer); frozenView.current = computedView; dragStart.current = outer; activeDrag.current = `corner-${index}`; setSelection({ kind: "corner", index }); setActive(`corner-${index}`); }} onPointerMove={(event: PointerEvent<SVGCircleElement>) => { if (activeDrag.current !== `corner-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const next = pointFromClient(event.clientX, event.clientY); if (!next) return; const constrained = houseCorner ? Object.freeze({ x: next.x, z: 0 }) : next; try { accept(movePolygonCorner(dragStart.current ?? outer, index, constrained, false, snapIncrement)); } catch { /* reject preview */ } }} onPointerUp={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.releasePointerCapture(event.pointerId); endDrag(); }} onPointerCancel={cancelDrag} />;
         })}
       </svg>
       {(selectedCorner || selectedEdge) && <div className="trace-dimension-editor">
-        {selectedCorner && selection?.kind === "corner" && <><div><strong>Corner {selection.index + 1}</strong><small>Measured from the original left house corner.</small></div><label><span>Along house (ft)</span><input type="number" step="0.5" value={feet(selectedCorner.x)} onChange={(event) => { if (event.target.value !== "") setCornerFeet("x", Number(event.target.value)); }} /></label><label><span>Away from house (ft)</span><input type="number" step="0.5" disabled={selectedHouseCorner} value={feet(selectedCorner.z)} onChange={(event) => { if (event.target.value !== "") setCornerFeet("z", Number(event.target.value)); }} /></label></>}
-        {selectedEdge && selection?.kind === "segment" && (() => { const horizontal = Math.abs(selectedEdge.end.x - selectedEdge.start.x) >= Math.abs(selectedEdge.end.z - selectedEdge.start.z); const position = horizontal ? selectedEdge.start.z : selectedEdge.start.x; return <><div><strong>Edge {selection.index + 1} · {formatLength(selectedEdge.length)}</strong><small>Enter its exact plan position or keep dragging the square.</small></div><label><span>{horizontal ? "Away from house" : "Along house"} (ft)</span><input type="number" step="0.5" value={feet(position)} onChange={(event) => { if (event.target.value !== "") setSegmentFeet(Number(event.target.value)); }} /></label></>; })()}
+        {selectedCorner && selection?.kind === "corner" && <><div><strong>Corner {selection.index + 1}</strong><small>Measured from the original left house corner.</small></div><label><span>Along house (ft)</span><input type="number" step="0.5" value={feet(selectedCorner.x)} onFocus={() => remember(outer)} onChange={(event) => { if (event.target.value !== "") setCornerFeet("x", Number(event.target.value)); }} /></label><label><span>Away from house (ft)</span><input type="number" step="0.5" disabled={selectedHouseCorner} value={feet(selectedCorner.z)} onFocus={() => remember(outer)} onChange={(event) => { if (event.target.value !== "") setCornerFeet("z", Number(event.target.value)); }} /></label></>}
+        {selectedEdge && selection?.kind === "segment" && (() => { const horizontal = Math.abs(selectedEdge.end.x - selectedEdge.start.x) >= Math.abs(selectedEdge.end.z - selectedEdge.start.z); const position = horizontal ? selectedEdge.start.z : selectedEdge.start.x; return <><div><strong>Edge {selection.index + 1} · {formatLength(selectedEdge.length)}</strong><small>Enter its exact plan position or keep dragging the square.</small></div><label><span>{horizontal ? "Away from house" : "Along house"} (ft)</span><input type="number" step="0.5" value={feet(position)} onFocus={() => remember(outer)} onChange={(event) => { if (event.target.value !== "") setSegmentFeet(Number(event.target.value)); }} /></label></>; })()}
       </div>}
       <div className="trace-edge-buttons" aria-label="Add outline offset">{edges.map((edge, index) => index === houseEdgeIndex ? null : <button key={edge.id} onClick={() => addOffset(index)}>Add offset to edge {index + 1}</button>)}</div>
       <p><span className="trace-dot round" /> Select or drag a corner. <span className="trace-dot square" /> Select or drag an edge. Exact feet controls appear after selection.</p>

@@ -24,6 +24,8 @@ Only explicitly confirmed width, projection, optional elevation, attachment resp
 
 The tracer displays deterministic feet-and-inches labels on every segment. Selecting a round corner exposes exact along-house and away-from-house coordinates; selecting a square edge exposes its exact perpendicular plan position. Typed values use six-inch increments without magnetic realignment, while direct dragging retains snap behavior and a frozen drag view so resizing geometry does not change the pointer scale mid-drag.
 
+Before a traced polygon becomes DeckDesign v3, the dialog owns a bounded local undo stack. Offset creation, each pointer-drag start, each focused exact-dimension edit, and rectangle reset record a prior polygon snapshot. Undo restores only this ephemeral trace state; it does not write history into the design document or interfere with the main editor's monotonic command history.
+
 This tracer is not photogrammetry and performs no image analysis or AI calls: images help the user recognize the shape, while only their plan edits record corners. Future perspective calibration, multi-view reconstruction, or AI suggestions must remain reviewable proposals until user confirmation and must not alter this authority boundary.
 
 ## Current prototype JSON shape

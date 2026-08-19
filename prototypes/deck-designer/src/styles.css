@@ -103,6 +103,8 @@ button:hover { transform: translateY(-1px); }
 .trace-plan-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .trace-plan-heading small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
 .trace-plan-heading button { min-height: 44px; }
+.trace-heading-actions { display: flex; gap: 6px; }
+.trace-heading-actions button:disabled { cursor: not-allowed; opacity: .4; }
 .trace-plan svg { display: block; width: 100%; height: 360px; border: 1px solid #d8ded9; border-radius: 8px; touch-action: none; }
 .trace-edge-buttons { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; padding-bottom: 2px; }
 .trace-edge-buttons button { min-width: 128px; min-height: 44px; flex: 1 0 auto; border-color: #aab8ae; background: #f5f7f4; color: #28483b; font-size: 9px; font-weight: 750; }
