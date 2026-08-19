@@ -10,7 +10,7 @@ import { formatFeetInches } from "./PlanView";
 import { saveDeckDesignV3 } from "./storageV3";
 import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
-import { addBumpoutOnEdge, movePolygonSegment } from "./polygonEditorV3";
+import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment } from "./polygonEditorV3";
 
 const ThreeViewV3 = lazy(async () => ({ default: (await import("./ThreeViewV3")).ThreeViewV3 }));
 type Point = Readonly<{ x: number; z: number }>;
@@ -53,7 +53,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
       return false;
     }
   };
-  const moveCorner = (index: number, point: Point, commit: boolean) => replaceRegion(platform.region.outer.map((current, currentIndex) => currentIndex === index ? point : current), commit);
+  const moveCorner = (index: number, point: Point, commit: boolean) => replaceRegion(movePolygonCorner(platform.region.outer, index, point, commit), commit);
   const addCorner = (edgeIndex: number, point: Point) => {
     try {
       const outer = addBumpoutOnEdge(platform.region.outer, edgeIndex, point, snapIncrement);
@@ -69,7 +69,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
   const moveSegment = (edgeIndex: number, distance: number, commit: boolean) => {
     try {
       const current = history.present.platforms.find((item) => item.id === platform.id)!;
-      replaceRegion(movePolygonSegment(current.region.outer, edgeIndex, distance, snapIncrement), commit);
+      replaceRegion(movePolygonSegment(current.region.outer, edgeIndex, distance, snapIncrement, commit), commit);
       if (commit) setMessage("Segment moved with both attached corners; neighboring segments remained connected.");
     } catch (error) {
       setPreview(null);
@@ -145,7 +145,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready." }
       <div className="field-grid"><V3NumberField label="Deck height" value={platform.elevation} onCommit={(value) => updatePlatform({ elevation: value }, "Deck height updated.")} /><V3NumberField label="Joist spacing" value={platform.construction.framing.joistSpacing} onCommit={(value) => updateConstruction({ ...platform.construction, framing: { ...platform.construction.framing, joistSpacing: value } }, "Joist layout spacing updated.")} /></div>
       {hasEdgeReferences && <section className="selected-edge-card review-card"><strong>Unlock corner editing</strong><p>The current house, railing, or stair options are attached to exact edges. Unlocking clears those edge options so the outline can change safely.</p><button className="primary" onClick={unlockOutline}>Unlock corner editing</button><small>Stairs are turned off and edge options are cleared. Reattach them after shaping the deck.</small></section>}
       <button className={`primary full-action add-corner-button${addCornerMode ? " active" : ""}`} disabled={hasEdgeReferences} aria-pressed={addCornerMode} onClick={() => setAddCornerMode((current) => !current)}>{addCornerMode ? "Cancel adding bumpout" : "Add bumpout"}</button>
-      <p className={`offset-action-status${addCornerMode ? " ready" : ""}`} role="status">{hasEdgeReferences ? "Unlock corner editing above first." : addCornerMode ? "Now click the straight edge where the rectangular bumpout should go." : "Drag round corner handles or square segment handles directly in the plan."}</p>
+      <p className={`offset-action-status${addCornerMode ? " ready" : ""}`} role="status">{hasEdgeReferences ? "Unlock corner editing above first." : addCornerMode ? "Click the straight edge—or click near its end to line the bumpout up with that corner." : "To align a bumpout with a corner, drag its square side handle onto that corner; coincident points merge automatically."}</p>
       <div className="section-heading compact preset-offset-heading"><span>+</span><div><p>Preset rectangular offset</p><small>Optional shortcut for a standard notch</small></div></div>
       <label className="field full"><span>Step 2 · Choose the offset edge</span><select disabled={hasEdgeReferences} value={selectedEdgeId ?? ""} onChange={(event) => { setSelectedEdgeId(event.target.value || null); setOffsetComplete(false); }}><option value="">Select an edge…</option>{geometry.platformEdges.map((edge, index) => <option value={edge.id} key={edge.id}>Edge {index + 1} · {formatFeetInches(edge.length)}</option>)}</select><small className="field-help">You can also click an edge directly in the measured plan.</small></label>
       <button className="primary full-action" disabled={hasEdgeReferences || !selectedEdgeId} title={hasEdgeReferences ? "Unlock corner editing first." : !selectedEdgeId && !offsetComplete ? "Choose an edge first." : undefined} onClick={addOffset}>{offsetComplete ? "Offset added ✓" : "Step 3 · Add rectangular offset"}</button>

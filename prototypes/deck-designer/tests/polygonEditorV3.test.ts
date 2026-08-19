@@ -1,6 +1,6 @@
 // @ts-ignore The production root intentionally does not install this isolated prototype package's test runner.
 import { describe, expect, it } from "vitest";
-import { addBumpoutOnEdge, movePolygonSegment } from "../src/polygonEditorV3";
+import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment } from "../src/polygonEditorV3";
 import { normalizePolygon } from "../src/polygon";
 
 const rectangle = Object.freeze([{ x: 0, z: 0 }, { x: 192, z: 0 }, { x: 192, z: 144 }, { x: 0, z: 144 }]);
@@ -19,6 +19,26 @@ describe("direct v3 polygon authoring", () => {
     const next = movePolygonSegment(rectangle, 2, 24, 6);
     expect(next).toEqual([{ x: 0, z: 0 }, { x: 192, z: 0 }, { x: 192, z: 168 }, { x: 0, z: 168 }]);
     expect(normalizePolygon(next)).toEqual(next);
+  });
+
+  it("anchors a bumpout to an existing corner when the click is near the edge endpoint", () => {
+    const next = addBumpoutOnEdge(rectangle, 1, { x: 192, z: 2 }, 6);
+    expect(next).toHaveLength(6);
+    expect(next.slice(1, 4)).toEqual([
+      { x: 198, z: 0 }, { x: 198, z: 24 }, { x: 192, z: 24 },
+    ]);
+    expect(normalizePolygon(next)).toEqual(next);
+  });
+
+  it("merges a bumpout side or corner when it aligns with an existing corner", () => {
+    const bumpout = addBumpoutOnEdge(rectangle, 1, { x: 192, z: 60 }, 6);
+    const movedSide = movePolygonSegment(bumpout, 2, 48, 6);
+    expect(movedSide).toHaveLength(6);
+    expect(movedSide[1]).toEqual({ x: 198, z: 0 });
+    expect(normalizePolygon(movedSide)).toEqual(movedSide);
+    const mergedCorner = movePolygonCorner(bumpout, 2, bumpout[1]);
+    expect(mergedCorner).toHaveLength(7);
+    expect(normalizePolygon(mergedCorner)).toEqual(mergedCorner);
   });
 
   it("rejects corner insertion on segments too short for snapped placement", () => {
