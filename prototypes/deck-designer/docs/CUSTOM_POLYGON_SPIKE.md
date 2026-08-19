@@ -10,6 +10,8 @@ The ring—not generated meshes or quantities—would be authoritative. Stable o
 
 An isolated region kernel also proves up to eight strictly contained, non-touching, non-overlapping hole rings. Region area subtracts normalized hole areas, and horizontal/vertical member intervals split deterministically around voids. These are still kernel semantics only, not DeckDesign facts.
 
+The projection spike now triangulates simple concave outer rings with stable triangle IDs and area preservation. It also generates deterministic board and joist segments across a polygon region, splitting members around holes and recording reproducible total lengths. Hole-aware surface triangulation remains intentionally separate and unproven.
+
 ## Migration and integration direction
 
 - Rectangle and L-shape facts can migrate deterministically into canonical rings.
@@ -24,3 +26,4 @@ An isolated region kernel also proves up to eight strictly contained, non-touchi
 - Whether the first UI permits arbitrary angles or begins with orthogonal-only editing.
 - Minimum edge length, snapping policy, and tolerance rules for imported designs.
 - Versioned treatment of edge-attached stairs and railings when vertices are inserted, removed, or reordered.
+- Hole-aware triangulation and 3D extrusion strategy without making render triangles authoritative.
