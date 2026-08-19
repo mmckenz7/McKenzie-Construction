@@ -7,6 +7,11 @@ export type PolygonEdge = Readonly<{
   outward: PolygonPoint;
 }>;
 export type PolygonInterval = Readonly<{ start: number; end: number }>;
+export type PolygonEdgeReferenceResolution = Readonly<{
+  status: "preserved" | "remapped" | "review_required" | "missing";
+  previousEdgeId: string;
+  candidateEdgeIds: readonly string[];
+}>;
 
 const EPSILON = 0.000001;
 const samePoint = (a: PolygonPoint, b: PolygonPoint): boolean =>
@@ -132,6 +137,69 @@ export function derivePolygonEdges(points: readonly PolygonPoint[]): readonly Po
       outward: Object.freeze({ x: dz / length, z: -dx / length }),
     });
   }));
+}
+
+const encodeCoordinate = (value: number): string => {
+  const scaled = Math.round(value * 100);
+  return `${scaled < 0 ? "n" : "p"}${Math.abs(scaled)}`;
+};
+
+export function geometricPolygonEdgeId(start: PolygonPoint, end: PolygonPoint): string {
+  return `edge-${encodeCoordinate(start.x)}-${encodeCoordinate(start.z)}--${encodeCoordinate(end.x)}-${encodeCoordinate(end.z)}`;
+}
+
+export function deriveGeometricPolygonEdges(points: readonly PolygonPoint[]): readonly PolygonEdge[] {
+  const normalized = normalizePolygon(points);
+  return Object.freeze(normalized.map((start, index) => {
+    const end = normalized[(index + 1) % normalized.length];
+    const dx = end.x - start.x;
+    const dz = end.z - start.z;
+    const length = Math.hypot(dx, dz);
+    return Object.freeze({
+      id: geometricPolygonEdgeId(start, end),
+      start,
+      end,
+      length,
+      outward: Object.freeze({ x: dz / length, z: -dx / length }),
+    });
+  }));
+}
+
+function collinearOverlapLength(first: PolygonEdge, second: PolygonEdge): number {
+  const dx = first.end.x - first.start.x;
+  const dz = first.end.z - first.start.z;
+  if (Math.abs(cross(first.start, first.end, second.start)) > EPSILON ||
+      Math.abs(cross(first.start, first.end, second.end)) > EPSILON) return 0;
+  const project = (point: PolygonPoint) => ((point.x - first.start.x) * dx + (point.z - first.start.z) * dz) / first.length;
+  const secondStart = project(second.start);
+  const secondEnd = project(second.end);
+  return Math.max(0, Math.min(first.length, Math.max(secondStart, secondEnd)) - Math.max(0, Math.min(secondStart, secondEnd)));
+}
+
+export function resolveGeometricEdgeReference(
+  previousPoints: readonly PolygonPoint[],
+  nextPoints: readonly PolygonPoint[],
+  previousEdgeId: string,
+): PolygonEdgeReferenceResolution {
+  const previousEdges = deriveGeometricPolygonEdges(previousPoints);
+  const nextEdges = deriveGeometricPolygonEdges(nextPoints);
+  if (nextEdges.some((edge) => edge.id === previousEdgeId)) {
+    return Object.freeze({ status: "preserved", previousEdgeId, candidateEdgeIds: Object.freeze([previousEdgeId]) });
+  }
+  const previous = previousEdges.find((edge) => edge.id === previousEdgeId);
+  if (!previous) return Object.freeze({ status: "missing", previousEdgeId, candidateEdgeIds: Object.freeze([]) });
+  const candidates = nextEdges
+    .map((edge) => ({ edge, overlap: collinearOverlapLength(previous, edge) }))
+    .filter((candidate) => candidate.overlap > EPSILON)
+    .sort((a, b) => b.overlap - a.overlap || a.edge.id.localeCompare(b.edge.id));
+  if (candidates.length === 0) {
+    return Object.freeze({ status: "missing", previousEdgeId, candidateEdgeIds: Object.freeze([]) });
+  }
+  return Object.freeze({
+    status: candidates.length === 1 ? "remapped" : "review_required",
+    previousEdgeId,
+    candidateEdgeIds: Object.freeze(candidates.map((candidate) => candidate.edge.id)),
+  });
 }
 
 export function horizontalIntervalsAt(points: readonly PolygonPoint[], z: number): readonly PolygonInterval[] {

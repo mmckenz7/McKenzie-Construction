@@ -1,9 +1,11 @@
 // @ts-ignore The production root intentionally does not install this isolated prototype package's test runner.
 import { describe, expect, it } from "vitest";
 import {
+  deriveGeometricPolygonEdges,
   derivePolygonEdges,
   horizontalIntervalsAt,
   normalizePolygon,
+  resolveGeometricEdgeReference,
   signedPolygonArea,
   verticalIntervalsAt,
 } from "../src/polygon";
@@ -47,5 +49,38 @@ describe("custom polygon kernel spike", () => {
     expect(() => normalizePolygon([{ x: 0, z: 0 }, { x: 24, z: 0 }, { x: 48, z: 0 }, { x: 48, z: 48 }, { x: 0, z: 48 }])).toThrow(/collinear/);
     expect(() => normalizePolygon([{ x: 0, z: 0 }, { x: 12, z: 0 }, { x: 12, z: 12 }, { x: 0, z: 12 }])).toThrow(/4 square feet/);
     expect(() => normalizePolygon([{ x: 0, z: 0 }, { x: 72, z: 72 }, { x: 0, z: 72 }, { x: 72, z: 0 }])).toThrow(/intersect|4 square feet/);
+  });
+
+  it("keeps geometric IDs for unchanged edges while local edits replace only affected identities", () => {
+    const rectangle = [{ x: 0, z: 0 }, { x: 240, z: 0 }, { x: 240, z: 180 }, { x: 0, z: 180 }];
+    const rotatedReversed = [{ x: 240, z: 180 }, { x: 240, z: 0 }, { x: 0, z: 0 }, { x: 0, z: 180 }];
+    const notchedTop = [
+      { x: 0, z: 0 }, { x: 240, z: 0 }, { x: 240, z: 180 },
+      { x: 160, z: 180 }, { x: 160, z: 204 }, { x: 80, z: 204 }, { x: 80, z: 180 }, { x: 0, z: 180 },
+    ];
+    const rectangleIds = deriveGeometricPolygonEdges(rectangle).map((edge) => edge.id);
+    expect(deriveGeometricPolygonEdges(rotatedReversed).map((edge) => edge.id)).toEqual(rectangleIds);
+    const notchedIds = new Set(deriveGeometricPolygonEdges(notchedTop).map((edge) => edge.id));
+    expect(rectangleIds.filter((id) => notchedIds.has(id))).toHaveLength(3);
+    expect(new Set(rectangleIds).size).toBe(rectangleIds.length);
+    expect(rectangleIds.every((id) => /^edge-[np]\d+-[np]\d+--[np]\d+-[np]\d+$/.test(id))).toBe(true);
+  });
+
+  it("classifies preserved, unambiguous, ambiguous, and missing edge-reference changes", () => {
+    const rectangle = [{ x: 0, z: 0 }, { x: 240, z: 0 }, { x: 240, z: 180 }, { x: 0, z: 180 }];
+    const rectangleEdges = deriveGeometricPolygonEdges(rectangle);
+    const bottomId = rectangleEdges[0].id;
+    const topId = rectangleEdges[2].id;
+    const widened = [{ x: 0, z: 0 }, { x: 264, z: 0 }, { x: 264, z: 180 }, { x: 0, z: 180 }];
+    const notchedTop = [
+      { x: 0, z: 0 }, { x: 240, z: 0 }, { x: 240, z: 180 },
+      { x: 160, z: 180 }, { x: 160, z: 204 }, { x: 80, z: 204 }, { x: 80, z: 180 }, { x: 0, z: 180 },
+    ];
+    expect(resolveGeometricEdgeReference(rectangle, [...rectangle].reverse(), bottomId).status).toBe("preserved");
+    expect(resolveGeometricEdgeReference(rectangle, widened, bottomId)).toMatchObject({ status: "remapped", candidateEdgeIds: [expect.any(String)] });
+    expect(resolveGeometricEdgeReference(rectangle, notchedTop, topId)).toMatchObject({ status: "review_required", candidateEdgeIds: [expect.any(String), expect.any(String)] });
+    expect(resolveGeometricEdgeReference(rectangle, widened, "edge-not-recorded")).toEqual({
+      status: "missing", previousEdgeId: "edge-not-recorded", candidateEdgeIds: [],
+    });
   });
 });

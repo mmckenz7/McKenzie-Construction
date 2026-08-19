@@ -29,3 +29,7 @@ A neutral report spike packages net/gross/hole measurements, stable geometry ref
 - Minimum edge length, snapping policy, and tolerance rules for imported designs.
 - Versioned treatment of edge-attached stairs and railings when vertices are inserted, removed, or reordered.
 - Hole-aware triangulation and 3D extrusion strategy without making render triangles authoritative.
+
+## Edge identity experiment
+
+The kernel now exposes coordinate-derived edge IDs alongside sequential projection IDs. Canonical-equivalent rings produce identical IDs, and inserting a localized notch preserves every untouched edge ID. A resolver classifies references as `preserved`, `remapped`, `review_required`, or `missing`: one collinear successor is an unambiguous remap, while a split edge yields multiple review candidates. This is useful for deterministic diffing, but moving or splitting an attached edge necessarily changes its geometric identity. Recommendation: do not silently treat a coordinate ID as permanent attachment identity. A future edit command should preserve explicit attachment records when unambiguous and require review when an edge moves, splits, merges, or disappears.
