@@ -6,6 +6,8 @@ An isolated `modelV3` migration spike now exercises the proposed contract withou
 
 A non-mutating region-replacement planner compares a proposed ring with the recorded v3 platform. It lists automatic one-to-one remaps, new edges, and blocking impacts. Ambiguous or missing edges block when they carry house-attachment, active-railing, or any recorded stair-edge intent; otherwise new free geometry can proceed without inventing an attachment decision. A separate immutable command applies only safe plans, remaps references, defaults genuinely new edges to free, and advances the design revision exactly once. Review-required plans remain unapplied and return their complete impact evidence.
 
+The test-only v3 history reducer stores immutable snapshots and guarantees strictly increasing revisions across apply, undo, and redo. Undo/redo restore recorded platform facts as new revisions rather than moving the authoritative revision backward.
+
 ## Proposed future authoritative facts
 
 A future design version may replace shape-specific dimensions with one open outer ring of 3–24 `{ x, z }` vertices in inches. The closing vertex is omitted. Normalization rounds to hundredths of an inch, enforces positive winding, and rotates the ring to a stable lowest-`z`/lowest-`x` start vertex. Adjacent duplicates, redundant collinear vertices, self-intersections, out-of-bounds coordinates, and areas below four square feet fail closed.
