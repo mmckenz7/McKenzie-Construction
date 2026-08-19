@@ -4,6 +4,8 @@ Status: isolated kernel research only. This does not change `DeckDesign v2`, pro
 
 An isolated `modelV3` migration spike now exercises the proposed contract without switching the application or local-storage format. It migrates v1/v2 rectangle and L-shape designs into `platforms[]`, canonical outer/hole rings, geometric edge conditions, and edge-referenced rail/stair intent. The former L cutout becomes a concave outer ring; no redundant width/projection/cutout facts survive inside the v3 platform.
 
+A non-mutating region-replacement planner compares a proposed ring with the recorded v3 platform. It lists automatic one-to-one remaps, new edges, and blocking impacts. Ambiguous or missing edges block only when they carry house-attachment, active-railing, or enabled-stair intent; otherwise new free geometry can proceed without inventing an attachment decision.
+
 ## Proposed future authoritative facts
 
 A future design version may replace shape-specific dimensions with one open outer ring of 3–24 `{ x, z }` vertices in inches. The closing vertex is omitted. Normalization rounds to hundredths of an inch, enforces positive winding, and rotates the ring to a stable lowest-`z`/lowest-`x` start vertex. Adjacent duplicates, redundant collinear vertices, self-intersections, out-of-bounds coordinates, and areas below four square feet fail closed.

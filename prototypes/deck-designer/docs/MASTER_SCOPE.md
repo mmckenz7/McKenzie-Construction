@@ -35,6 +35,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Prototype-only neutral polygon measurement/quantity report with explicit classification and warnings
 - [x] Prototype-only geometric edge identity experiment with localized edit stability
 - [x] Test-only DeckDesign v3 migration spike for canonical platforms and edge conditions; application remains on v2
+- [x] Non-mutating v3 region-edit planner with explicit attachment impact review
 - [x] Undo/redo command history with monotonic design revisions
 - [x] Local duplicate command and initial generic deck templates
 - [x] Initial grade, house-wall, opening, and attachment-intent foundation
