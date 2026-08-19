@@ -9,6 +9,7 @@ type Material = Readonly<{
   product_line: string | null;
   unit: string;
   unit_cost: number;
+  effective_unit_cost?: number;
   waste_percent: number;
 }>;
 
@@ -69,7 +70,8 @@ function slug(value: string) {
 }
 
 function materialLabel(material: Material) {
-  return [material.brand, material.product_line, material.description].filter(Boolean).join(" — ");
+  const price = Number(material.effective_unit_cost ?? material.unit_cost);
+  return `${[material.brand, material.product_line, material.description].filter(Boolean).join(" — ")} ($${price.toFixed(2)}/${material.unit})`;
 }
 
 export function EstimatingAssemblyBuilder() {
@@ -245,7 +247,7 @@ export function EstimatingAssemblyBuilder() {
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <label className="text-sm font-semibold text-slate-800">Component label<input value={component.label} onChange={(event) => updateComponent(index, { label: event.target.value, componentKey: slug(event.target.value) || component.componentKey })} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950" placeholder="Grooved field deck boards" /></label>
                   <label className="text-sm font-semibold text-slate-800">Cost type<select value={component.costType} onChange={(event) => updateComponent(index, { costType: event.target.value as ComponentDraft["costType"], materialCatalogId: event.target.value === "material" ? component.materialCatalogId : null })} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950"><option value="material">Material</option><option value="labor">Labor</option><option value="subcontractor">Subcontractor</option><option value="equipment">Equipment</option><option value="other">Other</option></select></label>
-                  {component.costType === "material" ? <label className="text-sm font-semibold text-slate-800 md:col-span-2">Catalog product<select value={component.materialCatalogId ?? ""} onChange={(event) => { const material = materials.find((item) => item.id === event.target.value); updateComponent(index, { materialCatalogId: event.target.value || null, unit: material?.unit ?? component.unit, wastePercent: String(material?.waste_percent ?? component.wastePercent) }); }} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950"><option value="">Choose an approved product</option>{materials.map((material) => <option key={material.id} value={material.id}>{materialLabel(material)} (${Number(material.unit_cost).toFixed(2)}/{material.unit})</option>)}</select></label> : null}
+                  {component.costType === "material" ? <label className="text-sm font-semibold text-slate-800 md:col-span-2">Catalog product<select value={component.materialCatalogId ?? ""} onChange={(event) => { const material = materials.find((item) => item.id === event.target.value); updateComponent(index, { materialCatalogId: event.target.value || null, unit: material?.unit ?? component.unit, wastePercent: String(material?.waste_percent ?? component.wastePercent) }); }} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950"><option value="">Choose an approved product</option>{materials.map((material) => <option key={material.id} value={material.id}>{materialLabel(material)}</option>)}</select></label> : null}
                   <label className="text-sm font-semibold text-slate-800">Quantity rule<select value={component.quantityBasis} onChange={(event) => updateComponent(index, { quantityBasis: event.target.value as ComponentDraft["quantityBasis"], quantityFactor: event.target.value === "manual_review" ? "" : component.quantityFactor || "1" })} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950"><option value="per_square_foot">Per square foot</option><option value="per_linear_foot">Per linear foot</option><option value="per_count">Per counted item</option><option value="fixed_each">Fixed amount</option><option value="manual_review">Manual review</option></select></label>
                   {component.quantityBasis !== "manual_review" ? <label className="text-sm font-semibold text-slate-800">Amount per unit<input type="number" min="0.000001" step="any" value={component.quantityFactor} onChange={(event) => updateComponent(index, { quantityFactor: event.target.value })} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950" /></label> : null}
                   <label className="text-sm font-semibold text-slate-800">Output unit<input value={component.unit} onChange={(event) => updateComponent(index, { unit: event.target.value })} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950" /></label>

@@ -52,6 +52,7 @@ test("cost-book UI separates reusable quantity logic from the product catalog", 
   assert.match(component, /Cost book assemblies/);
   assert.match(component, /future reviewed takeoff supplies the square feet, linear feet, or count/);
   assert.match(component, /Choose an approved product/);
+  assert.match(component, /effective_unit_cost \?\? material\.unit_cost/);
   assert.match(component, /Compatibility group/);
   assert.match(component, /Per square foot/);
   assert.match(component, /Per linear foot/);
