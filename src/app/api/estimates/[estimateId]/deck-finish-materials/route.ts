@@ -245,7 +245,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       requested_estimate_calculation: calculated.estimateCalculation,
       requested_evidence_snapshot: built.evidenceSnapshot,
     });
-    if (result.error) throw new Error(result.error.message);
+    if (result.error) {
+      console.error("Deck finish material application RPC failed", {
+        code: result.error.code,
+        message: result.error.message,
+      });
+      throw new Error("The Deck finish material transaction failed.");
+    }
     const outcome = rpcResult(result.data);
     if (outcome.result_code !== "ok") return failure(outcome.result_code);
     const completion = await completeCommittedMutationState(
@@ -270,6 +276,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       { status: 201 },
     );
   } catch (error) {
+    console.error("Deck finish material application failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: error instanceof Error ? error.message : "Unknown failure",
+    });
     if (error instanceof MutationStateChangedError)
       return failure("stale_calculation_revision");
     const status = error instanceof TypeError || error instanceof SyntaxError ? 400 : 500;
