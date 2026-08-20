@@ -17,6 +17,7 @@ type ServiceFaq = {
 };
 
 type ServiceLandingPageProps = {
+  areaServed?: string[];
   eyebrow: string;
   faqs: ServiceFaq[];
   headline: string;
@@ -50,6 +51,7 @@ const serviceAreas = [
 ];
 
 export function ServiceLandingPage({
+  areaServed = serviceAreas,
   eyebrow,
   faqs,
   headline,
@@ -74,7 +76,7 @@ export function ServiceLandingPage({
       url: "https://www.mckenzie-builds.com",
       telephone: "+1-865-433-3325",
     },
-    areaServed: serviceAreas.map((name) => ({
+    areaServed: areaServed.map((name) => ({
       "@type": "Place",
       name,
     })),

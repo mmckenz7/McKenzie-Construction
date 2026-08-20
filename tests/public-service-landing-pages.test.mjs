@@ -24,6 +24,24 @@ const pages = [
   },
 ];
 
+const localPages = [
+  {
+    file: "src/app/deck-builder-farragut-tn/page.tsx",
+    canonical: "/deck-builder-farragut-tn",
+    area: "Farragut, Tennessee",
+  },
+  {
+    file: "src/app/deck-builder-maryville-tn/page.tsx",
+    canonical: "/deck-builder-maryville-tn",
+    area: "Maryville, Tennessee",
+  },
+  {
+    file: "src/app/deck-builder-tellico-village-tn/page.tsx",
+    canonical: "/deck-builder-tellico-village-tn",
+    area: "Tellico Village, Tennessee",
+  },
+];
+
 test("high-intent service pages have unique metadata and substantive content", () => {
   for (const page of pages) {
     const source = read(page.file);
@@ -137,6 +155,44 @@ test("completed projects connect service traffic to related work and consultatio
   );
 });
 
+test("every available finished deck folder has a public project path", () => {
+  const gallery = read("src/app/projects/gallery/page.tsx");
+  const projectIndex = read("src/app/projects/page.tsx");
+  const folders = [
+    ["public/projects/island-ford", "/projects/island-ford"],
+    ["public/projects/knoxville-trex-deck", "/projects/knoxville-trex-deck-replacement"],
+    ["public/projects/tellico-village-screened-porch", "/projects/tellico-village-screened-porch"],
+    ["public/projects/east-tennessee-elevated-covered-deck", "/projects/east-tennessee-elevated-covered-deck"],
+  ];
+
+  for (const [folder, publicPath] of folders) {
+    assert.ok(fs.readdirSync(path.join(root, folder)).length > 0);
+    assert.ok(gallery.includes(publicPath));
+    assert.ok(projectIndex.includes(publicPath));
+  }
+});
+
+test("local deck pages use truthful area-specific metadata, content, and project proof", () => {
+  const sitemap = read("src/app/sitemap.ts");
+  const areaHub = read("src/app/service-areas/page.tsx");
+  const serviceTemplate = read("src/components/service-landing-page.tsx");
+
+  assert.match(serviceTemplate, /areaServed = serviceAreas/);
+  assert.match(areaHub, /Real Project Proof/);
+  assert.match(areaHub, /without making claims about a property before a site visit/);
+  for (const page of localPages) {
+    const source = read(page.file);
+    assert.ok(source.includes(`canonical: "${page.canonical}"`));
+    assert.ok(source.includes(`areaServed={["${page.area}"]}`));
+    assert.match(source, /featuredProject=/);
+    assert.match(source, /planningDetails=\{\[/);
+    assert.match(source, /processDetails=\{\[/);
+    assert.match(source, /const faqs = \[/);
+    assert.ok(sitemap.includes(page.canonical));
+    assert.ok(areaHub.includes(page.canonical));
+  }
+});
+
 test("public navigation works on mobile and service pages expose breadcrumbs", () => {
   const navigation = read("src/components/navigation.tsx");
   const service = read("src/components/service-landing-page.tsx");
@@ -177,4 +233,7 @@ test("new services are discoverable through internal links and sitemap", () => {
 
   assert.match(services, /href: "\/deck-replacement-knoxville"/);
   assert.match(services, /href: "\/covered-decks-knoxville"/);
+  assert.match(services, /href="\/service-areas"/);
+  assert.match(footer, /href="\/service-areas"/);
+  assert.match(sitemap, /service-areas/);
 });

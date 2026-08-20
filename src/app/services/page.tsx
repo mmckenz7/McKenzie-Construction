@@ -270,12 +270,20 @@ export default function ServicesPage() {
           </div>
 
           <div className="mt-10">
-            <Link
-              href="/knoxville-deck-builder"
-              className="inline-flex items-center rounded-lg bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
-            >
-              Explore Knoxville Deck Services →
-            </Link>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/knoxville-deck-builder"
+                className="inline-flex items-center justify-center rounded-lg bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+              >
+                Explore Knoxville Deck Services →
+              </Link>
+              <Link
+                href="/service-areas"
+                className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-950 transition hover:border-slate-500"
+              >
+                View East Tennessee Service Areas →
+              </Link>
+            </div>
           </div>
         </section>
 

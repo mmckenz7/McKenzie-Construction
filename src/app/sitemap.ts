@@ -42,6 +42,30 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.85,
     },
     {
+      url: `${baseUrl}/service-areas`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/deck-builder-farragut-tn`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/deck-builder-maryville-tn`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/deck-builder-tellico-village-tn`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
       url: `${baseUrl}/projects`,
       lastModified: new Date(),
       changeFrequency: "monthly",

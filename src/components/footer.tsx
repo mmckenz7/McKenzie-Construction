@@ -67,6 +67,13 @@ export function Footer() {
           </Link>
 
           <Link
+            href="/service-areas"
+            className="transition hover:text-brand-green"
+          >
+            Service Areas
+          </Link>
+
+          <Link
             href="/contact"
             className="transition hover:text-brand-green"
           >
