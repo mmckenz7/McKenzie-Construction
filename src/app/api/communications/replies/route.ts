@@ -129,7 +129,7 @@ export async function POST(request: Request) {
   let inReplyTo: string | null = null;
 
   if (threadId) {
-    const threadResult = await supabase.from("communication_threads").select("id,subject,department,lead_id,customer_id").eq("id", threadId).or("lead_id.not.is.null,customer_id.not.is.null").maybeSingle();
+    const threadResult = await supabase.from("communication_threads").select("id,subject,department,lead_id,customer_id").eq("id", threadId).neq("provider", "twilio").or("lead_id.not.is.null,customer_id.not.is.null").maybeSingle();
     if (threadResult.error || !threadResult.data) {
       return Response.json({ success: false, error: "The matched conversation could not be found." }, { status: 404 });
     }
@@ -138,7 +138,7 @@ export async function POST(request: Request) {
     department = threadResult.data.department;
     canonicalSubject = threadResult.data.subject?.trim() || subject;
   } else {
-    let existingThreadQuery = supabase.from("communication_threads").select("id,subject,department,lead_id,customer_id").neq("status", "archived").order("last_message_at", { ascending: false }).limit(1);
+    let existingThreadQuery = supabase.from("communication_threads").select("id,subject,department,lead_id,customer_id").neq("provider", "twilio").neq("status", "archived").order("last_message_at", { ascending: false }).limit(1);
     existingThreadQuery = leadId ? existingThreadQuery.eq("lead_id", leadId) : existingThreadQuery.eq("customer_id", customerId!);
     const existingThread = await existingThreadQuery.maybeSingle();
     if (!existingThread.error && existingThread.data) {

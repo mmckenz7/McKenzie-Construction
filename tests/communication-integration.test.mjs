@@ -93,6 +93,7 @@ test("Mission Control replies are server validated, sandboxed, threaded, and aud
   assert.match(replyRoute, /thread_id: threadId/);
   assert.match(replyRoute, /lead_activities/);
   assert.match(provider, /headers: message\.headers/);
+  assert.equal((replyRoute.match(/\.neq\("provider", "twilio"\)/g) ?? []).length, 2);
 });
 
 test("text replies prefer the matched CRM phone over stale thread participants", () => {
