@@ -9,6 +9,28 @@ import {
 
 const projects = [
   {
+    title: "Knoxville Trex Deck Replacement",
+    location: "Knoxville, Tennessee",
+    blurb:
+      "A two-level deck transformed into one connected Trex deck with aluminum railing and new stairs.",
+    imageSrc:
+      "/projects/knoxville-trex-deck/finished-deck-wide.jpg",
+    imageAlt:
+      "Completed Knoxville Trex deck with black aluminum railing",
+    href: "/projects/knoxville-trex-deck-replacement",
+  },
+  {
+    title: "Tellico Village Screened Porch & Deck",
+    location: "Tellico Village, Tennessee",
+    blurb:
+      "An elevated screened outdoor room with an adjoining open deck and grill area.",
+    imageSrc:
+      "/projects/tellico-village-screened-porch/full-rear-elevation.jpg",
+    imageAlt:
+      "Completed elevated screened porch and deck in Tellico Village",
+    href: "/projects/tellico-village-screened-porch",
+  },
+  {
     title:
       "Island Ford Modular Home & Outdoor Living",
     location: "Lake City, Tennessee",

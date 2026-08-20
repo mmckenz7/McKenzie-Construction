@@ -54,6 +54,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
+      url: `${baseUrl}/projects/knoxville-trex-deck-replacement`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
+    {
+      url: `${baseUrl}/projects/tellico-village-screened-porch`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.85,
+    },
+    {
       url: `${baseUrl}/projects/east-tennessee-ranch-renovation`,
       lastModified: new Date("2026-08-20"),
       changeFrequency: "monthly",

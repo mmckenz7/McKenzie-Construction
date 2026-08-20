@@ -12,7 +12,7 @@ const services = [
     description:
       "Purpose-built wood and composite decks designed around your home, property, and the way you want to use the space.",
     image:
-      "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1200&q=85",
+      "/projects/knoxville-trex-deck/finished-deck-wide.jpg",
     href: "/knoxville-deck-builder",
     linkLabel: "Explore deck services",
   },
@@ -21,7 +21,7 @@ const services = [
     description:
       "Comfortable, protected spaces for entertaining, relaxing, and enjoying East Tennessee throughout more of the year.",
     image:
-      "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=85",
+      "/projects/tellico-village-screened-porch/full-rear-elevation.jpg",
     href: "/covered-decks-knoxville",
     linkLabel: "Explore covered decks",
   },
@@ -30,7 +30,7 @@ const services = [
     description:
       "Open-air living without the insects, built to feel like a natural extension of your home.",
     image:
-      "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=1200&q=85",
+      "/projects/tellico-village-screened-porch/screened-living-space.jpg",
     href: "/services",
     linkLabel: "Explore our services",
   },
@@ -369,14 +369,14 @@ export default function HomePage() {
           </div>
 
           <Link
-            href="/projects/island-ford"
+            href="/projects/knoxville-trex-deck-replacement"
             className="group relative mt-12 block min-h-[520px] overflow-hidden bg-zinc-950 text-white"
           >
             <div
               className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105"
               style={{
                 backgroundImage:
-                  "url('/projects/island-ford/08F626F4-F8F9-4B55-B3E5-723253E28102_1_105_c.jpeg')",
+                  "url('/projects/knoxville-trex-deck/finished-deck-wide.jpg')",
               }}
             />
 
@@ -391,18 +391,17 @@ export default function HomePage() {
                     color: brandGreen,
                   }}
                 >
-                  Lake City, Tennessee
+                  Knoxville, Tennessee
                 </p>
 
                 <h3 className="mt-3 text-3xl font-black sm:text-4xl">
-                  Island Ford Modular Home &amp; Outdoor Living
+                  Knoxville Trex Deck Replacement
                 </h3>
 
                 <p className="mt-4 max-w-xl text-base leading-7 text-zinc-200">
-                  Complete modular-home installation with exterior
-                  finish work, custom entry decks, a large rear wood
-                  deck, stairs, landscaping, gravel access, and site
-                  improvements.
+                  A weathered two-level deck replaced with one connected
+                  outdoor space using Trex decking, black aluminum railing,
+                  and a new stair run.
                 </p>
 
                 <p className="mt-6 inline-flex items-center text-sm font-black uppercase tracking-wider">

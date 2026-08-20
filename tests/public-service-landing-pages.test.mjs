@@ -86,6 +86,25 @@ test("renovation photos are grouped into private, photo-backed project stories",
   assert.doesNotMatch(`${ranch}\n${cottage}`, /Cecil Avenue|Valley View/);
 });
 
+test("completed deck work is the primary project focus", () => {
+  const home = read("src/app/page.tsx");
+  const projects = read("src/app/projects/page.tsx");
+  const trex = read("src/app/projects/knoxville-trex-deck-replacement/page.tsx");
+  const porch = read("src/app/projects/tellico-village-screened-porch/page.tsx");
+  const sitemap = read("src/app/sitemap.ts");
+
+  assert.match(home, /projects\/knoxville-trex-deck\/finished-deck-wide\.jpg/);
+  assert.match(home, /projects\/tellico-village-screened-porch\/screened-living-space\.jpg/);
+  assert.doesNotMatch(home, /images\.unsplash\.com/);
+  assert.ok(projects.indexOf("Knoxville Trex Deck Replacement") < projects.indexOf("East Tennessee Ranch Home Renovation"));
+  assert.match(trex, /canonical: "\/projects\/knoxville-trex-deck-replacement"/);
+  assert.match(trex, /Trex decking/);
+  assert.match(porch, /canonical: "\/projects\/tellico-village-screened-porch"/);
+  assert.match(porch, /Screened%20Porch/);
+  assert.match(sitemap, /projects\/knoxville-trex-deck-replacement/);
+  assert.match(sitemap, /projects\/tellico-village-screened-porch/);
+});
+
 test("public navigation works on mobile and service pages expose breadcrumbs", () => {
   const navigation = read("src/components/navigation.tsx");
   const service = read("src/components/service-landing-page.tsx");

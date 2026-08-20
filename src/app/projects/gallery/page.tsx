@@ -33,6 +33,30 @@ const galleryImages: Array<{
   href?: string;
 }> = [
   {
+    src: "/projects/knoxville-trex-deck/finished-deck-wide.jpg",
+    alt: "Completed Knoxville Trex deck with black aluminum railing",
+    caption: "Trex deck replacement — Knoxville, Tennessee",
+    href: "/projects/knoxville-trex-deck-replacement",
+  },
+  {
+    src: "/projects/knoxville-trex-deck/deck-surface-railing.jpg",
+    alt: "Trex deck surface and coordinated aluminum railing",
+    caption: "Composite decking and aluminum railing — Knoxville, Tennessee",
+    href: "/projects/knoxville-trex-deck-replacement",
+  },
+  {
+    src: "/projects/tellico-village-screened-porch/full-rear-elevation.jpg",
+    alt: "Completed elevated screened porch and deck",
+    caption: "Screened porch and deck — Tellico Village, Tennessee",
+    href: "/projects/tellico-village-screened-porch",
+  },
+  {
+    src: "/projects/tellico-village-screened-porch/screened-living-space.jpg",
+    alt: "Finished screened outdoor living space",
+    caption: "Screened outdoor room — Tellico Village, Tennessee",
+    href: "/projects/tellico-village-screened-porch",
+  },
+  {
     src: "/projects/island-ford/05062FD1-CF2E-4F0C-8422-79246C3BAAE8_1_105_c.jpeg",
     alt: "Wide completed rear deck overlooking the wooded property",
     caption: "Rear wood deck — Lake City, Tennessee",
