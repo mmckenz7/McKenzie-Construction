@@ -125,6 +125,8 @@ button:hover { transform: translateY(-1px); }
 .trace-house-edge { stroke: #b85c36; stroke-width: 4; }
 .trace-edge.highlighted, .trace-house-edge.highlighted { stroke: #8ca919; stroke-width: 6; }
 .trace-stair-selection { stroke: #df7540; stroke-width: 7; pointer-events: none; }
+.trace-stair-preview { fill: #d88a58; fill-opacity: .78; stroke: #713d20; stroke-width: 1.4; pointer-events: none; }
+.trace-stair-label { fill: #713d20; stroke: white; stroke-width: 2.5px; paint-order: stroke; font-size: 7px; font-weight: 900; letter-spacing: .08em; pointer-events: none; text-anchor: middle; dominant-baseline: middle; }
 .trace-edge-hit { fill: none; stroke: transparent; stroke-width: 22; cursor: copy; }
 .trace-corner { fill: #efff77; stroke: #214b3b; stroke-width: 2.5; cursor: grab; }
 .trace-corner.house { fill: #f0a36e; }

@@ -8,6 +8,7 @@ import { deriveGeometricPolygonEdges } from "../src/polygon";
 import { derivePlatformGeometryV3 } from "../src/geometryV3";
 import { deriveDeckAccessoryProjectionV3, stableDeckAccessoryProjectionV3Json } from "../src/quantityProjectionV3";
 import { planEdgeDimensionLabel } from "../src/PlanViewV3";
+import { derivePhotoTraceStairPreview } from "../src/photoTraceStairs";
 
 const base = migrateDeckDesignToV3(DEFAULT_DESIGN);
 
@@ -58,11 +59,13 @@ describe("local-only photo-assisted start", () => {
   it("carries a user-selected exact stair side from the confirmed outline", () => {
     const outer = [{ x: 0, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 72 }, { x: 96, z: 72 }, { x: 96, z: 144 }, { x: 0, z: 144 }];
     const edges = deriveGeometricPolygonEdges(outer);
-    const stairEdge = edges[2];
+    const stairEdge = edges[5];
     const facts = { designName: "Stair photo trace", layoutIntent: "non-standard" as const, width: 144, projection: 144, surfaceElevation: 48, doorWidth: null, attachment: "ledger" as const };
     const next = createDesignFromConfirmedPhotoFacts(base, facts, outer, stairEdge.id);
-    expect(next.platforms[0].construction.stairs).toMatchObject({ enabled: true, edgeId: stairEdge.id, offset: 0 });
-    expect(derivePlatformGeometryV3(next, "platform-1").stairTreads.length).toBeGreaterThan(0);
+    expect(next.platforms[0].construction.stairs).toMatchObject({ enabled: true, edgeId: stairEdge.id, offset: 48 });
+    const geometry = derivePlatformGeometryV3(next, "platform-1");
+    const preview = derivePhotoTraceStairPreview(outer, stairEdge.id, 48);
+    expect(preview.treads).toEqual(geometry.stairTreads.map((tread) => tread.corners));
     expect(() => createDesignFromConfirmedPhotoFacts(base, facts, outer, "missing-edge")).toThrow(/no longer exists/i);
     expect(() => createDesignFromConfirmedPhotoFacts(base, facts, outer, edges[0].id)).toThrow(/no longer exists/i);
   });

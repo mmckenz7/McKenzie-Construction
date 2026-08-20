@@ -6,7 +6,7 @@
 - Tapping a plan side or its white square handle highlights that exact side and reveals only its contextual Add bumpout, Add/Move stairs, and Toggle railing actions below the plan.
 - When side references lock the outline, the bumpout action stays disabled and explains that Shape must be unlocked first.
 - In photo-reference tracing, the row of per-side offset buttons is gone. Selecting one side reveals one Add bumpout here action and its exact length field.
-- The same selected-side panel now shows Add stairs here beside Add bumpout here. Selecting stairs marks the exact side in orange and carries that exact edge reference into the confirmed design; house and short sides reject stair placement.
+- The same selected-side panel now shows Add stairs here beside Add bumpout here. Selecting stairs immediately renders the centered stair treads outside the orange-marked exact side and carries that same placement into the confirmed design; house and short sides reject stair placement.
 
 ## 2026-08-19 responsive smoke check
 

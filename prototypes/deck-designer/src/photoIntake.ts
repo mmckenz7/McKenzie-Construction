@@ -2,6 +2,7 @@ import { DEFAULT_DESIGN, normalizeDesign, updateDesign, type HouseAttachment } f
 import { migrateDeckDesignToV3, type DeckDesignV3 } from "./modelV3";
 import { deriveGeometricPolygonEdges, geometricPolygonEdgeId, type PolygonPoint } from "./polygon";
 import { normalizePolygonRegion } from "./polygonRegion";
+import { centeredStairOffset } from "./photoTraceStairs";
 
 export type ConfirmedPhotoFacts = Readonly<{
   designName: string;
@@ -138,7 +139,7 @@ export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: C
       construction: {
         ...platform.construction,
         railing: { ...platform.construction.railing, enabledEdgeIds: freeEdges.map((edge) => edge.id) },
-        stairs: { ...platform.construction.stairs, enabled: Boolean(preferredStairEdgeId), edgeId: stairEdge.id, offset: 0 },
+        stairs: { ...platform.construction.stairs, enabled: Boolean(preferredStairEdgeId), edgeId: stairEdge.id, offset: preferredStairEdgeId ? centeredStairOffset(stairEdge.length, platform.construction.stairs.width) : 0 },
       },
     }],
   });

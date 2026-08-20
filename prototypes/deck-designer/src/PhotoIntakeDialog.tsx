@@ -7,6 +7,8 @@ import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 type LocalPhoto = Readonly<{ name: string; url: string }>;
 type Props = Readonly<{
   initialFacts: ConfirmedPhotoFacts;
+  fallbackSurfaceElevation: number;
+  gradeElevation: number;
   onCancel: () => void;
   onStartDesign: (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number, confirmedOuter?: readonly PolygonPoint[], stairEdgeId?: string | null) => void;
 }>;
@@ -26,7 +28,7 @@ const feet = (inches: number): string => String(Math.round(inches / 12 * 100) / 
 const parseFeet = (value: string): number => Number(value) * 12;
 const parseOptionalInches = (value: string): number | null => value.trim() ? Number(value) : null;
 
-export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
+export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeElevation, onCancel, onStartDesign }: Props) {
   const [photos, setPhotos] = useState<Partial<Record<GuidedPhotoRole, LocalPhoto>>>({});
   const [additionalPhotos, setAdditionalPhotos] = useState<readonly LocalPhoto[]>([]);
   const urls = useRef(new Set<string>());
@@ -139,7 +141,7 @@ export function PhotoIntake({ initialFacts, onCancel, onStartDesign }: Props) {
         <label className="field full"><span>Connection to house</span><select value={attachment} onChange={(event) => setAttachment(event.target.value as HouseAttachment)}><option value="unknown">Unknown / field verify</option><option value="ledger">Ledger attached</option><option value="non-ledger">Freestanding / non-ledger</option></select></label>
       </div></section>
       <section id="photo-step-review"><div className="photo-step"><span>3</span><div><strong>Review before creating geometry</strong><small>No photo-derived measurement is applied automatically.</small></div></div>{review ? <div className="photo-review"><div><strong>Confirmed</strong>{review.confirmed.map((item) => <p key={item}>✓ {item}</p>)}</div><div><strong>Still verify</strong>{review.fieldVerification.map((item) => <p key={item}>• {item}</p>)}</div></div> : <p className="photo-review-error">Enter a valid deck width and distance from the house.</p>}</section>
-      {layoutIntent === "non-standard" && Number.isFinite(numericWidth) && Number.isFinite(numericProjection) && <section id="photo-step-outline"><div className="photo-step"><span>4</span><div><strong>Trace and confirm the real outline</strong><small>Use the photos beside the measured plan. This step—not the photo pixels—creates geometry.</small></div></div><PhotoOutlineTracer width={numericWidth} projection={numericProjection} photos={allPhotos} outer={traceOuter} stairEdgeId={traceStairEdgeId} onChange={setTraceOuter} onStairEdgeChange={setTraceStairEdgeId} onError={setError} /><div className={`trace-status${traced ? " ready" : ""}`} role="status"><strong>{traced ? `Outline ready · ${traceOuter.length} confirmed corners${traceStairEdgeId ? " · stairs selected" : ""}` : "The outline is still a rectangle"}</strong><span>{traced ? "Start the design when the corners match the job." : "Tap a non-house edge to add an offset, then drag its handles into position."}</span></div></section>}
+      {layoutIntent === "non-standard" && Number.isFinite(numericWidth) && Number.isFinite(numericProjection) && <section id="photo-step-outline"><div className="photo-step"><span>4</span><div><strong>Trace and confirm the real outline</strong><small>Use the photos beside the measured plan. This step—not the photo pixels—creates geometry.</small></div></div><PhotoOutlineTracer width={numericWidth} projection={numericProjection} photos={allPhotos} outer={traceOuter} stairEdgeId={traceStairEdgeId} surfaceElevation={draft.surfaceElevation ?? fallbackSurfaceElevation} gradeElevation={gradeElevation} onChange={setTraceOuter} onStairEdgeChange={setTraceStairEdgeId} onError={setError} /><div className={`trace-status${traced ? " ready" : ""}`} role="status"><strong>{traced ? `Outline ready · ${traceOuter.length} confirmed corners${traceStairEdgeId ? " · stairs selected" : ""}` : "The outline is still a rectangle"}</strong><span>{traced ? "Start the design when the corners match the job." : "Tap a non-house edge to add an offset, then drag its handles into position."}</span></div></section>}
     </div>
     <footer><div><strong>{coverage.addedCount} photo{coverage.addedCount === 1 ? "" : "s"} added</strong><small>{layoutIntent === "non-standard" ? "A changed outline is required before starting." : "You can start with zero photos and enter dimensions manually."}</small></div><div><button onClick={onCancel}>Keep current design</button><button className="primary" disabled={layoutIntent === "non-standard" && !traced} onClick={start}>{layoutIntent === "non-standard" ? "Start from confirmed outline" : "Start rectangle design"}</button></div></footer>
     {error && <p className="photo-error" role="alert">{error}</p>}

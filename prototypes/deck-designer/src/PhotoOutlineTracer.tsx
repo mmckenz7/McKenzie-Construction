@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 import { normalizePolygonRegion } from "./polygonRegion";
 import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment } from "./polygonEditorV3";
+import { derivePhotoTraceStairPreview } from "./photoTraceStairs";
 
 type ReferencePhoto = Readonly<{ name: string; url: string }>;
 type TraceSelection = Readonly<{ kind: "corner" | "segment"; index: number }> | null;
@@ -12,6 +13,8 @@ type Props = Readonly<{
   photos: readonly ReferencePhoto[];
   outer: readonly PolygonPoint[];
   stairEdgeId: string | null;
+  surfaceElevation: number;
+  gradeElevation: number;
   onChange: (outer: readonly PolygonPoint[]) => void;
   onStairEdgeChange: (edgeId: string | null) => void;
   onError: (message: string) => void;
@@ -103,7 +106,7 @@ export function resizeTraceSegmentToFeet(outer: readonly PolygonPoint[], index: 
   return validatePhotoTrace(next);
 }
 
-export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdgeId, onChange, onStairEdgeChange, onError }: Props) {
+export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdgeId, surfaceElevation, gradeElevation, onChange, onStairEdgeChange, onError }: Props) {
   const svg = useRef<SVGSVGElement>(null);
   const dragStart = useRef<readonly PolygonPoint[] | null>(null);
   const segmentDrag = useRef<Readonly<{ index: number; midpoint: PolygonPoint; outward: PolygonPoint }> | null>(null);
@@ -122,12 +125,14 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
   const [segmentLengthInput, setSegmentLengthInput] = useState("");
   useEffect(() => { undoStack.current = []; setUndoCount(0); setSelection(null); }, [width, projection]);
   const edges = useMemo(() => deriveGeometricPolygonEdges(outer), [outer]);
+  const stairPreview = useMemo(() => stairEdgeId ? derivePhotoTraceStairPreview(outer, stairEdgeId, surfaceElevation, gradeElevation) : null, [gradeElevation, outer, stairEdgeId, surfaceElevation]);
   const houseEdgeIndex = edges.findIndex((edge) => Math.abs(edge.start.z) < .01 && Math.abs(edge.end.z) < .01);
   const fixedHouseCorners = new Set(houseEdgeIndex < 0 ? [] : [houseEdgeIndex, (houseEdgeIndex + 1) % outer.length]);
-  const minX = Math.min(0, ...outer.map((point) => point.x));
-  const maxX = Math.max(width, ...outer.map((point) => point.x));
-  const minZ = Math.min(0, ...outer.map((point) => point.z));
-  const maxZ = Math.max(projection, ...outer.map((point) => point.z));
+  const viewPoints = [...outer, ...(stairPreview?.treads.flat() ?? [])];
+  const minX = Math.min(0, ...viewPoints.map((point) => point.x));
+  const maxX = Math.max(width, ...viewPoints.map((point) => point.x));
+  const minZ = Math.min(0, ...viewPoints.map((point) => point.z));
+  const maxZ = Math.max(projection, ...viewPoints.map((point) => point.z));
   const margin = Math.max(maxX - minX, maxZ - minZ, 120) * .24;
   const computedView: ViewBounds = { minX, minZ, margin, width: maxX - minX + margin * 2, height: maxZ - minZ + margin * 2 };
   const view = active && frozenView.current ? frozenView.current : manualView ?? computedView;
@@ -209,6 +214,12 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     try { onChange(resizeTraceSegmentToFeet(outer, selection.index, value)); onError(""); }
     catch (error) { onError(error instanceof Error ? error.message : "That segment length is not valid."); }
   };
+  const toggleStairsOnSelectedEdge = () => {
+    if (!selectedEdge) return;
+    const nextEdgeId = stairEdgeId === selectedEdge.id ? null : selectedEdge.id;
+    onStairEdgeChange(nextEdgeId);
+    if (nextEdgeId) requestAnimationFrame(() => svg.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  };
   const segmentDescription = (edge: (typeof edges)[number]) => {
     const horizontal = Math.abs(edge.end.x - edge.start.x) >= Math.abs(edge.end.z - edge.start.z);
     return `${formatLength(edge.length)} ${horizontal ? "horizontal" : "vertical"} segment`;
@@ -268,6 +279,8 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
         <defs><pattern id="trace-grid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#a9b4ad" strokeWidth=".4" /></pattern></defs>
         <rect width="100%" height="100%" fill="url(#trace-grid)" />
         <polygon points={outer.map((point) => `${x(point.x)},${y(point.z)}`).join(" ")} className="trace-platform" />
+        {stairPreview?.treads.map((tread, index) => <polygon key={`trace-stair-${index}`} points={tread.map((point) => `${x(point.x)},${y(point.z)}`).join(" ")} className="trace-stair-preview" />)}
+        {stairPreview && (() => { const last = stairPreview.treads[stairPreview.treads.length - 1]; const center = last.reduce((sum, point) => ({ x: sum.x + point.x / last.length, z: sum.z + point.z / last.length }), { x: 0, z: 0 }); return <text x={x(center.x)} y={y(center.z)} className="trace-stair-label">STAIRS</text>; })()}
         {edges.map((edge, index) => {
           const midpoint = Object.freeze({ x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 });
           const labelX = midpoint.x + edge.outward.x * 24;
@@ -285,7 +298,7 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
       </svg>
       {(selectedCorner || selectedEdge) && <div className="trace-dimension-editor">
         {selectedCorner && selection?.kind === "corner" && <><div><strong>Corner {selection.index + 1}</strong><small>Measured from the original left house corner.</small></div><label><span>Along house (ft)</span><input type="number" step="0.5" value={cornerXInput} onFocus={() => remember(outer)} onChange={(event) => { const value = event.target.value; setCornerXInput(value); if (value !== "") setCornerFeet("x", Number(value)); }} onBlur={() => setCornerXInput(String(feet(selectedCorner.x)))} /></label><label><span>Away from house (ft)</span><input type="number" step="0.5" disabled={selectedHouseCorner} value={cornerZInput} onFocus={() => remember(outer)} onChange={(event) => { const value = event.target.value; setCornerZInput(value); if (value !== "") setCornerFeet("z", Number(value)); }} onBlur={() => setCornerZInput(String(feet(selectedCorner.z)))} /></label></>}
-        {selectedEdge && selection?.kind === "segment" && <><div><strong>Selected segment</strong><small>Only this highlighted side will change.</small></div><label><span>Length (ft)</span><input type="number" step="0.5" min="0.5" value={segmentLengthInput} onFocus={() => remember(outer)} onChange={(event) => { const value = event.target.value; setSegmentLengthInput(value); if (value !== "") setSegmentLengthFeet(Number(value)); }} onBlur={() => setSegmentLengthInput(String(feet(selectedEdge.length)))} /></label><button className="trace-context-action" disabled={selection.index === houseEdgeIndex} onClick={() => addOffset(selection.index)}>{selection.index === houseEdgeIndex ? "House side stays straight" : "Add bumpout here"}</button><button className={`trace-context-action stair${stairEdgeId === selectedEdge.id ? " selected" : ""}`} disabled={selection.index === houseEdgeIndex || selectedEdge.length < 48} onClick={() => onStairEdgeChange(stairEdgeId === selectedEdge.id ? null : selectedEdge.id)}>{selection.index === houseEdgeIndex ? "No stairs on house side" : selectedEdge.length < 48 ? "Side too short for stairs" : stairEdgeId === selectedEdge.id ? "Stairs selected here ✓" : "Add stairs here"}</button></>}
+        {selectedEdge && selection?.kind === "segment" && <><div><strong>Selected segment</strong><small>Only this highlighted side will change.</small></div><label><span>Length (ft)</span><input type="number" step="0.5" min="0.5" value={segmentLengthInput} onFocus={() => remember(outer)} onChange={(event) => { const value = event.target.value; setSegmentLengthInput(value); if (value !== "") setSegmentLengthFeet(Number(value)); }} onBlur={() => setSegmentLengthInput(String(feet(selectedEdge.length)))} /></label><button className="trace-context-action" disabled={selection.index === houseEdgeIndex} onClick={() => addOffset(selection.index)}>{selection.index === houseEdgeIndex ? "House side stays straight" : "Add bumpout here"}</button><button className={`trace-context-action stair${stairEdgeId === selectedEdge.id ? " selected" : ""}`} disabled={selection.index === houseEdgeIndex || selectedEdge.length < 48} onClick={toggleStairsOnSelectedEdge}>{selection.index === houseEdgeIndex ? "No stairs on house side" : selectedEdge.length < 48 ? "Side too short for stairs" : stairEdgeId === selectedEdge.id ? "Stairs shown in orange ✓" : "Add stairs here"}</button></>}
       </div>}
       <p>Tap one side to highlight it and reveal Add bumpout here. <span className="trace-dot round" /> Round corners move freely. <span className="trace-dot square" /> White squares move both ends together.</p>
     </section>
