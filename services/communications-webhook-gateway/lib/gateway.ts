@@ -11,14 +11,6 @@ function requiredEnvironment(name: string) {
   return value;
 }
 
-export function publicRequestUrl(request: Request) {
-  const requested = new URL(request.url);
-  const configuredBase = process.env.GATEWAY_PUBLIC_BASE_URL?.trim();
-  return configuredBase
-    ? new URL(`${requested.pathname}${requested.search}`, configuredBase).toString()
-    : requested.toString();
-}
-
 function targetUrl(pathname: string) {
   const targetBase = requiredEnvironment("GATEWAY_TARGET_BASE_URL");
   const parsed = new URL(targetBase);
@@ -38,7 +30,7 @@ export async function limitedBody(request: Request) {
   return body;
 }
 
-export async function forwardVerifiedWebhook(input: {
+export async function forwardProviderWebhook(input: {
   provider: Provider;
   pathname: string;
   body: string;
@@ -71,6 +63,6 @@ export function gatewayFailure(error: unknown) {
   if (error instanceof RangeError) {
     return Response.json({ success: false, error: error.message }, { status: 413 });
   }
-  console.error("Verified webhook forwarding failed.", error instanceof Error ? error.message : "Unknown error");
-  return Response.json({ success: false, error: "The verified webhook could not be forwarded." }, { status: 502 });
+  console.error("Provider webhook forwarding failed.", error instanceof Error ? error.message : "Unknown error");
+  return Response.json({ success: false, error: "The provider webhook could not be forwarded." }, { status: 502 });
 }

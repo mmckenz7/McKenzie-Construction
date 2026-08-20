@@ -16,13 +16,16 @@ test("the public gateway exposes only fixed webhook paths and health", async () 
   assert.doesNotMatch(routes, /\[\.\.\./);
 });
 
-test("Twilio and Resend signatures are verified before forwarding", async () => {
+test("Twilio and Resend signature evidence is required and preserved for CRM verification", async () => {
   const twilio = await source("app/api/communications/webhooks/twilio/route.ts");
   const voice = await source("app/api/communications/webhooks/twilio/voice/route.ts");
   const resend = await source("app/api/communications/webhooks/resend/route.ts");
-  assert.ok(twilio.indexOf("if (!verifyTwilioRequest") < twilio.lastIndexOf("return forwardVerifiedWebhook"));
-  assert.ok(voice.indexOf("if (!verifyTwilioRequest") < voice.lastIndexOf("return forwardVerifiedWebhook"));
-  assert.ok(resend.indexOf("if (!verifyResendRequest") < resend.lastIndexOf("return forwardVerifiedWebhook"));
+  assert.match(twilio, /if \(!signature\).*401/);
+  assert.match(voice, /if \(!signature\).*401/);
+  assert.match(resend, /if \(!id \|\| !timestamp \|\| !signature\).*401/);
+  assert.match(twilio, /"x-twilio-signature": signature/);
+  assert.match(voice, /"x-twilio-signature": signature/);
+  assert.match(resend, /"svix-signature": signature/);
 });
 
 test("the Preview bypass is sent only as a private forwarding header", async () => {

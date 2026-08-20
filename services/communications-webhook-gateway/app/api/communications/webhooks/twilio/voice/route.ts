@@ -1,6 +1,5 @@
-import { forwardVerifiedWebhook, gatewayFailure, limitedBody } from "../../../../../../lib/gateway";
+import { forwardProviderWebhook, gatewayFailure, limitedBody } from "../../../../../../lib/gateway";
 import { TWILIO_VOICE_PATH } from "../../../../../../lib/routes";
-import { verifyTwilioRequest } from "../../../../../../lib/twilio";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,13 +7,14 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const body = await limitedBody(request);
-    if (!verifyTwilioRequest(request, body)) return new Response(null, { status: 401 });
-    return forwardVerifiedWebhook({
+    const signature = request.headers.get("x-twilio-signature")?.trim();
+    if (!signature) return new Response(null, { status: 401 });
+    return forwardProviderWebhook({
       provider: "twilio",
       pathname: TWILIO_VOICE_PATH,
       body,
       contentType: "application/x-www-form-urlencoded",
-      providerHeaders: { "x-twilio-signature": request.headers.get("x-twilio-signature") ?? "" },
+      providerHeaders: { "x-twilio-signature": signature },
     });
   } catch (error) {
     return gatewayFailure(error);
