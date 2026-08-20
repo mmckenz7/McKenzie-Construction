@@ -118,3 +118,22 @@ export function movePolygonSegment(
   next[(edgeIndex + 1) % next.length] = movedEnd;
   return mergeCoincident ? mergeCoincidentNeighbors(next) : Object.freeze(next);
 }
+
+export function resizePolygonEdge(
+  outer: readonly PolygonPoint[],
+  edgeIndex: number,
+  requestedLength: number,
+  snapIncrement: number,
+): readonly PolygonPoint[] {
+  const edges = deriveGeometricPolygonEdges(outer);
+  const edge = edges[edgeIndex];
+  if (!edge) throw new RangeError("Select an existing outline segment before changing its length.");
+  const length = snap(requestedLength, snapIncrement);
+  if (!Number.isFinite(length) || length < snapIncrement) throw new RangeError(`Side length must be at least ${snapIncrement} inches.`);
+  const direction = { x: (edge.end.x - edge.start.x) / edge.length, z: (edge.end.z - edge.start.z) / edge.length };
+  const connectedEdgeIndex = (edgeIndex + 1) % edges.length;
+  const connectedEdge = edges[connectedEdgeIndex];
+  const alignment = connectedEdge.outward.x * direction.x + connectedEdge.outward.z * direction.z;
+  if (Math.abs(alignment) < .99) throw new RangeError("Exact side length requires a square connected side; drag the corner for an angled layout.");
+  return movePolygonSegment(outer, connectedEdgeIndex, (length - edge.length) / alignment, snapIncrement);
+}

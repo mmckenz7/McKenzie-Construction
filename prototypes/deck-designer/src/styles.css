@@ -154,15 +154,17 @@ button:hover { transform: translateY(-1px); }
 .photo-error { margin: 0; padding: 0 22px 14px; background: #f4f6f2; }
 .workspace { display: grid; grid-template-columns: 294px minmax(0, 1fr); min-height: 640px; }
 .mobile-workspace-nav, .mobile-plan-edge-actions { display: none; }
-.plan-action-tray { display: grid; gap: 10px; padding: 12px; border-top: 1px solid var(--line); background: #f4f6f2; }
+.plan-action-tray { display: grid; max-height: 245px; gap: 10px; padding: 12px; overflow-y: auto; scrollbar-gutter: stable; border-top: 1px solid var(--line); background: #f4f6f2; }
 .plan-action-copy strong, .plan-action-copy small { display: block; }
 .plan-action-copy strong { color: var(--ink); font-size: 12px; }
 .plan-action-copy small { margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.35; }
 .plan-action-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.plan-action-fields.segment-fields { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
 .plan-action-fields .field { margin: 0; }
 .plan-action-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 7px; }
 .plan-action-buttons button { min-height: 44px; border-color: #aebbb2; background: white; color: #34473f; font-size: 10px; font-weight: 750; }
 .plan-action-buttons button.primary { border-color: #aabd2f; background: var(--lime); color: #17231e; }
+.plan-action-tray .remove-stairs, .segment-landing-controls > button { min-height: 44px; }
 .designer-stage-nav { display: flex; align-items: center; gap: 8px; padding: 10px clamp(18px, 4vw, 60px); border-bottom: 1px solid var(--line); background: #edf1ec; }
 .designer-stage-nav button { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 7px 13px; border-color: #aebbb2; background: white; color: #42554b; font-size: 11px; font-weight: 800; }
 .designer-stage-nav button span { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 50%; background: #e4e9e4; }
@@ -297,7 +299,7 @@ button:hover { transform: translateY(-1px); }
 .design-notices p.review { border-left-color: #c3973d; background: #f7efd8; color: #66501e; }
 .visual-area { position: sticky; top: 0; align-self: start; min-width: 0; padding: 18px; display: grid; grid-template-columns: minmax(280px, .85fr) minmax(380px, 1.15fr); align-items: start; gap: 14px; background: #e6e9e4; }
 .view-card { min-width: 0; height: 530px; display: flex; flex-direction: column; overflow: hidden; background: white; border: 1px solid #d3d8d1; border-radius: 12px; box-shadow: 0 5px 20px #182b2210; }
-.plan-card { height: auto; min-height: 530px; }
+.plan-card { min-height: 530px; }
 .card-title { min-height: 57px; padding: 11px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e1e4df; }
 .card-title span { display: block; font-size: 12px; font-weight: 700; }
 .card-title small { color: #78837d; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
@@ -331,12 +333,6 @@ button:hover { transform: translateY(-1px); }
 .v3-edge:hover, .v3-edge:focus { fill: rgba(200, 221, 60, .52); }
 .corner-handle { fill: #f3ff8d; }
 .full-action { width: 100%; margin-top: 10px; }
-.corner-list { display: grid; gap: 8px; margin-top: 14px; }
-.corner-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
-.corner-row strong { grid-column: 1 / -1; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
-.corner-row label { display: grid; gap: 3px; font-size: 10px; color: var(--muted); }
-.corner-row input { width: 100%; padding: 7px; border: 1px solid var(--line); border-radius: 6px; }
-.corner-row button { grid-column: 1 / -1; }
 .review-card small { display: block; margin-top: 8px; }
 .review-card .primary { width: 100%; }
 .offset-action-status { margin: 8px 0 0; padding: 9px 10px; border-radius: 8px; background: #fff4df; color: #744716; font-size: 12px; font-weight: 700; }
@@ -380,7 +376,7 @@ button:hover { transform: translateY(-1px); }
   .topbar { align-items: flex-start; flex-wrap: wrap; }
   .header-actions { display: grid; width: 100%; grid-template-columns: 1fr 1fr; margin: 4px 0 0; }
   .header-actions button { min-height: 44px; padding-inline: 6px; }
-  .mobile-workspace-nav { position: sticky; top: 0; z-index: 12; display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 8px; border-bottom: 1px solid var(--line); background: #f4f6f2ee; backdrop-filter: blur(8px); }
+  .mobile-workspace-nav { position: sticky; top: 0; z-index: 12; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 8px; border-bottom: 1px solid var(--line); background: #f4f6f2ee; backdrop-filter: blur(8px); }
   .mobile-workspace-nav a { display: grid; min-height: 44px; place-items: center; border: 1px solid #9eafa4; border-radius: 8px; background: white; color: #244538; font-size: 11px; font-weight: 800; text-decoration: none; }
   .railing-mobile-nav { grid-template-columns: 1fr 1fr; }
   .designer-stage-nav { position: sticky; top: 0; z-index: 13; padding: 7px 8px; }
@@ -392,6 +388,7 @@ button:hover { transform: translateY(-1px); }
   .visual-area { order: 1; padding: 10px; }
   .view-card { height: 438px; }
   .plan-card { height: auto; min-height: 438px; }
+  .plan-action-tray { max-height: none; overflow-y: visible; }
   .mobile-plan-edge-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 10px; border-top: 1px solid var(--line); background: #f4f6f2; }
   .mobile-plan-edge-actions > div, .mobile-plan-edge-actions > p { grid-column: 1 / -1; margin: 0; }
   .mobile-plan-edge-actions strong, .mobile-plan-edge-actions small { display: block; }

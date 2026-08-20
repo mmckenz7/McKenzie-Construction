@@ -1,6 +1,6 @@
 // @ts-ignore The production root intentionally does not install this isolated prototype package's test runner.
 import { describe, expect, it } from "vitest";
-import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment } from "../src/polygonEditorV3";
+import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment, resizePolygonEdge } from "../src/polygonEditorV3";
 import { normalizePolygon } from "../src/polygon";
 
 const rectangle = Object.freeze([{ x: 0, z: 0 }, { x: 192, z: 0 }, { x: 192, z: 144 }, { x: 0, z: 144 }]);
@@ -19,6 +19,16 @@ describe("direct v3 polygon authoring", () => {
     const next = movePolygonSegment(rectangle, 2, 24, 6);
     expect(next).toEqual([{ x: 0, z: 0 }, { x: 192, z: 0 }, { x: 192, z: 168 }, { x: 0, z: 168 }]);
     expect(normalizePolygon(next)).toEqual(next);
+  });
+
+  it("changes only the selected side length while its connected side follows", () => {
+    const next = resizePolygonEdge(rectangle, 0, 120, 6);
+    expect(next).toEqual([{ x: 0, z: 0 }, { x: 120, z: 0 }, { x: 120, z: 144 }, { x: 0, z: 144 }]);
+    expect(normalizePolygon(next)).toEqual(next);
+  });
+
+  it("rejects a side length that would collapse the selected segment", () => {
+    expect(() => resizePolygonEdge(rectangle, 0, 0, 6)).toThrow(/at least 6 inches/i);
   });
 
   it("anchors a bumpout to an existing corner when the click is near the edge endpoint", () => {
