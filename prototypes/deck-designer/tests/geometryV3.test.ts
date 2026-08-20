@@ -141,6 +141,17 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(geometry.landingSupportPosts.every((post) => post.top < platform.elevation)).toBe(true);
   });
 
+  it("derives top and midway landings independently or together", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const system = { id: "stair-system-1", locked: true, edgeId: platform.edgeConditions.find((condition) => condition.condition === "free")!.edgeId, offset: 12, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [] } as const;
+    const landing = (id: string, afterRiser: number) => ({ id, locked: true, afterRiser, width: system.width, depth: 48, turn: "straight" as const, connections: [] });
+    const positionsFor = (landings: readonly ReturnType<typeof landing>[]) => derivePlatformGeometryV3(normalizeDeckDesignV3({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings }] } }] }), platform.id).landings.map((item) => item.afterRiser);
+    expect(positionsFor([landing("top-only", 0)])).toEqual([0]);
+    expect(positionsFor([landing("midway-only", 3)])).toEqual([3]);
+    expect(positionsFor([landing("top", 0), landing("midway", 3)])).toEqual([0, 3]);
+  });
+
   it("sizes a landing independently while keeping both flights centered on it", () => {
     const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
     const platform = base.platforms[0];
