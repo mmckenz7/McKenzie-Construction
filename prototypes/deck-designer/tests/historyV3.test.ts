@@ -93,4 +93,22 @@ describe("DeckDesign v3 immutable command history", () => {
     expect(redone.present.platforms[0].construction.stairs).toMatchObject({ landingPosition: "midway", upperFlightRisers: 3, landingWidth: 72 });
     expect([applied.present, undone.present, redone.present].map((design) => design.metadata.revision)).toEqual([2, 3, 4]);
   });
+
+  it("undoes and redoes locked stair-system and landing groups atomically", () => {
+    const prepared = safeNotchSource();
+    const preparedPlatform = prepared.platforms[0];
+    const source = normalizeDeckDesignV3({ ...prepared, platforms: [{ ...preparedPlatform, construction: { ...preparedPlatform.construction, stairs: { ...preparedPlatform.construction.stairs, enabled: true } } }] });
+    const platform = source.platforms[0];
+    const system = platform.construction.stairSystems[0];
+    const grouped = normalizeDeckDesignV3({ ...source, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, locked: true, landings: [
+      { id: `${system.id}-landing-1`, locked: true, afterRiser: 0, width: system.width, depth: 48, turn: "straight" },
+      { id: `${system.id}-landing-2`, locked: true, afterRiser: 3, width: system.width, depth: 48, turn: "left" },
+    ] }] } }], metadata: { ...source.metadata, revision: 2 } });
+    const applied = designHistoryReducerV3(createHistoryV3(source), { type: "apply", design: grouped });
+    const undone = designHistoryReducerV3(applied, { type: "undo" });
+    const redone = designHistoryReducerV3(undone, { type: "redo" });
+    expect(undone.present.platforms[0].construction.stairSystems[0].landings).toHaveLength(system.landings.length);
+    expect(redone.present.platforms[0].construction.stairSystems[0]).toMatchObject({ locked: true, landings: [{ locked: true }, { locked: true }] });
+    expect([applied.present, undone.present, redone.present].map((design) => design.metadata.revision)).toEqual([2, 3, 4]);
+  });
 });

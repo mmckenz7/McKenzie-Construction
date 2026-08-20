@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-20 grouped stair systems and ordered landings
+
+- Desktop QA locked Landing 1, revealed and added Landing 2, locked the complete stair system, then added Stair system 2 on another exact free edge. The completed first group remained unchanged and separately selectable.
+- The same route authority updated 2D, 3D, stair/landing railing geometry, and conceptual quantities. Two landings aggregated to 32 square feet and retained separate geometry references; adding the second stair system increased stair treads, stringers, and stair-railing quantities without changing deck geometry.
+- At 390 × 844, stair-system and landing selectors remained 48–49 pixels high, all add/lock/remove actions measured at least 44 pixels high, both visual cards fit the viewport, and there was no horizontal overflow.
+- The browser reported no warnings or errors. Old local v3 single-stair state loaded as one editable stair system, demonstrating the compatibility path in the live application.
+- The grouped route measured 94.5 KiB initial and 231.5 KiB total JavaScript gzip. Enforced ceilings are now narrowly set at 95 KiB and 232 KiB; the 170 KiB largest-chunk ceiling is unchanged.
+
 ## 2026-08-20 turning-landing perimeter fix
 
 - Each 90° turn leaves its outgoing stair edge open while retaining both the opposite protected-side railing and the outside landing railing; left and right turns mirror exactly.

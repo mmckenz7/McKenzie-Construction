@@ -48,7 +48,7 @@ export function applyHouseConnectionV3(design: DeckDesignV3, platformId: string,
   const edge = edges.find((candidate) => candidate.id === input.edgeId);
   if (!edge) throw new RangeError("Choose the exact side of the deck that meets the house.");
   if (!(["unknown", "ledger", "non-ledger"] as const).includes(input.attachment)) throw new TypeError("Choose a supported house connection.");
-  if (platform.construction.railing.enabledEdgeIds.includes(edge.id) || (platform.construction.stairs.enabled && platform.construction.stairs.edgeId === edge.id)) {
+  if (platform.construction.railing.enabledEdgeIds.includes(edge.id) || platform.construction.stairSystems.some((system) => system.edgeId === edge.id)) {
     throw new RangeError("Remove railings or stairs from the house side before attaching it to the house.");
   }
   if (input.doorEnabled && (!Number.isFinite(input.doorOffset) || !Number.isFinite(input.doorWidth) || input.doorWidth < 24 || input.doorWidth > 144 || input.doorOffset < 0 || input.doorOffset + input.doorWidth > edge.length)) {

@@ -70,7 +70,7 @@ export function planPolygonRegionReplacement(
     const condition = platform.edgeConditions.find((candidate) => candidate.edgeId === resolution.previousEdgeId);
     if (condition?.condition === "house_attachment") usages.push("house_attachment");
     if (platform.construction.railing.enabledEdgeIds.includes(resolution.previousEdgeId)) usages.push("railing");
-    if (platform.construction.stairs.enabled && platform.construction.stairs.edgeId === resolution.previousEdgeId) usages.push("stairs");
+    if (platform.construction.stairSystems.some((system) => system.edgeId === resolution.previousEdgeId)) usages.push("stairs");
     if (usages.length === 0) continue;
     impacts.push(Object.freeze({
       platformId,
@@ -128,19 +128,7 @@ export function applyPolygonRegionReplacement(
     }
     return resolution.candidateEdgeIds[0];
   };
-  const remapInactiveStairReference = (edgeId: string): string => {
-    const resolution = plan.resolutions.find((candidate) => candidate.previousEdgeId === edgeId);
-    if (resolution && (resolution.status === "preserved" || resolution.status === "remapped")) {
-      const nextEdgeId = resolution.candidateEdgeIds[0];
-      if (edgeConditions.some((condition) => condition.edgeId === nextEdgeId && condition.condition === "free")) return nextEdgeId;
-    }
-    const freeEdge = edgeConditions.find((condition) => condition.condition === "free");
-    if (!freeEdge) throw new RangeError("An edited platform must retain at least one free edge.");
-    return freeEdge.edgeId;
-  };
-  const nextStairEdgeId = platform.construction.stairs.enabled
-    ? remapReference(platform.construction.stairs.edgeId)
-    : remapInactiveStairReference(platform.construction.stairs.edgeId);
+  const nextStairSystems = Object.freeze(platform.construction.stairSystems.map((system) => Object.freeze({ ...system, edgeId: remapReference(system.edgeId) })));
   const nextPlatform = Object.freeze({
     ...platform,
     region: nextRegion,
@@ -151,10 +139,7 @@ export function applyPolygonRegionReplacement(
         ...platform.construction.railing,
         enabledEdgeIds: Object.freeze(platform.construction.railing.enabledEdgeIds.map(remapReference)),
       }),
-      stairs: Object.freeze({
-        ...platform.construction.stairs,
-        edgeId: nextStairEdgeId,
-      }),
+      stairSystems: nextStairSystems,
     }),
   });
   const nextDesign = normalizeDeckDesignV3({
@@ -170,9 +155,6 @@ export function applyPolygonRegionReplacement(
       `Platform ${platformId} region replaced at revision ${nextDesign.metadata.revision}.`,
       ...(plan.automaticRemaps.length > 0 ? [`${plan.automaticRemaps.length} edge references remapped geometrically.`] : []),
       ...(defaultedFreeEdges > 0 ? [`${defaultedFreeEdges} new edges defaulted to free with no attachment intent.`] : []),
-      ...(!platform.construction.stairs.enabled && nextStairEdgeId !== platform.construction.stairs.edgeId
-        ? ["Inactive stair placeholder followed the edited outline; no active stair geometry was moved."]
-        : []),
     ]),
     plan,
   });

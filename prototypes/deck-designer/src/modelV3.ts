@@ -25,15 +25,39 @@ export type DeckPlatformV3 = Readonly<{
     decking: DeckDesign["construction"]["decking"];
     framing: DeckDesign["construction"]["framing"];
     railing: Readonly<{ height: number; enabledEdgeIds: readonly string[] }>;
-    stairs: Omit<DeckDesign["construction"]["stairs"], "edgeId"> & Readonly<{
+    stairSystems: readonly StairSystemV3[];
+    /** Derived, non-serialized compatibility view of the first stair system. */
+    stairs: LegacyStairsV3;
+  }>;
+}>;
+
+export type StairLandingV3 = Readonly<{
+  id: string;
+  locked: boolean;
+  afterRiser: number;
+  width: number;
+  depth: number;
+  turn: "straight" | "left" | "right";
+}>;
+
+export type StairSystemV3 = Readonly<{
+  id: string;
+  locked: boolean;
+  edgeId: string;
+  offset: number;
+  width: number;
+  treadDepth: number;
+  maxRiserHeight: number;
+  landings: readonly StairLandingV3[];
+}>;
+
+type LegacyStairsV3 = Omit<DeckDesign["construction"]["stairs"], "edgeId"> & Readonly<{
       edgeId: string;
       landingTurn: "straight" | "left" | "right";
       landingPosition: "top" | "midway";
       upperFlightRisers: number;
       landingWidth: number;
     }>;
-  }>;
-}>;
 
 export type DeckDesignV3 = Readonly<{
   schemaVersion: 3;
@@ -90,22 +114,31 @@ function migrateNormalizedV2(design: DeckDesign): DeckDesignV3 {
       condition: edge.id === houseEdgeId ? "house_attachment" as const : "free" as const,
       attachment: edge.id === houseEdgeId ? houseAttachment : "none" as const,
     }))),
-    construction: Object.freeze({
+    construction: constructionWithDerivedLegacyStairs({
       decking: design.construction.decking,
       framing: design.construction.framing,
       railing: Object.freeze({
         height: design.construction.railing.height,
         enabledEdgeIds: Object.freeze(design.construction.railing.enabledEdges.map((edgeId) => semanticEdges[edgeId])),
       }),
-      stairs: Object.freeze({
-        ...design.construction.stairs,
+      stairSystems: design.construction.stairs.enabled ? Object.freeze([Object.freeze({
+        id: "stair-system-1",
+        locked: false,
         edgeId: semanticEdges[design.construction.stairs.edgeId],
-        landingTurn: "straight" as const,
-        landingPosition: "top" as const,
-        upperFlightRisers: 3,
-        landingWidth: design.construction.stairs.width,
-      }),
-    }),
+        offset: design.construction.stairs.offset,
+        width: design.construction.stairs.width,
+        treadDepth: design.construction.stairs.treadDepth,
+        maxRiserHeight: design.construction.stairs.maxRiserHeight,
+        landings: design.construction.stairs.landingEnabled ? Object.freeze([Object.freeze({
+          id: "stair-system-1-landing-1",
+          locked: false,
+          afterRiser: 0,
+          width: design.construction.stairs.width,
+          depth: design.construction.stairs.landingDepth,
+          turn: "straight" as const,
+        })]) : Object.freeze([]),
+      })]) : Object.freeze([]),
+    }, semanticEdges.front),
   });
   return Object.freeze({
     schemaVersion: 3,
@@ -116,6 +149,61 @@ function migrateNormalizedV2(design: DeckDesign): DeckDesignV3 {
     siteContext: design.siteContext,
     metadata: design.metadata,
   });
+}
+
+function legacyStairsFromSystems(systems: readonly StairSystemV3[], fallbackEdgeId: string): LegacyStairsV3 {
+  const system = systems[0];
+  const landing = system?.landings[0];
+  return Object.freeze({
+    enabled: Boolean(system),
+    edgeId: system?.edgeId ?? fallbackEdgeId,
+    offset: system?.offset ?? DEFAULT_DESIGN.construction.stairs.offset,
+    width: system?.width ?? DEFAULT_DESIGN.construction.stairs.width,
+    treadDepth: system?.treadDepth ?? DEFAULT_DESIGN.construction.stairs.treadDepth,
+    maxRiserHeight: system?.maxRiserHeight ?? DEFAULT_DESIGN.construction.stairs.maxRiserHeight,
+    landingEnabled: Boolean(landing),
+    landingDepth: landing?.depth ?? DEFAULT_DESIGN.construction.stairs.landingDepth,
+    landingTurn: landing?.turn ?? "straight",
+    landingPosition: landing && landing.afterRiser > 0 ? "midway" : "top",
+    upperFlightRisers: landing?.afterRiser || 3,
+    landingWidth: landing?.width ?? system?.width ?? DEFAULT_DESIGN.construction.stairs.width,
+  });
+}
+
+function legacySystemFromStairs(stairs: Partial<LegacyStairsV3>, id: string): Partial<StairSystemV3> {
+  const width = stairs.width ?? DEFAULT_DESIGN.construction.stairs.width;
+  const landingEnabled = stairs.landingEnabled === true;
+  return {
+    id,
+    locked: false,
+    edgeId: stairs.edgeId,
+    offset: stairs.offset,
+    width,
+    treadDepth: stairs.treadDepth,
+    maxRiserHeight: stairs.maxRiserHeight,
+    landings: landingEnabled ? [{
+      id: `${id}-landing-1`,
+      locked: false,
+      afterRiser: stairs.landingPosition === "midway" ? (stairs.upperFlightRisers ?? 3) : 0,
+      width: stairs.landingWidth ?? width,
+      depth: stairs.landingDepth ?? DEFAULT_DESIGN.construction.stairs.landingDepth,
+      turn: stairs.landingTurn ?? "straight",
+    }] : [],
+  };
+}
+
+function constructionWithDerivedLegacyStairs(
+  construction: Omit<DeckPlatformV3["construction"], "stairs">,
+  fallbackEdgeId: string,
+): DeckPlatformV3["construction"] {
+  const result = { ...construction } as DeckPlatformV3["construction"];
+  Object.defineProperty(result, "stairs", {
+    value: legacyStairsFromSystems(construction.stairSystems, fallbackEdgeId),
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return Object.freeze(result);
 }
 
 function normalizePlatformV3(
@@ -162,7 +250,7 @@ function normalizePlatformV3(
       decking: platform.construction.decking,
       framing: platform.construction.framing,
       railing: { height: platform.construction.railing.height, enabledEdges: [] },
-      stairs: { ...platform.construction.stairs, enabled: false, edgeId: "front" },
+      stairs: { ...DEFAULT_DESIGN.construction.stairs, enabled: false, edgeId: "front" },
     },
     metadata: design.metadata,
   });
@@ -173,63 +261,79 @@ function normalizePlatformV3(
   if (platform.construction.railing.enabledEdgeIds.some((edgeId) => !freeEdgeIds.has(edgeId))) {
     throw new RangeError("V3 railing can reference only recorded free edges.");
   }
-  if (!freeEdgeIds.has(platform.construction.stairs.edgeId)) {
-    throw new RangeError("V3 stairs must reference a recorded free edge.");
-  }
-  const stairEdge = edges.find((edge) => edge.id === platform.construction.stairs.edgeId)!;
-  const landingTurn = platform.construction.stairs.landingTurn ?? "straight";
-  if (!["straight", "left", "right"].includes(landingTurn)) {
-    throw new TypeError("V3 stair landingTurn must be straight, left, or right.");
-  }
-  const landingPosition = platform.construction.stairs.landingPosition ?? "top";
-  if (!["top", "midway"].includes(landingPosition)) {
-    throw new TypeError("V3 stair landingPosition must be top or midway.");
-  }
-  const totalRisers = Math.ceil((shared.platform.surfaceElevation - shared.siteContext.gradeElevation) / shared.construction.stairs.maxRiserHeight);
-  const defaultUpperFlightRisers = Math.max(1, Math.min(3, totalRisers - 1));
-  const upperFlightRisers = platform.construction.stairs.upperFlightRisers ?? defaultUpperFlightRisers;
-  if (!Number.isInteger(upperFlightRisers) || upperFlightRisers < 1) {
-    throw new RangeError("V3 upperFlightRisers must be a positive whole number.");
-  }
-  const landingWidth = platform.construction.stairs.landingWidth ?? shared.construction.stairs.width;
-  if (!Number.isFinite(landingWidth) || landingWidth < 30 || landingWidth > 144) {
-    throw new RangeError("V3 landingWidth must be between 30 and 144 inches.");
-  }
-  if (platform.construction.stairs.enabled &&
-      shared.construction.stairs.offset + shared.construction.stairs.width > stairEdge.length) {
-    throw new RangeError("V3 stairs must fit within their recorded free edge.");
-  }
-  if (platform.construction.stairs.enabled && shared.construction.stairs.landingEnabled && landingTurn !== "straight" && shared.construction.stairs.landingDepth < shared.construction.stairs.width) {
-    throw new RangeError("A turning landing must be at least as deep as the stair width.");
-  }
-  if (platform.construction.stairs.enabled && shared.construction.stairs.landingEnabled && landingWidth < shared.construction.stairs.width) {
-    throw new RangeError("A landing must be at least as wide as the stairs.");
-  }
-  if (platform.construction.stairs.enabled && shared.construction.stairs.landingEnabled && landingPosition === "midway" && (totalRisers < 2 || upperFlightRisers >= totalRisers)) {
-    throw new RangeError(`A midway landing must leave at least one riser in each flight; this stair has ${totalRisers} total risers.`);
-  }
+  const rawConstruction = platform.construction as DeckPlatformV3["construction"] & { stairs?: Partial<LegacyStairsV3> };
+  const explicitLegacyOverride = Object.prototype.propertyIsEnumerable.call(rawConstruction, "stairs") ? rawConstruction.stairs : null;
+  const rawSystems: readonly Partial<StairSystemV3>[] = explicitLegacyOverride
+    ? (explicitLegacyOverride.enabled ? [legacySystemFromStairs(explicitLegacyOverride, "stair-system-1")] : [])
+    : Array.isArray(rawConstruction.stairSystems)
+      ? rawConstruction.stairSystems
+      : rawConstruction.stairs?.enabled
+        ? [legacySystemFromStairs(rawConstruction.stairs, "stair-system-1")]
+        : [];
+  if (rawSystems.length > 6) throw new RangeError("A platform can contain at most six stair systems in this prototype.");
+  const systemIds = new Set<string>();
+  const openingsByEdge = new Map<string, { start: number; end: number; systemId: string }[]>();
+  const stairSystems = Object.freeze(rawSystems.map((candidate, systemIndex): StairSystemV3 => {
+    const id = candidate.id ?? `stair-system-${systemIndex + 1}`;
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(id) || systemIds.has(id)) throw new TypeError("Every stair system requires a unique stable lowercase ID.");
+    systemIds.add(id);
+    const edgeId = candidate.edgeId ?? [...freeEdgeIds][0];
+    if (!freeEdgeIds.has(edgeId)) throw new RangeError("V3 stairs must reference a recorded free edge.");
+    const normalizedStair = normalizeDesign({
+      ...DEFAULT_DESIGN,
+      platform: { ...DEFAULT_DESIGN.platform, surfaceElevation: shared.platform.surfaceElevation },
+      siteContext: shared.siteContext,
+      construction: { ...DEFAULT_DESIGN.construction, stairs: {
+        ...DEFAULT_DESIGN.construction.stairs,
+        enabled: false,
+        edgeId: "front",
+        offset: candidate.offset,
+        width: candidate.width,
+        treadDepth: candidate.treadDepth,
+        maxRiserHeight: candidate.maxRiserHeight,
+      } },
+    }).construction.stairs;
+    const stairEdge = edges.find((edge) => edge.id === edgeId)!;
+    if (normalizedStair.offset + normalizedStair.width > stairEdge.length) throw new RangeError("V3 stairs must fit within their recorded free edge.");
+    const existingOpenings = openingsByEdge.get(edgeId) ?? [];
+    const opening = { start: normalizedStair.offset, end: normalizedStair.offset + normalizedStair.width, systemId: id };
+    if (existingOpenings.some((item) => opening.start < item.end && opening.end > item.start)) throw new RangeError("Stair systems on the same deck side cannot overlap.");
+    openingsByEdge.set(edgeId, [...existingOpenings, opening]);
+    const totalRisers = Math.ceil((shared.platform.surfaceElevation - shared.siteContext.gradeElevation) / normalizedStair.maxRiserHeight);
+    const landingIds = new Set<string>();
+    let previousAfterRiser = -1;
+    const landings = Object.freeze((candidate.landings ?? []).map((landing, landingIndex): StairLandingV3 => {
+      const landingId = landing.id ?? `${id}-landing-${landingIndex + 1}`;
+      if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(landingId) || landingIds.has(landingId)) throw new TypeError("Every stair landing requires a unique stable lowercase ID within its stair system.");
+      landingIds.add(landingId);
+      const afterRiser = landing.afterRiser ?? 0;
+      if (!Number.isInteger(afterRiser) || afterRiser < 0 || afterRiser >= totalRisers || afterRiser <= previousAfterRiser) throw new RangeError("Landing positions must be unique increasing whole riser counts below the total stair rise.");
+      previousAfterRiser = afterRiser;
+      const width = landing.width ?? normalizedStair.width;
+      const depth = landing.depth ?? 48;
+      const turn = landing.turn ?? "straight";
+      if (!Number.isFinite(width) || width < 30 || width > 144 || width < normalizedStair.width) throw new RangeError("A landing must be 30–144 inches wide and at least as wide as its stairs.");
+      if (!Number.isFinite(depth) || depth < 24 || depth > 120) throw new RangeError("A landing depth must be between 24 and 120 inches.");
+      if (!["straight", "left", "right"].includes(turn)) throw new TypeError("A landing turn must be straight, left, or right.");
+      if (turn !== "straight" && depth < normalizedStair.width) throw new RangeError("A turning landing must be at least as deep as the stair width.");
+      return Object.freeze({ id: landingId, locked: landing.locked === true, afterRiser, width, depth, turn });
+    }));
+    return Object.freeze({ id, locked: candidate.locked === true, edgeId, offset: normalizedStair.offset, width: normalizedStair.width, treadDepth: normalizedStair.treadDepth, maxRiserHeight: normalizedStair.maxRiserHeight, landings });
+  }));
   return Object.freeze({
     id: platform.id,
     elevation: shared.platform.surfaceElevation,
     region,
     edgeConditions,
-    construction: Object.freeze({
+    construction: constructionWithDerivedLegacyStairs({
       decking: shared.construction.decking,
       framing: shared.construction.framing,
       railing: Object.freeze({
         height: shared.construction.railing.height,
         enabledEdgeIds: Object.freeze([...platform.construction.railing.enabledEdgeIds]),
       }),
-      stairs: Object.freeze({
-        ...shared.construction.stairs,
-        enabled: platform.construction.stairs.enabled,
-        edgeId: platform.construction.stairs.edgeId,
-        landingTurn,
-        landingPosition,
-        upperFlightRisers,
-        landingWidth,
-      }),
-    }),
+      stairSystems,
+    }, [...freeEdgeIds][0]),
   });
 }
 

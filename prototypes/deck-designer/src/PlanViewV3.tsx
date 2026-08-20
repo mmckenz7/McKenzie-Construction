@@ -1,13 +1,14 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { stairOffsetFromPoint } from "./editor";
 import type { DeckPlatformGeometryV3 } from "./geometryV3";
-import type { DeckPlatformV3 } from "./modelV3";
+import type { DeckPlatformV3, StairSystemV3 } from "./modelV3";
 import { formatFeetInches } from "./PlanView";
 import type { HouseContextGeometry } from "./houseContextGeometry";
 
 type Point = Readonly<{ x: number; z: number }>;
 type Props = {
   platform: DeckPlatformV3;
+  activeStairSystem?: StairSystemV3 | null;
   geometry: DeckPlatformGeometryV3;
   houseGeometry: HouseContextGeometry;
   snapIncrement: number;
@@ -36,11 +37,11 @@ export function planEdgeDimensionLabel(edge: Readonly<{ start: Point; end: Point
   });
 }
 
-export function PlanViewV3({ platform, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, onSelectEdge, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit }: Props) {
+export function PlanViewV3({ platform, activeStairSystem = null, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, onSelectEdge, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const segmentDrag = useRef<Readonly<{ index: number; midpoint: Point; outward: Point }> | null>(null);
   const [active, setActive] = useState<string | null>(null);
-  const all = [...geometry.footprint, ...geometry.stairTreads.flatMap((tread) => tread.corners), ...(geometry.landing?.corners ?? []), ...houseGeometry.houseWallPanels.flatMap((panel) => [panel.start, panel.end])];
+  const all = [...geometry.footprint, ...geometry.stairTreads.flatMap((tread) => tread.corners), ...geometry.landings.flatMap((landing) => landing.corners), ...houseGeometry.houseWallPanels.flatMap((panel) => [panel.start, panel.end])];
   const minX = Math.min(...all.map((point) => point.x));
   const maxX = Math.max(...all.map((point) => point.x));
   const minZ = Math.min(...all.map((point) => point.z));
@@ -57,15 +58,15 @@ export function PlanViewV3({ platform, geometry, houseGeometry, snapIncrement, e
     return { x: snap(local.x + minX - margin, snapIncrement), z: snap(local.y + minZ - margin, snapIncrement) };
   };
   const localPoint = (event: PointerEvent<SVGCircleElement | SVGRectElement>): Point | null => pointFromClient(event.clientX, event.clientY);
-  const stair = platform.construction.stairs;
-  const stairEdge = geometry.platformEdges.find((edge) => edge.id === stair.edgeId) ?? null;
+  const stair = activeStairSystem;
+  const stairEdge = stair ? geometry.platformEdges.find((edge) => edge.id === stair.edgeId) ?? null : null;
   const stairCenter = stairEdge ? (() => {
-    const ratio = (stair.offset + stair.width / 2) / stairEdge.length;
+    const ratio = ((stair?.offset ?? 0) + (stair?.width ?? 0) / 2) / stairEdge.length;
     return { x: stairEdge.start.x + (stairEdge.end.x - stairEdge.start.x) * ratio, z: stairEdge.start.z + (stairEdge.end.z - stairEdge.start.z) * ratio };
   })() : null;
   const stairPointer = (event: PointerEvent<SVGCircleElement>, commit: boolean) => {
     const point = localPoint(event);
-    if (!point || !stairEdge) return;
+    if (!point || !stairEdge || !stair) return;
     const offset = stairOffsetFromPoint(stairEdge, stair.width, point, snapIncrement);
     commit ? onStairCommit(offset) : onStairPreview(offset);
   };
@@ -94,7 +95,7 @@ export function PlanViewV3({ platform, geometry, houseGeometry, snapIncrement, e
     {geometry.surfaceBoards.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-board" />)}
     {geometry.joists.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-joist" />)}
     {geometry.railSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-rail" />)}
-    {geometry.landing && <polygon points={geometry.landing.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-landing" />}
+    {geometry.landings.map((landing) => <polygon key={landing.id} points={landing.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-landing" />)}
     {geometry.landingRailSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-rail plan-landing-rail" />)}
     {geometry.stairTreads.map((tread) => <polygon key={tread.id} points={tread.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-stair" />)}
     {geometry.stairRailSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-stair-rail" />)}
@@ -121,6 +122,6 @@ export function PlanViewV3({ platform, geometry, houseGeometry, snapIncrement, e
       return <rect key={`segment-${index}`} x={x(midpoint.x) - 4.5} y={y(midpoint.z) - 4.5} width="9" height="9" rx="2" className={`segment-move-handle${active === `segment-${index}` ? " active" : ""}`} role="button" tabIndex={0} aria-label={`Move segment ${index + 1}; drag perpendicular to reshape attached segments`} onKeyDown={(event) => { const directions: Record<string, Point> = { ArrowLeft: { x: -1, z: 0 }, ArrowRight: { x: 1, z: 0 }, ArrowUp: { x: 0, z: -1 }, ArrowDown: { x: 0, z: 1 } }; const direction = directions[event.key]; if (!direction) return; const projection = direction.x * edge.outward.x + direction.z * edge.outward.z; if (Math.abs(projection) < .5) return; event.preventDefault(); onSegmentCommit(index, Math.sign(projection) * snapIncrement); }} onPointerDown={(event) => { onSelectEdge(edge.id); event.currentTarget.setPointerCapture(event.pointerId); segmentDrag.current = { index, midpoint, outward: edge.outward }; setActive(`segment-${index}`); }} onPointerMove={(event) => { if (active !== `segment-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const distance = segmentDistance(event); if (distance !== null) onSegmentPreview(index, distance); }} onPointerUp={(event) => { if (active !== `segment-${index}`) return; const distance = segmentDistance(event); if (distance !== null) onSegmentCommit(index, distance); event.currentTarget.releasePointerCapture(event.pointerId); segmentDrag.current = null; setActive(null); }} onPointerCancel={() => { segmentDrag.current = null; setActive(null); onCancel(); }} />;
     })}
     {editingEnabled && platform.region.outer.map((point, index) => <circle key={index} cx={x(point.x)} cy={y(point.z)} r={active === `corner-${index}` ? 7 : 5.5} className="dimension-handle corner-handle" role="button" tabIndex={0} aria-label={`Corner ${index + 1}, ${point.x} inches left/right and ${point.z} inches away; drag or use arrow keys`} onKeyDown={(event) => nudgeCorner(index, event)} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive(`corner-${index}`); }} onPointerMove={(event) => { if (active === `corner-${index}` && event.currentTarget.hasPointerCapture(event.pointerId)) { const point = localPoint(event); if (point) onCornerPreview(index, point); } }} onPointerUp={(event) => { if (active !== `corner-${index}`) return; const point = localPoint(event); if (point) onCornerCommit(index, point); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />)}
-    {editingEnabled && stair.enabled && stairCenter && <circle cx={x(stairCenter.x)} cy={y(stairCenter.z)} r={active === "stairs" ? 8 : 6.5} className="stair-move-handle" role="button" tabIndex={0} aria-label="Move stairs along selected geometric edge" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive("stairs"); }} onPointerMove={(event) => { if (active === "stairs" && event.currentTarget.hasPointerCapture(event.pointerId)) stairPointer(event, false); }} onPointerUp={(event) => { if (active !== "stairs") return; stairPointer(event, true); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />}
+    {editingEnabled && stair && !stair.locked && stairCenter && <circle cx={x(stairCenter.x)} cy={y(stairCenter.z)} r={active === "stairs" ? 8 : 6.5} className="stair-move-handle" role="button" tabIndex={0} aria-label={`Move ${stair.id} along selected geometric edge`} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive("stairs"); }} onPointerMove={(event) => { if (active === "stairs" && event.currentTarget.hasPointerCapture(event.pointerId)) stairPointer(event, false); }} onPointerUp={(event) => { if (active !== "stairs") return; stairPointer(event, true); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />}
   </svg>;
 }

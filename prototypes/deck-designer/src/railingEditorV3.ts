@@ -37,13 +37,13 @@ export function railingAssemblySummary(platform: DeckPlatformV3, geometry: DeckP
   return Object.freeze({
     deck: Object.freeze({ segmentCount: geometry.railSegments.length, linearInches: deckLinearInches }),
     stairs: Object.freeze({
-      present: platform.construction.stairs.enabled,
+      present: platform.construction.stairSystems.length > 0,
       segmentCount: geometry.stairRailSegments.length,
       postCount: geometry.stairRailPosts.length,
       linearInches: stairLinearInches,
     }),
     landing: Object.freeze({
-      present: platform.construction.stairs.enabled && platform.construction.stairs.landingEnabled,
+      present: geometry.landings.length > 0,
       segmentCount: geometry.landingRailSegments.length,
       postCount: geometry.landingRailPosts.length,
       linearInches: landingLinearInches,

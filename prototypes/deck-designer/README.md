@@ -17,16 +17,16 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Exact width, projection, and deck-surface elevation inputs
 - Deterministic 2D plan, procedural 3D, and basic quantities
 - Simple decking, joists, beam, posts, and railings
-- Any-free-edge conceptual stairs with an explicit railing opening
+- Multiple independently locked conceptual stair systems on free edges, each with its own explicit railing opening
 - Deterministic conceptual stair side-stringer paths in 2D, 3D, and quantities
 - Recorded grade, multiple editable house walls/attachment intent, and multiple selectable conceptual door/window openings per wall
-- Optional top or midway landing with exact independent width/depth, deterministic two-flight orientation, and area
+- Ordered, stair-system-associated landings with exact step position, independent width/depth, deterministic straight/left/right routing, and area
 - Conceptual landing side rails, stair rails, rail posts, and outer support locations
 - Command-based undo and redo
 - Direct plan handles for width, projection, and L-cutout dimensions with selectable 1, 6, or 12 inch snapping
 - Flexible polygon corner handles, exact corner coordinates, and repeatable rectangular offsets
 - Click-to-add rectangular bumpouts with parallel outer segments, magnetic corner-axis alignment, and draggable segment handles that move both attached endpoints
-- Direct stair movement along exact geometric edges with bounds and grid snapping
+- Direct movement of the active stair system along exact geometric edges with bounds and grid snapping
 - Keyboard/click edge selection with contextual railing and stair actions
 - Deterministic, explainable conceptual review notices
 - Three generic geometry templates plus a local duplicate-design command

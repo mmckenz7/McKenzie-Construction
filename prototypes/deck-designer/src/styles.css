@@ -255,6 +255,13 @@ button:hover { transform: translateY(-1px); }
 .stair-landing-controls fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .stair-landing-controls legend { margin-bottom: 7px; color: #55635c; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .stair-landing-controls small { margin-top: 7px; color: #657169; }
+.stair-system-list, .landing-sequence { display: grid; gap: 7px; margin: 10px 0; }
+.stair-system-summary, .landing-sequence button { display: grid; min-height: 48px; gap: 3px; padding: 9px 11px; border: 1px solid #bdc9c0; border-radius: 8px; background: #fff; color: #274238; text-align: left; }
+.stair-system-summary strong, .landing-sequence strong { font-size: 11px; }
+.stair-system-summary small, .landing-sequence small { margin: 0; color: #66736b; font-size: 9px; text-transform: none; letter-spacing: 0; }
+.stair-system-summary.active, .landing-sequence button.active { border-color: #173f31; box-shadow: inset 4px 0 0 #cbe72f; background: #edf4e8; }
+.stair-add-next { border-style: dashed; }
+.stair-configuration .selected-edge-actions button, .stair-landing-controls > button, .stair-configuration .remove-stairs { min-height: 44px; }
 .stair-railing-note { display: grid !important; gap: 3px !important; margin-top: 12px; padding: 9px; border-left: 3px solid #6f8879; border-radius: 5px; background: #e2eae4; text-transform: none !important; letter-spacing: 0 !important; }
 .stair-railing-note strong { color: #29463a; font-size: 10px; }
 .stair-railing-note small { margin: 0; color: #5a6a61; }

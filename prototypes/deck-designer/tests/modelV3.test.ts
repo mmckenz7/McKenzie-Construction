@@ -49,21 +49,19 @@ describe("isolated DeckDesign v3 migration spike", () => {
   });
 
   it("defaults older v3 landings to top and validates a recorded midway split", () => {
-    const migrated = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const migrated = migrateDeckDesignToV3(lShapeLandingFixture.design);
     const legacy = JSON.parse(stableDeckDesignV3Json(migrated));
-    delete legacy.platforms[0].construction.stairs.landingPosition;
-    delete legacy.platforms[0].construction.stairs.upperFlightRisers;
-    delete legacy.platforms[0].construction.stairs.landingWidth;
-    expect(migrateDeckDesignToV3(legacy).platforms[0].construction.stairs).toMatchObject({ landingPosition: "top", upperFlightRisers: 3, landingWidth: 48 });
+    delete legacy.platforms[0].construction.stairSystems[0].landings[0]?.locked;
+    expect(migrateDeckDesignToV3(legacy).platforms[0].construction.stairSystems[0].landings[0]?.locked).toBe(false);
     const platform = migrated.platforms[0];
     expect(() => normalizeDeckDesignV3({
       ...migrated,
       platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, landingEnabled: true, landingPosition: "midway", upperFlightRisers: 7 } } }],
-    })).toThrow(/at least one riser in each flight/i);
+    })).toThrow(/below the total stair rise/i);
     expect(() => normalizeDeckDesignV3({
       ...migrated,
       platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, landingEnabled: true, width: 60, landingWidth: 48 } } }],
-    })).toThrow(/at least as wide as the stairs/i);
+    })).toThrow(/at least as wide as (the|its) stairs/i);
   });
 
   it("rejects railing or stairs that reference attached or missing edges", () => {
@@ -80,7 +78,17 @@ describe("isolated DeckDesign v3 migration spike", () => {
     })).toThrow(/unique list/i);
     expect(() => normalizeDeckDesignV3({
       ...migrated,
-      platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, edgeId: "edge-missing" } } }],
+      platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...platform.construction.stairSystems[0], edgeId: "edge-missing" }] } }],
     })).toThrow(/stairs.*free edge/i);
+  });
+
+  it("writes grouped stairs as the only serialized authority and rejects overlapping systems", () => {
+    const migrated = migrateDeckDesignToV3(lShapeLandingFixture.design);
+    const serialized = JSON.parse(stableDeckDesignV3Json(migrated));
+    expect(serialized.platforms[0].construction.stairSystems).toHaveLength(1);
+    expect(serialized.platforms[0].construction).not.toHaveProperty("stairs");
+    const platform = migrated.platforms[0];
+    const first = platform.construction.stairSystems[0];
+    expect(() => normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [first, { ...first, id: "stair-system-2" }] } }] })).toThrow(/cannot overlap/i);
   });
 });

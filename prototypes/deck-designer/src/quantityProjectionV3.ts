@@ -59,8 +59,8 @@ export function deriveDeckAccessoryProjectionV3(
       explanation: `Conceptual unique railing endpoints and intermediate posts in bays not exceeding ${platform.construction.framing.maxPostSpacing} in`,
     }),
   ];
-  if (platform.construction.stairs.enabled) {
-    const stair = platform.construction.stairs;
+  if (platform.construction.stairSystems.length > 0) {
+    const stairSystems = platform.construction.stairSystems;
     const stringerInches = geometry.stairStringers.reduce((sum, stringer) => sum + Math.hypot(
       stringer.end.x - stringer.start.x,
       stringer.end.y - stringer.start.y,
@@ -79,16 +79,16 @@ export function deriveDeckAccessoryProjectionV3(
         unit: "each" as const,
         assemblyIntent: "stair" as const,
         sourceGeometry: Object.freeze(geometry.stairTreads.map((tread) => `${platformId}:${tread.id}`)),
-        explanation: `${stair.edgeId} edge: ceiling of ${geometry.stairRise} in deck-to-grade rise divided by ${stair.maxRiserHeight} in maximum riser`,
+        explanation: `${stairSystems.length} recorded stair system${stairSystems.length === 1 ? "" : "s"}; each system derives its treads from deck-to-grade rise and its recorded maximum riser`,
       }),
       Object.freeze({
         key: "stair-run",
         quantityClass: "visualization" as const,
-        amount: feet(geometry.stairTreads.length * stair.treadDepth),
+        amount: feet(geometry.stairTreads.reduce((sum, tread) => sum + tread.depth, 0)),
         unit: "lin ft" as const,
         assemblyIntent: "stair" as const,
         sourceGeometry: Object.freeze(geometry.stairTreads.map((tread) => `${platformId}:${tread.id}`)),
-        explanation: `${geometry.stairTreads.length} treads multiplied by ${stair.treadDepth} in conceptual tread depth`,
+        explanation: `${geometry.stairTreads.length} system-scoped treads summed from their recorded conceptual tread depths`,
       }),
       Object.freeze({
         key: "stair-stringer-count",
@@ -127,17 +127,20 @@ export function deriveDeckAccessoryProjectionV3(
         explanation: "Conceptual top and bottom posts on both stair sides; intermediate balusters and final assembly are not determined",
       }),
     );
-    if (geometry.landing) {
+    if (geometry.landings.length > 0) {
       const landingRailInches = geometry.landingRailSegments.reduce((sum, rail) => sum + memberLength(rail), 0);
+      const landingArea = geometry.landings.reduce((sum, landing) => sum + landing.width * landing.depth, 0);
       quantities.push(
         Object.freeze({
           key: "stair-landing-area",
           quantityClass: "visualization" as const,
-          amount: squareFeet(geometry.landing.width * geometry.landing.depth),
+          amount: squareFeet(landingArea),
           unit: "sq ft" as const,
           assemblyIntent: "stair_landing" as const,
-          sourceGeometry: Object.freeze([`${platformId}:${geometry.landing.id}`]),
-          explanation: `${geometry.landing.width} in by ${geometry.landing.depth} in conceptual ${geometry.landing.position} landing at ${round(geometry.landing.y)} in elevation`,
+          sourceGeometry: Object.freeze(geometry.landings.map((landing) => `${platformId}:${landing.id}`)),
+          explanation: geometry.landings.length === 1
+            ? `${geometry.landings[0].width} in by ${geometry.landings[0].depth} in conceptual ${geometry.landings[0].position} landing at ${round(geometry.landings[0].y)} in elevation in ${geometry.landings[0].systemId}`
+            : `${geometry.landings.length} system-associated landings totaling ${round(landingArea)} sq in at recorded stair-route elevations`,
         }),
         Object.freeze({
           key: "landing-support-post-count",
