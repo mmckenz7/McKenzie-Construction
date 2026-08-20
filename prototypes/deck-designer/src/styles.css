@@ -261,6 +261,7 @@ button:hover { transform: translateY(-1px); }
 .stair-system-summary small, .landing-sequence small { margin: 0; color: #66736b; font-size: 9px; text-transform: none; letter-spacing: 0; }
 .stair-system-summary.active, .landing-sequence button.active { border-color: #173f31; box-shadow: inset 4px 0 0 #cbe72f; background: #edf4e8; }
 .stair-add-next { border-style: dashed; }
+.stair-add-next button { min-height: 44px; }
 .stair-configuration .selected-edge-actions button, .stair-landing-controls > button, .stair-configuration .remove-stairs { min-height: 44px; }
 .landing-connections { display: grid; gap: 10px; padding-top: 4px; border-top: 1px solid #d4ddd6; }
 .landing-connections > div:first-child small, .landing-connection-card > div:first-child small { display: block; margin-top: 3px; color: #66736b; }
