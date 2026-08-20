@@ -4,7 +4,7 @@ import { DEFAULT_DESIGN, designFingerprint, normalizeDesign, stableDesignJson, u
 import { deriveGeometry } from "../src/geometry";
 import { deriveQuantities } from "../src/quantities";
 import { createHistory, designHistoryReducer } from "../src/history";
-import { dimensionsFromHandle, snapDimension, stairOffsetFromPoint } from "../src/editor";
+import { dimensionsFromHandle, firstAvailableStairOffset, snapDimension, stairOffsetFromPoint } from "../src/editor";
 import { formatFeetInches } from "../src/PlanView";
 import { deriveDesignNotices } from "../src/notices";
 import { GENERIC_DECK_TEMPLATES, applyTemplateToDesign, duplicateDesign, getDeckTemplate } from "../src/templates";
@@ -177,6 +177,12 @@ describe("direct plan editing", () => {
     expect(stairOffsetFromPoint(front, 48, { x: -100, z: 144 }, 6)).toBe(0);
     expect(stairOffsetFromPoint(front, 48, { x: 500, z: 144 }, 6)).toBe(144);
     expect(stairOffsetFromPoint(right, 48, { x: 192, z: 91 }, 6)).toBe(66);
+  });
+
+  it("places another stair set in the first open span on the selected side", () => {
+    expect(firstAvailableStairOffset(240, 48, [{ start: 48, end: 96 }])).toBe(0);
+    expect(firstAvailableStairOffset(240, 48, [{ start: 0, end: 48 }, { start: 96, end: 144 }])).toBe(48);
+    expect(firstAvailableStairOffset(96, 48, [{ start: 0, end: 48 }, { start: 48, end: 96 }])).toBeNull();
   });
 });
 
