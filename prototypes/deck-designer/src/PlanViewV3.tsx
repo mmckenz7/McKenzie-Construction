@@ -3,11 +3,13 @@ import { stairOffsetFromPoint } from "./editor";
 import type { DeckPlatformGeometryV3 } from "./geometryV3";
 import type { DeckPlatformV3 } from "./modelV3";
 import { formatFeetInches } from "./PlanView";
+import type { HouseContextGeometry } from "./houseContextGeometry";
 
 type Point = Readonly<{ x: number; z: number }>;
 type Props = {
   platform: DeckPlatformV3;
   geometry: DeckPlatformGeometryV3;
+  houseGeometry: HouseContextGeometry;
   snapIncrement: number;
   selectedEdgeId: string | null;
   onSelectEdge: (edgeId: string) => void;
@@ -35,11 +37,11 @@ export function planEdgeDimensionLabel(edge: Readonly<{ start: Point; end: Point
   });
 }
 
-export function PlanViewV3({ platform, geometry, snapIncrement, selectedEdgeId, onSelectEdge, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, addCornerMode, onAddCorner, onSegmentPreview, onSegmentCommit }: Props) {
+export function PlanViewV3({ platform, geometry, houseGeometry, snapIncrement, selectedEdgeId, onSelectEdge, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, addCornerMode, onAddCorner, onSegmentPreview, onSegmentCommit }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const segmentDrag = useRef<Readonly<{ index: number; midpoint: Point; outward: Point }> | null>(null);
   const [active, setActive] = useState<string | null>(null);
-  const all = [...geometry.footprint, ...geometry.stairTreads.flatMap((tread) => tread.corners), ...(geometry.landing?.corners ?? [])];
+  const all = [...geometry.footprint, ...geometry.stairTreads.flatMap((tread) => tread.corners), ...(geometry.landing?.corners ?? []), ...houseGeometry.houseWallPanels.flatMap((panel) => [panel.start, panel.end])];
   const minX = Math.min(...all.map((point) => point.x));
   const maxX = Math.max(...all.map((point) => point.x));
   const minZ = Math.min(...all.map((point) => point.z));
@@ -91,6 +93,8 @@ export function PlanViewV3({ platform, geometry, snapIncrement, selectedEdgeId, 
   return <svg ref={ref} className={`plan-svg v3-plan${addCornerMode ? " add-corner-mode" : ""}`} viewBox={`0 0 ${maxX - minX + margin * 2} ${maxZ - minZ + margin * 2}`} role="img" aria-label={`Editable ${geometry.footprint.length}-corner deck outline`}>
     <defs><pattern id="v3-grid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#a9b4ad" strokeWidth=".4" /></pattern></defs>
     <rect width="100%" height="100%" fill="url(#v3-grid)" />
+    {houseGeometry.houseWallPanels.map((panel) => <line key={panel.id} x1={x(panel.start.x)} y1={y(panel.start.z)} x2={x(panel.end.x)} y2={y(panel.end.z)} className="plan-house-wall" />)}
+    {houseGeometry.houseOpenings.map((opening) => <line key={`${opening.wallId}-${opening.id}`} x1={x(opening.start.x)} y1={y(opening.start.z)} x2={x(opening.end.x)} y2={y(opening.end.z)} className={`plan-house-opening ${opening.kind}`} />)}
     <polygon points={geometry.footprint.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-platform" />
     {geometry.surfaceBoards.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-board" />)}
     {geometry.joists.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-joist" />)}
@@ -107,6 +111,7 @@ export function PlanViewV3({ platform, geometry, snapIncrement, selectedEdgeId, 
       ];
       return <g key={edge.id}>{selectedEdgeId === edge.id && <line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className="plan-selected-edge" />}<polygon points={hitPoints.map((point) => `${x(point.x)},${y(point.z)}`).join(" ")} className="v3-edge" role="button" tabIndex={0} aria-label={addCornerMode ? `Add bumpout on segment ${index + 1}` : `Select segment ${index + 1}`} onClick={(event) => addCornerMode ? addCornerFromClick(index, event) : onSelectEdge(edge.id)} onKeyDown={(event) => { if (event.key !== "Enter" && event.key !== " ") return; event.preventDefault(); if (addCornerMode) onAddCorner(index, midpoint); else onSelectEdge(edge.id); }} /></g>;
     })}
+    {geometry.platformEdges.filter((edge) => platform.edgeConditions.some((condition) => condition.edgeId === edge.id && condition.condition === "house_attachment")).map((edge) => <line key={`house-edge-${edge.id}`} x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className="plan-house-attachment-edge" />)}
     {geometry.platformEdges.map((edge) => {
       const label = planEdgeDimensionLabel(edge);
       const labelX = x(label.x);

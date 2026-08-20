@@ -191,6 +191,11 @@ button:hover { transform: translateY(-1px); }
 .selected-edge-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .selected-edge-actions button { padding: 7px 5px; border-color: #aebbb2; background: white; color: #34473f; font-size: 9px; }
 .selected-edge-actions button:disabled { cursor: not-allowed; opacity: .45; transform: none; }
+.house-connection-editor { scroll-margin-top: 62px; }
+.house-door-toggle { margin: 4px 0 12px; padding: 10px; border: 1px solid #c7d1ca; border-radius: 8px; background: #f1f4f0; }
+.house-door-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 13px; }
+.house-connection-help { margin-top: 8px; }
+.house-editor-loading { margin: 24px 0; padding: 14px; border-radius: 8px; background: #eef2ec; color: #526058; font-size: 10px; }
 .dimension-input { position: relative; }
 .dimension-input input { padding-right: 30px; }
 .dimension-input > span { position: absolute; right: 9px; top: 11px; color: #849087; font-size: 11px; }
@@ -229,6 +234,7 @@ button:hover { transform: translateY(-1px); }
 .plan-house-wall { stroke: #c8c2b5; stroke-width: 8; }
 .plan-house-opening { stroke: #6b8277; stroke-width: 5; stroke-dasharray: 3 1; }
 .plan-house-opening.door { stroke: #456b5a; }
+.plan-house-attachment-edge { stroke: #b85c36; stroke-width: 3.5; pointer-events: none; }
 .plan-selected-edge { stroke: var(--lime); stroke-width: 7; opacity: .9; }
 .plan-edge-hit { fill: #ffffff; fill-opacity: .001; cursor: pointer; outline: none; }
 .plan-edge-hit:hover, .plan-edge-hit:focus { fill: #c8dd3c; fill-opacity: .42; }
@@ -301,7 +307,7 @@ button:hover { transform: translateY(-1px); }
   .topbar { align-items: flex-start; flex-wrap: wrap; }
   .header-actions { display: grid; width: 100%; grid-template-columns: 1fr 1fr; margin: 4px 0 0; }
   .header-actions button { min-height: 44px; padding-inline: 6px; }
-  .mobile-workspace-nav { position: sticky; top: 0; z-index: 12; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); background: #f4f6f2ee; backdrop-filter: blur(8px); }
+  .mobile-workspace-nav { position: sticky; top: 0; z-index: 12; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); background: #f4f6f2ee; backdrop-filter: blur(8px); }
   .mobile-workspace-nav a { display: grid; min-height: 44px; place-items: center; border: 1px solid #9eafa4; border-radius: 8px; background: white; color: #244538; font-size: 11px; font-weight: 800; text-decoration: none; }
   .workspace { display: flex; flex-direction: column; }
   .controls-panel { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -329,6 +335,7 @@ button:hover { transform: translateY(-1px); }
   .trace-plan svg { height: 330px; }
   .trace-dimension-editor { grid-template-columns: 1fr 1fr; }
   .trace-dimension-editor > div:first-child { grid-column: 1 / -1; }
+  .house-door-fields { grid-template-columns: 1fr; }
   .trace-status { align-items: flex-start; flex-direction: column; }
   .photo-facts-grid .full { grid-column: auto; }
   .photo-slot { display: grid; grid-template-columns: 92px 1fr; column-gap: 10px; }

@@ -7,8 +7,9 @@ import type { DeckPlatformGeometryV3 } from "./geometryV3";
 import type { DeckPlatformV3 } from "./modelV3";
 import { RENDER_QUALITY_POLICIES, type RenderQuality } from "./renderQuality";
 import type { CameraPreset } from "./ThreeView";
+import type { HouseContextGeometry } from "./houseContextGeometry";
 
-type Props = { platform: DeckPlatformV3; geometry: DeckPlatformGeometryV3; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality };
+type Props = { platform: DeckPlatformV3; geometry: DeckPlatformGeometryV3; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality };
 
 function member(group: THREE.Group, value: Readonly<{ start: { x: number; z: number }; end: { x: number; z: number } }>, y: number, height: number, depth: number, material: THREE.Material) {
   const dx = value.end.x - value.start.x, dz = value.end.z - value.start.z;
@@ -17,7 +18,7 @@ function member(group: THREE.Group, value: Readonly<{ start: { x: number; z: num
   mesh.rotation.y = -Math.atan2(dz, dx); mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
 }
 
-export function ThreeViewV3({ platform, geometry, gradeElevation, preset, presetRequest, showFraming, quality }: Props) {
+export function ThreeViewV3({ platform, geometry, houseGeometry, gradeElevation, preset, presetRequest, showFraming, quality }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -39,6 +40,8 @@ export function ThreeViewV3({ platform, geometry, gradeElevation, preset, preset
     const deck = new THREE.MeshStandardMaterial({ color: 0x8b6545, roughness: .68 });
     const frame = new THREE.MeshStandardMaterial({ color: 0xb48a5d, roughness: .86 });
     const rail = new THREE.MeshStandardMaterial({ color: 0x263a32, roughness: .55 });
+    const house = new THREE.MeshStandardMaterial({ color: 0xd9d5ca, roughness: .92 });
+    for (const panel of houseGeometry.houseWallPanels) member(model, panel, panel.baseElevation + panel.height / 2, panel.height, 8, house);
     for (const board of geometry.surfaceBoards) member(model, board, platform.elevation, 1, platform.construction.decking.boardWidth, deck);
     if (showFraming) for (const joist of geometry.joists) member(model, joist, platform.elevation - 5, 7.25, 1.5, frame);
     for (const segment of geometry.railSegments) { member(model, segment, platform.elevation + platform.construction.railing.height - 2, 3, 2.5, rail); member(model, segment, platform.elevation + 7, 2, 2, rail); }
@@ -50,8 +53,8 @@ export function ThreeViewV3({ platform, geometry, gradeElevation, preset, preset
     const observer = new ResizeObserver(resize); observer.observe(mount); resize();
     camera.position.set(centerX + span, platform.elevation + span, centerZ + span); controls.target.set(centerX, platform.elevation / 2, centerZ); controls.update();
     let frameId = 0; const animate = () => { controls.update(); renderer.render(scene, camera); frameId = requestAnimationFrame(animate); }; animate();
-    return () => { cancelAnimationFrame(frameId); observer.disconnect(); controls.dispose(); renderer.dispose(); scene.traverse((object: any) => { if (object instanceof THREE.Mesh) object.geometry.dispose(); }); [deck, frame, rail].forEach((value) => value.dispose()); if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement); };
-  }, [platform, geometry, gradeElevation, quality, showFraming, centerX, centerZ, span]);
+    return () => { cancelAnimationFrame(frameId); observer.disconnect(); controls.dispose(); renderer.dispose(); scene.traverse((object: any) => { if (object instanceof THREE.Mesh) object.geometry.dispose(); }); [deck, frame, rail, house].forEach((value) => value.dispose()); if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement); };
+  }, [platform, geometry, houseGeometry, gradeElevation, quality, showFraming, centerX, centerZ, span]);
 
   useEffect(() => {
     const camera = cameraRef.current, controls = controlsRef.current; if (!camera || !controls) return;

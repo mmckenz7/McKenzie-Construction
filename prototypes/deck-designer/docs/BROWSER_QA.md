@@ -64,3 +64,10 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Whole-phone workflow follow-up puts Plan & 3D before the long design controls, adds a sticky two-way jump bar, adds persistent Photos/Measurements/Review/Outline navigation inside the full-screen intake, and labels camera actions “Take or choose photo.” The edge-reference gate is now explained as “Edit deck outline.”
 - Fresh-origin QA confirms **Start with photos** is visible in the original foundation header and opens the v3 photo intake directly, without requiring **Open flexible corner editor** first.
 - Edge-length visibility follow-up renders feet-and-inches labels outside every v3 plan segment and moves photo-tracer labels away from the white segment handles. Rectangle QA confirmed both right and left 12-foot labels plus both 20-foot labels remain visible.
+
+## 2026-08-19 guided house-connection check
+
+- The lazy-loaded House step lists plan-relative sides with visible lengths instead of unexplained edge IDs and remains reachable from the three-button mobile jump bar.
+- Selected the 20-foot upper side, ledger attachment, a six-foot door, and a four-foot offset from the left corner. One command advanced revision 6 to 7 and displayed the recorded wall/door in both 2D and 3D.
+- The plan projected four wall panels, one door opening, and one exact highlighted attachment edge. The 3D wall retained a matching six-foot opening at deck elevation.
+- Focused tests reject doors outside the selected side and reject attempts to silently replace railing or stair references. Photos still provide no automatic measurements.

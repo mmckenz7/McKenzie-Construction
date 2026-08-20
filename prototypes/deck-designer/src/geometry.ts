@@ -1,4 +1,7 @@
-import type { DeckDesign, DeckEdgeId, HouseAttachment, HouseOpeningKind } from "./model";
+import type { DeckDesign, DeckEdgeId } from "./model";
+import { deriveHouseContextGeometry, type HouseOpeningProjection, type HouseWallPanel } from "./houseContextGeometry";
+
+export type { HouseOpeningProjection, HouseWallPanel } from "./houseContextGeometry";
 
 export type Point2 = Readonly<{ x: number; z: number }>;
 export type Point3 = Readonly<{ x: number; y: number; z: number }>;
@@ -40,19 +43,6 @@ export type Landing = Readonly<{
   rotationY: number;
 }>;
 type RailSegment = LinearMember & Readonly<{ edgeId: DeckEdgeId }>;
-export type HouseWallPanel = LinearMember & Readonly<{
-  wallId: string;
-  baseElevation: number;
-  height: number;
-  attachment: HouseAttachment;
-}>;
-export type HouseOpeningProjection = LinearMember & Readonly<{
-  wallId: string;
-  kind: HouseOpeningKind;
-  sillElevation: number;
-  height: number;
-}>;
-
 export type DeckGeometry = Readonly<{
   footprint: readonly Point2[];
   houseWallPanels: readonly HouseWallPanel[];
@@ -118,44 +108,7 @@ export function deriveGeometry(design: DeckDesign): DeckGeometry {
   const { boardWidth, gap } = design.construction.decking;
   const { joistSpacing, beamInset, maxPostSpacing } = design.construction.framing;
   const gradeElevation = design.siteContext.gradeElevation;
-  const houseWallPanels: HouseWallPanel[] = [];
-  const houseOpenings: HouseOpeningProjection[] = [];
-  for (const wall of design.siteContext.houseWalls) {
-    const wallLength = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
-    const wallDx = (wall.end.x - wall.start.x) / wallLength;
-    const wallDz = (wall.end.z - wall.start.z) / wallLength;
-    const wallPoint = (distance: number) => point(wall.start.x + wallDx * distance, wall.start.z + wallDz * distance);
-    const addPanel = (suffix: string, startDistance: number, endDistance: number, baseElevation: number, height: number) => {
-      if (endDistance <= startDistance || height <= 0) return;
-      houseWallPanels.push(Object.freeze({
-        id: `${wall.id}-${suffix}`,
-        wallId: wall.id,
-        start: wallPoint(startDistance),
-        end: wallPoint(endDistance),
-        baseElevation,
-        height,
-        attachment: wall.attachment,
-      }));
-    };
-    let cursor = 0;
-    for (const opening of wall.openings) {
-      addPanel(`full-${cursor}`, cursor, opening.offset, wall.baseElevation, wall.height);
-      addPanel(`below-${opening.id}`, opening.offset, opening.offset + opening.width, wall.baseElevation, opening.sillHeight);
-      const openingTop = wall.baseElevation + opening.sillHeight + opening.height;
-      addPanel(`above-${opening.id}`, opening.offset, opening.offset + opening.width, openingTop, wall.baseElevation + wall.height - openingTop);
-      houseOpenings.push(Object.freeze({
-        id: opening.id,
-        wallId: wall.id,
-        kind: opening.kind,
-        start: wallPoint(opening.offset),
-        end: wallPoint(opening.offset + opening.width),
-        sillElevation: wall.baseElevation + opening.sillHeight,
-        height: opening.height,
-      }));
-      cursor = opening.offset + opening.width;
-    }
-    addPanel(`full-${cursor}`, cursor, wallLength, wall.baseElevation, wall.height);
-  }
+  const { houseWallPanels, houseOpenings } = deriveHouseContextGeometry(design.siteContext);
   const boardRows = Math.ceil(projection / (boardWidth + gap));
   const surfaceBoards = Array.from({ length: boardRows }, (_, index) => {
     const z = Math.min(projection - boardWidth / 2, boardWidth / 2 + index * (boardWidth + gap));
