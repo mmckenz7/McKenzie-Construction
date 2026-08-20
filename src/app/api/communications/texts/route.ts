@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { deliverCommunication } from "@/lib/communications/provider";
 import { comparableDestination, e164UsPhone } from "@/lib/communications/phone";
+import { communicationWorkspaceMatchesSingletonCompany } from "@/lib/communications/workspace-company";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import { canAccessWorkspace, getWorkspaceAccess } from "@/lib/workspace-access";
 
@@ -44,6 +45,9 @@ export async function POST(request: Request) {
   }
 
   const supabase = createAdminServerClient();
+  if (!await communicationWorkspaceMatchesSingletonCompany(supabase, workspace.access!.company_id)) {
+    return Response.json({ success: false, error: "The company workspace could not be verified." }, { status: 403 });
+  }
   const settingsResult = await supabase.from("company_settings")
     .select("sms_delivery_provider,communications_from_phone,communication_sandbox_mode,communication_test_recipients")
     .limit(1).maybeSingle();
@@ -74,7 +78,7 @@ export async function POST(request: Request) {
 
   if (leadId) {
     const lead = await supabase.from("leads").select("name,phone")
-      .eq("id", leadId).eq("company_id", workspace.access!.company_id).maybeSingle();
+      .eq("id", leadId).maybeSingle();
     if (lead.error || !lead.data) {
       return Response.json({ success: false, error: "The lead could not be found." }, { status: 404 });
     }
@@ -84,7 +88,7 @@ export async function POST(request: Request) {
   if (customerId) {
     const customer = await supabase.from("customers")
       .select("customer_name,phone,source_lead_id")
-      .eq("id", customerId).eq("company_id", workspace.access!.company_id).maybeSingle();
+      .eq("id", customerId).maybeSingle();
     if (customer.error || !customer.data) {
       return Response.json({ success: false, error: "The customer could not be found." }, { status: 404 });
     }

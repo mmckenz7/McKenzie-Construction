@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { comparableDestination, e164UsPhone } from "@/lib/communications/phone";
 import { startTwilioBridgeCall } from "@/lib/communications/twilio-voice";
+import { communicationWorkspaceMatchesSingletonCompany } from "@/lib/communications/workspace-company";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import { canAccessWorkspace, getWorkspaceAccess } from "@/lib/workspace-access";
 
@@ -23,17 +24,20 @@ export async function POST(request: Request) {
   if (!teamMemberPhone) return Response.json({ success: false, error: "Add your mobile number to your employee profile before using OS calling." }, { status: 409 });
 
   const supabase = createAdminServerClient();
+  if (!await communicationWorkspaceMatchesSingletonCompany(supabase, workspace.access!.company_id)) {
+    return Response.json({ success: false, error: "The company workspace could not be verified." }, { status: 403 });
+  }
   let customerPhone: string | null = null;
   let displayName = "customer";
   if (leadId) {
     const lead = await supabase.from("leads").select("name,phone")
-      .eq("id", leadId).eq("company_id", workspace.access!.company_id).maybeSingle();
+      .eq("id", leadId).maybeSingle();
     customerPhone = e164UsPhone(lead.data?.phone ?? "");
     displayName = lead.data?.name?.trim() || displayName;
   }
   if (customerId) {
     const customer = await supabase.from("customers").select("customer_name,phone,source_lead_id")
-      .eq("id", customerId).eq("company_id", workspace.access!.company_id).maybeSingle();
+      .eq("id", customerId).maybeSingle();
     customerPhone = customerPhone ?? e164UsPhone(customer.data?.phone ?? "");
     leadId = leadId ?? customer.data?.source_lead_id ?? null;
     displayName = customer.data?.customer_name?.trim() || displayName;
