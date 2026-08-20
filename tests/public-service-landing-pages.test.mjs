@@ -68,6 +68,24 @@ test("completed project page has canonical metadata and matching project data", 
   assert.match(source, /McKenzie Construction/);
 });
 
+test("renovation photos are grouped into private, photo-backed project stories", () => {
+  const ranch = read("src/app/projects/east-tennessee-ranch-renovation/page.tsx");
+  const cottage = read("src/app/projects/east-tennessee-cottage-renovation/page.tsx");
+  const shared = read("src/components/renovation-project-page.tsx");
+  const projects = read("src/app/projects/page.tsx");
+  const sitemap = read("src/app/sitemap.ts");
+
+  assert.match(ranch, /canonical: "\/projects\/east-tennessee-ranch-renovation"/);
+  assert.match(cottage, /canonical: "\/projects\/east-tennessee-cottage-renovation"/);
+  assert.match(shared, /Exact addresses and homeowner details/);
+  assert.match(shared, /Exterior%20Residential%20Project/);
+  assert.match(projects, /east-tennessee-ranch-renovation/);
+  assert.match(projects, /east-tennessee-cottage-renovation/);
+  assert.match(sitemap, /projects\/east-tennessee-ranch-renovation/);
+  assert.match(sitemap, /projects\/east-tennessee-cottage-renovation/);
+  assert.doesNotMatch(`${ranch}\n${cottage}`, /Cecil Avenue|Valley View/);
+});
+
 test("public navigation works on mobile and service pages expose breadcrumbs", () => {
   const navigation = read("src/components/navigation.tsx");
   const service = read("src/components/service-landing-page.tsx");
@@ -83,7 +101,7 @@ test("project gallery has search metadata and a path to consultation", () => {
   const gallery = read("src/app/projects/gallery/page.tsx");
 
   assert.match(gallery, /canonical: "\/projects\/gallery"/);
-  assert.match(gallery, /View the Full Project/);
+  assert.match(gallery, /Browse Project Stories/);
   assert.match(gallery, /\/contact\?projectType=New%20Deck/);
   assert.match(gallery, /\/projects\/completed-renovations\/renovation-one-exterior\.jpg/);
   assert.match(gallery, /\/projects\/completed-renovations\/renovation-two-living-room\.jpg/);

@@ -20,6 +20,28 @@ const projects = [
       "Rear wood deck and stairs at the Island Ford modular home project",
     href: "/projects/island-ford",
   },
+  {
+    title: "East Tennessee Ranch Home Renovation",
+    location: "East Tennessee",
+    blurb:
+      "A photo-backed look at a refreshed exterior, updated kitchen, and bright finished sunroom.",
+    imageSrc:
+      "/projects/completed-renovations/renovation-one-exterior.jpg",
+    imageAlt:
+      "Completed single-story East Tennessee home exterior",
+    href: "/projects/east-tennessee-ranch-renovation",
+  },
+  {
+    title: "East Tennessee Cottage Renovation",
+    location: "East Tennessee",
+    blurb:
+      "Completed cottage exterior, living-room, hardwood-floor, fireplace, and kitchen finishes.",
+    imageSrc:
+      "/projects/completed-renovations/renovation-two-exterior.jpg",
+    imageAlt:
+      "Completed East Tennessee cottage exterior and entry",
+    href: "/projects/east-tennessee-cottage-renovation",
+  },
 ];
 
 export default function ProjectsPage() {
@@ -34,7 +56,7 @@ export default function ProjectsPage() {
           description="Explore selected construction, deck, outdoor-living, and residential projects with complete project details and photo galleries."
         />
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
+        <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
             <ProjectCard
               key={project.title}

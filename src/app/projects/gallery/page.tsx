@@ -26,7 +26,12 @@ export const metadata: Metadata = {
   },
 };
 
-const galleryImages = [
+const galleryImages: Array<{
+  src: string;
+  alt: string;
+  caption: string;
+  href?: string;
+}> = [
   {
     src: "/projects/island-ford/05062FD1-CF2E-4F0C-8422-79246C3BAAE8_1_105_c.jpeg",
     alt: "Wide completed rear deck overlooking the wooded property",
@@ -76,31 +81,37 @@ const galleryImages = [
     src: "/projects/completed-renovations/renovation-one-exterior.jpg",
     alt: "Completed single-story home exterior with fresh landscaping",
     caption: "Completed exterior renovation — East Tennessee",
+    href: "/projects/east-tennessee-ranch-renovation",
   },
   {
     src: "/projects/completed-renovations/renovation-one-kitchen.jpg",
     alt: "Renovated kitchen with light cabinets, stone-look counters, and tile backsplash",
     caption: "Kitchen renovation — East Tennessee",
+    href: "/projects/east-tennessee-ranch-renovation",
   },
   {
     src: "/projects/completed-renovations/renovation-one-sunroom.jpg",
     alt: "Finished sunroom with a wall of windows and new carpet",
     caption: "Sunroom interior finish — East Tennessee",
+    href: "/projects/east-tennessee-ranch-renovation",
   },
   {
     src: "/projects/completed-renovations/renovation-two-exterior.jpg",
     alt: "Completed cottage exterior with restored entry and landscaping",
     caption: "Cottage exterior renovation — East Tennessee",
+    href: "/projects/east-tennessee-cottage-renovation",
   },
   {
     src: "/projects/completed-renovations/renovation-two-living-room.jpg",
     alt: "Renovated living room with refinished hardwood floors and fireplace",
     caption: "Living room and hardwood restoration — East Tennessee",
+    href: "/projects/east-tennessee-cottage-renovation",
   },
   {
     src: "/projects/completed-renovations/renovation-two-kitchen.jpg",
     alt: "Renovated kitchen with wood cabinetry, tile floor, and updated appliances",
     caption: "Kitchen and interior renovation — East Tennessee",
+    href: "/projects/east-tennessee-cottage-renovation",
   },
 ];
 
@@ -117,8 +128,9 @@ export default function ProjectGalleryPage() {
         />
 
         <div className="mt-10 columns-1 gap-6 sm:columns-2 lg:columns-3">
-          {galleryImages.map((image) => (
-            <figure
+          {galleryImages.map((image) => {
+            const figure = (
+              <figure
               key={image.src}
               className="mb-6 break-inside-avoid overflow-hidden rounded-[1.5rem] border border-brand-charcoal/10 bg-white shadow-sm"
             >
@@ -135,23 +147,32 @@ export default function ProjectGalleryPage() {
               <figcaption className="px-5 py-4 text-sm font-semibold leading-6 text-brand-charcoal/70">
                 {image.caption}
               </figcaption>
-            </figure>
-          ))}
+              </figure>
+            );
+
+            return image.href ? (
+              <Link key={image.src} href={image.href} className="group block">
+                {figure}
+              </Link>
+            ) : (
+              figure
+            );
+          })}
         </div>
 
         <section className="mt-12 rounded-[2rem] border border-brand-charcoal/10 bg-white p-7 shadow-sm sm:p-10">
           <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-green">
-                Full Project Story
+                Project Stories
               </p>
               <h2 className="mt-3 text-3xl font-semibold">
-                See how the Island Ford deck and site work came together.
+                See the finished work grouped by project.
               </h2>
               <p className="mt-4 max-w-3xl leading-7 text-brand-charcoal/70">
-                Review the completed rear deck, stairs, entry decks, exterior
-                work, landscaping, access, and supporting site improvements in
-                one project case study.
+                Explore the Island Ford deck and site work or open either
+                renovation story for a clearer view of the related finished
+                spaces.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
@@ -159,7 +180,7 @@ export default function ProjectGalleryPage() {
                 href="/projects/island-ford"
                 className="inline-flex min-h-12 items-center justify-center rounded-full bg-brand-charcoal px-6 text-sm font-semibold text-white transition hover:bg-brand-charcoal/85"
               >
-                View the Full Project
+                Browse Project Stories
               </Link>
               <Link
                 href="/contact?projectType=New%20Deck"
