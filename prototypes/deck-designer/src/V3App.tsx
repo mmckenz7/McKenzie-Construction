@@ -146,8 +146,8 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     doorWidth: null,
     attachment: platform.edgeConditions.find((condition) => condition.condition === "house_attachment")?.attachment as "unknown" | "ledger" | "non-ledger" | undefined ?? "unknown",
   };
-  const startFromPhotos = (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number, confirmedOuter?: readonly PolygonPoint[]) => {
-    const next = createDesignFromConfirmedPhotoFacts(history.present, facts, confirmedOuter);
+  const startFromPhotos = (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number, confirmedOuter?: readonly PolygonPoint[], stairEdgeId?: string | null) => {
+    const next = createDesignFromConfirmedPhotoFacts(history.present, facts, confirmedOuter, stairEdgeId);
     setPreview(null);
     dispatch({ type: "reset", design: next });
     setSelectedPlatformId(next.platforms[0].id);

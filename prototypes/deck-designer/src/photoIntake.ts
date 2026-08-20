@@ -98,7 +98,7 @@ export function reviewPhotoCoverage(
   return Object.freeze({ addedCount, missingRecommendedRoles, message });
 }
 
-export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: ConfirmedPhotoFacts, confirmedOuter?: readonly PolygonPoint[]): DeckDesignV3 {
+export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: ConfirmedPhotoFacts, confirmedOuter?: readonly PolygonPoint[], preferredStairEdgeId?: string | null): DeckDesignV3 {
   const normalized = normalizeConfirmedPhotoFacts(facts);
   const currentElevation = base.platforms[0]?.elevation ?? DEFAULT_DESIGN.platform.surfaceElevation;
   const legacy = updateDesign(DEFAULT_DESIGN, {
@@ -123,7 +123,11 @@ export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: C
   const houseEdgeId = geometricPolygonEdgeId(houseEdges[0].start, houseEdges[0].end);
   const freeEdges = edges.filter((edge) => edge.id !== houseEdgeId);
   if (freeEdges.length === 0) throw new RangeError("The traced outline must expose a free edge.");
-  const stairEdge = [...freeEdges].sort((first, second) => second.length - first.length || first.id.localeCompare(second.id))[0];
+  const stairEdge = preferredStairEdgeId
+    ? freeEdges.find((edge) => edge.id === preferredStairEdgeId)
+    : [...freeEdges].sort((first, second) => second.length - first.length || first.id.localeCompare(second.id))[0];
+  if (!stairEdge) throw new RangeError("The selected stair side no longer exists. Select it again on the confirmed outline.");
+  if (preferredStairEdgeId && stairEdge.length < migrated.platforms[0].construction.stairs.width) throw new RangeError("The selected stair side is too short for the recorded stair width.");
   const platform = migrated.platforms[0];
   return migrateDeckDesignToV3({
     ...migrated,
@@ -134,7 +138,7 @@ export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: C
       construction: {
         ...platform.construction,
         railing: { ...platform.construction.railing, enabledEdgeIds: freeEdges.map((edge) => edge.id) },
-        stairs: { ...platform.construction.stairs, enabled: false, edgeId: stairEdge.id, offset: 0 },
+        stairs: { ...platform.construction.stairs, enabled: Boolean(preferredStairEdgeId), edgeId: stairEdge.id, offset: 0 },
       },
     }],
   });
