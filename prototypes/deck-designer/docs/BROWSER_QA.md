@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-20 staged railing-workspace check
+
+- Deck Layout and Railings are separate internal prototype stages; the layout stage contains shape, house, and stair controls but no railing action.
+- Lock layout & continue opens a dedicated railing workspace whose plan retains exact dimensions but removes corner, segment, and stair-movement handles.
+- Tapping a free side exposes only Add railing or Remove railing; the recorded house side remains unavailable, and stair openings continue to split enabled railing deterministically.
+- Returning to Deck Layout retains edge-reference protection so later outline changes require an explicit unlock and cannot silently remap railings.
+- The railing workspace is a separate on-demand code chunk. The narrowly revised budgets are 91 KiB for the initial entry and 227 KiB total gzip after adding the second workflow page.
+
 ## 2026-08-20 contextual side-action check
 
 - At 390 × 844, the sticky navigation shows Plan & 3D, Shape, Stairs, and House.
