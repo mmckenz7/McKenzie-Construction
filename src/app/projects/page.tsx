@@ -31,6 +31,17 @@ const projects = [
     href: "/projects/tellico-village-screened-porch",
   },
   {
+    title: "East Tennessee Elevated Covered Deck",
+    location: "East Tennessee",
+    blurb:
+      "An elevated wood deck with a finished roof ceiling, ceiling fan, open railing, furnished living space, and a full stair run.",
+    imageSrc:
+      "/projects/east-tennessee-elevated-covered-deck/full-rear-elevation.jpg",
+    imageAlt:
+      "Completed elevated covered wood deck in East Tennessee",
+    href: "/projects/east-tennessee-elevated-covered-deck",
+  },
+  {
     title:
       "Island Ford Modular Home & Outdoor Living",
     location: "Lake City, Tennessee",

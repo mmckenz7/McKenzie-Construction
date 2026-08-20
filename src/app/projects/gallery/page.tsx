@@ -47,6 +47,16 @@ const projects = [
     photoCount: 8,
   },
   {
+    title: "East Tennessee Elevated Covered Deck",
+    location: "East Tennessee",
+    category: "Covered Deck",
+    imageSrc:
+      "/projects/east-tennessee-elevated-covered-deck/full-rear-elevation.jpg",
+    imageAlt: "Completed elevated covered wood deck in East Tennessee",
+    href: "/projects/east-tennessee-elevated-covered-deck",
+    photoCount: 7,
+  },
+  {
     title: "Island Ford Modular Home & Outdoor Living",
     location: "Lake City, Tennessee",
     category: "Deck, Stairs & Residential Construction",

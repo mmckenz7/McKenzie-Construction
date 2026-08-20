@@ -91,6 +91,7 @@ test("completed deck work is the primary project focus", () => {
   const projects = read("src/app/projects/page.tsx");
   const trex = read("src/app/projects/knoxville-trex-deck-replacement/page.tsx");
   const porch = read("src/app/projects/tellico-village-screened-porch/page.tsx");
+  const coveredDeck = read("src/app/projects/east-tennessee-elevated-covered-deck/page.tsx");
   const sitemap = read("src/app/sitemap.ts");
 
   assert.match(home, /projects\/knoxville-trex-deck\/finished-deck-wide\.jpg/);
@@ -101,8 +102,12 @@ test("completed deck work is the primary project focus", () => {
   assert.match(trex, /Trex decking/);
   assert.match(porch, /canonical: "\/projects\/tellico-village-screened-porch"/);
   assert.match(porch, /Screened%20Porch/);
+  assert.match(coveredDeck, /canonical: "\/projects\/east-tennessee-elevated-covered-deck"/);
+  assert.match(coveredDeck, /finished soffit ceiling/);
+  assert.doesNotMatch(coveredDeck, /Pearson/i);
   assert.match(sitemap, /projects\/knoxville-trex-deck-replacement/);
   assert.match(sitemap, /projects\/tellico-village-screened-porch/);
+  assert.match(sitemap, /projects\/east-tennessee-elevated-covered-deck/);
 });
 
 test("public navigation works on mobile and service pages expose breadcrumbs", () => {
@@ -124,6 +129,7 @@ test("project gallery has search metadata and a path to consultation", () => {
   assert.match(gallery, /\/contact\?projectType=New%20Deck/);
   assert.match(gallery, /\/projects\/knoxville-trex-deck-replacement/);
   assert.match(gallery, /\/projects\/tellico-village-screened-porch/);
+  assert.match(gallery, /\/projects\/east-tennessee-elevated-covered-deck/);
   assert.match(gallery, /\/projects\/island-ford/);
   assert.match(gallery, /\/projects\/east-tennessee-ranch-renovation/);
   assert.match(gallery, /\/projects\/east-tennessee-cottage-renovation/);

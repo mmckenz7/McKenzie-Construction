@@ -66,6 +66,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.85,
     },
     {
+      url: `${baseUrl}/projects/east-tennessee-elevated-covered-deck`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.85,
+    },
+    {
       url: `${baseUrl}/projects/east-tennessee-ranch-renovation`,
       lastModified: new Date("2026-08-20"),
       changeFrequency: "monthly",
