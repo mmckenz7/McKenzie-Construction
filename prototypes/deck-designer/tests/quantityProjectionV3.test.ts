@@ -103,7 +103,7 @@ describe("v3 accessory quantity projection", () => {
     const platform = base.platforms[0];
     const freeEdges = platform.edgeConditions.filter((condition) => condition.condition === "free").map((condition) => condition.edgeId);
     const design = normalizeDeckDesignV3({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [
-      { id: "stair-system-1", locked: true, edgeId: freeEdges[0], offset: 0, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [{ id: "stair-system-1-landing-1", locked: true, afterRiser: 3, width: 48, depth: 48, turn: "left" }] },
+      { id: "stair-system-1", locked: true, edgeId: freeEdges[0], offset: 0, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [{ id: "stair-system-1-landing-1", locked: true, afterRiser: 3, width: 48, depth: 48, turn: "left", connections: [] }] },
       { id: "stair-system-2", locked: true, edgeId: freeEdges[1], offset: 12, width: 36, treadDepth: 11, maxRiserHeight: 7.75, landings: [] },
     ] } }] });
     const report = deriveDeckAccessoryProjectionV3(design, platform.id);
@@ -112,5 +112,23 @@ describe("v3 accessory quantity projection", () => {
     expect(byKey["stair-run"].amount).toBe(12.25);
     expect(byKey["stair-landing-area"].amount).toBe(16);
     expect(byKey["stair-tread-count"].sourceGeometry.some((id: string) => id.includes("stair-system-2"))).toBe(true);
+  });
+
+  it("counts a shared landing once while aggregating every connected flight", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const system = { id: "stair-system-1", locked: true, edgeId: platform.edgeConditions.find((condition) => condition.condition === "free")!.edgeId, offset: 48, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [] } as const;
+    const design = normalizeDeckDesignV3({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings: [{
+      id: `${system.id}-landing-1`, locked: true, afterRiser: 3, width: 48, depth: 48, turn: "straight", connections: [
+        { id: "merge-down", locked: true, destination: "grade", direction: "left", width: 48, treadDepth: 10 },
+        { id: "merge-up", locked: true, destination: "deck", direction: "right", width: 48, treadDepth: 10 },
+      ],
+    }] }] } }] });
+    const report = deriveDeckAccessoryProjectionV3(design, platform.id);
+    const byKey = Object.fromEntries(report.quantities.map((line) => [line.key, line]));
+    expect(byKey["stair-landing-area"].amount).toBe(16);
+    expect(byKey["stair-landing-area"].sourceGeometry).toHaveLength(1);
+    expect(byKey["stair-tread-count"].amount).toBe(14);
+    expect(byKey["stair-stringer-count"].amount).toBe(8);
   });
 });

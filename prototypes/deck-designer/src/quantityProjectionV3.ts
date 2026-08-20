@@ -61,6 +61,7 @@ export function deriveDeckAccessoryProjectionV3(
   ];
   if (platform.construction.stairSystems.length > 0) {
     const stairSystems = platform.construction.stairSystems;
+    const connectedFlights = stairSystems.reduce((sum, system) => sum + system.landings.reduce((landingSum, landing) => landingSum + landing.connections.length, 0), 0);
     const stringerInches = geometry.stairStringers.reduce((sum, stringer) => sum + Math.hypot(
       stringer.end.x - stringer.start.x,
       stringer.end.y - stringer.start.y,
@@ -79,7 +80,7 @@ export function deriveDeckAccessoryProjectionV3(
         unit: "each" as const,
         assemblyIntent: "stair" as const,
         sourceGeometry: Object.freeze(geometry.stairTreads.map((tread) => `${platformId}:${tread.id}`)),
-        explanation: `${stairSystems.length} recorded stair system${stairSystems.length === 1 ? "" : "s"}; each system derives its treads from deck-to-grade rise and its recorded maximum riser`,
+        explanation: `${stairSystems.length} recorded stair system${stairSystems.length === 1 ? "" : "s"} plus ${connectedFlights} shared-landing flight${connectedFlights === 1 ? "" : "s"}; every tread derives from recorded rise and tread intent`,
       }),
       Object.freeze({
         key: "stair-run",
@@ -140,7 +141,7 @@ export function deriveDeckAccessoryProjectionV3(
           sourceGeometry: Object.freeze(geometry.landings.map((landing) => `${platformId}:${landing.id}`)),
           explanation: geometry.landings.length === 1
             ? `${geometry.landings[0].width} in by ${geometry.landings[0].depth} in conceptual ${geometry.landings[0].position} landing at ${round(geometry.landings[0].y)} in elevation in ${geometry.landings[0].systemId}`
-            : `${geometry.landings.length} system-associated landings totaling ${round(landingArea)} sq in at recorded stair-route elevations`,
+            : `${geometry.landings.length} system-associated landings totaling ${round(landingArea)} sq in at recorded stair-route elevations; shared junctions are counted once`,
         }),
         Object.freeze({
           key: "landing-support-post-count",

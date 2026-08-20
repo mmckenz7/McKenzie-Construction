@@ -4,7 +4,7 @@ import { deriveDeckDesignProjectionV3 } from "./designProjectionV3";
 import { derivePlatformGeometryV3 } from "./geometryV3";
 import { createHistoryV3, designHistoryReducerV3 } from "./historyV3";
 import { DEFAULT_DESIGN, updateDesign } from "./model";
-import { deckDesignV3Fingerprint, migrateDeckDesignToV3, normalizeDeckDesignV3, stableDeckDesignV3Json, type DeckDesignV3, type DeckPlatformV3, type StairLandingV3, type StairSystemV3 } from "./modelV3";
+import { deckDesignV3Fingerprint, migrateDeckDesignToV3, normalizeDeckDesignV3, stableDeckDesignV3Json, type DeckDesignV3, type DeckPlatformV3, type StairLandingConnectionV3, type StairLandingV3, type StairSystemV3 } from "./modelV3";
 import { PlanViewV3 } from "./PlanViewV3";
 import { formatFeetInches } from "./PlanView";
 import { saveDeckDesignV3 } from "./storageV3";
@@ -20,6 +20,7 @@ const PhotoIntake = lazy(async () => ({ default: (await import("./PhotoIntakeDia
 const HouseConnectionEditor = lazy(async () => ({ default: (await import("./HouseConnectionEditor")).HouseConnectionEditor }));
 const RailingStageControls = lazy(async () => ({ default: (await import("./RailingStageControls")).RailingStageControls }));
 const RailingMobileActions = lazy(async () => ({ default: (await import("./RailingStageControls")).RailingMobileActions }));
+const LandingConnectionsEditor = lazy(async () => ({ default: (await import("./LandingConnectionsEditor")).LandingConnectionsEditor }));
 type Point = Readonly<{ x: number; z: number }>;
 
 function revisePlatform(design: DeckDesignV3, platform: DeckPlatformV3): DeckDesignV3 {
@@ -136,6 +137,10 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     if (!activeStairSystem || !activeLanding) { setMessage("Add or select a landing first."); return; }
     updateStairSystem({ landings: activeStairSystem.landings.map((landing) => landing.id === activeLanding.id ? { ...landing, ...update } : landing) }, nextMessage);
   };
+  const updateLandingConnection = (connectionId: string, update: Partial<StairLandingConnectionV3>, nextMessage: string) => {
+    if (!activeLanding) return;
+    updateLanding({ connections: activeLanding.connections.map((connection) => connection.id === connectionId ? { ...connection, ...update } : connection) }, nextMessage);
+  };
   const nextSystemId = () => { let index = 1; const used = new Set(platform.construction.stairSystems.map((system) => system.id)); while (used.has(`stair-system-${index}`)) index += 1; return `stair-system-${index}`; };
   const attachStairsToEdge = (edgeId: string, edgeLength: number) => {
     if (activeStairSystem && !activeStairSystem.locked) {
@@ -156,14 +161,26 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     const afterRiser = last ? Math.min(totalRisers - 1, last.afterRiser + Math.max(1, Math.floor((totalRisers - last.afterRiser) / 2))) : 0;
     if (last && afterRiser <= last.afterRiser) { setMessage("There is no remaining stair rise for another landing."); return; }
     const id = `${activeStairSystem.id}-landing-${activeStairSystem.landings.length + 1}`;
-    const landing: StairLandingV3 = Object.freeze({ id, locked: false, afterRiser, width: activeStairSystem.width, depth: 48, turn: "straight" });
+    const landing: StairLandingV3 = Object.freeze({ id, locked: false, afterRiser, width: activeStairSystem.width, depth: 48, turn: "straight", connections: Object.freeze([]) });
     setSelectedLandingId(id);
     updateStairSystem({ landings: [...activeStairSystem.landings, landing] }, `Landing ${activeStairSystem.landings.length + 1} added to this stair system.`);
+  };
+  const addLandingConnection = (destination: "deck" | "grade") => {
+    if (!activeStairSystem || !activeLanding?.locked) { setMessage("Lock the shared landing before connecting another stair flight."); return; }
+    if (destination === "deck" && activeLanding.afterRiser === 0) { setMessage("This landing is already at deck height. Move it below the deck before adding another stair up."); return; }
+    const last = activeLanding.connections.at(-1);
+    if (last && !last.locked) { setMessage("Lock the current connected flight before adding another one."); return; }
+    const usedDirections = new Set([activeLanding.turn, ...activeLanding.connections.map((connection) => connection.direction)]);
+    const direction = (["left", "right", "straight"] as const).find((candidate) => !usedDirections.has(candidate));
+    if (!direction) { setMessage("Every open side of this shared landing already has a stair flight."); return; }
+    const id = `${activeLanding.id}-connection-${activeLanding.connections.length + 1}`;
+    const connection: StairLandingConnectionV3 = Object.freeze({ id, locked: false, destination, direction, width: activeStairSystem.width, treadDepth: activeStairSystem.treadDepth });
+    updateLanding({ connections: [...activeLanding.connections, connection] }, `Connected another stair ${destination === "deck" ? "up to deck" : "down to grade"} through this shared landing.`);
   };
   const lockLanding = () => updateLanding({ locked: true }, "Landing locked. You can now add another landing to this stair system.");
   const lockStairSystem = () => {
     if (!activeStairSystem) return;
-    const landings = activeStairSystem.landings.map((landing) => ({ ...landing, locked: true }));
+    const landings = activeStairSystem.landings.map((landing) => ({ ...landing, locked: true, connections: landing.connections.map((connection) => ({ ...connection, locked: true })) }));
     replaceStairSystems(platform.construction.stairSystems.map((system) => system.id === activeStairSystem.id ? { ...system, locked: true, landings } : system), "Stair system locked. Select a side to add another stair system.");
     setSelectedStairSystemId(null); setSelectedLandingId(null);
   };
@@ -232,12 +249,13 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
         {activeStairSystem.locked ? <button onClick={() => updateStairSystem({ locked: false }, "Stair system reopened for explicit editing.")}>Edit this stair system</button> : <>
           <div className="field-grid"><V3NumberField label="Stair position" value={activeStairSystem.offset} onCommit={(value) => updateStairSystem({ offset: value }, "Stair position updated exactly.")} /><V3NumberField label="Stair width" value={activeStairSystem.width} onCommit={(value) => updateStairSystem({ width: value, landings: activeStairSystem.landings.map((landing) => ({ ...landing, width: Math.max(landing.width, value) })) }, "Stair width updated exactly.")} /><V3NumberField label="Step depth" value={activeStairSystem.treadDepth} onCommit={(value) => updateStairSystem({ treadDepth: value }, "Step depth updated exactly.")} /></div>
           <div className="stair-railing-note"><strong>Stair railings included</strong><small>Every flight in this system is tracked separately from standard deck railings.</small></div>
-          <div className="landing-sequence">{activeStairSystem.landings.map((landing, index) => <button key={landing.id} className={landing.id === activeLanding?.id ? "active" : ""} onClick={() => setSelectedLandingId(landing.id)}><strong>Landing {index + 1}</strong><small>after step {landing.afterRiser} · {landing.locked ? "locked" : "editing"}</small></button>)}</div>
+          <div className="landing-sequence">{activeStairSystem.landings.map((landing, index) => <button key={landing.id} className={landing.id === activeLanding?.id ? "active" : ""} onClick={() => setSelectedLandingId(landing.id)}><strong>Landing {index + 1}</strong><small>after step {landing.afterRiser} · {landing.connections.length} connected · {landing.locked ? "locked" : "editing"}</small></button>)}</div>
           {activeLanding && <div className="stair-landing-controls">
             <V3NumberField label="Steps before this landing" value={activeLanding.afterRiser} step={1} onCommit={(value) => updateLanding({ afterRiser: value }, "Landing position updated exactly.")} />
             <div className="field-grid"><V3NumberField label="Landing width" value={activeLanding.width} onCommit={(value) => updateLanding({ width: value }, "Landing width updated exactly.")} /><V3NumberField label="Landing depth" value={activeLanding.depth} onCommit={(value) => updateLanding({ depth: value }, "Landing depth updated exactly.")} /></div>
             <fieldset><legend>Direction after landing</legend><div className="toggle-grid">{(["straight", "left", "right"] as const).map((turn) => <button type="button" key={turn} className={`toggle${activeLanding.turn === turn ? " active" : ""}`} onClick={() => updateLanding({ turn, depth: turn === "straight" ? activeLanding.depth : Math.max(activeLanding.depth, activeStairSystem.width) }, `Stairs now continue ${turn} after this landing.`)}>{turn}</button>)}</div><small>Left and right are viewed while walking down this stair system.</small></fieldset>
             {!activeLanding.locked && <button className="primary" onClick={lockLanding}>Lock this landing</button>}
+            {activeLanding.locked && <Suspense fallback={<div className="house-editor-loading" role="status">Preparing shared landing controls…</div>}><LandingConnectionsEditor landing={activeLanding} onAdd={addLandingConnection} onUpdateLanding={(connections, nextMessage) => updateLanding({ connections }, nextMessage)} onUpdateConnection={updateLandingConnection} /></Suspense>}
           </div>}
           <div className="selected-edge-actions contextual"><button disabled={Boolean(activeStairSystem.landings.at(-1) && !activeStairSystem.landings.at(-1)?.locked) || activeStairSystem.landings.at(-1)?.afterRiser === activeTotalRisers - 1} onClick={addLanding}>{activeStairSystem.landings.length ? "Add another landing" : "Add first landing"}</button><button className="primary" onClick={lockStairSystem}>Lock this stair system</button></div>
           <button className="remove-stairs" onClick={() => { replaceStairSystems(platform.construction.stairSystems.filter((system) => system.id !== activeStairSystem.id), "Stair system removed."); setSelectedStairSystemId(null); setSelectedLandingId(null); }}>Remove this stair system</button>

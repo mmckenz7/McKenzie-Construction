@@ -91,4 +91,13 @@ describe("isolated DeckDesign v3 migration spike", () => {
     const first = platform.construction.stairSystems[0];
     expect(() => normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [first, { ...first, id: "stair-system-2" }] } }] })).toThrow(/cannot overlap/i);
   });
+
+  it("validates shared-landing merger sides and deck-bound rise", () => {
+    const migrated = migrateDeckDesignToV3(lShapeLandingFixture.design);
+    const platform = migrated.platforms[0];
+    const system = platform.construction.stairSystems[0];
+    const landing = system.landings[0];
+    expect(() => normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings: [{ ...landing, connections: [{ id: "duplicate-side", locked: true, destination: "grade", direction: landing.turn, width: system.width, treadDepth: 10 }] }] }] } }] })).toThrow(/different open sides/i);
+    expect(() => normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings: [{ ...landing, afterRiser: 0, connections: [{ id: "deck-at-deck", locked: true, destination: "deck", direction: "left", width: system.width, treadDepth: 10 }] }] }] } }] })).toThrow(/below deck elevation/i);
+  });
 });

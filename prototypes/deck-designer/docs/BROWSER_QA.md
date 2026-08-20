@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-20 shared-landing stair mergers
+
+- A locked midway landing now exposes `Connect stair down` and `Connect stair up`. Each connected flight has its own destination, unused landing side, width, tread depth, lock state, and removal action.
+- Clean-session QA created a three-riser upper approach, the primary lower flight, one additional grade-bound flight, and one additional deck-bound flight. The route projected 14 treads, eight stringer paths, and eight stair-railing paths while keeping one 16-square-foot landing.
+- All three travel sides remained open and the landing-railing projection correctly fell to zero segments and zero posts; no railing crossed a stair opening.
+- At 390 × 844, every merger action measured at least 44 pixels high, the document had no horizontal overflow, and the browser reported no warnings or errors.
+- Older v3 landings without `connections` still normalize to an explicit empty list. The measured bundle is 95.7 KiB initial and 233.8 KiB total gzip under narrow 96/234 KiB ceilings; the advanced controls are lazy-loaded in a 1.17 KiB chunk.
+
 ## 2026-08-20 grouped stair systems and ordered landings
 
 - Desktop QA locked Landing 1, revealed and added Landing 2, locked the complete stair system, then added Stair system 2 on another exact free edge. The completed first group remained unchanged and separately selectable.

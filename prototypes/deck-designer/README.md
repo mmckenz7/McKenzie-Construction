@@ -21,6 +21,7 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Deterministic conceptual stair side-stringer paths in 2D, 3D, and quantities
 - Recorded grade, multiple editable house walls/attachment intent, and multiple selectable conceptual door/window openings per wall
 - Ordered, stair-system-associated landings with exact step position, independent width/depth, deterministic straight/left/right routing, and area
+- Explicit shared-landing junctions where additional flights can merge from deck or diverge toward grade without duplicating the landing
 - Conceptual landing side rails, stair rails, rail posts, and outer support locations
 - Command-based undo and redo
 - Direct plan handles for width, projection, and L-cutout dimensions with selectable 1, 6, or 12 inch snapping

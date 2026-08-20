@@ -38,6 +38,16 @@ export type StairLandingV3 = Readonly<{
   width: number;
   depth: number;
   turn: "straight" | "left" | "right";
+  connections: readonly StairLandingConnectionV3[];
+}>;
+
+export type StairLandingConnectionV3 = Readonly<{
+  id: string;
+  locked: boolean;
+  destination: "deck" | "grade";
+  direction: "straight" | "left" | "right";
+  width: number;
+  treadDepth: number;
 }>;
 
 export type StairSystemV3 = Readonly<{
@@ -136,6 +146,7 @@ function migrateNormalizedV2(design: DeckDesign): DeckDesignV3 {
           width: design.construction.stairs.width,
           depth: design.construction.stairs.landingDepth,
           turn: "straight" as const,
+          connections: Object.freeze([]),
         })]) : Object.freeze([]),
       })]) : Object.freeze([]),
     }, semanticEdges.front),
@@ -188,6 +199,7 @@ function legacySystemFromStairs(stairs: Partial<LegacyStairsV3>, id: string): Pa
       width: stairs.landingWidth ?? width,
       depth: stairs.landingDepth ?? DEFAULT_DESIGN.construction.stairs.landingDepth,
       turn: stairs.landingTurn ?? "straight",
+      connections: [],
     }] : [],
   };
 }
@@ -316,7 +328,26 @@ function normalizePlatformV3(
       if (!Number.isFinite(depth) || depth < 24 || depth > 120) throw new RangeError("A landing depth must be between 24 and 120 inches.");
       if (!["straight", "left", "right"].includes(turn)) throw new TypeError("A landing turn must be straight, left, or right.");
       if (turn !== "straight" && depth < normalizedStair.width) throw new RangeError("A turning landing must be at least as deep as the stair width.");
-      return Object.freeze({ id: landingId, locked: landing.locked === true, afterRiser, width, depth, turn });
+      const connectionIds = new Set<string>();
+      const usedDirections = new Set<string>([turn]);
+      const connections = Object.freeze((landing.connections ?? []).map((connection, connectionIndex): StairLandingConnectionV3 => {
+        const connectionId = connection.id ?? `${landingId}-connection-${connectionIndex + 1}`;
+        if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(connectionId) || connectionIds.has(connectionId)) throw new TypeError("Every shared-landing stair connection requires a unique stable lowercase ID.");
+        connectionIds.add(connectionId);
+        const destination = connection.destination ?? "grade";
+        const direction = connection.direction ?? (["left", "right", "straight"] as const).find((candidateDirection) => !usedDirections.has(candidateDirection)) ?? "straight";
+        if (destination !== "deck" && destination !== "grade") throw new TypeError("A shared-landing stair connection must lead to deck or grade.");
+        if (!["straight", "left", "right"].includes(direction)) throw new TypeError("A shared-landing stair direction must be straight, left, or right.");
+        if (usedDirections.has(direction)) throw new RangeError("Stair flights attached to one landing must use different open sides.");
+        if (destination === "deck" && afterRiser === 0) throw new RangeError("A deck-bound merged stair requires a landing below deck elevation.");
+        usedDirections.add(direction);
+        const connectionWidth = connection.width ?? normalizedStair.width;
+        const connectionTreadDepth = connection.treadDepth ?? normalizedStair.treadDepth;
+        if (!Number.isFinite(connectionWidth) || connectionWidth < 30 || connectionWidth > 96 || connectionWidth > width) throw new RangeError("A merged stair must be 30–96 inches wide and fit its shared landing.");
+        if (!Number.isFinite(connectionTreadDepth) || connectionTreadDepth < 9 || connectionTreadDepth > 14) throw new RangeError("A merged stair tread depth must be between 9 and 14 inches.");
+        return Object.freeze({ id: connectionId, locked: connection.locked === true, destination, direction, width: connectionWidth, treadDepth: connectionTreadDepth });
+      }));
+      return Object.freeze({ id: landingId, locked: landing.locked === true, afterRiser, width, depth, turn, connections });
     }));
     return Object.freeze({ id, locked: candidate.locked === true, edgeId, offset: normalizedStair.offset, width: normalizedStair.width, treadDepth: normalizedStair.treadDepth, maxRiserHeight: normalizedStair.maxRiserHeight, landings });
   }));

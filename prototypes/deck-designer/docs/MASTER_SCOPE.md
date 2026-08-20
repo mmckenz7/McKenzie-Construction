@@ -34,6 +34,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Optional intermediate-height landing with deterministic two-flight stairs
 - [x] Exact landing width and depth independent of stair width
 - [x] Multiple independently locked stair systems and ordered, system-associated chained landings
+- [x] Shared-landing merger junctions with multiple independently locked deck- or grade-bound flights
 - [ ] Switchback stairs and collision-aware configurations beyond straight/left/right chained flights
 - [x] Edge selection with contextual railing/stair actions and explainable conceptual warnings
 - [x] Drag handles and selectable grid snapping for rectangle and L-cutout dimensions

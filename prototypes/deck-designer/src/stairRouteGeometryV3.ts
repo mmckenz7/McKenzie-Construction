@@ -1,4 +1,4 @@
-import type { StairSystemV3 } from "./modelV3";
+import type { StairLandingConnectionV3, StairSystemV3 } from "./modelV3";
 import type { PolygonEdge, PolygonPoint } from "./polygon";
 
 export type StairPoint3V3 = Readonly<{ x: number; y: number; z: number }>;
@@ -57,6 +57,32 @@ export function deriveStairRouteGeometryV3(args: Readonly<{
   let completedRisers = 0;
   let flightIndex = 0;
 
+  const addConnectedFlight = (connection: StairLandingConnectionV3, branchOrigin: PolygonPoint, branchDirection: PolygonPoint, landingElevation: number, afterRiser: number) => {
+    const count = connection.destination === "grade" ? totalRisers - afterRiser : afterRiser;
+    if (count <= 0) return;
+    const widthDirection = point(-branchDirection.z, branchDirection.x);
+    const flightRun = count * connection.treadDepth;
+    const endElevation = connection.destination === "grade" ? gradeElevation : platformElevation;
+    const elevationDirection = connection.destination === "grade" ? -1 : 1;
+    for (let index = 0; index < count; index += 1) {
+      const center = point(branchOrigin.x + branchDirection.x * connection.treadDepth * (index + .5), branchOrigin.z + branchDirection.z * connection.treadDepth * (index + .5));
+      const alongX = widthDirection.x * connection.width / 2;
+      const alongZ = widthDirection.z * connection.width / 2;
+      const outX = branchDirection.x * connection.treadDepth / 2;
+      const outZ = branchDirection.z * connection.treadDepth / 2;
+      treads.push(Object.freeze({ id: `${root}${connection.id}-tread-${index + 1}`, x: center.x, z: center.z, y: landingElevation + elevationDirection * actualRise * (index + 1), width: connection.width, depth: connection.treadDepth, rise: actualRise, rotationY: -Math.atan2(widthDirection.z, widthDirection.x), corners: Object.freeze([
+        point(center.x - alongX - outX, center.z - alongZ - outZ), point(center.x + alongX - outX, center.z + alongZ - outZ),
+        point(center.x + alongX + outX, center.z + alongZ + outZ), point(center.x - alongX + outX, center.z - alongZ + outZ),
+      ]) }));
+    }
+    const stringerSide = Math.max(0, connection.width / 2 - .75);
+    const railSide = Math.max(0, connection.width / 2 - 2);
+    for (const [sideIndex, side] of [-1, 1].entries()) {
+      stringers.push(Object.freeze({ id: `${root}${connection.id}-stringer-${sideIndex + 1}`, start: point3(branchOrigin.x + widthDirection.x * stringerSide * side, landingElevation, branchOrigin.z + widthDirection.z * stringerSide * side), end: point3(branchOrigin.x + widthDirection.x * stringerSide * side + branchDirection.x * flightRun, endElevation, branchOrigin.z + widthDirection.z * stringerSide * side + branchDirection.z * flightRun) }));
+      rails.push(Object.freeze({ id: `${root}${connection.id}-rail-${sideIndex + 1}`, start: point3(branchOrigin.x + widthDirection.x * railSide * side, landingElevation + railingHeight - 2, branchOrigin.z + widthDirection.z * railSide * side), end: point3(branchOrigin.x + widthDirection.x * railSide * side + branchDirection.x * flightRun, endElevation + railingHeight - 2, branchOrigin.z + widthDirection.z * railSide * side + branchDirection.z * flightRun) }));
+    }
+  };
+
   const addFlight = (count: number, nextElevation: number) => {
     if (count <= 0) return;
     flightIndex += 1;
@@ -107,17 +133,25 @@ export function deriveStairRouteGeometryV3(args: Readonly<{
     const landingId = !namespaceIds && landingIndex === 0 ? "stair-landing" : `${root}stair-landing-${landingIndex + 1}`;
     landings.push(Object.freeze({ id: landingId, systemId: system.id, afterRiser: landing.afterRiser, position: landing.afterRiser === 0 ? "top" : "midway", y: landingElevation, depth: landing.depth, width: landing.width, center, rotationY: -Math.atan2(widthDirection.z, widthDirection.x), corners }));
     const railPrefix = !namespaceIds && landingIndex === 0 ? "landing-rail" : `${landingId}-rail`;
+    const openDirections = new Set([landing.turn, ...landing.connections.map((connection) => connection.direction)]);
     const segments = [
-      ...(landing.turn !== "left" ? [{ id: `${railPrefix}-left`, start: corners[0], end: corners[3], y: landingElevation }] : []),
-      ...(landing.turn !== "right" ? [{ id: `${railPrefix}-right`, start: corners[1], end: corners[2], y: landingElevation }] : []),
-      ...(landing.turn !== "straight" ? [{ id: `${railPrefix}-outer`, start: corners[3], end: corners[2], y: landingElevation }] : []),
+      ...(!openDirections.has("left") ? [{ id: `${railPrefix}-left`, start: corners[0], end: corners[3], y: landingElevation }] : []),
+      ...(!openDirections.has("right") ? [{ id: `${railPrefix}-right`, start: corners[1], end: corners[2], y: landingElevation }] : []),
+      ...(!openDirections.has("straight") ? [{ id: `${railPrefix}-outer`, start: corners[3], end: corners[2], y: landingElevation }] : []),
     ].map((segment) => Object.freeze(segment));
     landingRails.push(...segments);
     const railPoints = new Map<string, PolygonPoint>();
     for (const segment of segments) for (const corner of [segment.start, segment.end]) railPoints.set(`${corner.x}:${corner.z}`, corner);
-    const points = landing.turn === "straight" ? corners : [...railPoints.values()];
+    const points = landing.connections.length === 0 && landing.turn === "straight" ? corners : [...railPoints.values()];
     points.forEach((corner, index) => landingRailPosts.push(Object.freeze({ id: !namespaceIds && landingIndex === 0 ? `landing-rail-post-${index + 1}` : `${landingId}-rail-post-${index + 1}`, x: corner.x, z: corner.z, top: landingElevation + railingHeight })));
     [corners[2], corners[3]].forEach((corner, index) => landingSupportPosts.push(Object.freeze({ id: !namespaceIds && landingIndex === 0 ? `landing-support-post-${index + 1}` : `${landingId}-support-post-${index + 1}`, x: corner.x, z: corner.z, top: landingElevation - 5.5 })));
+    for (const connection of landing.connections) {
+      const branchDirection = rotate(direction, connection.direction);
+      const branchOrigin = connection.direction === "straight"
+        ? point(center.x + direction.x * landing.depth / 2, center.z + direction.z * landing.depth / 2)
+        : point(center.x + branchDirection.x * landing.width / 2, center.z + branchDirection.z * landing.width / 2);
+      addConnectedFlight(connection, branchOrigin, branchDirection, landingElevation, landing.afterRiser);
+    }
     const nextDirection = rotate(direction, landing.turn);
     origin = landing.turn === "straight"
       ? point(origin.x + direction.x * landing.depth, origin.z + direction.z * landing.depth)

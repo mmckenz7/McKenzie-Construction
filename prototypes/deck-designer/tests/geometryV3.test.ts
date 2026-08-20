@@ -160,8 +160,8 @@ describe("v3 free-edge geometry equivalence", () => {
     const freeEdges = platform.edgeConditions.filter((condition) => condition.condition === "free").map((condition) => condition.edgeId);
     const design = normalizeDeckDesignV3({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [
       { id: "stair-system-1", locked: true, edgeId: freeEdges[0], offset: 12, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [
-        { id: "stair-system-1-landing-1", locked: true, afterRiser: 0, width: 48, depth: 48, turn: "straight" },
-        { id: "stair-system-1-landing-2", locked: true, afterRiser: 3, width: 60, depth: 48, turn: "left" },
+        { id: "stair-system-1-landing-1", locked: true, afterRiser: 0, width: 48, depth: 48, turn: "straight", connections: [] },
+        { id: "stair-system-1-landing-2", locked: true, afterRiser: 3, width: 60, depth: 48, turn: "left", connections: [] },
       ] },
       { id: "stair-system-2", locked: true, edgeId: freeEdges[1], offset: 24, width: 36, treadDepth: 10, maxRiserHeight: 7.75, landings: [] },
     ] } }] });
@@ -173,5 +173,27 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(geometry.stairRailSegments).toHaveLength(6);
     expect(geometry.stairRailPosts).toHaveLength(12);
     expect(new Set(geometry.stairTreads.map((tread) => tread.id)).size).toBe(14);
+  });
+
+  it("treats converging and diverging stair flights as one shared landing junction", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const system = { id: "stair-system-1", locked: true, edgeId: platform.edgeConditions.find((condition) => condition.condition === "free")!.edgeId, offset: 48, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [] } as const;
+    const design = normalizeDeckDesignV3({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, locked: true, landings: [{
+      id: `${system.id}-landing-1`, locked: true, afterRiser: 3, width: 48, depth: 48, turn: "straight", connections: [
+        { id: "merge-down", locked: true, destination: "grade", direction: "left", width: 48, treadDepth: 10 },
+        { id: "merge-up", locked: true, destination: "deck", direction: "right", width: 48, treadDepth: 10 },
+      ],
+    }] }] } }] });
+    const geometry = derivePlatformGeometryV3(design, platform.id);
+    expect(geometry.landings).toHaveLength(1);
+    expect(geometry.stairTreads).toHaveLength(14);
+    expect(geometry.stairStringers).toHaveLength(8);
+    expect(geometry.stairRailSegments).toHaveLength(8);
+    expect(geometry.landingRailSegments).toHaveLength(0);
+    expect(geometry.landingRailPosts).toHaveLength(0);
+    expect(new Set(geometry.stairTreads.map((tread) => tread.id)).size).toBe(14);
+    expect(geometry.stairTreads.find((tread) => tread.id.includes("merge-up-tread-3"))?.y).toBeCloseTo(platform.elevation);
+    expect(geometry.stairTreads.find((tread) => tread.id.includes("merge-down-tread-4"))?.y).toBeCloseTo(base.siteContext.gradeElevation);
   });
 });

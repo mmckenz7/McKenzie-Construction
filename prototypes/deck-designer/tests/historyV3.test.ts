@@ -101,8 +101,8 @@ describe("DeckDesign v3 immutable command history", () => {
     const platform = source.platforms[0];
     const system = platform.construction.stairSystems[0];
     const grouped = normalizeDeckDesignV3({ ...source, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, locked: true, landings: [
-      { id: `${system.id}-landing-1`, locked: true, afterRiser: 0, width: system.width, depth: 48, turn: "straight" },
-      { id: `${system.id}-landing-2`, locked: true, afterRiser: 3, width: system.width, depth: 48, turn: "left" },
+      { id: `${system.id}-landing-1`, locked: true, afterRiser: 0, width: system.width, depth: 48, turn: "straight", connections: [] },
+      { id: `${system.id}-landing-2`, locked: true, afterRiser: 3, width: system.width, depth: 48, turn: "left", connections: [] },
     ] }] } }], metadata: { ...source.metadata, revision: 2 } });
     const applied = designHistoryReducerV3(createHistoryV3(source), { type: "apply", design: grouped });
     const undone = designHistoryReducerV3(applied, { type: "undo" });
