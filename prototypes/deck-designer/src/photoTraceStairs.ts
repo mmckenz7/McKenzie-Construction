@@ -21,6 +21,13 @@ export function validateStairOffset(edgeLength: number, offset: number, stairWid
   return offset;
 }
 
+export function validateStairWidth(edgeLength: number, stairWidth: number): number {
+  if (!Number.isFinite(stairWidth) || stairWidth < 30 || stairWidth > 96 || stairWidth > edgeLength) {
+    throw new RangeError("Stair width must be between 2.5 and 8 feet and fit on the selected side.");
+  }
+  return stairWidth;
+}
+
 export function derivePhotoTraceStairPreview(
   outer: readonly PolygonPoint[],
   edgeId: string,

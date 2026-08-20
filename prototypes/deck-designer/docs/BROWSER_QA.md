@@ -8,6 +8,7 @@
 - In photo-reference tracing, the row of per-side offset buttons is gone. Selecting one side reveals one Add bumpout here action and its exact length field.
 - The same selected-side panel now shows Add stairs here beside Add bumpout here. Selecting stairs immediately renders the centered stair treads outside the orange-marked exact side and carries that same placement into the confirmed design; house and short sides reject stair placement.
 - Photo-outline stairs now expose an orange touch handle for rough sliding along the selected side plus synchronized From left/right or From top/bottom measurements for exact placement. Both routes preserve the full four-foot stair width and carry the recorded offset into the authoritative design.
+- The selected-side stair controls include an exact width from 2.5 to 8 feet. Width changes preserve the stair center when possible, update both end clearances, resize the orange preview, and carry the recorded width into final 2D/3D geometry.
 
 ## 2026-08-19 responsive smoke check
 
