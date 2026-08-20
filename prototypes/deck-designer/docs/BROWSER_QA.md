@@ -1,10 +1,10 @@
 # Browser QA record
 
-## 2026-08-20 turning-landing protected-side fix
+## 2026-08-20 turning-landing perimeter fix
 
-- A left-turn stair now leaves the right landing edge open for the outgoing flight and retains the left protected-side railing; a right turn does the exact mirror image.
+- A left-turn stair now leaves the right landing edge open for the outgoing flight while retaining both the left protected-side railing and the outside landing railing; a right turn does the exact mirror image.
 - The corrected edge selection drives the same 2D plan, 3D model, landing-railing posts, and deterministic quantity references.
-- Focused geometry tests assert both turn directions retain the rail opposite the outgoing stair flight so later rendering changes cannot silently reverse the rule.
+- Focused geometry tests assert both turn directions create the complete L-shaped landing guard opposite the outgoing stair flight so later rendering changes cannot silently drop an exposed edge.
 
 ## 2026-08-20 visible landing-railing groups
 

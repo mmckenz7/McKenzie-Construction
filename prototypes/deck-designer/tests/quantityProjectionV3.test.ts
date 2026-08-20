@@ -61,8 +61,8 @@ describe("v3 accessory quantity projection", () => {
     const report = deriveDeckAccessoryProjectionV3(design, platform.id);
     const byKey = Object.fromEntries(report.quantities.map((line) => [line.key, line]));
     expect(byKey["stair-landing-area"].amount).toBe(20);
-    expect(byKey["landing-railing-linear-feet"].amount).toBe(5);
-    expect(byKey["landing-railing-post-count"].amount).toBe(2);
+    expect(byKey["landing-railing-linear-feet"].amount).toBe(9);
+    expect(byKey["landing-railing-post-count"].amount).toBe(3);
     expect(byKey["stair-tread-count"].sourceGeometry).toHaveLength(7);
     expect(byKey["stair-railing-linear-feet"].amount).toBe(14.15);
     expect(byKey["stair-railing-post-count"].amount).toBe(4);
