@@ -34,7 +34,7 @@ const projects = [
     imageSrc: "/projects/knoxville-trex-deck/finished-deck-wide.jpg",
     imageAlt: "Completed Knoxville Trex deck with black aluminum railing",
     href: "/projects/knoxville-trex-deck-replacement",
-    photoCount: 4,
+    photoCount: 7,
   },
   {
     title: "Tellico Village Screened Porch & Deck",
@@ -44,7 +44,7 @@ const projects = [
       "/projects/tellico-village-screened-porch/full-rear-elevation.jpg",
     imageAlt: "Completed elevated screened porch and adjoining deck",
     href: "/projects/tellico-village-screened-porch",
-    photoCount: 4,
+    photoCount: 8,
   },
   {
     title: "Island Ford Modular Home & Outdoor Living",
@@ -54,7 +54,7 @@ const projects = [
       "/projects/island-ford/08F626F4-F8F9-4B55-B3E5-723253E28102_1_105_c.jpeg",
     imageAlt: "Rear wood deck and stairs at the Island Ford project",
     href: "/projects/island-ford",
-    photoCount: 9,
+    photoCount: 11,
   },
   {
     title: "East Tennessee Ranch Home Renovation",
@@ -64,7 +64,7 @@ const projects = [
       "/projects/completed-renovations/renovation-one-exterior.jpg",
     imageAlt: "Completed single-story East Tennessee home exterior",
     href: "/projects/east-tennessee-ranch-renovation",
-    photoCount: 6,
+    photoCount: 3,
   },
   {
     title: "East Tennessee Cottage Renovation",
@@ -74,7 +74,7 @@ const projects = [
       "/projects/completed-renovations/renovation-two-exterior.jpg",
     imageAlt: "Completed East Tennessee cottage exterior and entry",
     href: "/projects/east-tennessee-cottage-renovation",
-    photoCount: 6,
+    photoCount: 3,
   },
 ];
 

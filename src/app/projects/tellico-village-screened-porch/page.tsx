@@ -43,6 +43,26 @@ const images = [
     alt: "Open deck grill area adjoining the screened porch",
     caption: "Adjoining open deck and grill area",
   },
+  {
+    src: "/projects/tellico-village-screened-porch/furnished-screened-room.jpg",
+    alt: "Furnished screened porch with seating and a wooded view",
+    caption: "Furnished screened outdoor room",
+  },
+  {
+    src: "/projects/tellico-village-screened-porch/screen-and-grill-detail.jpg",
+    alt: "Screen wall and grill area where the open deck meets the porch",
+    caption: "Screen enclosure and adjoining grill area",
+  },
+  {
+    src: "/projects/tellico-village-screened-porch/rear-elevation-portrait.jpg",
+    alt: "Portrait view of the completed elevated screened porch and stairs",
+    caption: "Elevated porch, deck, and stair system",
+  },
+  {
+    src: "/projects/tellico-village-screened-porch/rear-elevation-wide.jpg",
+    alt: "Wide rear view of the screened porch and adjoining deck",
+    caption: "Full screened-porch and deck addition",
+  },
 ];
 
 export default function TellicoVillageScreenedPorchPage() {

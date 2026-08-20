@@ -43,6 +43,21 @@ const images = [
     alt: "Single-level deck layout viewed from the house",
     caption: "Open single-level layout",
   },
+  {
+    src: "/projects/knoxville-trex-deck/front-elevation.jpg",
+    alt: "Wide front view of the completed Trex deck and stair landing",
+    caption: "Finished deck, stairs, and yard connection",
+  },
+  {
+    src: "/projects/knoxville-trex-deck/corner-railing-view.jpg",
+    alt: "Angled view of the Trex deck corner and black aluminum railing",
+    caption: "Deck corner and coordinated railing",
+  },
+  {
+    src: "/projects/knoxville-trex-deck/deck-surface-from-house.jpg",
+    alt: "Trex deck surface and railing viewed from the house",
+    caption: "Finished deck surface from the house",
+  },
 ];
 
 export default function KnoxvilleTrexDeckReplacementPage() {

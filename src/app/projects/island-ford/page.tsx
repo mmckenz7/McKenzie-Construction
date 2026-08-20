@@ -46,6 +46,26 @@ const galleryImages = [
     src: "/projects/island-ford/432C12B6-148C-48E7-A14C-7F94FD5B350F_1_105_c.jpeg",
     alt: "Side entry stairs and landscaped walkway",
   },
+  {
+    src: "/projects/island-ford/1D22BCAB-16C5-4167-8076-73E5900433C6_1_105_c.jpeg",
+    alt: "Finished side entry deck and steps at the home",
+  },
+  {
+    src: "/projects/island-ford/215A71BC-A4BC-4ECF-A5E8-228721BD697D_1_105_c.jpeg",
+    alt: "Side view of the entry deck beside the completed exterior",
+  },
+  {
+    src: "/projects/island-ford/71752E31-41DF-4906-9A61-CDA95EBB3A8C_1_105_c.jpeg",
+    alt: "Wide site view of the rear deck, stairs, and gravel access",
+  },
+  {
+    src: "/projects/island-ford/9A27566E-1D13-446F-9846-66366E957DF9_1_105_c.jpeg",
+    alt: "Finished wood deck surface and guard railing",
+  },
+  {
+    src: "/projects/island-ford/9A535F40-1AA8-48E2-BC0F-DB17AEC2B07C_1_105_c.jpeg",
+    alt: "View from the rear deck toward the stairs and landscaped yard",
+  },
 ];
 
 export default function IslandFordProjectPage() {
