@@ -116,6 +116,9 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, onChange,
   const [highlightedSegment, setHighlightedSegment] = useState<number | null>(null);
   const [manualView, setManualView] = useState<ViewBounds | null>(null);
   const [undoCount, setUndoCount] = useState(0);
+  const [cornerXInput, setCornerXInput] = useState("");
+  const [cornerZInput, setCornerZInput] = useState("");
+  const [segmentLengthInput, setSegmentLengthInput] = useState("");
   useEffect(() => { undoStack.current = []; setUndoCount(0); setSelection(null); }, [width, projection]);
   const edges = useMemo(() => deriveGeometricPolygonEdges(outer), [outer]);
   const houseEdgeIndex = edges.findIndex((edge) => Math.abs(edge.start.z) < .01 && Math.abs(edge.end.z) < .01);
@@ -184,6 +187,15 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, onChange,
   const selectedCorner = selection?.kind === "corner" ? outer[selection.index] : undefined;
   const selectedEdge = selection?.kind === "segment" ? edges[selection.index] : undefined;
   const selectedHouseCorner = selection?.kind === "corner" && fixedHouseCorners.has(selection.index);
+  useEffect(() => {
+    if (!selectedCorner) return;
+    setCornerXInput(String(feet(selectedCorner.x)));
+    setCornerZInput(String(feet(selectedCorner.z)));
+  }, [selection?.kind, selection?.index, selectedCorner?.x, selectedCorner?.z]);
+  useEffect(() => {
+    if (!selectedEdge) return;
+    setSegmentLengthInput(String(feet(selectedEdge.length)));
+  }, [selection?.kind, selection?.index, selectedEdge?.length]);
   const setCornerFeet = (axis: "x" | "z", value: number) => {
     if (!selectedCorner || !Number.isFinite(value) || selection?.kind !== "corner") return;
     const xFeet = axis === "x" ? value : feet(selectedCorner.x);
@@ -271,8 +283,8 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, onChange,
         })}
       </svg>
       {(selectedCorner || selectedEdge) && <div className="trace-dimension-editor">
-        {selectedCorner && selection?.kind === "corner" && <><div><strong>Corner {selection.index + 1}</strong><small>Measured from the original left house corner.</small></div><label><span>Along house (ft)</span><input type="number" step="0.5" value={feet(selectedCorner.x)} onFocus={() => remember(outer)} onChange={(event) => { if (event.target.value !== "") setCornerFeet("x", Number(event.target.value)); }} /></label><label><span>Away from house (ft)</span><input type="number" step="0.5" disabled={selectedHouseCorner} value={feet(selectedCorner.z)} onFocus={() => remember(outer)} onChange={(event) => { if (event.target.value !== "") setCornerFeet("z", Number(event.target.value)); }} /></label></>}
-        {selectedEdge && selection?.kind === "segment" && <><div><strong>Selected segment</strong><small>Drag the white square to move both end corners together, or enter its exact length.</small></div><label><span>Length (ft)</span><input type="number" step="0.5" min="0.5" value={feet(selectedEdge.length)} onFocus={() => remember(outer)} onChange={(event) => { if (event.target.value !== "") setSegmentLengthFeet(Number(event.target.value)); }} /></label></>}
+        {selectedCorner && selection?.kind === "corner" && <><div><strong>Corner {selection.index + 1}</strong><small>Measured from the original left house corner.</small></div><label><span>Along house (ft)</span><input type="number" step="0.5" value={cornerXInput} onFocus={() => remember(outer)} onChange={(event) => { const value = event.target.value; setCornerXInput(value); if (value !== "") setCornerFeet("x", Number(value)); }} onBlur={() => setCornerXInput(String(feet(selectedCorner.x)))} /></label><label><span>Away from house (ft)</span><input type="number" step="0.5" disabled={selectedHouseCorner} value={cornerZInput} onFocus={() => remember(outer)} onChange={(event) => { const value = event.target.value; setCornerZInput(value); if (value !== "") setCornerFeet("z", Number(value)); }} onBlur={() => setCornerZInput(String(feet(selectedCorner.z)))} /></label></>}
+        {selectedEdge && selection?.kind === "segment" && <><div><strong>Selected segment</strong><small>Drag the white square to move both end corners together, or enter its exact length.</small></div><label><span>Length (ft)</span><input type="number" step="0.5" min="0.5" value={segmentLengthInput} onFocus={() => remember(outer)} onChange={(event) => { const value = event.target.value; setSegmentLengthInput(value); if (value !== "") setSegmentLengthFeet(Number(value)); }} onBlur={() => setSegmentLengthInput(String(feet(selectedEdge.length)))} /></label></>}
       </div>}
       <div className="trace-edge-buttons" aria-label="Add outline offset">{edges.map((edge, index) => index === houseEdgeIndex ? null : <button key={edge.id} onFocus={() => setHighlightedSegment(index)} onBlur={() => setHighlightedSegment(null)} onMouseEnter={() => setHighlightedSegment(index)} onMouseLeave={() => setHighlightedSegment(null)} onClick={() => addOffset(index)}>Add offset · {segmentDescription(edge)}</button>)}</div>
       <p><span className="trace-dot round" /> Round corners move freely. <span className="trace-dot square" /> White squares move both ends of a segment together. Measurements appear after selection.</p>
