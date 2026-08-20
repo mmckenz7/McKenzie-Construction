@@ -2,6 +2,8 @@ import "server-only";
 
 import twilio from "twilio";
 
+export { normalizedPhone } from "@/lib/communications/phone";
+
 function requestParameters(form: FormData) {
   const parameters: Record<string, string | string[]> = {};
   for (const [key, rawValue] of form.entries()) {
@@ -24,9 +26,4 @@ export function validateTwilioWebhook(request: Request, form: FormData) {
     ? new URL(`${requested.pathname}${requested.search}`, configuredBase).toString()
     : requested.toString();
   return twilio.validateRequest(authToken, signature, validationUrl, requestParameters(form));
-}
-
-export function normalizedPhone(value: string) {
-  const digits = value.replace(/\D/g, "");
-  return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
 }

@@ -14,6 +14,7 @@ type CommunicationsPageProps = {
 
 type InboxThread = {
   id: string;
+  provider: string;
   subject: string | null;
   department: string;
   status: string;
@@ -27,6 +28,7 @@ type InboxThread = {
 
 type Message = {
   id: string;
+  channel: string;
   thread_id: string | null;
   direction: string;
   sender: string;
@@ -79,7 +81,7 @@ export default async function CommunicationsPage({
   const supabase = createAdminServerClient();
   let threadQuery = supabase
     .from("communication_threads")
-    .select("id,subject,department,status,lead_id,customer_id,assigned_to_id,participant_addresses,unread_count,last_message_at")
+    .select("id,provider,subject,department,status,lead_id,customer_id,assigned_to_id,participant_addresses,unread_count,last_message_at")
     .or("lead_id.not.is.null,customer_id.not.is.null")
     .order("unread_count", { ascending: false })
     .order("last_message_at", { ascending: false })
@@ -98,7 +100,7 @@ export default async function CommunicationsPage({
     threadQuery,
     supabase
       .from("communication_messages")
-      .select("id,thread_id,direction,sender,recipient,subject,body,status,department,lead_id,is_read,has_attachments,received_at,sent_at,created_at")
+      .select("id,channel,thread_id,direction,sender,recipient,subject,body,status,department,lead_id,is_read,has_attachments,received_at,sent_at,created_at")
       .order("created_at", { ascending: false })
       .limit(150),
     supabase
@@ -140,6 +142,7 @@ export default async function CommunicationsPage({
   );
   const pendingMessages: Message[] = (outboxResult.data ?? []).map((message) => ({
     id: message.id,
+    channel: message.channel,
     thread_id: null,
     direction: "outbound",
     sender: message.sender,
@@ -200,59 +203,59 @@ export default async function CommunicationsPage({
   const teamMembers = (teamResult.data ?? []).map((member) => ({ id: String(member.id), name: String(member.name) }));
   const teamById = new Map(teamMembers.map((member) => [member.id, member.name]));
 
-  return <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+  return <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6"><div className="mx-auto max-w-7xl">
     <div className="flex flex-wrap items-end justify-between gap-5">
-      <div><p className="text-xs font-bold uppercase tracking-[.18em] text-blue-400">Mission Control</p><h1 className="mt-2 text-3xl font-bold">Customer Inbox</h1><p className="mt-2 max-w-2xl text-sm text-slate-400">Customer email conversations matched to leads and routed by department.</p></div>
-      <Link href="/admin/settings/communications" className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-bold text-slate-200">Integration settings</Link>
+      <div><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-slate-500">Mission Control</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Customer inbox</h1><p className="mt-2 max-w-2xl text-sm text-slate-600">Email and text conversations connected to the right lead or customer.</p></div>
+      <Link href="/admin/settings/communications" className="min-h-10 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400">Integration settings</Link>
     </div>
 
     <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <article className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Unread replies</p><p className="mt-2 text-3xl font-bold text-white">{unread}</p></article>
-      <article className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Open conversations</p><p className="mt-2 text-3xl font-bold text-white">{openConversations}</p></article>
-      <article className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Matched records</p><p className="mt-2 text-3xl font-bold text-white">{matchedRecords}</p></article>
-      <article className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Needs attention</p><p className="mt-2 text-3xl font-bold text-white">{needsAttention}</p></article>
+      {[['Unread', unread], ['Open', openConversations], ['Matched', matchedRecords], ['Needs attention', needsAttention]].map(([label, value]) => <article key={String(label)} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{value}</p></article>)}
     </section>
 
-    <section className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-      <div><p className="text-sm font-bold text-slate-200">{mailbox?.address ?? "Microsoft 365 mailbox not configured"}</p><p className="mt-1 text-xs text-slate-500">{mailbox?.last_sync_at ? `Last synchronized ${timestamp(mailbox.last_sync_at)}` : "Synchronization has not run yet"} · {titleCase(mailbox?.last_sync_status ?? "not configured")}</p></div>
-      <div className="flex flex-wrap gap-2">{views.map(([value, label]) => <Link key={value} href={value === "all" ? "/sales/communications" : `/sales/communications?view=${value}`} className={`rounded-full px-3 py-1.5 text-xs font-bold ${view === value ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"}`}>{label}</Link>)}</div>
+    <section className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div><p className="text-sm font-semibold text-slate-900">{mailbox?.address ?? "Microsoft 365 mailbox not configured"}</p><p className="mt-1 text-xs text-slate-500">{mailbox?.last_sync_at ? `Last synchronized ${timestamp(mailbox.last_sync_at)}` : "Synchronization has not run yet"} · {titleCase(mailbox?.last_sync_status ?? "not configured")}</p></div>
+      <div className="flex flex-wrap gap-1">{views.map(([value, label]) => <Link key={value} href={value === "all" ? "/sales/communications" : `/sales/communications?view=${value}`} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${view === value ? "bg-slate-950 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>{label}</Link>)}</div>
     </section>
 
-    <section className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+    <details className="mt-5 rounded-xl border border-slate-200 bg-white shadow-sm">
+      <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-slate-800">Integration health <span className="ml-2 font-normal text-slate-500">Email, text, and scheduled processing</span></summary>
+      <section className="border-t border-slate-200 p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><p className="text-xs font-bold uppercase tracking-wider text-blue-400">Automation health</p><h2 className="mt-1 text-lg font-bold text-white">Email workflow</h2></div>
-        <p className="max-w-xl text-right text-xs leading-5 text-slate-500">Live refresh runs while this inbox is open. The Vercel Hobby fallback runs daily; five-minute unattended processing requires Vercel Pro or an external scheduler.</p>
+        <div><p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Automation health</p><h2 className="mt-1 text-lg font-semibold text-slate-950">Delivery workflow</h2></div>
+        <p className="max-w-xl text-right text-xs leading-5 text-slate-500">Live refresh runs while this inbox is open. Scheduled processing handles unattended delivery and inbox updates.</p>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"><p className="text-xs font-bold uppercase text-slate-500">Microsoft inbox</p><p className={`mt-2 text-sm font-bold ${inboxHealth.tone}`}>{inboxHealth.label}</p><p className="mt-1 text-xs text-slate-500">{lastSyncAgeMinutes === null ? "No completed synchronization" : `${lastSyncAgeMinutes} minutes since update`}</p></article>
-        <article className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"><p className="text-xs font-bold uppercase text-slate-500">Delivery queue</p><p className={`mt-2 text-sm font-bold ${failedDeliveries ? "text-rose-300" : "text-emerald-300"}`}>{failedDeliveries ? `${failedDeliveries} need attention` : "Ready"}</p><p className="mt-1 text-xs text-slate-500">{queuedDeliveries} waiting to process</p></article>
-        <article className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"><p className="text-xs font-bold uppercase text-slate-500">Resend events</p><p className={`mt-2 text-sm font-bold ${resendWebhookReady ? "text-emerald-300" : "text-amber-300"}`}>{resendWebhookReady ? "Signing secret ready" : "Signing secret missing"}</p><p className="mt-1 text-xs text-slate-500">Tracks delivery, bounce, and complaint events</p></article>
-        <article className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"><p className="text-xs font-bold uppercase text-slate-500">Daily fallback</p><p className={`mt-2 text-sm font-bold ${schedulerSecretReady ? "text-emerald-300" : "text-amber-300"}`}>{schedulerSecretReady ? "Scheduler secret ready" : "Scheduler secret missing"}</p><p className="mt-1 text-xs text-slate-500">Hobby-compatible safety run</p></article>
+        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-semibold uppercase text-slate-500">Microsoft inbox</p><p className={`mt-2 text-sm font-semibold ${inboxHealth.tone.replace('-300', '-700')}`}>{inboxHealth.label}</p><p className="mt-1 text-xs text-slate-500">{lastSyncAgeMinutes === null ? "No completed synchronization" : `${lastSyncAgeMinutes} minutes since update`}</p></article>
+        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-semibold uppercase text-slate-500">Delivery queue</p><p className={`mt-2 text-sm font-semibold ${failedDeliveries ? "text-rose-700" : "text-emerald-700"}`}>{failedDeliveries ? `${failedDeliveries} need attention` : "Ready"}</p><p className="mt-1 text-xs text-slate-500">{queuedDeliveries} waiting to process</p></article>
+        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-semibold uppercase text-slate-500">Resend events</p><p className={`mt-2 text-sm font-semibold ${resendWebhookReady ? "text-emerald-700" : "text-amber-700"}`}>{resendWebhookReady ? "Signing secret ready" : "Signing secret missing"}</p><p className="mt-1 text-xs text-slate-500">Delivery, bounce, and complaint events</p></article>
+        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-semibold uppercase text-slate-500">Scheduler</p><p className={`mt-2 text-sm font-semibold ${schedulerSecretReady ? "text-emerald-700" : "text-amber-700"}`}>{schedulerSecretReady ? "Ready" : "Secret missing"}</p><p className="mt-1 text-xs text-slate-500">Unattended processing</p></article>
       </div>
-      <div className="mt-4 border-t border-slate-800 pt-4"><CommunicationAutomationControls enabled /></div>
-    </section>
+      <div className="mt-4 border-t border-slate-200 pt-4"><CommunicationAutomationControls enabled /></div>
+      </section>
+    </details>
 
-    <section className="mt-5 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
-      <div className="border-b border-slate-800 px-5 py-4"><h2 className="font-bold text-white">Conversations</h2></div>
-      {threads.length === 0 ? <div className="p-10 text-center"><p className="font-bold text-slate-200">No matched conversations in this view</p><p className="mt-2 text-sm text-slate-500">Replies appear here after Mission Control matches them to a lead or customer.</p></div> : <div className="divide-y divide-slate-800">
+    <section className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 px-5 py-4"><h2 className="font-semibold text-slate-950">Conversations</h2></div>
+      {threads.length === 0 ? <div className="p-10 text-center"><p className="font-semibold text-slate-900">No matched conversations in this view</p><p className="mt-2 text-sm text-slate-500">Replies appear here after Mission Control matches them to a lead or customer.</p></div> : <div className="divide-y divide-slate-200">
         {threads.map((thread) => {
           const latest = latestByThread.get(thread.id);
           const lead = thread.lead_id ? leads.get(thread.lead_id) : null;
           const customer = thread.customer_id ? customers.get(thread.customer_id) : null;
           const phone = lead?.phone ?? customer?.phone ?? null;
           const matchedName = lead?.name ?? customer?.customer_name ?? latest?.sender ?? thread.participant_addresses[0] ?? "Matched customer";
-          return <article key={thread.id} className="grid gap-3 px-5 py-5 transition hover:bg-slate-900/70 lg:grid-cols-[170px_1fr_280px]">
-            <div><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-bold uppercase tracking-wider text-blue-400">{thread.department}</span>{thread.unread_count ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">{thread.unread_count} new</span> : null}<span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-400">{thread.status}</span></div><p className="mt-2 text-xs text-slate-500">{timestamp(thread.last_message_at)}</p>{thread.assigned_to_id ? <p className="mt-1 text-xs text-slate-500">{teamById.get(thread.assigned_to_id) ?? "Assigned"}</p> : null}</div>
-            <div className="min-w-0"><Link href={`/sales/communications/${thread.id}`} className="truncate font-bold text-slate-100 hover:text-blue-300">{thread.subject || "(No subject)"}</Link><p className="mt-1 text-sm text-slate-400">{matchedName}</p>{latest ? <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{latest.body}</p> : null}</div>
-            <div className="flex flex-wrap items-start justify-end gap-2">{phone ? <a href={`tel:${phone}`} className="rounded-lg border border-blue-800 bg-blue-950/40 px-3 py-2 text-xs font-bold text-blue-300">Call</a> : null}<Link href={`/sales/communications/${thread.id}#reply`} className="rounded-lg bg-emerald-950/50 px-3 py-2 text-xs font-bold text-emerald-300">Reply</Link><CommunicationThreadControls compact threadId={thread.id} status={thread.status} unreadCount={thread.unread_count} assignedToId={thread.assigned_to_id} teamMembers={teamMembers} /></div>
+          return <article key={thread.id} className="grid gap-3 px-5 py-5 transition hover:bg-slate-50 lg:grid-cols-[170px_1fr_280px]">
+            <div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">{thread.provider === "twilio" ? "Text" : "Email"}</span><span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{thread.department}</span>{thread.unread_count ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">{thread.unread_count} new</span> : null}</div><p className="mt-2 text-xs text-slate-500">{timestamp(thread.last_message_at)}</p>{thread.assigned_to_id ? <p className="mt-1 text-xs text-slate-500">{teamById.get(thread.assigned_to_id) ?? "Assigned"}</p> : null}</div>
+            <div className="min-w-0"><Link href={`/sales/communications/${thread.id}`} className="truncate font-semibold text-slate-950 hover:text-blue-700">{thread.subject || "Customer conversation"}</Link><p className="mt-1 text-sm text-slate-600">{matchedName}</p>{latest ? <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{latest.body}</p> : null}</div>
+            <div className="flex flex-wrap items-start justify-end gap-2">{phone ? <a href={`tel:${phone}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Device call</a> : null}<Link href={`/sales/communications/${thread.id}#reply`} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white">Reply</Link><CommunicationThreadControls compact threadId={thread.id} status={thread.status} unreadCount={thread.unread_count} assignedToId={thread.assigned_to_id} teamMembers={teamMembers} /></div>
           </article>;
         })}
       </div>}
     </section>
 
-    <section className="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/40">
-      <div className="border-b border-slate-800 px-5 py-4"><h2 className="font-bold text-white">Delivery activity</h2></div>
-      <div className="divide-y divide-slate-800">{messages.slice(0, 12).map((message) => <article key={message.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[110px_1fr_auto]"><div><span className="text-xs font-bold uppercase text-slate-500">{message.direction}</span><p className="mt-1 text-xs text-slate-600">{timestamp(messageTime(message))}</p></div><div><p className="text-sm font-bold text-slate-300">{message.subject || "(No subject)"}</p><p className="mt-1 line-clamp-1 text-xs text-slate-500">{message.direction === "inbound" ? message.sender : message.recipient}</p></div><span className="text-xs font-bold uppercase text-slate-500">{message.status}</span></article>)}</div>
-    </section>
-  </main>;
+    <details className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <summary className="cursor-pointer list-none border-b border-slate-200 px-5 py-4 font-semibold text-slate-950">Delivery activity</summary>
+      <div className="divide-y divide-slate-200">{messages.slice(0, 12).map((message) => <article key={message.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[110px_1fr_auto]"><div><span className="text-xs font-semibold uppercase text-slate-500">{message.channel} · {message.direction}</span><p className="mt-1 text-xs text-slate-500">{timestamp(messageTime(message))}</p></div><div><p className="text-sm font-semibold text-slate-800">{message.subject || (message.channel === "sms" ? "Text message" : "No subject")}</p><p className="mt-1 line-clamp-1 text-xs text-slate-500">{message.direction === "inbound" ? message.sender : message.recipient}</p></div><span className="text-xs font-semibold uppercase text-slate-500">{message.status}</span></article>)}</div>
+    </details>
+  </div></main>;
 }

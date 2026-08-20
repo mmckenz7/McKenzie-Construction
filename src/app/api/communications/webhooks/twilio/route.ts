@@ -1,5 +1,6 @@
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
-import { normalizedPhone, validateTwilioWebhook } from "@/lib/communications/twilio-webhook";
+import { e164UsPhone, normalizedPhone } from "@/lib/communications/phone";
+import { validateTwilioWebhook } from "@/lib/communications/twilio-webhook";
 
 export const runtime = "nodejs";
 
@@ -9,12 +10,38 @@ function xml(status = 200) {
   return new Response(TWIML, { status, headers: { "Content-Type": "text/xml; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
-async function findLeadId(from: string) {
+async function findContact(from: string) {
   const supabase = createAdminServerClient();
   const result = await supabase.from("leads").select("id, phone").not("phone", "is", null).limit(1000);
-  if (result.error) return null;
+  if (result.error) return { leadId: null, customerId: null };
   const wanted = normalizedPhone(from);
-  return (result.data ?? []).find((lead) => normalizedPhone(String(lead.phone ?? "")) === wanted)?.id ?? null;
+  const leadId = (result.data ?? []).find((lead) => normalizedPhone(String(lead.phone ?? "")) === wanted)?.id ?? null;
+  if (leadId) return { leadId, customerId: null };
+  const customerResult = await supabase.from("customers")
+    .select("id,source_lead_id,phone").not("phone", "is", null).limit(1000);
+  const customer = (customerResult.data ?? []).find((candidate) => normalizedPhone(String(candidate.phone ?? "")) === wanted);
+  return { leadId: customer?.source_lead_id ?? null, customerId: customer?.id ?? null };
+}
+
+async function textThread(from: string, to: string, leadId: string | null, customerId: string | null, receivedAt: string) {
+  const supabase = createAdminServerClient();
+  const customerPhone = e164UsPhone(from) ?? from;
+  const companyPhone = e164UsPhone(to) ?? to;
+  const providerThreadId = `sms:${customerPhone}`;
+  const result = await supabase.from("communication_threads").upsert({
+    provider: "twilio",
+    provider_thread_id: providerThreadId,
+    subject: "Text conversation",
+    department: "sales",
+    status: "open",
+    lead_id: leadId,
+    customer_id: customerId,
+    participant_addresses: [companyPhone, customerPhone],
+    unread_count: 1,
+    last_message_at: receivedAt,
+    metadata: { channel: "sms" },
+  }, { onConflict: "provider,provider_thread_id" }).select("id").single();
+  return result.data?.id ?? null;
 }
 
 export async function POST(request: Request) {
@@ -33,13 +60,16 @@ export async function POST(request: Request) {
     if (!from || !to) return xml(400);
     const optOutValue = String(form.get("OptOutType") ?? "").toUpperCase();
     const optOutType = optOutValue === "STOP" || optOutValue === "START" || optOutValue === "HELP" ? optOutValue : null;
-    const leadId = await findLeadId(from);
+    const { leadId, customerId } = await findContact(from);
     const receivedAt = new Date().toISOString();
+    const threadId = await textThread(from, to, leadId, customerId, receivedAt);
+    if (!threadId) return xml(500);
     const message = await supabase.from("communication_messages").upsert({
       channel: "sms", direction: "inbound", sender: from, recipient: to,
       body, status: "received", provider: "twilio", provider_message_id: providerMessageId,
-      lead_id: leadId, opt_out_type: optOutType, received_at: receivedAt,
-      metadata: { num_media: String(form.get("NumMedia") ?? "0") },
+      lead_id: leadId, thread_id: threadId, department: "sales", is_read: false,
+      opt_out_type: optOutType, received_at: receivedAt,
+      metadata: { num_media: String(form.get("NumMedia") ?? "0"), customer_id: customerId },
     }, { onConflict: "provider,provider_message_id,direction", ignoreDuplicates: true }).select("id").maybeSingle();
     if (message.error) return xml(500);
     if (!message.data) return xml();
@@ -64,6 +94,11 @@ export async function POST(request: Request) {
         supabase.from("tasks").update({ status: "canceled", canceled_at: receivedAt, completion_note: "Canceled because the customer replied by text." }).eq("lead_id", leadId).in("task_type", ["first_phone_follow_up", "phone_follow_up"]).in("status", ["open", "in_progress"]),
       ]);
     }
+    await supabase.from("communication_threads").update({
+      status: "open",
+      unread_count: 1,
+      last_message_at: receivedAt,
+    }).eq("id", threadId);
     return xml();
   }
 

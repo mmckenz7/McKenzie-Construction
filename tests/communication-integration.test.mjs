@@ -18,6 +18,7 @@ const replyComposer = readFileSync("src/components/communication-reply-composer.
 const threadPage = readFileSync("src/app/sales/communications/[threadId]/page.tsx", "utf8");
 const leadPage = readFileSync("src/app/sales/leads/[leadId]/page.tsx", "utf8");
 const customerPage = readFileSync("src/app/sales/customers/[customerId]/page.tsx", "utf8");
+const customerCommunicationPanel = readFileSync("src/components/customer-communication-panel.tsx", "utf8");
 const threadControlsRoute = readFileSync("src/app/api/communications/threads/[threadId]/route.ts", "utf8");
 const threadControls = readFileSync("src/components/communication-thread-controls.tsx", "utf8");
 const threadMessages = readFileSync("src/components/communication-thread-messages.tsx", "utf8");
@@ -93,12 +94,14 @@ test("Mission Control replies are server validated, sandboxed, threaded, and aud
   assert.match(provider, /headers: message\.headers/);
 });
 
-test("the shared reply composer is available from inbox, lead, and customer records", () => {
+test("the shared channel-first composer is available from inbox, lead, and customer records", () => {
   assert.match(replyComposer, /\/api\/communications\/replies/);
   assert.match(replyComposer, /Send reply/);
   assert.match(threadPage, /CommunicationReplyComposer/);
-  assert.match(leadPage, /CommunicationReplyComposer/);
-  assert.match(customerPage, /CommunicationReplyComposer/);
+  assert.match(leadPage, /CustomerCommunicationPanel/);
+  assert.match(customerPage, /CustomerCommunicationPanel/);
+  assert.match(customerCommunicationPanel, /CommunicationReplyComposer/);
+  assert.match(customerCommunicationPanel, /TextMessageComposer/);
   assert.match(inbox, /#reply/);
   assert.match(replyComposer, /readOnly=\{Boolean\(threadId\)\}/);
   assert.match(replyRoute, /canonicalSubject = threadResult\.data\.subject/);

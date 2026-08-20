@@ -94,6 +94,16 @@ export async function POST(
   }
 
   try {
+    let estimatingBypass = false;
+    try {
+      const body = await request.json() as Record<string, unknown>;
+      if (Object.keys(body).some((key) => key !== "estimatingBypass") || (body.estimatingBypass !== undefined && typeof body.estimatingBypass !== "boolean")) {
+        return Response.json({ error: "The customer conversion request contains unsupported fields." }, { status: 400 });
+      }
+      estimatingBypass = body.estimatingBypass === true;
+    } catch {
+      // Existing callers without a JSON body retain the standard conversion path.
+    }
     const { leadId: rawLeadId } =
       await context.params;
 
@@ -160,6 +170,10 @@ export async function POST(
 
     const lead =
       leadData as LeadRecord;
+
+    if (estimatingBypass && lead.lead_status !== "estimate_in_progress") {
+      return Response.json({ error: "The estimating bypass is available only while an estimate is in progress." }, { status: 409 });
+    }
 
     const customerName =
       lead.name?.trim() ||
@@ -506,6 +520,8 @@ export async function POST(
                 lead.responsible_person_id &&
                   !customerOwnerId,
               ),
+            estimating_bypassed_for_crm_test: estimatingBypass,
+            estimating_bypass_reason: estimatingBypass ? "estimating_workflow_under_rebuild" : null,
           },
         }),
     ]);
@@ -544,6 +560,7 @@ export async function POST(
       customerName:
         newCustomer.customer_name,
       customerOwnerId,
+      estimatingBypass,
     });
   } catch (error) {
     console.error(

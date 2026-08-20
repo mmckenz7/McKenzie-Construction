@@ -617,7 +617,7 @@ export default function LeadStageWorkflow({
     }
   }
 
-  async function handleConvertToCustomer() {
+  async function handleConvertToCustomer(estimatingBypass = false) {
     setActiveAction(
       "convert_to_customer",
     );
@@ -630,6 +630,8 @@ export default function LeadStageWorkflow({
         )}/convert-to-customer`,
         {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ estimatingBypass }),
         },
       );
 
@@ -647,7 +649,7 @@ export default function LeadStageWorkflow({
             } was added to the customer list.`,
       );
 
-      router.push("/admin/customers");
+      router.push("/sales/customers");
       router.refresh();
     } catch (error) {
       setErrorMessage(
@@ -1164,6 +1166,13 @@ export default function LeadStageWorkflow({
                 : "Mark Revised Estimate Sent"}
             </button>
           </div>
+          <details className="mt-5 border-t border-sky-200 pt-4">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-600">CRM test while estimating is being rebuilt</summary>
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-sm leading-6 text-slate-600">This skips only the estimate and proposal stages. The customer record, activity history, and project handoff remain real. The activity log will clearly show that estimating was bypassed.</p>
+              <button type="button" onClick={() => void handleConvertToCustomer(true)} disabled={isBusy} className="mt-3 min-h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm hover:border-slate-400 disabled:opacity-40">{activeAction === "convert_to_customer" ? "Creating customer…" : "Bypass estimating and continue CRM test"}</button>
+            </div>
+          </details>
         </section>
       ) : null}
 

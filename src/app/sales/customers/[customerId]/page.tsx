@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CustomerProjectManager } from "@/components/customer-project-manager";
-import { CommunicationReplyComposer } from "@/components/communication-reply-composer";
+import { CustomerCommunicationPanel } from "@/components/customer-communication-panel";
+import { OsCallButton } from "@/components/os-call-button";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const dynamic = "force-dynamic";
@@ -251,7 +252,7 @@ export default async function CustomerDetailPage({
     projectsResult,
     activeTeamResult,
     companySettingsResult,
-    communicationThreadResult,
+    communicationThreadsResult,
   ] = await Promise.all([
     customer.assigned_to
       ? supabase
@@ -379,17 +380,19 @@ export default async function CustomerDetailPage({
 
     supabase
       .from("communication_threads")
-      .select("id,subject")
+      .select("id,subject,provider")
       .eq("customer_id", customerId)
       .neq("status", "archived")
       .order("last_message_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(20),
   ]);
 
   const assignedEmployee =
     (assignedEmployeeResult.data ??
       null) as TeamMember | null;
+  const communicationThreads = communicationThreadsResult.data ?? [];
+  const emailThread = communicationThreads.find((thread) => thread.provider !== "twilio") ?? null;
+  const smsThread = communicationThreads.find((thread) => thread.provider === "twilio") ?? null;
 
   const tasks =
     (tasksResult.data ??
@@ -498,6 +501,7 @@ export default async function CustomerDetailPage({
                   "—"
                 )}
               </p>
+              <div className="mt-3"><OsCallButton leadId={customer.source_lead_id} customerId={customer.id} disabled={!customer.phone} /></div>
             </section>
 
             <section className="border-b border-slate-200 p-6 lg:border-b-0 lg:border-r">
@@ -555,20 +559,15 @@ export default async function CustomerDetailPage({
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-widest text-amber-700">Customer Communication</p>
-              <h2 className="mt-1 text-xl font-bold text-slate-950">Email {customer.customer_name}</h2>
-              <p className="mt-2 text-sm text-slate-600">Send a reply from the customer record. It will also appear in the matched Mission Control conversation.</p>
-              <div className="mt-5">
-                <CommunicationReplyComposer
-                  recipient={customer.email}
-                  threadId={communicationThreadResult.data?.id ?? null}
-                  leadId={customer.source_lead_id}
-                  customerId={customer.id}
-                  initialSubject={communicationThreadResult.data?.subject ?? `Regarding your ${customer.project_type?.trim() || "project"}`}
-                />
-              </div>
-            </section>
+            <CustomerCommunicationPanel
+              email={customer.email}
+              phone={customer.phone}
+              leadId={customer.source_lead_id}
+              customerId={customer.id}
+              emailThreadId={emailThread?.id ?? null}
+              smsThreadId={smsThread?.id ?? null}
+              initialSubject={emailThread?.subject ?? `Regarding your ${customer.project_type?.trim() || "project"}`}
+            />
 
             <CustomerProjectManager
               customerId={

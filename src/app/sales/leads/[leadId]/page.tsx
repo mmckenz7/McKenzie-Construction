@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import LeadAssignmentControl from "@/components/lead-assignment-control";
-import { CommunicationReplyComposer } from "@/components/communication-reply-composer";
+import { CustomerCommunicationPanel } from "@/components/customer-communication-panel";
 import LeadNotesForm from "@/components/lead-notes-form";
 import LeadStageWorkflow from "@/components/lead-stage-workflow";
+import { OsCallButton } from "@/components/os-call-button";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const dynamic = "force-dynamic";
@@ -269,7 +270,7 @@ export default async function LeadDetailPage({
     taskResult,
     activityResult,
     settingsResult,
-    communicationThreadResult,
+    communicationThreadsResult,
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -326,12 +327,11 @@ export default async function LeadDetailPage({
 
     supabase
       .from("communication_threads")
-      .select("id,subject")
+      .select("id,subject,provider")
       .eq("lead_id", leadId)
       .neq("status", "archived")
       .order("last_message_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(20),
   ]);
 
   if (leadResult.error || !leadResult.data) {
@@ -339,6 +339,9 @@ export default async function LeadDetailPage({
   }
 
   const lead = leadResult.data as Lead;
+  const communicationThreads = communicationThreadsResult.data ?? [];
+  const emailThread = communicationThreads.find((thread) => thread.provider !== "twilio") ?? null;
+  const smsThread = communicationThreads.find((thread) => thread.provider === "twilio") ?? null;
 
   const tasks =
     (taskResult.data ?? []) as LeadTask[];
@@ -428,6 +431,7 @@ export default async function LeadDetailPage({
                   "—"
                 )}
               </p>
+              <div className="mt-3"><OsCallButton leadId={String(lead.id)} disabled={!lead.phone} /></div>
             </section>
 
             <section className="border-b border-slate-200 p-6 lg:border-b-0 lg:border-r">
@@ -529,19 +533,14 @@ export default async function LeadDetailPage({
               />
             </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-widest text-amber-700">Customer Communication</p>
-              <h2 className="mt-1 text-xl font-bold text-slate-950">Email {displayValue(lead.name)}</h2>
-              <p className="mt-2 text-sm text-slate-600">Send a reply from the lead record. It will also appear in the matched Mission Control conversation.</p>
-              <div className="mt-5">
-                <CommunicationReplyComposer
-                  recipient={lead.email}
-                  threadId={communicationThreadResult.data?.id ?? null}
-                  leadId={String(lead.id)}
-                  initialSubject={communicationThreadResult.data?.subject ?? `Regarding your ${lead.project_type?.trim() || "project"}`}
-                />
-              </div>
-            </section>
+            <CustomerCommunicationPanel
+              email={lead.email}
+              phone={lead.phone}
+              leadId={String(lead.id)}
+              emailThreadId={emailThread?.id ?? null}
+              smsThreadId={smsThread?.id ?? null}
+              initialSubject={emailThread?.subject ?? `Regarding your ${lead.project_type?.trim() || "project"}`}
+            />
 
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="mb-5">
