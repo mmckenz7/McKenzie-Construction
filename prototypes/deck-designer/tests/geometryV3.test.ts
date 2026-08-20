@@ -35,7 +35,12 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(geometry.stairTreads).toEqual(oldGeometry.stairTreads);
     expect(geometry.stairStringers).toEqual(oldGeometry.stairStringers);
     expect(geometry.stairRise).toBe(oldGeometry.stairRise);
-    expect(geometry.landing).toEqual(oldGeometry.landing);
+    if (oldGeometry.landing) {
+      expect(geometry.landing).toMatchObject(oldGeometry.landing);
+      expect(geometry.landing?.position).toBe("top");
+    } else {
+      expect(geometry.landing).toBeNull();
+    }
     expect(geometry.landingRailSegments).toEqual(oldGeometry.landingRailSegments);
     expect(geometry.landingRailPosts).toEqual(oldGeometry.landingRailPosts);
     expect(geometry.landingSupportPosts).toEqual(oldGeometry.landingSupportPosts);
@@ -119,5 +124,26 @@ describe("v3 free-edge geometry equivalence", () => {
       ...design,
       platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, landingEnabled: true, landingDepth: 36, width: 48, landingTurn: "left" } } }],
     })).toThrow(/at least as deep as the stair width/i);
+  });
+
+  it("splits one recorded stair into deterministic upper and lower flights around a midway landing", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, offset: 48, width: 48, landingEnabled: true, landingDepth: 48, landingTurn: "left", landingPosition: "midway", upperFlightRisers: 3 } } }],
+    });
+    const geometry = derivePlatformGeometryV3(design, platform.id);
+    const rise = 48 / 7;
+    expect(geometry.landing).toMatchObject({ position: "midway", y: 48 - rise * 3 });
+    expect(geometry.stairTreads).toHaveLength(7);
+    expect(geometry.stairTreads[1].z - geometry.stairTreads[0].z).toBe(10);
+    expect(geometry.stairTreads[4].x - geometry.stairTreads[3].x).toBe(10);
+    expect(geometry.stairTreads[2].y).toBeCloseTo(geometry.landing!.y);
+    expect(geometry.stairTreads[3].y).toBeCloseTo(geometry.landing!.y - rise);
+    expect(geometry.stairStringers.map((stringer) => stringer.id)).toEqual(["stair-stringer-upper-1", "stair-stringer-upper-2", "stair-stringer-lower-1", "stair-stringer-lower-2"]);
+    expect(geometry.stairRailSegments).toHaveLength(4);
+    expect(geometry.stairRailPosts).toHaveLength(8);
+    expect(geometry.landingSupportPosts.every((post) => post.top < platform.elevation)).toBe(true);
   });
 });

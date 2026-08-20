@@ -28,6 +28,8 @@ export type DeckPlatformV3 = Readonly<{
     stairs: Omit<DeckDesign["construction"]["stairs"], "edgeId"> & Readonly<{
       edgeId: string;
       landingTurn: "straight" | "left" | "right";
+      landingPosition: "top" | "midway";
+      upperFlightRisers: number;
     }>;
   }>;
 }>;
@@ -98,6 +100,8 @@ function migrateNormalizedV2(design: DeckDesign): DeckDesignV3 {
         ...design.construction.stairs,
         edgeId: semanticEdges[design.construction.stairs.edgeId],
         landingTurn: "straight" as const,
+        landingPosition: "top" as const,
+        upperFlightRisers: 3,
       }),
     }),
   });
@@ -175,12 +179,25 @@ function normalizePlatformV3(
   if (!["straight", "left", "right"].includes(landingTurn)) {
     throw new TypeError("V3 stair landingTurn must be straight, left, or right.");
   }
+  const landingPosition = platform.construction.stairs.landingPosition ?? "top";
+  if (!["top", "midway"].includes(landingPosition)) {
+    throw new TypeError("V3 stair landingPosition must be top or midway.");
+  }
+  const totalRisers = Math.ceil((shared.platform.surfaceElevation - shared.siteContext.gradeElevation) / shared.construction.stairs.maxRiserHeight);
+  const defaultUpperFlightRisers = Math.max(1, Math.min(3, totalRisers - 1));
+  const upperFlightRisers = platform.construction.stairs.upperFlightRisers ?? defaultUpperFlightRisers;
+  if (!Number.isInteger(upperFlightRisers) || upperFlightRisers < 1) {
+    throw new RangeError("V3 upperFlightRisers must be a positive whole number.");
+  }
   if (platform.construction.stairs.enabled &&
       shared.construction.stairs.offset + shared.construction.stairs.width > stairEdge.length) {
     throw new RangeError("V3 stairs must fit within their recorded free edge.");
   }
   if (platform.construction.stairs.enabled && shared.construction.stairs.landingEnabled && landingTurn !== "straight" && shared.construction.stairs.landingDepth < shared.construction.stairs.width) {
     throw new RangeError("A turning landing must be at least as deep as the stair width.");
+  }
+  if (platform.construction.stairs.enabled && shared.construction.stairs.landingEnabled && landingPosition === "midway" && (totalRisers < 2 || upperFlightRisers >= totalRisers)) {
+    throw new RangeError(`A midway landing must leave at least one riser in each flight; this stair has ${totalRisers} total risers.`);
   }
   return Object.freeze({
     id: platform.id,
@@ -199,6 +216,8 @@ function normalizePlatformV3(
         enabled: platform.construction.stairs.enabled,
         edgeId: platform.construction.stairs.edgeId,
         landingTurn,
+        landingPosition,
+        upperFlightRisers,
       }),
     }),
   });

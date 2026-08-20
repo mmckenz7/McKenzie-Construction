@@ -237,6 +237,7 @@ button:hover { transform: translateY(-1px); }
 .dimension-input input { padding-right: 30px; }
 .dimension-input > span { position: absolute; right: 9px; top: 11px; color: #849087; font-size: 11px; }
 .toggle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.toggle-grid.two { grid-template-columns: repeat(2, 1fr); }
 .toggle { padding: 8px 5px; border-color: #ccd2cc; background: white; color: #526058; font-size: 11px; text-transform: capitalize; }
 .toggle.active { background: var(--forest); color: white; border-color: var(--forest); }
 .check-row { display: flex; gap: 8px; align-items: center; margin: 16px 0; color: #48564f; font-size: 12px; }

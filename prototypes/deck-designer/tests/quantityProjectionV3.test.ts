@@ -69,4 +69,20 @@ describe("v3 accessory quantity projection", () => {
     expect(byKey["stair-railing-linear-feet"].assemblyIntent).toBe("stair_railing");
     expect(byKey["railing-linear-feet"].assemblyIntent).toBe("railing");
   });
+
+  it("projects two stair flights and one midway landing without changing the total tread count", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, landingEnabled: true, landingPosition: "midway", upperFlightRisers: 3, landingDepth: 48, landingTurn: "left" } } }],
+    });
+    const report = deriveDeckAccessoryProjectionV3(design, platform.id);
+    const byKey = Object.fromEntries(report.quantities.map((line) => [line.key, line]));
+    expect(byKey["stair-tread-count"].amount).toBe(7);
+    expect(byKey["stair-stringer-count"].amount).toBe(4);
+    expect(byKey["stair-railing-post-count"].amount).toBe(8);
+    expect(byKey["stair-landing-area"].explanation).toMatch(/midway landing at 27\.43 in elevation/i);
+    expect(stableDeckAccessoryProjectionV3Json(report)).toBe(stableDeckAccessoryProjectionV3Json(report));
+  });
 });

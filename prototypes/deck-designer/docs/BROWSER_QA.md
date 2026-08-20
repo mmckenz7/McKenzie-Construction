@@ -121,3 +121,11 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Selected the 20-foot upper side, ledger attachment, a six-foot door, and a four-foot offset from the left corner. One command advanced revision 6 to 7 and displayed the recorded wall/door in both 2D and 3D.
 - The plan projected four wall panels, one door opening, and one exact highlighted attachment edge. The 3D wall retained a matching six-foot opening at deck elevation.
 - Focused tests reject doors outside the selected side and reject attempts to silently replace railing or stair references. Photos still provide no automatic measurements.
+## 2026-08-20 midway-landing and two-flight check
+
+- Enabling a landing now offers an explicit At deck or Midway choice. Midway reveals one whole-number Steps before landing field; existing v3 designs default to At deck without changing their geometry or quantities.
+- With a 48-inch deck height and three steps before the landing, the measured plan and live 3D model showed three upper treads, a landing below deck elevation, and four lower treads.
+- Straight, left, and right outgoing flights retain open travel paths. Desktop visual QA confirmed left and right mirror correctly and keep landing protection on the exposed sides rather than across either stair opening.
+- The same midway facts produced seven total treads, four stringer paths, four stair-railing paths, eight stair-rail endpoint posts, and a separate 16-square-foot landing. Returning the same design to At deck restored two stringers and four stair-rail posts while retaining seven treads.
+- Browser interaction produced no application warnings or errors. Existing responsive layout rules and touch-sized controls remain unchanged; the new location choices and exact split input use the same mobile control patterns already verified at 390 × 844.
+- The narrowly revised bundle ceilings are 93 KiB for the initial entry and 230 KiB for total JavaScript gzip; measured output is 92.3 KiB and 229.3 KiB respectively.

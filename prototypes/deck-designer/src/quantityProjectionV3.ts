@@ -137,7 +137,7 @@ export function deriveDeckAccessoryProjectionV3(
           unit: "sq ft" as const,
           assemblyIntent: "stair_landing" as const,
           sourceGeometry: Object.freeze([`${platformId}:${geometry.landing.id}`]),
-          explanation: `${geometry.landing.width} in by ${geometry.landing.depth} in conceptual top landing`,
+          explanation: `${geometry.landing.width} in by ${geometry.landing.depth} in conceptual ${geometry.landing.position} landing at ${round(geometry.landing.y)} in elevation`,
         }),
         Object.freeze({
           key: "landing-support-post-count",
