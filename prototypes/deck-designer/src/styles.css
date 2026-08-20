@@ -165,6 +165,10 @@ button:hover { transform: translateY(-1px); }
 .plan-action-buttons button { min-height: 44px; border-color: #aebbb2; background: white; color: #34473f; font-size: 10px; font-weight: 750; }
 .plan-action-buttons button.primary { border-color: #aabd2f; background: var(--lime); color: #17231e; }
 .plan-action-tray .remove-stairs, .segment-landing-controls > button { min-height: 44px; }
+.automatic-standard-note { display: grid; gap: 3px; padding: 9px; border-left: 3px solid #6f8879; border-radius: 5px; background: #e2eae4; }
+.automatic-standard-note strong { color: #29463a; font-size: 10px; }
+.automatic-standard-note small { color: #5a6a61; font-size: 9px; line-height: 1.4; }
+.segment-action-status { margin: 0; padding: 8px 9px; border-radius: 6px; background: #fff0d2; color: #76501e; font-size: 9px; line-height: 1.4; }
 .designer-stage-nav { display: flex; align-items: center; gap: 8px; padding: 10px clamp(18px, 4vw, 60px); border-bottom: 1px solid var(--line); background: #edf1ec; }
 .designer-stage-nav button { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 7px 13px; border-color: #aebbb2; background: white; color: #42554b; font-size: 11px; font-weight: 800; }
 .designer-stage-nav button span { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 50%; background: #e4e9e4; }
