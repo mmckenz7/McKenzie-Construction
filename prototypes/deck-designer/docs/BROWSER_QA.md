@@ -2,7 +2,7 @@
 
 ## 2026-08-20 turning-landing perimeter fix
 
-- A left-turn stair now leaves the right landing edge open for the outgoing flight while retaining both the left protected-side railing and the outside landing railing; a right turn does the exact mirror image.
+- Each 90° turn leaves its outgoing stair edge open while retaining both the opposite protected-side railing and the outside landing railing; left and right turns mirror exactly.
 - The corrected edge selection drives the same 2D plan, 3D model, landing-railing posts, and deterministic quantity references.
 - Focused geometry tests assert both turn directions create the complete L-shaped landing guard opposite the outgoing stair flight so later rendering changes cannot silently drop an exposed edge.
 

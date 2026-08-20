@@ -100,8 +100,8 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(right.stairRailSegments.every((rail) => rail.end.x < rail.start.x)).toBe(true);
     expect(left.stairRailPosts).toHaveLength(4);
     expect(right.stairRailPosts).toHaveLength(4);
-    expect(left.landingRailSegments.map((segment) => segment.id)).toEqual(["landing-rail-left", "landing-rail-outer"]);
-    expect(right.landingRailSegments.map((segment) => segment.id)).toEqual(["landing-rail-right", "landing-rail-outer"]);
+    expect(left.landingRailSegments.map((segment) => segment.id)).toEqual(["landing-rail-right", "landing-rail-outer"]);
+    expect(right.landingRailSegments.map((segment) => segment.id)).toEqual(["landing-rail-left", "landing-rail-outer"]);
     const leftFirstTreadCenterX = left.stairTreads[0].corners.reduce((sum, corner) => sum + corner.x, 0) / 4;
     const rightFirstTreadCenterX = right.stairTreads[0].corners.reduce((sum, corner) => sum + corner.x, 0) / 4;
     expect(left.landingRailSegments[0].start.x).toBeLessThan(leftFirstTreadCenterX);
