@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-20 flexible landings, levels, cutouts, and visible history
+
+- Added two unfinished midway landings consecutively on one stair system at a 6-foot level; both appeared in the deterministic sequence without requiring the first landing to be finished.
+- Added a second platform at an exact elevation and offset. The active level remained editable while the other level stayed visible and selectable in the measured plan; both rendered together in the 3D context.
+- Added a 3-by-3-foot rectangular cutout to only the selected level. Aggregate platform area changed from 480 to 471 square feet, the cutout became selectable in the plan, and visible Undo restored 480 square feet in one action with Redo available.
+- At 390 × 844, Add level, Add cutout, Undo, Add midway landing, and the selected-side tray were all visible. A clean browser session reported no warnings or errors.
+- Full validation passed 157 tests. The measured bundle is 97.1 KiB initial and 237.2 KiB total gzip under 98/238 KiB ceilings; level/cutout controls and platform commands remain on-demand chunks.
+
 ## 2026-08-20 shared-landing stair mergers
 
 - A locked midway landing now exposes `Connect stair down` and `Connect stair up`. Each connected flight has its own destination, unused landing side, width, tread depth, lock state, and removal action.

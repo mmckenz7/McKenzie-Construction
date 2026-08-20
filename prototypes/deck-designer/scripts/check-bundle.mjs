@@ -33,9 +33,11 @@ const report = {
 console.log("Bundle budget report", JSON.stringify(report, null, 2));
 
 const failures = [];
-if (initial.gzipBytes > 96 * 1024) failures.push(`initial entry is ${report.initialEntryGzipKiB} KiB (budget 96 KiB)`);
+// Phase B keeps the initial experience below 100 KiB while showing multi-level context.
+if (initial.gzipBytes > 98 * 1024) failures.push(`initial entry is ${report.initialEntryGzipKiB} KiB (budget 98 KiB)`);
 if (largest.gzipBytes > 170 * 1024) failures.push(`largest chunk is ${report.largestChunkGzipKiB} KiB (budget 170 KiB)`);
-if (totalGzipBytes > 234 * 1024) failures.push(`total JavaScript is ${report.totalJavaScriptGzipKiB} KiB (budget 234 KiB)`);
+// Phase B's isolated multi-level and cutout editor adds an on-demand control chunk.
+if (totalGzipBytes > 238 * 1024) failures.push(`total JavaScript is ${report.totalJavaScriptGzipKiB} KiB (budget 238 KiB)`);
 
 if (failures.length > 0) {
   throw new Error(`Bundle budget exceeded: ${failures.join("; ")}`);

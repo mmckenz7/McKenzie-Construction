@@ -14,6 +14,7 @@ import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment, resizePolygonE
 import { createDesignFromConfirmedPhotoFacts, type ConfirmedPhotoFacts, type PhotoIntakeReview } from "./photoIntake";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
+import { V3NumberField } from "./V3NumberField";
 
 const ThreeViewV3 = lazy(async () => ({ default: (await import("./ThreeViewV3")).ThreeViewV3 }));
 const PhotoIntake = lazy(async () => ({ default: (await import("./PhotoIntakeDialog")).PhotoIntake }));
@@ -21,6 +22,7 @@ const HouseConnectionEditor = lazy(async () => ({ default: (await import("./Hous
 const RailingStageControls = lazy(async () => ({ default: (await import("./RailingStageControls")).RailingStageControls }));
 const RailingMobileActions = lazy(async () => ({ default: (await import("./RailingStageControls")).RailingMobileActions }));
 const LandingConnectionsEditor = lazy(async () => ({ default: (await import("./LandingConnectionsEditor")).LandingConnectionsEditor }));
+const LevelCutoutControls = lazy(async () => ({ default: (await import("./LevelCutoutControls")).LevelCutoutControls }));
 type Point = Readonly<{ x: number; z: number }>;
 
 function revisePlatform(design: DeckDesignV3, platform: DeckPlatformV3): DeckDesignV3 {
@@ -34,6 +36,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
   const design = preview ?? history.present;
   const platform = design.platforms.find((item) => item.id === selectedPlatformId) ?? design.platforms[0];
   const geometry = useMemo(() => derivePlatformGeometryV3(design, platform.id), [design, platform.id]);
+  const contextPlatforms = useMemo(() => design.platforms.filter((item) => item.id !== platform.id).map((item) => ({ platform: item, geometry: derivePlatformGeometryV3(design, item.id) })), [design, platform.id]);
   const houseGeometry = useMemo(() => deriveHouseContextGeometry(design.siteContext), [design.siteContext]);
   const projection = useMemo(() => deriveDeckDesignProjectionV3(design), [design]);
   const [message, setMessage] = useState(initialMessage);
@@ -41,6 +44,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [selectedStairSystemId, setSelectedStairSystemId] = useState<string | null>(null);
   const [selectedLandingId, setSelectedLandingId] = useState<string | null>(null);
+  const [selectedHoleIndex, setSelectedHoleIndex] = useState<number | null>(null);
   const [landingPositionMode, setLandingPositionMode] = useState<"height" | "distance" | "below" | "above">("below");
   const [workflowStage, setWorkflowStage] = useState<"layout" | "railings">("layout");
   const [showFraming, setShowFraming] = useState(true);
@@ -57,10 +61,12 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
   const activeActualRise = activeTotalRisers ? (platform.elevation - design.siteContext.gradeElevation) / activeTotalRisers : 0;
   const hasEdgeReferences = platform.edgeConditions.some((condition) => condition.condition === "house_attachment") || platform.construction.railing.enabledEdgeIds.length > 0 || platform.construction.stairSystems.length > 0;
   const visibleGeometry = useMemo(() => workflowStage === "layout" ? { ...geometry, railSegments: [], railPosts: [] } : geometry, [geometry, workflowStage]);
+  const visibleContextPlatforms = useMemo(() => contextPlatforms.map((item) => ({ platform: item.platform, geometry: workflowStage === "layout" ? { ...item.geometry, railSegments: [], railPosts: [] } : item.geometry })), [contextPlatforms, workflowStage]);
   const apply = (next: DeckDesignV3, nextMessage: string) => { setPreview(null); dispatch({ type: "apply", design: next }); setMessage(nextMessage); };
-  const replaceRegion = (outer: readonly Point[], commit: boolean): boolean => {
+  const changeHistory = (type: "undo" | "redo") => { setPreview(null); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); dispatch({ type }); setMessage(type === "undo" ? "Last change undone." : "Change restored."); };
+  const replaceRegion = (outer: readonly Point[], commit: boolean, holes = platform.region.holes): boolean => {
     try {
-      const result = applyPolygonRegionReplacement(history.present, platform.id, { outer, holes: platform.region.holes });
+      const result = applyPolygonRegionReplacement(history.present, platform.id, { outer, holes });
       if (commit) apply(result.design, result.notices.join(" ")); else setPreview(result.design);
       return true;
     } catch (error) {
@@ -113,6 +119,53 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     apply(revisePlatform(history.present, { ...current, ...update }), nextMessage);
   };
   const updateConstruction = (construction: DeckPlatformV3["construction"], nextMessage: string) => updatePlatform({ construction }, nextMessage);
+  const platformBounds = platform.region.outer.reduce((bounds, point) => ({ minX: Math.min(bounds.minX, point.x), maxX: Math.max(bounds.maxX, point.x), minZ: Math.min(bounds.minZ, point.z), maxZ: Math.max(bounds.maxZ, point.z) }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+  const nextPlatformId = () => { let index = 2; const ids = new Set(design.platforms.map((item) => item.id)); while (ids.has(`platform-${index}`)) index += 1; return `platform-${index}`; };
+  const addLevel = async () => {
+    try {
+      const { addPlatformLevelV3 } = await import("./platformCommandsV3");
+      const id = nextPlatformId();
+      const result = addPlatformLevelV3(history.present, platform.id, id, Math.min(144, platform.elevation + 24), { x: platformBounds.maxX - platformBounds.minX + 24, z: 0 });
+      apply(result.design, `${id.replaceAll("-", " ")} added. Position and height are editable.`);
+      setSelectedPlatformId(id); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Level could not be added."); }
+  };
+  const removeLevel = async () => {
+    try {
+      const { removePlatformV3 } = await import("./platformCommandsV3");
+      const result = removePlatformV3(history.present, platform.id);
+      apply(result.design, result.notices.join(" "));
+      setSelectedPlatformId(result.design.platforms[0].id); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Level could not be removed."); }
+  };
+  const movePlatformOrigin = (axis: "x" | "z", valueFeet: number) => {
+    const target = valueFeet * 12;
+    const delta = target - (axis === "x" ? platformBounds.minX : platformBounds.minZ);
+    const translate = (point: Point): Point => Object.freeze({ x: point.x + (axis === "x" ? delta : 0), z: point.z + (axis === "z" ? delta : 0) });
+    const outer = platform.region.outer.map(translate);
+    const holes = platform.region.holes.map((hole) => hole.map(translate));
+    if (replaceRegion(outer, true, holes)) setMessage(`Level position updated ${axis === "x" ? "left/right" : "away from house"}.`);
+  };
+  const rectangleHole = (centerX: number, centerZ: number, width: number, depth: number): readonly Point[] => Object.freeze([{ x: centerX - width / 2, z: centerZ - depth / 2 }, { x: centerX + width / 2, z: centerZ - depth / 2 }, { x: centerX + width / 2, z: centerZ + depth / 2 }, { x: centerX - width / 2, z: centerZ + depth / 2 }].map((point) => Object.freeze(point)));
+  const addCutout = () => {
+    try {
+      const width = Math.min(36, platformBounds.maxX - platformBounds.minX - 24), depth = Math.min(36, platformBounds.maxZ - platformBounds.minZ - 24);
+      if (width < 12 || depth < 12) throw new RangeError("This level is too small for a safe rectangular cutout.");
+      const hole = rectangleHole((platformBounds.minX + platformBounds.maxX) / 2, (platformBounds.minZ + platformBounds.maxZ) / 2, width, depth);
+      const holes = [...platform.region.holes, hole];
+      if (replaceRegion(platform.region.outer, true, holes)) { setSelectedHoleIndex(holes.length - 1); setMessage("Cutout added. Set its exact center and size in feet."); }
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Cutout rejected."); }
+  };
+  const updateCutout = (index: number, update: Partial<{ centerX: number; centerZ: number; width: number; depth: number }>) => {
+    const current = platform.region.holes[index]; if (!current) return;
+    const bounds = current.reduce((result, point) => ({ minX: Math.min(result.minX, point.x), maxX: Math.max(result.maxX, point.x), minZ: Math.min(result.minZ, point.z), maxZ: Math.max(result.maxZ, point.z) }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+    const next = rectangleHole(update.centerX ?? (bounds.minX + bounds.maxX) / 2, update.centerZ ?? (bounds.minZ + bounds.maxZ) / 2, update.width ?? bounds.maxX - bounds.minX, update.depth ?? bounds.maxZ - bounds.minZ);
+    const holes = platform.region.holes.map((hole, holeIndex) => holeIndex === index ? next : hole);
+    if (replaceRegion(platform.region.outer, true, holes)) setMessage("Cutout updated exactly.");
+  };
+  const removeCutout = (index: number) => {
+    if (replaceRegion(platform.region.outer, true, platform.region.holes.filter((_, holeIndex) => holeIndex !== index))) { setSelectedHoleIndex(null); setMessage("Cutout removed."); }
+  };
   const unlockOutline = () => {
     const current = history.present.platforms.find((item) => item.id === platform.id)!;
     const unlocked: DeckPlatformV3 = {
@@ -135,8 +188,8 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     addCorner(edgeIndex, { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 });
   };
   const applyRailing = (railing: DeckPlatformV3["construction"]["railing"], nextMessage: string) => updateConstruction({ ...platform.construction, railing }, nextMessage);
-  const enterRailingStage = () => { setPreview(null); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setWorkflowStage("railings"); setMessage("Layout locked. Tap railing sides."); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const returnToLayoutStage = () => { setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setWorkflowStage("layout"); setMessage("Layout reopened; attachments stay protected."); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const enterRailingStage = () => { setPreview(null); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setWorkflowStage("railings"); setMessage("Layout locked. Tap railing sides."); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const returnToLayoutStage = () => { setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setWorkflowStage("layout"); setMessage("Layout reopened; attachments stay protected."); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const replaceStairSystems = (systems: readonly StairSystemV3[], nextMessage: string, previewOnly = false) => {
     try {
       const current = history.present.platforms.find((item) => item.id === platform.id)!;
@@ -170,8 +223,6 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
   const addLanding = (kind: "top" | "midway") => {
     if (!activeStairSystem || activeStairSystem.locked) { setMessage("Open stairs before adding a landing."); return; }
     const totalRisers = Math.ceil((platform.elevation - design.siteContext.gradeElevation) / activeStairSystem.maxRiserHeight);
-    const unfinishedLanding = activeStairSystem.landings.find((landing) => !landing.locked);
-    if (unfinishedLanding) { setSelectedLandingId(unfinishedLanding.id); setMessage("Finish or lock the open landing before adding another."); return; }
     const existingTopLanding = activeStairSystem.landings.find((landing) => landing.afterRiser === 0);
     if (kind === "top" && existingTopLanding) { setSelectedLandingId(existingTopLanding.id); setMessage("This stair system already has a top landing."); return; }
     const midwayLandings = activeStairSystem.landings.filter((landing) => landing.afterRiser > 0);
@@ -235,7 +286,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
   const applyTemplate = (kind: "rectangle" | "l-shape") => {
     const legacy = updateDesign(DEFAULT_DESIGN, kind === "rectangle" ? { kind } : { kind, cutoutWidth: 48, cutoutDepth: 48 });
     const next = migrateDeckDesignToV3({ ...legacy, id: design.id, name: design.name, metadata: { ...legacy.metadata, revision: design.metadata.revision + 1 } });
-    apply(next, `${kind === "rectangle" ? "Rectangle" : "L-shape"} template applied in v3.`); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setWorkflowStage("layout");
+    apply(next, `${kind === "rectangle" ? "Rectangle" : "L-shape"} template applied in v3.`); setSelectedPlatformId(next.platforms[0].id); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setWorkflowStage("layout");
   };
   const photoBounds = platform.region.outer.reduce((bounds, point) => ({
     minX: Math.min(bounds.minX, point.x), maxX: Math.max(bounds.maxX, point.x),
@@ -258,6 +309,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     setSelectedEdgeId(null);
     setSelectedStairSystemId(null);
     setSelectedLandingId(null);
+    setSelectedHoleIndex(null);
     setWorkflowStage("layout");
     setPhotoStartSummary(Object.freeze({ photoCount, review }));
     setPhotoIntakeOpen(false);
@@ -268,7 +320,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
 
   return <main>
     {photoIntakeOpen && <Suspense fallback={<div className="photo-intake-backdrop"><div className="photo-intake-loading" role="status">Preparing local photo review…</div></div>}><PhotoIntake initialFacts={initialPhotoFacts} fallbackSurfaceElevation={platform.elevation} gradeElevation={design.siteContext.gradeElevation} onCancel={() => setPhotoIntakeOpen(false)} onStartDesign={startFromPhotos} /></Suspense>}
-    <header className="topbar"><div className="brand-mark">M</div><div><p className="eyebrow">McKenzie Construction · isolated R&amp;D</p><h1>Deck Designer</h1></div><div className="header-actions"><button className="quiet" onClick={() => setPhotoIntakeOpen(true)}>Start with photos</button><button className="quiet" onClick={() => { saveDeckDesignV3(localStorage, design); setMessage(`Saved v3 locally at revision ${design.metadata.revision}.`); }}>Save locally</button><button className="quiet" onClick={download}>Download JSON</button><button className="primary" onClick={() => fileInput.current?.click()}>Load JSON</button><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const next = migrateDeckDesignToV3(JSON.parse(await file.text())); dispatch({ type: "reset", design: next }); setSelectedPlatformId(next.platforms[0].id); setWorkflowStage("layout"); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setMessage(`Loaded v3 design “${next.name}”.`); } catch (error) { setMessage(error instanceof Error ? `Load rejected: ${error.message}` : "Load rejected."); } event.target.value = ""; }} /></div></header>
+    <header className="topbar"><div className="brand-mark">M</div><div><p className="eyebrow">McKenzie Construction · isolated R&amp;D</p><h1>Deck Designer</h1></div><div className="header-actions"><button className="quiet" onClick={() => setPhotoIntakeOpen(true)}>Start with photos</button><button className="quiet" onClick={() => { saveDeckDesignV3(localStorage, design); setMessage(`Saved v3 locally at revision ${design.metadata.revision}.`); }}>Save locally</button><button className="quiet" onClick={download}>Download JSON</button><button className="primary" onClick={() => fileInput.current?.click()}>Load JSON</button><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const next = migrateDeckDesignToV3(JSON.parse(await file.text())); dispatch({ type: "reset", design: next }); setSelectedPlatformId(next.platforms[0].id); setWorkflowStage("layout"); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setMessage(`Loaded v3 design “${next.name}”.`); } catch (error) { setMessage(error instanceof Error ? `Load rejected: ${error.message}` : "Load rejected."); } event.target.value = ""; }} /></div></header>
     <section className="warning"><strong>Conceptual — not for construction.</strong> Field and qualified review required.</section>
     <nav className="designer-stage-nav" aria-label="Deck design stages"><button className={workflowStage === "layout" ? "active" : "complete"} onClick={returnToLayoutStage}><span>1</span> Deck layout</button><button className={workflowStage === "railings" ? "active" : ""} onClick={workflowStage === "layout" ? enterRailingStage : undefined}><span>2</span> Railings</button><span className="stage-coming-soon">Materials come next</span></nav>
     {workflowStage === "layout" ? <nav className="mobile-workspace-nav" aria-label="Mobile designer sections"><a href="#design-views">Plan &amp; 3D</a><a href="#design-controls">Setup</a><a href="#house-connection">House</a></nav> : <nav className="mobile-workspace-nav railing-mobile-nav" aria-label="Mobile railing sections"><a href="#design-views">Railing plan</a><a href="#railing-controls">Railing controls</a></nav>}
@@ -278,18 +330,18 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
       {photoStartSummary && <section className={`photo-start-summary${photoStartSummary.review.outlineWarning ? " needs-outline" : ""}`}><strong>Photo-assisted start</strong><p>{photoStartSummary.photoCount} photo{photoStartSummary.photoCount === 1 ? "" : "s"} reviewed. Confirmed facts made the geometry.</p>{photoStartSummary.review.outlineWarning && <p className="outline-warning">{photoStartSummary.review.outlineWarning}</p>}<small>{photoStartSummary.review.fieldVerification.length} field note{photoStartSummary.review.fieldVerification.length === 1 ? "" : "s"} remain.</small><button onClick={() => setPhotoIntakeOpen(true)}>Review photos</button></section>}
       <div className="shape-switch"><button onClick={() => applyTemplate("rectangle")}>Rectangle</button><button onClick={() => applyTemplate("l-shape")}>L-shape</button></div>
       <label className="field full"><span>Design name</span><input value={design.name} onChange={(event) => { try { apply(normalizeDeckDesignV3({ ...history.present, name: event.target.value, metadata: { ...history.present.metadata, revision: history.present.metadata.revision + 1 } }), "Design name updated."); } catch { /* retain */ } }} /></label>
-      {design.platforms.length > 1 && <label className="field full"><span>Platform to edit</span><select value={platform.id} onChange={(event) => { setSelectedPlatformId(event.target.value); setSelectedEdgeId(null); }} >{design.platforms.map((item) => <option key={item.id} value={item.id}>{item.id} · {formatFeetInches(item.elevation)} high</option>)}</select></label>}
+      <Suspense fallback={<div className="house-editor-loading" role="status">Preparing level controls…</div>}><LevelCutoutControls platforms={design.platforms} platform={platform} platformBounds={platformBounds} selectedHoleIndex={selectedHoleIndex} onSelectPlatform={(platformId) => { setSelectedPlatformId(platformId); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); }} onAddLevel={addLevel} onRemoveLevel={removeLevel} onMoveLevel={movePlatformOrigin} onAddCutout={addCutout} onSelectCutout={setSelectedHoleIndex} onUpdateCutout={updateCutout} onRemoveCutout={removeCutout} /></Suspense>
       <label className="field full"><span>Drag step</span><select value={snapIncrement} onChange={(event) => setSnapIncrement(Number(event.target.value))}><option value="1">1 inch · fine</option><option value="6">6 inches · standard</option><option value="12">12 inches · coarse</option></select></label>
-      <div className="field-grid"><V3NumberField label="Deck height" value={platform.elevation} onCommit={(value) => updatePlatform({ elevation: value }, "Deck height updated.")} /><V3NumberField label="Joist spacing" value={platform.construction.framing.joistSpacing} onCommit={(value) => updateConstruction({ ...platform.construction, framing: { ...platform.construction.framing, joistSpacing: value } }, "Joist layout spacing updated.")} /></div>
+      <div className="field-grid"><V3NumberField label="Level height (feet)" value={Math.round(platform.elevation / 12 * 100) / 100} step={.5} onCommit={(value) => updatePlatform({ elevation: value * 12 }, "Level height updated.")} /><V3NumberField label="Joist spacing (in)" value={platform.construction.framing.joistSpacing} onCommit={(value) => updateConstruction({ ...platform.construction, framing: { ...platform.construction.framing, joistSpacing: value } }, "Joist layout spacing updated.")} /></div>
       {hasEdgeReferences && <section className="selected-edge-card review-card"><strong>Edit deck outline</strong><p>Clear side options before reshaping.</p><button className="primary" onClick={unlockOutline}>Edit deck outline</button><small>Reattach side options afterward.</small></section>}
       <p className="outline-edit-feedback">{message}</p>
       <Suspense fallback={<div className="house-editor-loading" role="status">Preparing house connection…</div>}><HouseConnectionEditor design={design} platform={platform} onApply={updateHouseConnection} onError={setMessage} /></Suspense>
       <section className="stage-continue-card"><span>Layout ready?</span><strong>Lock it before railings.</strong><button className="primary" onClick={enterRailingStage}>Lock &amp; continue</button><small>You can return later.</small></section>
       </> : <Suspense fallback={<div className="house-editor-loading" role="status">Preparing railing workspace…</div>}><RailingStageControls platform={platform} geometry={geometry} selectedEdgeId={selectedEdgeId} onRailingChange={applyRailing} onHeight={(height) => updateConstruction({ ...platform.construction, railing: { ...platform.construction.railing, height } }, "Railing height updated exactly.")} onBack={returnToLayoutStage} /></Suspense>}
-      <div className="history-actions"><button disabled={!history.past.length} onClick={() => dispatch({ type: "undo" })}>Undo</button><button disabled={!history.future.length} onClick={() => dispatch({ type: "redo" })}>Redo</button></div>
+      <div className="history-actions"><button disabled={!history.past.length} onClick={() => changeHistory("undo")}>Undo</button><button disabled={!history.future.length} onClick={() => changeHistory("redo")}>Redo</button></div>
       <div className="design-facts"><div><span>Schema</span><strong>DeckDesign v3</strong></div><div><span>Revision</span><strong>{design.metadata.revision}</strong></div><div><span>Fingerprint</span><code>{deckDesignV3Fingerprint(design)}</code></div></div><p className="status-message" aria-live="polite">{message}</p>
     </aside><section className="visual-area" id="design-views">
-      <article className="view-card plan-card"><div className="card-title"><div><span>{workflowStage === "layout" ? "Measured plan" : "Railing plan"}</span><small>{workflowStage === "layout" ? `2D · ${platform.id} · ${geometry.platformEdges.length} sides` : "2D · tap a railing side"}</small></div><strong>{formatFeetInches(platform.elevation)} high</strong></div><PlanViewV3 platform={platform} activeStairSystem={activeStairSystem} geometry={visibleGeometry} houseGeometry={houseGeometry} snapIncrement={snapIncrement} editingEnabled={workflowStage === "layout"} selectedEdgeId={selectedEdgeId} onSelectEdge={workflowStage === "layout" ? selectLayoutEdge : setSelectedEdgeId} onCornerPreview={(index, point) => moveCorner(index, point, false)} onCornerCommit={(index, point) => moveCorner(index, point, true)} onCancel={() => setPreview(null)} onStairPreview={(offset) => updateStairSystem({ offset }, "", true)} onStairCommit={(offset) => updateStairSystem({ offset }, `Stairs moved to ${formatFeetInches(offset)}.`)} onSegmentPreview={(index, distance) => moveSegment(index, distance, false)} onSegmentCommit={(index, distance) => moveSegment(index, distance, true)} />
+      <article className="view-card plan-card"><div className="card-title"><div><span>{workflowStage === "layout" ? "Measured plan" : "Railing plan"}</span><small>{workflowStage === "layout" ? `2D · ${platform.id} · ${geometry.platformEdges.length} sides` : "2D · tap a railing side"}</small></div><div className="plan-card-tools"><strong>{formatFeetInches(platform.elevation)} high</strong><div className="plan-history-actions"><button disabled={!history.past.length} onClick={() => changeHistory("undo")}>Undo</button><button disabled={!history.future.length} onClick={() => changeHistory("redo")}>Redo</button></div></div></div><PlanViewV3 platform={platform} activeStairSystem={activeStairSystem} geometry={visibleGeometry} contextPlatforms={contextPlatforms.map((item) => ({ id: item.platform.id, elevation: item.platform.elevation, footprint: item.geometry.footprint }))} houseGeometry={houseGeometry} snapIncrement={snapIncrement} editingEnabled={workflowStage === "layout"} selectedEdgeId={selectedEdgeId} selectedHoleIndex={selectedHoleIndex} onSelectEdge={workflowStage === "layout" ? selectLayoutEdge : setSelectedEdgeId} onSelectContextPlatform={(platformId) => { setSelectedPlatformId(platformId); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setMessage(`${platformId.replaceAll("-", " ")} selected.`); }} onSelectHole={(index) => { setSelectedHoleIndex(index); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setMessage(`Cutout ${index + 1} selected.`); }} onCornerPreview={(index, point) => moveCorner(index, point, false)} onCornerCommit={(index, point) => moveCorner(index, point, true)} onCancel={() => setPreview(null)} onStairPreview={(offset) => updateStairSystem({ offset }, "", true)} onStairCommit={(offset) => updateStairSystem({ offset }, `Stairs moved to ${formatFeetInches(offset)}.`)} onSegmentPreview={(index, distance) => moveSegment(index, distance, false)} onSegmentCommit={(index, distance) => moveSegment(index, distance, true)} />
         {workflowStage === "layout" ? <section ref={planActionTray} className={`plan-action-tray${activeStairSystem ? " editing-stairs" : ""}`} aria-live="polite">
           {selectedEdgeId ? (() => {
             const edge = geometry.platformEdges.find((item) => item.id === selectedEdgeId);
@@ -309,7 +361,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
                   {activeLanding.afterRiser === 0 ? <div className="stair-railing-note"><strong>Top landing</strong><small>At deck height.</small></div> : <><div className="stair-railing-note"><strong>Midway landing position</strong><small>Use a known measurement.</small></div><label className="field"><span>Set midway landing by</span><select value={landingPositionMode} onChange={(event) => setLandingPositionMode(event.target.value as typeof landingPositionMode)}><option value="height">Height above grade</option><option value="distance">Distance from deck edge</option><option value="below">Steps below deck</option><option value="above">Steps above grade</option></select></label><V3NumberField label={landingPositionMode === "height" ? "Height above grade (in)" : landingPositionMode === "distance" ? "Distance from deck (in)" : landingPositionMode === "above" ? "Steps above grade" : "Steps below deck"} value={midwayLandingValue()} step={landingPositionMode === "above" || landingPositionMode === "below" ? 1 : .25} onCommit={(value) => updateMidwayLandingPosition(landingPositionMode, value)} /></>}
                   <div className="field-grid"><V3NumberField label="Landing width (feet)" value={Math.round(activeLanding.width / 12 * 100) / 100} step={.5} onCommit={(value) => updateLanding({ width: value * 12 }, "Landing width updated exactly.")} /><V3NumberField label="Landing depth (feet)" value={Math.round(activeLanding.depth / 12 * 100) / 100} step={.5} onCommit={(value) => updateLanding({ depth: value * 12 }, "Landing depth updated exactly.")} /></div>
                   <fieldset><legend>Direction after landing</legend><div className="toggle-grid">{(["straight", "left", "right"] as const).map((turn) => <button type="button" key={turn} className={`toggle${activeLanding.turn === turn ? " active" : ""}`} onClick={() => updateLanding({ turn, depth: turn === "straight" ? activeLanding.depth : Math.max(activeLanding.depth, activeStairSystem.width) }, `Stairs continue ${turn}.`)}>{turn}</button>)}</div><small>Viewed walking down.</small></fieldset>
-                  {!activeLanding.locked && <button className="primary" onClick={lockLanding}>Lock this landing</button>}
+                  {!activeLanding.locked && <button className="primary" onClick={lockLanding}>Finish landing details</button>}
                   {activeLanding.locked && <Suspense fallback={<div className="house-editor-loading" role="status">Preparing shared landing controls…</div>}><LandingConnectionsEditor landing={activeLanding} onAdd={addLandingConnection} onUpdateLanding={(connections, nextMessage) => updateLanding({ connections }, nextMessage)} onUpdateConnection={updateLandingConnection} /></Suspense>}
                 </div>}
                 <button className="remove-stairs" onClick={() => { const remaining = platform.construction.stairSystems.filter((system) => system.id !== activeStairSystem.id); replaceStairSystems(remaining, "Stairs removed from this side."); setSelectedStairSystemId(null); setSelectedLandingId(null); }}>Remove stairs from this side</button>
@@ -319,14 +371,8 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
           })() : <div className="plan-action-copy"><strong>Select a blueprint side</strong><small>Its length, stairs, and landings will appear here—nothing else.</small></div>}
         </section> : <Suspense fallback={<div className="mobile-plan-edge-actions"><p>Preparing railing controls…</p></div>}><RailingMobileActions platform={platform} geometry={geometry} selectedEdgeId={selectedEdgeId} onRailingChange={applyRailing} /></Suspense>}
       </article>
-      <article className="view-card three-card"><div className="card-title"><div><span>{workflowStage === "layout" ? "Model view" : "Railing model"}</span><small>3D · design authority</small></div><div className="view-tools"><select value={quality} aria-label="3D quality" onChange={(event) => setQuality(event.target.value as RenderQuality)}><option value="economy">Economy</option><option value="balanced">Balanced</option><option value="detailed">Detailed</option></select><div className="camera-buttons">{(["perspective", "top", "front"] as CameraPreset[]).map((value) => <button key={value} className={preset === value ? "active" : ""} onClick={() => { setPreset(value); setPresetRequest((current) => current + 1); }}>{value}</button>)}</div></div></div><Suspense fallback={<div className="three-loading">Preparing model…</div>}><ThreeViewV3 platform={platform} geometry={visibleGeometry} houseGeometry={houseGeometry} gradeElevation={design.siteContext.gradeElevation} preset={preset} presetRequest={presetRequest} showFraming={showFraming} quality={quality} /></Suspense><label className="check-row three-framing"><input type="checkbox" checked={showFraming} onChange={(event) => setShowFraming(event.target.checked)} />Show framing</label></article>
+      <article className="view-card three-card"><div className="card-title"><div><span>{workflowStage === "layout" ? "Model view" : "Railing model"}</span><small>3D · design authority</small></div><div className="view-tools"><select value={quality} aria-label="3D quality" onChange={(event) => setQuality(event.target.value as RenderQuality)}><option value="economy">Economy</option><option value="balanced">Balanced</option><option value="detailed">Detailed</option></select><div className="camera-buttons">{(["perspective", "top", "front"] as CameraPreset[]).map((value) => <button key={value} className={preset === value ? "active" : ""} onClick={() => { setPreset(value); setPresetRequest((current) => current + 1); }}>{value}</button>)}</div></div></div><Suspense fallback={<div className="three-loading">Preparing model…</div>}><ThreeViewV3 platform={platform} geometry={visibleGeometry} contextPlatforms={visibleContextPlatforms} houseGeometry={houseGeometry} gradeElevation={design.siteContext.gradeElevation} preset={preset} presetRequest={presetRequest} showFraming={showFraming} quality={quality} /></Suspense><label className="check-row three-framing"><input type="checkbox" checked={showFraming} onChange={(event) => setShowFraming(event.target.checked)} />Show framing</label></article>
     </section></div>
     <section className="quantity-section"><div className="quantity-heading"><div><p className="eyebrow">Deterministic v3</p><h2>Conceptual quantities</h2></div><p>{photoStartSummary?.review.outlineWarning ? "Envelope quantities until reshaped." : "No prices or structural claims."}</p></div><div className="quantity-grid">{projection.aggregateQuantities.map((line) => <article className="quantity-card" key={line.key}><span>{line.key.replaceAll("-", " ")}</span><strong>{line.amount.toLocaleString()} <small>{line.unit}</small></strong><p>{line.sourceGeometry.length} geometry references.</p></article>)}</div></section>
   </main>;
-}
-
-function V3NumberField({ label, value, step = .25, onCommit }: { label: string; value: number; step?: number; onCommit: (value: number) => void }) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
-  return <label className="field"><span>{label}</span><input type="number" step={step} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={() => { onCommit(Number(draft)); setDraft(String(value)); }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></label>;
 }

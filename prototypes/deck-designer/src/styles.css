@@ -165,6 +165,21 @@ button:hover { transform: translateY(-1px); }
 .plan-action-buttons button { min-height: 44px; border-color: #aebbb2; background: white; color: #34473f; font-size: 10px; font-weight: 750; }
 .plan-action-buttons button.primary { border-color: #aabd2f; background: var(--lime); color: #17231e; }
 .plan-action-tray .remove-stairs, .segment-landing-controls > button { min-height: 44px; }
+.plan-card-tools { display: flex; align-items: center; gap: 8px; }
+.plan-history-actions { display: flex; gap: 4px; }
+.plan-history-actions button { min-height: 34px; padding: 5px 8px; border-color: #bdc7c0; background: #f7f8f5; color: #34473f; font-size: 9px; font-weight: 800; }
+.level-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 14px; }
+.level-actions button { min-height: 42px; border-color: #aebbb2; background: white; color: #34473f; font-size: 10px; font-weight: 750; }
+.level-position-fields { margin: 14px 0; }
+.cutout-controls { display: grid; gap: 10px; margin: 16px 0; padding: 12px; border: 1px solid #c4cec7; border-radius: 9px; background: #f4f6f2; }
+.cutout-controls > div:first-child strong, .cutout-controls > div:first-child small { display: block; }
+.cutout-controls > div:first-child strong { font-size: 11px; }
+.cutout-controls > div:first-child small { margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.4; }
+.cutout-controls > button, .cutout-editor > button { min-height: 42px; border-color: #aebbb2; background: white; color: #34473f; font-size: 10px; font-weight: 750; }
+.cutout-editor { display: grid; gap: 10px; padding-top: 3px; }
+.plan-hole { fill: #eef2ec; stroke: #b56d37; stroke-width: 2.5px; cursor: pointer; }
+.plan-hole.selected { fill: #fff2bf; stroke: #1f5643; stroke-width: 4px; }
+.plan-context-platform { fill: #cad5cc; fill-opacity: .72; stroke: #6c7f74; stroke-width: 2px; stroke-dasharray: 7 5; cursor: pointer; }
 .automatic-standard-note { display: grid; gap: 3px; padding: 9px; border-left: 3px solid #6f8879; border-radius: 5px; background: #e2eae4; }
 .automatic-standard-note strong { color: #29463a; font-size: 10px; }
 .automatic-standard-note small { color: #5a6a61; font-size: 9px; line-height: 1.4; }

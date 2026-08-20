@@ -9,7 +9,8 @@ import { RENDER_QUALITY_POLICIES, type RenderQuality } from "./renderQuality";
 import type { CameraPreset } from "./ThreeView";
 import type { HouseContextGeometry } from "./houseContextGeometry";
 
-type Props = { platform: DeckPlatformV3; geometry: DeckPlatformGeometryV3; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality };
+type PlatformView = Readonly<{ platform: DeckPlatformV3; geometry: DeckPlatformGeometryV3 }>;
+type Props = { platform: DeckPlatformV3; geometry: DeckPlatformGeometryV3; contextPlatforms?: readonly PlatformView[]; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality };
 
 function member(group: THREE.Group, value: Readonly<{ start: { x: number; z: number }; end: { x: number; z: number } }>, y: number, height: number, depth: number, material: THREE.Material) {
   const dx = value.end.x - value.start.x, dz = value.end.z - value.start.z;
@@ -26,11 +27,12 @@ function slopedMember(group: THREE.Group, value: Readonly<{ start: { x: number; 
   mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
 }
 
-export function ThreeViewV3({ platform, geometry, houseGeometry, gradeElevation, preset, presetRequest, showFraming, quality }: Props) {
+export function ThreeViewV3({ platform, geometry, contextPlatforms = [], houseGeometry, gradeElevation, preset, presetRequest, showFraming, quality }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
-  const visiblePoints = [...geometry.footprint, ...geometry.stairTreads.flatMap((tread) => tread.corners), ...(geometry.landing?.corners ?? [])];
+  const platformViews = [...contextPlatforms, { platform, geometry }];
+  const visiblePoints = platformViews.flatMap((item) => [...item.geometry.footprint, ...item.geometry.stairTreads.flatMap((tread) => tread.corners), ...item.geometry.landings.flatMap((landing) => landing.corners)]);
   const xs = visiblePoints.map((point) => point.x), zs = visiblePoints.map((point) => point.z);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
   const centerX = (minX + maxX) / 2, centerZ = (minZ + maxZ) / 2, span = Math.max(maxX - minX, maxZ - minZ, 120);
@@ -51,23 +53,26 @@ export function ThreeViewV3({ platform, geometry, houseGeometry, gradeElevation,
     const rail = new THREE.MeshStandardMaterial({ color: 0x263a32, roughness: .55 });
     const house = new THREE.MeshStandardMaterial({ color: 0xd9d5ca, roughness: .92 });
     for (const panel of houseGeometry.houseWallPanels) member(model, panel, panel.baseElevation + panel.height / 2, panel.height, 8, house);
-    for (const board of geometry.surfaceBoards) member(model, board, platform.elevation, 1, platform.construction.decking.boardWidth, deck);
-    if (showFraming) for (const joist of geometry.joists) member(model, joist, platform.elevation - 5, 7.25, 1.5, frame);
-    for (const segment of geometry.railSegments) { member(model, segment, platform.elevation + platform.construction.railing.height - 2, 3, 2.5, rail); member(model, segment, platform.elevation + 7, 2, 2, rail); }
-    for (const segment of geometry.landingRailSegments) { member(model, segment, segment.y + platform.construction.railing.height - 2, 3, 2.5, rail); member(model, segment, segment.y + 7, 2, 2, rail); }
-    for (const post of [...geometry.railPosts, ...geometry.landingRailPosts]) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, platform.construction.railing.height, 4), rail); mesh.position.set(post.x, post.top - platform.construction.railing.height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
-    for (const segment of geometry.stairRailSegments) slopedMember(model, segment, 3, rail);
-    for (const post of geometry.stairRailPosts) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, post.height, 4), rail); mesh.position.set(post.x, post.y + post.height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
-    for (const tread of geometry.stairTreads) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(tread.width, Math.max(1.5, tread.rise), tread.depth), deck); mesh.position.set(tread.x, tread.y + Math.max(1.5, tread.rise) / 2, tread.z); mesh.rotation.y = tread.rotationY; mesh.castShadow = true; model.add(mesh); }
-    for (const landing of geometry.landings) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(landing.width, 5.5, landing.depth), deck); mesh.position.set(landing.center.x, landing.y - 2.25, landing.center.z); mesh.rotation.y = landing.rotationY; model.add(mesh); }
-    if (showFraming) for (const post of geometry.landingSupportPosts) { const height = Math.max(1, post.top - gradeElevation); const mesh = new THREE.Mesh(new THREE.BoxGeometry(6, height, 6), frame); mesh.position.set(post.x, gradeElevation + height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
+    for (const view of platformViews) {
+      const itemPlatform = view.platform, itemGeometry = view.geometry;
+      for (const board of itemGeometry.surfaceBoards) member(model, board, itemPlatform.elevation, 1, itemPlatform.construction.decking.boardWidth, deck);
+      if (showFraming) for (const joist of itemGeometry.joists) member(model, joist, itemPlatform.elevation - 5, 7.25, 1.5, frame);
+      for (const segment of itemGeometry.railSegments) { member(model, segment, itemPlatform.elevation + itemPlatform.construction.railing.height - 2, 3, 2.5, rail); member(model, segment, itemPlatform.elevation + 7, 2, 2, rail); }
+      for (const segment of itemGeometry.landingRailSegments) { member(model, segment, segment.y + itemPlatform.construction.railing.height - 2, 3, 2.5, rail); member(model, segment, segment.y + 7, 2, 2, rail); }
+      for (const post of [...itemGeometry.railPosts, ...itemGeometry.landingRailPosts]) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, itemPlatform.construction.railing.height, 4), rail); mesh.position.set(post.x, post.top - itemPlatform.construction.railing.height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
+      for (const segment of itemGeometry.stairRailSegments) slopedMember(model, segment, 3, rail);
+      for (const post of itemGeometry.stairRailPosts) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, post.height, 4), rail); mesh.position.set(post.x, post.y + post.height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
+      for (const tread of itemGeometry.stairTreads) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(tread.width, Math.max(1.5, tread.rise), tread.depth), deck); mesh.position.set(tread.x, tread.y + Math.max(1.5, tread.rise) / 2, tread.z); mesh.rotation.y = tread.rotationY; mesh.castShadow = true; model.add(mesh); }
+      for (const landing of itemGeometry.landings) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(landing.width, 5.5, landing.depth), deck); mesh.position.set(landing.center.x, landing.y - 2.25, landing.center.z); mesh.rotation.y = landing.rotationY; model.add(mesh); }
+      if (showFraming) for (const post of itemGeometry.landingSupportPosts) { const height = Math.max(1, post.top - gradeElevation); const mesh = new THREE.Mesh(new THREE.BoxGeometry(6, height, 6), frame); mesh.position.set(post.x, gradeElevation + height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
+    }
     scene.add(model);
     const resize = () => { const width = Math.max(1, mount.clientWidth), height = Math.max(1, mount.clientHeight); renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix(); };
     const observer = new ResizeObserver(resize); observer.observe(mount); resize();
     camera.position.set(centerX + span, platform.elevation + span, centerZ + span); controls.target.set(centerX, platform.elevation / 2, centerZ); controls.update();
     let frameId = 0; const animate = () => { controls.update(); renderer.render(scene, camera); frameId = requestAnimationFrame(animate); }; animate();
     return () => { cancelAnimationFrame(frameId); observer.disconnect(); controls.dispose(); renderer.dispose(); scene.traverse((object: any) => { if (object instanceof THREE.Mesh) object.geometry.dispose(); }); [deck, frame, rail, house].forEach((value) => value.dispose()); if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement); };
-  }, [platform, geometry, houseGeometry, gradeElevation, quality, showFraming, centerX, centerZ, span]);
+  }, [platform, geometry, contextPlatforms, houseGeometry, gradeElevation, quality, showFraming, centerX, centerZ, span]);
 
   useEffect(() => {
     const camera = cameraRef.current, controls = controlsRef.current; if (!camera || !controls) return;

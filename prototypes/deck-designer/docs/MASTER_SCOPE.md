@@ -34,6 +34,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Optional intermediate-height landing with deterministic two-flight stairs
 - [x] Exact landing width and depth independent of stair width
 - [x] Multiple independently locked stair systems and ordered, system-associated chained landings
+- [x] Multiple unfinished landings may be added and positioned before finishing their details
 - [x] Shared-landing merger junctions with multiple independently locked deck- or grade-bound flights
 - [ ] Switchback stairs and collision-aware configurations beyond straight/left/right chained flights
 - [x] Edge selection with contextual railing/stair actions and explainable conceptual warnings
@@ -43,6 +44,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [ ] Angle constraints, alignment guides, and broader object selection
 - [x] Prototype-only canonical custom-polygon kernel and contract spike (not yet part of DeckDesign)
 - [x] Prototype-only contained-hole region kernel with subtractive area and split member intervals
+- [x] Browser editor for exact rectangular cutouts/obstacles on the selected platform
 - [x] Prototype-only concave triangulation and deterministic board/joist segmentation around holes
 - [x] Prototype-only neutral polygon measurement/quantity report with explicit classification and warnings
 - [x] Prototype-only geometric edge identity experiment with localized edit stability
@@ -66,7 +68,8 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 
 ## Phase C — configuration depth and polish
 
-- [ ] Multiple levels and inter-level connections
+- [x] Multiple editable levels with exact elevation/position and combined 2D/3D context
+- [ ] Explicit inter-level connections and level-to-level stairs
 - [x] Prototype-only deterministic multi-platform projection and quantity aggregation
 - [x] Prototype-only immutable duplicate/remove platform commands with history coverage
 - [x] Controller-approved v3 browser/local-state activation with preserved v2 fallback

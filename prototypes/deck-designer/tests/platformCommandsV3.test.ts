@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { deriveDeckDesignProjectionV3 } from "../src/designProjectionV3";
 import { createHistoryV3, designHistoryReducerV3 } from "../src/historyV3";
 import { migrateDeckDesignToV3 } from "../src/modelV3";
-import { duplicatePlatformV3, removePlatformV3 } from "../src/platformCommandsV3";
+import { addPlatformLevelV3, duplicatePlatformV3, removePlatformV3 } from "../src/platformCommandsV3";
 import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
 
 describe("DeckDesign v3 platform commands", () => {
@@ -17,6 +17,19 @@ describe("DeckDesign v3 platform commands", () => {
     expect(result.design.platforms[1]).toEqual({ ...result.design.platforms[0], id: "upper-platform", elevation: 84.25 });
     expect(result.notices.join(" ")).toMatch(/not inferred/i);
     expect(JSON.stringify(design)).toBe(original);
+  });
+
+  it("adds an offset editable level without copying side attachments or accessories", () => {
+    const design = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const result = addPlatformLevelV3(design, "platform-1", "platform-2", 72, { x: 216, z: 24 });
+    const level = result.design.platforms[1];
+    expect(result.command).toBe("add_platform_level");
+    expect(level.elevation).toBe(72);
+    expect(level.region.outer[0]).toEqual({ x: 216, z: 24 });
+    expect(level.edgeConditions.every((condition) => condition.condition === "free")).toBe(true);
+    expect(level.construction.railing.enabledEdgeIds).toEqual([]);
+    expect(level.construction.stairSystems).toEqual([]);
+    expect(result.notices.join(" ")).toMatch(/not inferred/i);
   });
 
   it("removes one platform without allowing an empty design", () => {

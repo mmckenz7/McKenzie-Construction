@@ -6,6 +6,7 @@ import { formatFeetInches } from "./PlanView";
 import type { HouseContextGeometry } from "./houseContextGeometry";
 
 type Point = Readonly<{ x: number; z: number }>;
+type ContextPlatform = Readonly<{ id: string; elevation: number; footprint: readonly Point[] }>;
 type Props = {
   platform: DeckPlatformV3;
   activeStairSystem?: StairSystemV3 | null;
@@ -14,7 +15,11 @@ type Props = {
   snapIncrement: number;
   editingEnabled?: boolean;
   selectedEdgeId: string | null;
+  selectedHoleIndex?: number | null;
+  contextPlatforms?: readonly ContextPlatform[];
   onSelectEdge: (edgeId: string) => void;
+  onSelectHole?: (index: number) => void;
+  onSelectContextPlatform?: (platformId: string) => void;
   onCornerPreview: (index: number, point: Point) => void;
   onCornerCommit: (index: number, point: Point) => void;
   onCancel: () => void;
@@ -37,11 +42,11 @@ export function planEdgeDimensionLabel(edge: Readonly<{ start: Point; end: Point
   });
 }
 
-export function PlanViewV3({ platform, activeStairSystem = null, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, onSelectEdge, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit }: Props) {
+export function PlanViewV3({ platform, activeStairSystem = null, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, selectedHoleIndex = null, contextPlatforms = [], onSelectEdge, onSelectHole, onSelectContextPlatform, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const segmentDrag = useRef<Readonly<{ index: number; midpoint: Point; outward: Point }> | null>(null);
   const [active, setActive] = useState<string | null>(null);
-  const all = [...geometry.footprint, ...geometry.stairTreads.flatMap((tread) => tread.corners), ...geometry.landings.flatMap((landing) => landing.corners), ...houseGeometry.houseWallPanels.flatMap((panel) => [panel.start, panel.end])];
+  const all = [...geometry.footprint, ...contextPlatforms.flatMap((item) => item.footprint), ...geometry.stairTreads.flatMap((tread) => tread.corners), ...geometry.landings.flatMap((landing) => landing.corners), ...houseGeometry.houseWallPanels.flatMap((panel) => [panel.start, panel.end])];
   const minX = Math.min(...all.map((point) => point.x));
   const maxX = Math.max(...all.map((point) => point.x));
   const minZ = Math.min(...all.map((point) => point.z));
@@ -91,7 +96,9 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
     <rect width="100%" height="100%" fill="url(#v3-grid)" />
     {houseGeometry.houseWallPanels.map((panel) => <line key={panel.id} x1={x(panel.start.x)} y1={y(panel.start.z)} x2={x(panel.end.x)} y2={y(panel.end.z)} className="plan-house-wall" />)}
     {houseGeometry.houseOpenings.map((opening) => <line key={`${opening.wallId}-${opening.id}`} x1={x(opening.start.x)} y1={y(opening.start.z)} x2={x(opening.end.x)} y2={y(opening.end.z)} className={`plan-house-opening ${opening.kind}`} />)}
+    {contextPlatforms.map((item) => <polygon key={item.id} points={item.footprint.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-context-platform" role={editingEnabled ? "button" : undefined} tabIndex={editingEnabled ? 0 : undefined} aria-label={`Edit ${item.id} at ${formatFeetInches(item.elevation)} high`} onClick={() => editingEnabled && onSelectContextPlatform?.(item.id)} onKeyDown={(event) => { if (!editingEnabled || (event.key !== "Enter" && event.key !== " ")) return; event.preventDefault(); onSelectContextPlatform?.(item.id); }} />)}
     <polygon points={geometry.footprint.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-platform" />
+    {platform.region.holes.map((hole, index) => <polygon key={`hole-${index}`} points={hole.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className={`plan-hole${selectedHoleIndex === index ? " selected" : ""}`} role={editingEnabled ? "button" : undefined} tabIndex={editingEnabled ? 0 : undefined} aria-label={`Select cutout ${index + 1}`} onClick={() => editingEnabled && onSelectHole?.(index)} onKeyDown={(event) => { if (!editingEnabled || (event.key !== "Enter" && event.key !== " ")) return; event.preventDefault(); onSelectHole?.(index); }} />)}
     {geometry.surfaceBoards.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-board" />)}
     {geometry.joists.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-joist" />)}
     {geometry.railSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-rail" />)}

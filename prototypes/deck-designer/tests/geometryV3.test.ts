@@ -152,6 +152,25 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(positionsFor([landing("top", 0), landing("midway", 3)])).toEqual([0, 3]);
   });
 
+  it("keeps multiple unfinished landings deterministic without requiring lock order", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const edgeId = platform.edgeConditions.find((condition) => condition.condition === "free")!.edgeId;
+    const system = {
+      id: "stair-system-1", locked: false, edgeId, offset: 12, width: 48,
+      treadDepth: 10, maxRiserHeight: 7.75,
+      landings: [
+        { id: "landing-1", locked: false, afterRiser: 2, width: 48, depth: 48, turn: "straight" as const, connections: [] },
+        { id: "landing-2", locked: false, afterRiser: 4, width: 60, depth: 48, turn: "left" as const, connections: [] },
+      ],
+    };
+    const design = normalizeDeckDesignV3({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [system] } }] });
+    const first = derivePlatformGeometryV3(design, platform.id);
+    const second = derivePlatformGeometryV3(design, platform.id);
+    expect(first.landings.map((landing) => landing.afterRiser)).toEqual([2, 4]);
+    expect(first).toEqual(second);
+  });
+
   it("sizes a landing independently while keeping both flights centered on it", () => {
     const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
     const platform = base.platforms[0];

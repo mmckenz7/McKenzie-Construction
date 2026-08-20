@@ -7,6 +7,7 @@ import {
 import { migrateDeckDesignToV3, normalizeDeckDesignV3 } from "../src/modelV3";
 import lShapeLandingFixture from "./fixtures/l-shape-landing.json";
 import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
+import { addPlatformLevelV3 } from "../src/platformCommandsV3";
 
 const quantityMap = (report: ReturnType<typeof deriveDeckDesignProjectionV3>) =>
   Object.fromEntries(report.aggregateQuantities.map((line) => [line.key, line.amount]));
@@ -48,6 +49,20 @@ describe("v3 design-level deterministic projection", () => {
     const reversed = normalizeDeckDesignV3({ ...design, platforms: [...design.platforms].reverse() });
     expect(deriveDeckDesignProjectionV3(reversed).aggregateQuantities)
       .toEqual(deriveDeckDesignProjectionV3(design).aggregateQuantities);
+  });
+
+  it("subtracts a cutout only from its selected level and aggregates reproducibly", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const added = addPlatformLevelV3(base, "platform-1", "platform-2", 72, { x: 300, z: 0 }).design;
+    const second = added.platforms[1];
+    const hole = [{ x: 348, z: 48 }, { x: 372, z: 48 }, { x: 372, z: 72 }, { x: 348, z: 72 }];
+    const design = normalizeDeckDesignV3({ ...added, platforms: [added.platforms[0], { ...second, region: { ...second.region, holes: [hole] } }] });
+    const baseArea = quantityMap(deriveDeckDesignProjectionV3(base))["platform-area"];
+    const first = deriveDeckDesignProjectionV3(design);
+    const secondRun = deriveDeckDesignProjectionV3(design);
+    expect(quantityMap(first)["platform-area"]).toBe(baseArea * 2 - 4);
+    expect(first).toEqual(secondRun);
+    expect(first.platforms.find((item) => item.platformId === "platform-1")?.surface.quantities.find((line) => line.key === "platform-area")?.amount).toBe(baseArea);
   });
 
   it("serializes the same normalized design projection byte-for-byte", () => {
