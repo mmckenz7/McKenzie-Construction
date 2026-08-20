@@ -36,8 +36,6 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
   const [message, setMessage] = useState(initialMessage);
   const [snapIncrement, setSnapIncrement] = useState(6);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [offsetComplete, setOffsetComplete] = useState(false);
-  const [addCornerMode, setAddCornerMode] = useState(false);
   const [showFraming, setShowFraming] = useState(true);
   const [preset, setPreset] = useState<CameraPreset>("perspective");
   const [presetRequest, setPresetRequest] = useState(0);
@@ -66,8 +64,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     try {
       const outer = addBumpoutOnEdge(platform.region.outer, edgeIndex, point, snapIncrement);
       if (replaceRegion(outer, true)) {
-        setAddCornerMode(false);
-        setOffsetComplete(false);
+        setSelectedEdgeId(null);
         setMessage("Rectangular bumpout added with a parallel outer segment. Drag any round corner or square segment handle to refine it.");
       }
     } catch (error) {
@@ -102,21 +99,11 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     };
     apply(revisePlatform(history.present, unlocked), "Outline unlocked by your command: edge attachments and railings were cleared and stairs were turned off. Add them back after shaping the deck.");
   };
-  const addOffset = () => {
-    const edgeIndex = geometry.platformEdges.findIndex((edge) => edge.id === selectedEdgeId);
-    if (edgeIndex < 0) { setMessage("Select the edge where you want the offset first."); return; }
+  const addBumpoutToEdge = (edgeId: string) => {
+    const edgeIndex = geometry.platformEdges.findIndex((edge) => edge.id === edgeId);
     const edge = geometry.platformEdges[edgeIndex];
-    const inset = 24;
-    const entry = { x: edge.start.x + (edge.end.x - edge.start.x) / 3, z: edge.start.z + (edge.end.z - edge.start.z) / 3 };
-    const exit = { x: edge.start.x + (edge.end.x - edge.start.x) * 2 / 3, z: edge.start.z + (edge.end.z - edge.start.z) * 2 / 3 };
-    const innerEntry = { x: entry.x - edge.outward.x * inset, z: entry.z - edge.outward.z * inset };
-    const innerExit = { x: exit.x - edge.outward.x * inset, z: exit.z - edge.outward.z * inset };
-    const next = [...platform.region.outer];
-    next.splice(edgeIndex + 1, 0, entry, innerEntry, innerExit, exit);
-    if (replaceRegion(next, true)) {
-      setSelectedEdgeId(null);
-      setOffsetComplete(true);
-    }
+    if (!edge) { setMessage("Select the side where you want the bumpout first."); return; }
+    addCorner(edgeIndex, { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 });
   };
   const removeCorner = (index: number) => {
     if (platform.region.outer.length <= 4) { setMessage("Keep at least four corners in this orthogonal deck editor."); return; }
@@ -134,12 +121,17 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
       if (previewOnly) setPreview(next); else apply(next, nextMessage);
     } catch (error) { setPreview(null); setMessage(error instanceof Error ? error.message : "Stair update rejected."); }
   };
+  const attachStairsToEdge = (edgeId: string, edgeLength: number) => updateStairs({
+    enabled: true,
+    edgeId,
+    offset: Math.min(platform.construction.stairs.offset, edgeLength - platform.construction.stairs.width),
+  }, "Stairs attached to the selected exact edge.");
   const updateHouseConnection = (next: DeckDesignV3, attachment: "unknown" | "ledger" | "non-ledger") => apply(next, attachment === "unknown" ? "House side and door updated. Connection type still requires field verification." : "House side, door, and connection type updated from confirmed entries.");
   const download = () => { const url = URL.createObjectURL(new Blob([stableDeckDesignV3Json(design)], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = "deck-design-v3.json"; link.click(); URL.revokeObjectURL(url); };
   const applyTemplate = (kind: "rectangle" | "l-shape") => {
     const legacy = updateDesign(DEFAULT_DESIGN, kind === "rectangle" ? { kind } : { kind, cutoutWidth: 48, cutoutDepth: 48 });
     const next = migrateDeckDesignToV3({ ...legacy, id: design.id, name: design.name, metadata: { ...legacy.metadata, revision: design.metadata.revision + 1 } });
-    apply(next, `${kind === "rectangle" ? "Rectangle" : "L-shape"} template applied in v3.`); setSelectedEdgeId(null); setOffsetComplete(false);
+    apply(next, `${kind === "rectangle" ? "Rectangle" : "L-shape"} template applied in v3.`); setSelectedEdgeId(null);
   };
   const photoBounds = platform.region.outer.reduce((bounds, point) => ({
     minX: Math.min(bounds.minX, point.x), maxX: Math.max(bounds.maxX, point.x),
@@ -160,8 +152,6 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     dispatch({ type: "reset", design: next });
     setSelectedPlatformId(next.platforms[0].id);
     setSelectedEdgeId(null);
-    setOffsetComplete(false);
-    setAddCornerMode(false);
     setPhotoStartSummary(Object.freeze({ photoCount, review }));
     setPhotoIntakeOpen(false);
     setMessage(facts.layoutIntent === "non-standard"
@@ -173,7 +163,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     {photoIntakeOpen && <Suspense fallback={<div className="photo-intake-backdrop"><div className="photo-intake-loading" role="status">Preparing local photo review…</div></div>}><PhotoIntake initialFacts={initialPhotoFacts} onCancel={() => setPhotoIntakeOpen(false)} onStartDesign={startFromPhotos} /></Suspense>}
     <header className="topbar"><div className="brand-mark">M</div><div><p className="eyebrow">McKenzie Construction · isolated R&amp;D</p><h1>Deck Designer</h1></div><div className="header-actions"><button className="quiet" onClick={() => setPhotoIntakeOpen(true)}>Start with photos</button><button className="quiet" onClick={() => { saveDeckDesignV3(localStorage, design); setMessage(`Saved v3 locally at revision ${design.metadata.revision}.`); }}>Save locally</button><button className="quiet" onClick={download}>Download JSON</button><button className="primary" onClick={() => fileInput.current?.click()}>Load JSON</button><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const next = migrateDeckDesignToV3(JSON.parse(await file.text())); dispatch({ type: "reset", design: next }); setMessage(`Loaded v3 design “${next.name}”.`); } catch (error) { setMessage(error instanceof Error ? `Load rejected: ${error.message}` : "Load rejected."); } event.target.value = ""; }} /></div></header>
     <section className="warning"><strong>Conceptual design — not for construction.</strong> Corner geometry and quantities are deterministic; structure, connections, code, and field dimensions still require qualified review.</section>
-    <nav className="mobile-workspace-nav" aria-label="Mobile designer sections"><a href="#design-views">Plan &amp; 3D</a><a href="#design-controls">Shape</a><a href="#house-connection">House</a></nav>
+    <nav className="mobile-workspace-nav" aria-label="Mobile designer sections"><a href="#design-views">Plan &amp; 3D</a><a href="#design-controls">Shape</a><a href="#side-options">Stairs</a><a href="#house-connection">House</a></nav>
     <div className="workspace"><aside className="controls-panel" id="design-controls">
       <div className="section-heading"><span>01</span><div><p>Deck outline</p><small>Move corners or add rectangular offsets</small></div></div>
       {photoStartSummary && <section className={`photo-start-summary${photoStartSummary.review.outlineWarning ? " needs-outline" : ""}`}><strong>Photo-assisted start</strong><p>{photoStartSummary.photoCount} local photo{photoStartSummary.photoCount === 1 ? "" : "s"} reviewed. Geometry came only from confirmed entries and manual tracing.</p>{photoStartSummary.review.outlineWarning && <p className="outline-warning">{photoStartSummary.review.outlineWarning}</p>}<small>{photoStartSummary.review.fieldVerification.length} field-verification note{photoStartSummary.review.fieldVerification.length === 1 ? "" : "s"} remain. Photo previews were released after review.</small><button onClick={() => setPhotoIntakeOpen(true)}>Start another photo review</button></section>}
@@ -183,23 +173,19 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
       <label className="field full"><span>Drag step</span><select value={snapIncrement} onChange={(event) => setSnapIncrement(Number(event.target.value))}><option value="1">1 inch · fine</option><option value="6">6 inches · standard</option><option value="12">12 inches · coarse</option></select></label>
       <div className="field-grid"><V3NumberField label="Deck height" value={platform.elevation} onCommit={(value) => updatePlatform({ elevation: value }, "Deck height updated.")} /><V3NumberField label="Joist spacing" value={platform.construction.framing.joistSpacing} onCommit={(value) => updateConstruction({ ...platform.construction, framing: { ...platform.construction.framing, joistSpacing: value } }, "Joist layout spacing updated.")} /></div>
       {hasEdgeReferences && <section className="selected-edge-card review-card"><strong>Edit deck outline</strong><p>The house, railings, or stairs are attached to exact sides. Editing removes those side options so the shape can change safely.</p><button className="primary" onClick={unlockOutline}>Edit deck outline</button><small>Stairs and side options will be removed. Add them back after shaping the deck.</small></section>}
-      <button className={`primary full-action add-corner-button${addCornerMode ? " active" : ""}`} disabled={hasEdgeReferences} aria-pressed={addCornerMode} onClick={() => setAddCornerMode((current) => !current)}>{addCornerMode ? "Cancel adding bumpout" : "Add bumpout"}</button>
-      <p className={`offset-action-status${addCornerMode ? " ready" : ""}`} role="status">{hasEdgeReferences ? "Choose Edit deck outline above first." : addCornerMode ? "Click the straight edge—or click near its end to line the bumpout up with that corner." : "Corners and square side handles magnetically align within one drag step; matching points merge automatically."}</p>
+      <p className="offset-action-status" role="status">Tap a side in the plan. The bumpout, stairs, and railing actions will appear for that highlighted side only.</p>
       <p className="outline-edit-feedback" aria-live="polite">{message}</p>
-      <div className="section-heading compact preset-offset-heading"><span>+</span><div><p>Preset rectangular offset</p><small>Optional shortcut for a standard notch</small></div></div>
-      <label className="field full"><span>Step 2 · Choose the offset edge</span><select disabled={hasEdgeReferences} value={selectedEdgeId ?? ""} onChange={(event) => { setSelectedEdgeId(event.target.value || null); setOffsetComplete(false); }}><option value="">Select an edge…</option>{geometry.platformEdges.map((edge, index) => <option value={edge.id} key={edge.id}>Edge {index + 1} · {formatFeetInches(edge.length)}</option>)}</select><small className="field-help">You can also click an edge directly in the measured plan.</small></label>
-      <button className="primary full-action" disabled={hasEdgeReferences || !selectedEdgeId} title={hasEdgeReferences ? "Choose Edit deck outline first." : !selectedEdgeId && !offsetComplete ? "Choose an edge first." : undefined} onClick={addOffset}>{offsetComplete ? "Offset added ✓" : "Step 3 · Add rectangular offset"}</button>
-      <p className={`offset-action-status${offsetComplete || (!hasEdgeReferences && selectedEdgeId) ? " ready" : ""}`} role="status">{hasEdgeReferences ? "Start with Edit deck outline above." : offsetComplete ? "Offset added successfully. Select another edge only if you want a second offset." : selectedEdgeId ? "Ready — add the offset, then adjust its corners." : "Outline editing is ready. Choose an edge for Step 2."}</p>
-      <p className="section-help">Adds a 2-foot-deep rectangular offset to the selected edge. Repeat these last two steps on another edge for a deck with two offsets.</p>
       <div className="corner-list">{platform.region.outer.map((point, index) => <section className="corner-row" key={index}><strong>Corner {index + 1}</strong><V3NumberField label="Left / right" value={point.x} onCommit={(value) => moveCorner(index, { ...point, x: value }, true)} /><V3NumberField label="Away" value={point.z} onCommit={(value) => moveCorner(index, { ...point, z: value }, true)} /><button disabled={platform.region.outer.length <= 4} onClick={() => removeCorner(index)}>Remove</button></section>)}</div>
-      <div className="section-heading compact"><span>02</span><div><p>Selected edge</p><small>Railings and stairs use exact edge references</small></div></div>
-      {selectedEdgeId ? (() => { const edge = geometry.platformEdges.find((item) => item.id === selectedEdgeId)!; return <section className="selected-edge-card"><strong>{formatFeetInches(edge.length)} edge</strong><div className="selected-edge-actions"><button onClick={() => toggleRail(edge.id)}>Toggle railing</button><button disabled={edge.length < platform.construction.stairs.width} onClick={() => updateStairs({ enabled: true, edgeId: edge.id, offset: Math.min(platform.construction.stairs.offset, edge.length - platform.construction.stairs.width) }, "Stairs attached to the selected exact edge.")}>Attach stairs</button></div></section>; })() : <p className="section-help">Click an edge in the plan or choose one above.</p>}
+      <div className="section-heading compact" id="side-options"><span>02</span><div><p>Railings and stairs</p><small>Select a side, then add what belongs there</small></div></div>
+      {selectedEdgeId ? (() => { const edge = geometry.platformEdges.find((item) => item.id === selectedEdgeId)!; return <section className="selected-edge-card"><strong>{formatFeetInches(edge.length)} side selected</strong><div className="selected-edge-actions contextual"><button disabled={hasEdgeReferences} onClick={() => addBumpoutToEdge(edge.id)}>{hasEdgeReferences ? "Edit shape first" : "Add bumpout here"}</button><button disabled={edge.length < platform.construction.stairs.width} onClick={() => attachStairsToEdge(edge.id, edge.length)}>{platform.construction.stairs.enabled ? "Move stairs here" : "Add stairs here"}</button><button onClick={() => toggleRail(edge.id)}>Toggle railing</button></div></section>; })() : <p className="section-help">Tap a side in the measured plan. Its bumpout, stairs, and railing actions will appear here.</p>}
       {platform.construction.stairs.enabled && <section className="selected-edge-card"><strong>Movable stairs</strong><p>Drag the orange-outlined handle in the plan.</p><div className="field-grid"><V3NumberField label="Stair position" value={platform.construction.stairs.offset} onCommit={(value) => updateStairs({ offset: value }, "Stair position updated exactly.")} /><V3NumberField label="Stair width" value={platform.construction.stairs.width} onCommit={(value) => updateStairs({ width: value }, "Stair width updated exactly.")} /><V3NumberField label="Step depth" value={platform.construction.stairs.treadDepth} onCommit={(value) => updateStairs({ treadDepth: value }, "Step depth updated exactly.")} /></div><button onClick={() => updateStairs({ enabled: false }, "Stairs removed.")}>Remove stairs</button></section>}
       <Suspense fallback={<div className="house-editor-loading" role="status">Preparing house connection…</div>}><HouseConnectionEditor design={design} platform={platform} onApply={updateHouseConnection} onError={setMessage} /></Suspense>
       <div className="history-actions"><button disabled={!history.past.length} onClick={() => dispatch({ type: "undo" })}>Undo</button><button disabled={!history.future.length} onClick={() => dispatch({ type: "redo" })}>Redo</button></div>
       <div className="design-facts"><div><span>Schema</span><strong>DeckDesign v3</strong></div><div><span>Revision</span><strong>{design.metadata.revision}</strong></div><div><span>Fingerprint</span><code>{deckDesignV3Fingerprint(design)}</code></div></div><p className="status-message" aria-live="polite">{message}</p>
     </aside><section className="visual-area" id="design-views">
-      <article className="view-card plan-card"><div className="card-title"><div><span>Measured polygon plan</span><small>2D · {platform.id} · {platform.region.outer.length} editable corners</small></div><strong>{formatFeetInches(platform.elevation)} high</strong></div><PlanViewV3 platform={platform} geometry={geometry} houseGeometry={houseGeometry} snapIncrement={snapIncrement} selectedEdgeId={selectedEdgeId} onSelectEdge={(edgeId) => { setSelectedEdgeId(edgeId); setOffsetComplete(false); }} onCornerPreview={(index, point) => moveCorner(index, point, false)} onCornerCommit={(index, point) => moveCorner(index, point, true)} onCancel={() => setPreview(null)} onStairPreview={(offset) => updateStairs({ offset }, "", true)} onStairCommit={(offset) => updateStairs({ offset }, `Stairs moved to ${formatFeetInches(offset)} from the edge start.`)} addCornerMode={addCornerMode} onAddCorner={addCorner} onSegmentPreview={(index, distance) => moveSegment(index, distance, false)} onSegmentCommit={(index, distance) => moveSegment(index, distance, true)} /></article>
+      <article className="view-card plan-card"><div className="card-title"><div><span>Measured polygon plan</span><small>2D · {platform.id} · {platform.region.outer.length} editable corners</small></div><strong>{formatFeetInches(platform.elevation)} high</strong></div><PlanViewV3 platform={platform} geometry={geometry} houseGeometry={houseGeometry} snapIncrement={snapIncrement} selectedEdgeId={selectedEdgeId} onSelectEdge={setSelectedEdgeId} onCornerPreview={(index, point) => moveCorner(index, point, false)} onCornerCommit={(index, point) => moveCorner(index, point, true)} onCancel={() => setPreview(null)} onStairPreview={(offset) => updateStairs({ offset }, "", true)} onStairCommit={(offset) => updateStairs({ offset }, `Stairs moved to ${formatFeetInches(offset)} from the edge start.`)} onSegmentPreview={(index, distance) => moveSegment(index, distance, false)} onSegmentCommit={(index, distance) => moveSegment(index, distance, true)} />
+        <section className="mobile-plan-edge-actions" aria-live="polite">{selectedEdgeId ? (() => { const edge = geometry.platformEdges.find((item) => item.id === selectedEdgeId)!; return <><div><strong>{formatFeetInches(edge.length)} side selected</strong><small>{hasEdgeReferences ? "Shape is locked to protect existing side options. Use Shape above to unlock it before adding a bumpout." : "These actions apply only to the highlighted side."}</small></div><button disabled={hasEdgeReferences} onClick={() => addBumpoutToEdge(edge.id)}>{hasEdgeReferences ? "Edit shape first" : "Add bumpout here"}</button><button className="primary" disabled={edge.length < platform.construction.stairs.width} onClick={() => attachStairsToEdge(edge.id, edge.length)}>{platform.construction.stairs.enabled ? "Move stairs here" : "Add stairs here"}</button><button onClick={() => toggleRail(edge.id)}>Toggle railing</button></>; })() : <p>Tap one deck side. Bumpout, stairs, and railing actions will appear here.</p>}</section>
+      </article>
       <article className="view-card three-card"><div className="card-title"><div><span>Model view</span><small>3D · polygon authority</small></div><div className="view-tools"><select value={quality} aria-label="3D quality" onChange={(event) => setQuality(event.target.value as RenderQuality)}><option value="economy">Economy</option><option value="balanced">Balanced</option><option value="detailed">Detailed</option></select><div className="camera-buttons">{(["perspective", "top", "front"] as CameraPreset[]).map((value) => <button key={value} className={preset === value ? "active" : ""} onClick={() => { setPreset(value); setPresetRequest((current) => current + 1); }}>{value}</button>)}</div></div></div><Suspense fallback={<div className="three-loading">Preparing polygon model…</div>}><ThreeViewV3 platform={platform} geometry={geometry} houseGeometry={houseGeometry} gradeElevation={design.siteContext.gradeElevation} preset={preset} presetRequest={presetRequest} showFraming={showFraming} quality={quality} /></Suspense><label className="check-row three-framing"><input type="checkbox" checked={showFraming} onChange={(event) => setShowFraming(event.target.checked)} />Show framing intent</label></article>
     </section></div>
     <section className="quantity-section"><div className="quantity-heading"><div><p className="eyebrow">Deterministic v3 projection</p><h2>Conceptual quantities</h2></div><p>{photoStartSummary?.review.outlineWarning ? "Overall-envelope quantities only—the non-standard outline must be reshaped before these are used." : "No products, prices, labor, waste, margin, or structural conclusions."}</p></div><div className="quantity-grid">{projection.aggregateQuantities.map((line) => <article className="quantity-card" key={line.key}><span>{line.key.replaceAll("-", " ")}</span><strong>{line.amount.toLocaleString()} <small>{line.unit}</small></strong><p>Derived from {line.sourceGeometry.length} recorded geometry references.</p></article>)}</div></section>

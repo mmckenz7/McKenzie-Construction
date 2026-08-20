@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-20 contextual side-action check
+
+- At 390 × 844, the sticky navigation shows Plan & 3D, Shape, Stairs, and House.
+- Tapping a plan side or its white square handle highlights that exact side and reveals only its contextual Add bumpout, Add/Move stairs, and Toggle railing actions below the plan.
+- When side references lock the outline, the bumpout action stays disabled and explains that Shape must be unlocked first.
+- In photo-reference tracing, the row of per-side offset buttons is gone. Selecting one side reveals one Add bumpout here action and its exact length field.
+
 ## 2026-08-19 responsive smoke check
 
 Scope: isolated DeckDesign v2 browser application before any v3 activation.
