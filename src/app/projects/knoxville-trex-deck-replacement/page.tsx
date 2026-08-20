@@ -75,6 +75,24 @@ export default function KnoxvilleTrexDeckReplacementPage() {
       ]}
       images={images}
       canonicalPath="/projects/knoxville-trex-deck-replacement"
+      relatedProjects={[
+        {
+          title: "East Tennessee Elevated Covered Deck",
+          location: "East Tennessee",
+          imageSrc:
+            "/projects/east-tennessee-elevated-covered-deck/full-rear-elevation.jpg",
+          imageAlt: "Completed elevated covered wood deck",
+          href: "/projects/east-tennessee-elevated-covered-deck",
+        },
+        {
+          title: "Tellico Village Screened Porch & Deck",
+          location: "Tellico Village, Tennessee",
+          imageSrc:
+            "/projects/tellico-village-screened-porch/full-rear-elevation.jpg",
+          imageAlt: "Completed screened porch and adjoining deck",
+          href: "/projects/tellico-village-screened-porch",
+        },
+      ]}
     />
   );
 }

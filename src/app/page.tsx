@@ -36,6 +36,29 @@ const services = [
   },
 ];
 
+const additionalFeaturedProjects = [
+  {
+    title: "East Tennessee Elevated Covered Deck",
+    location: "East Tennessee",
+    description:
+      "A roofed wood deck with a finished ceiling, ceiling fan, furnished living area, and full stair run.",
+    image:
+      "/projects/east-tennessee-elevated-covered-deck/full-rear-elevation.jpg",
+    imageAlt: "Completed elevated covered wood deck in East Tennessee",
+    href: "/projects/east-tennessee-elevated-covered-deck",
+  },
+  {
+    title: "Tellico Village Screened Porch & Deck",
+    location: "Tellico Village, Tennessee",
+    description:
+      "An elevated screened room with an adjoining open deck, grill area, composite surface, and stairs.",
+    image:
+      "/projects/tellico-village-screened-porch/full-rear-elevation.jpg",
+    imageAlt: "Completed screened porch and adjoining elevated deck",
+    href: "/projects/tellico-village-screened-porch",
+  },
+];
+
 const processSteps = [
   {
     number: "01",
@@ -418,6 +441,43 @@ export default function HomePage() {
               </div>
             </div>
           </Link>
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            {additionalFeaturedProjects.map((project) => (
+              <Link
+                key={project.href}
+                href={project.href}
+                className="group grid overflow-hidden border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lime-500 sm:grid-cols-[0.9fr_1.1fr]"
+              >
+                <div className="relative min-h-64 overflow-hidden bg-zinc-200">
+                  <Image
+                    src={project.image}
+                    alt={project.imageAlt}
+                    fill
+                    sizes="(min-width: 1024px) 25vw, 100vw"
+                    className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                  />
+                </div>
+                <div className="flex flex-col justify-center p-7">
+                  <p
+                    className="text-xs font-black uppercase tracking-[0.18em]"
+                    style={{ color: brandGreen }}
+                  >
+                    {project.location}
+                  </p>
+                  <h3 className="mt-3 text-2xl font-black leading-tight">
+                    {project.title}
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-zinc-600">
+                    {project.description}
+                  </p>
+                  <p className="mt-5 text-sm font-black uppercase tracking-wider">
+                    Explore project <span style={{ color: brandGreen }}>→</span>
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
 
           <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div>

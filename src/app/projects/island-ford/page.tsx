@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 
 import { Footer } from "@/components/footer";
 import { Navigation } from "@/components/navigation";
+import { RelatedProjects } from "@/components/related-projects";
 
 export const metadata: Metadata = {
   title: "Island Ford Deck & Outdoor Living Project",
@@ -245,6 +246,26 @@ export default function IslandFordProjectPage() {
             </div>
           </div>
         </section>
+
+        <RelatedProjects
+          projects={[
+            {
+              title: "Knoxville Trex Deck Replacement",
+              location: "Knoxville, Tennessee",
+              imageSrc: "/projects/knoxville-trex-deck/finished-deck-wide.jpg",
+              imageAlt: "Completed Knoxville Trex deck",
+              href: "/projects/knoxville-trex-deck-replacement",
+            },
+            {
+              title: "East Tennessee Elevated Covered Deck",
+              location: "East Tennessee",
+              imageSrc:
+                "/projects/east-tennessee-elevated-covered-deck/full-rear-elevation.jpg",
+              imageAlt: "Completed elevated covered wood deck",
+              href: "/projects/east-tennessee-elevated-covered-deck",
+            },
+          ]}
+        />
 
         <section className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
           <div className="rounded-[2rem] bg-brand-charcoal px-7 py-10 text-white sm:px-10 lg:flex lg:items-center lg:justify-between">

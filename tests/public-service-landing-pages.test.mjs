@@ -96,6 +96,8 @@ test("completed deck work is the primary project focus", () => {
 
   assert.match(home, /projects\/knoxville-trex-deck\/finished-deck-wide\.jpg/);
   assert.match(home, /projects\/tellico-village-screened-porch\/screened-living-space\.jpg/);
+  assert.match(home, /projects\/east-tennessee-elevated-covered-deck/);
+  assert.match(home, /additionalFeaturedProjects\.map/);
   assert.doesNotMatch(home, /images\.unsplash\.com/);
   assert.ok(projects.indexOf("Knoxville Trex Deck Replacement") < projects.indexOf("East Tennessee Ranch Home Renovation"));
   assert.match(trex, /canonical: "\/projects\/knoxville-trex-deck-replacement"/);
@@ -108,6 +110,31 @@ test("completed deck work is the primary project focus", () => {
   assert.match(sitemap, /projects\/knoxville-trex-deck-replacement/);
   assert.match(sitemap, /projects\/tellico-village-screened-porch/);
   assert.match(sitemap, /projects\/east-tennessee-elevated-covered-deck/);
+});
+
+test("completed projects connect service traffic to related work and consultation paths", () => {
+  const coveredService = read("src/app/covered-decks-knoxville/page.tsx");
+  const serviceTemplate = read("src/components/service-landing-page.tsx");
+  const projectTemplate = read("src/components/deck-project-page.tsx");
+  const relatedProjects = read("src/components/related-projects.tsx");
+  const trex = read("src/app/projects/knoxville-trex-deck-replacement/page.tsx");
+  const porch = read("src/app/projects/tellico-village-screened-porch/page.tsx");
+  const coveredDeck = read("src/app/projects/east-tennessee-elevated-covered-deck/page.tsx");
+  const islandFord = read("src/app/projects/island-ford/page.tsx");
+
+  assert.match(coveredService, /featuredProject=/);
+  assert.match(coveredService, /east-tennessee-elevated-covered-deck/);
+  assert.match(coveredDeck, /projectType="Covered%20Outdoor%20Living"/);
+  assert.match(serviceTemplate, /See the Completed Project/);
+  assert.match(projectTemplate, /RelatedProjects projects=/);
+  assert.match(relatedProjects, /Explore more completed outdoor spaces/);
+  for (const project of [trex, porch, coveredDeck, islandFord]) {
+    assert.match(project, /RelatedProjects|relatedProjects=/);
+  }
+  assert.doesNotMatch(
+    `${coveredService}\n${serviceTemplate}\n${projectTemplate}\n${relatedProjects}`,
+    /Pearson/i,
+  );
 });
 
 test("public navigation works on mobile and service pages expose breadcrumbs", () => {

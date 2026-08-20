@@ -3,6 +3,10 @@ import Link from "next/link";
 
 import { Footer } from "@/components/footer";
 import { Navigation } from "@/components/navigation";
+import {
+  RelatedProjects,
+  type RelatedProject,
+} from "@/components/related-projects";
 
 export type DeckProjectImage = {
   src: string;
@@ -14,10 +18,15 @@ type DeckProjectPageProps = {
   title: string;
   location: string;
   summary: string;
-  projectType: "New%20Deck" | "Deck%20Replacement" | "Screened%20Porch";
+  projectType:
+    | "New%20Deck"
+    | "Deck%20Replacement"
+    | "Screened%20Porch"
+    | "Covered%20Outdoor%20Living";
   highlights: string[];
   images: DeckProjectImage[];
   canonicalPath: string;
+  relatedProjects: RelatedProject[];
 };
 
 export function DeckProjectPage({
@@ -28,6 +37,7 @@ export function DeckProjectPage({
   highlights,
   images,
   canonicalPath,
+  relatedProjects,
 }: DeckProjectPageProps) {
   const schema = {
     "@context": "https://schema.org",
@@ -167,6 +177,8 @@ export function DeckProjectPage({
             </Link>
           </div>
         </section>
+
+        <RelatedProjects projects={relatedProjects} />
       </main>
 
       <Footer />

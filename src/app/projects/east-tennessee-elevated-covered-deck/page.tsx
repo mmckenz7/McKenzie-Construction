@@ -66,7 +66,7 @@ export default function EastTennesseeElevatedCoveredDeckPage() {
       title="East Tennessee Elevated Covered Deck"
       location="East Tennessee"
       summary="This elevated wood deck adds a roofed outdoor-living area with a finished soffit ceiling, ceiling fan, open wood railing, and a full stair run to the backyard. The furnished space provides shade while keeping an open view across the property."
-      projectType="New%20Deck"
+      projectType="Covered%20Outdoor%20Living"
       highlights={[
         "Elevated covered outdoor-living area",
         "Finished soffit ceiling with ceiling fan",
@@ -75,6 +75,23 @@ export default function EastTennesseeElevatedCoveredDeckPage() {
       ]}
       images={images}
       canonicalPath="/projects/east-tennessee-elevated-covered-deck"
+      relatedProjects={[
+        {
+          title: "Tellico Village Screened Porch & Deck",
+          location: "Tellico Village, Tennessee",
+          imageSrc:
+            "/projects/tellico-village-screened-porch/full-rear-elevation.jpg",
+          imageAlt: "Completed screened porch and adjoining deck",
+          href: "/projects/tellico-village-screened-porch",
+        },
+        {
+          title: "Knoxville Trex Deck Replacement",
+          location: "Knoxville, Tennessee",
+          imageSrc: "/projects/knoxville-trex-deck/finished-deck-wide.jpg",
+          imageAlt: "Completed Knoxville Trex deck",
+          href: "/projects/knoxville-trex-deck-replacement",
+        },
+      ]}
     />
   );
 }

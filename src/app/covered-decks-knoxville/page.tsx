@@ -49,6 +49,16 @@ export default function CoveredDecksKnoxvillePage() {
       path="/covered-decks-knoxville"
       projectType="Covered Outdoor Living"
       serviceName="Covered deck construction in Knoxville, Tennessee"
+      featuredProject={{
+        title: "East Tennessee Elevated Covered Deck",
+        location: "East Tennessee",
+        description:
+          "This completed project shows how a roof, finished soffit ceiling, ceiling fan, wood deck, railing, stairs, and furnished living area work together as one outdoor space.",
+        imageSrc:
+          "/projects/east-tennessee-elevated-covered-deck/full-rear-elevation.jpg",
+        imageAlt: "Completed elevated covered wood deck in East Tennessee",
+        href: "/projects/east-tennessee-elevated-covered-deck",
+      }}
       planningDetails={[
         {
           title: "Home and Roof Relationship",
