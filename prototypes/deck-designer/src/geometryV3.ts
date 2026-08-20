@@ -107,17 +107,33 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
   const actualRise = riserCount > 0 ? stairRise / riserCount : 0;
   const landingOffset = stair.enabled && stair.landingEnabled ? stair.landingDepth : 0;
   const stairCenterOnEdge = positionOnEdge(stair.offset + stair.width / 2);
-  const stairRotationY = -Math.atan2(stairDz, stairDx);
+  const turn = stair.landingEnabled ? stair.landingTurn : "straight";
+  const runDirection = turn === "left"
+    ? point(stairEdge.outward.z, -stairEdge.outward.x)
+    : turn === "right"
+      ? point(-stairEdge.outward.z, stairEdge.outward.x)
+      : stairEdge.outward;
+  const widthDirection = point(-runDirection.z, runDirection.x);
+  const runOrigin = turn === "straight"
+    ? point(
+        stairCenterOnEdge.x + stairEdge.outward.x * landingOffset,
+        stairCenterOnEdge.z + stairEdge.outward.z * landingOffset,
+      )
+    : point(
+        stairCenterOnEdge.x + stairEdge.outward.x * (stair.landingDepth - stair.width / 2) + runDirection.x * stair.width / 2,
+        stairCenterOnEdge.z + stairEdge.outward.z * (stair.landingDepth - stair.width / 2) + runDirection.z * stair.width / 2,
+      );
+  const stairRotationY = -Math.atan2(widthDirection.z, widthDirection.x);
+  const landingRotationY = -Math.atan2(stairDz, stairDx);
   const stairTreads = Object.freeze(Array.from({ length: riserCount }, (_, index) => {
-    const outwardDistance = landingOffset + stair.treadDepth * (index + 0.5);
     const center = point(
-      stairCenterOnEdge.x + stairEdge.outward.x * outwardDistance,
-      stairCenterOnEdge.z + stairEdge.outward.z * outwardDistance,
+      runOrigin.x + runDirection.x * stair.treadDepth * (index + 0.5),
+      runOrigin.z + runDirection.z * stair.treadDepth * (index + 0.5),
     );
-    const alongX = stairDx * stair.width / 2;
-    const alongZ = stairDz * stair.width / 2;
-    const outX = stairEdge.outward.x * stair.treadDepth / 2;
-    const outZ = stairEdge.outward.z * stair.treadDepth / 2;
+    const alongX = widthDirection.x * stair.width / 2;
+    const alongZ = widthDirection.z * stair.width / 2;
+    const outX = runDirection.x * stair.treadDepth / 2;
+    const outZ = runDirection.z * stair.treadDepth / 2;
     return Object.freeze({
       id: `stair-tread-${index + 1}`,
       x: center.x,
@@ -141,14 +157,14 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
     ? Object.freeze([-1, 1].map((side, index) => Object.freeze({
         id: `stair-stringer-${index + 1}`,
         start: point3(
-          stairCenterOnEdge.x + stairDx * stringerSideOffset * side + stairEdge.outward.x * landingOffset,
+          runOrigin.x + widthDirection.x * stringerSideOffset * side,
           platform.elevation,
-          stairCenterOnEdge.z + stairDz * stringerSideOffset * side + stairEdge.outward.z * landingOffset,
+          runOrigin.z + widthDirection.z * stringerSideOffset * side,
         ),
         end: point3(
-          stairCenterOnEdge.x + stairDx * stringerSideOffset * side + stairEdge.outward.x * (landingOffset + stairRun),
+          runOrigin.x + widthDirection.x * stringerSideOffset * side + runDirection.x * stairRun,
           gradeElevation,
-          stairCenterOnEdge.z + stairDz * stringerSideOffset * side + stairEdge.outward.z * (landingOffset + stairRun),
+          runOrigin.z + widthDirection.z * stringerSideOffset * side + runDirection.z * stairRun,
         ),
       })))
     : Object.freeze([]);
@@ -172,19 +188,24 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
     depth: stair.landingDepth,
     width: stair.width,
     center: landingCenter,
-    rotationY: stairRotationY,
+    rotationY: landingRotationY,
     corners: landingCorners,
   }) : null;
   const landingRailSegments = landing ? Object.freeze([
-    Object.freeze({ id: "landing-rail-left", start: landingCorners[0], end: landingCorners[3] }),
-    Object.freeze({ id: "landing-rail-right", start: landingCorners[1], end: landingCorners[2] }),
+    ...(turn !== "left" ? [Object.freeze({ id: "landing-rail-left", start: landingCorners[0], end: landingCorners[3] })] : []),
+    ...(turn !== "right" ? [Object.freeze({ id: "landing-rail-right", start: landingCorners[1], end: landingCorners[2] })] : []),
   ]) : Object.freeze([]);
-  const landingRailPosts = landing ? Object.freeze(landingCorners.map((corner, index) => Object.freeze({
+  const landingRailPointMap = new Map<string, PolygonPoint>();
+  for (const segment of landingRailSegments) {
+    for (const corner of [segment.start, segment.end]) landingRailPointMap.set(`${corner.x}:${corner.z}`, corner);
+  }
+  const landingRailPoints = landing ? (turn === "straight" ? landingCorners : [...landingRailPointMap.values()]) : [];
+  const landingRailPosts = Object.freeze(landingRailPoints.map((corner, index) => Object.freeze({
     id: `landing-rail-post-${index + 1}`,
     x: corner.x,
     z: corner.z,
     top: platform.elevation + platform.construction.railing.height,
-  }))) : Object.freeze([]);
+  })));
   const landingSupportPosts = landing ? Object.freeze([landingCorners[2], landingCorners[3]].map((corner, index) => Object.freeze({
     id: `landing-support-post-${index + 1}`,
     x: corner.x,

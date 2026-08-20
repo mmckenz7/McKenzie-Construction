@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { deriveGeometry } from "../src/geometry";
 import { normalizeDesign } from "../src/model";
-import { migrateDeckDesignToV3 } from "../src/modelV3";
+import { migrateDeckDesignToV3, normalizeDeckDesignV3 } from "../src/modelV3";
 import {
   deriveDeckAccessoryProjectionV3,
   stableDeckAccessoryProjectionV3Json,
@@ -47,5 +47,20 @@ describe("v3 accessory quantity projection", () => {
     expect(JSON.stringify(report)).not.toMatch(/price|cost|sku|margin|supplier/i);
     expect(report.quantities.filter((line) => line.key.includes("post") || line.key.includes("stringer"))
       .every((line) => line.quantityClass === "visualization")).toBe(true);
+  });
+
+  it("projects a turning landing from the same recorded geometry facts", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, landingEnabled: true, landingDepth: 60, landingTurn: "left" } } }],
+    });
+    const report = deriveDeckAccessoryProjectionV3(design, platform.id);
+    const byKey = Object.fromEntries(report.quantities.map((line) => [line.key, line]));
+    expect(byKey["stair-landing-area"].amount).toBe(20);
+    expect(byKey["landing-railing-linear-feet"].amount).toBe(5);
+    expect(byKey["landing-railing-post-count"].amount).toBe(2);
+    expect(byKey["stair-tread-count"].sourceGeometry).toHaveLength(7);
   });
 });

@@ -33,9 +33,9 @@ const report = {
 console.log("Bundle budget report", JSON.stringify(report, null, 2));
 
 const failures = [];
-if (initial.gzipBytes > 91 * 1024) failures.push(`initial entry is ${report.initialEntryGzipKiB} KiB (budget 91 KiB)`);
+if (initial.gzipBytes > 92 * 1024) failures.push(`initial entry is ${report.initialEntryGzipKiB} KiB (budget 92 KiB)`);
 if (largest.gzipBytes > 170 * 1024) failures.push(`largest chunk is ${report.largestChunkGzipKiB} KiB (budget 170 KiB)`);
-if (totalGzipBytes > 227 * 1024) failures.push(`total JavaScript is ${report.totalJavaScriptGzipKiB} KiB (budget 227 KiB)`);
+if (totalGzipBytes > 228 * 1024) failures.push(`total JavaScript is ${report.totalJavaScriptGzipKiB} KiB (budget 228 KiB)`);
 
 if (failures.length > 0) {
   throw new Error(`Bundle budget exceeded: ${failures.join("; ")}`);

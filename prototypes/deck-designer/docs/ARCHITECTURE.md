@@ -36,7 +36,7 @@ The tracer's touch-first viewport remains presentation state: pinch gestures and
 
 This tracer is not photogrammetry and performs no image analysis or AI calls: images help the user recognize the shape, while only their plan edits record corners. Future perspective calibration, multi-view reconstruction, or AI suggestions must remain reviewable proposals until user confirmation and must not alter this authority boundary.
 
-## Current prototype JSON shape
+## Legacy v2 input shape
 
 ```json
 {
@@ -77,13 +77,15 @@ This tracer is not photogrammetry and performs no image analysis or AI calls: im
 }
 ```
 
+The active browser document is DeckDesign v3. The legacy v2 shape above remains an accepted local import and migrates to polygon platforms plus geometric edge references; its stair intent receives `landingTurn: "straight"`. New v3 saves and downloads always include the explicit turn field.
+
 ## Deterministic quantity policy
 
-The current projection reports geometry-derived conceptual quantities: platform area, surface board rows and linear feet, joist count and linear feet, one beam line, post count, railing length and unique railing-post count, straight-stair tread/run and two side-stringer paths, and a visible screw allowance. Rounding happens only at named output boundaries. Every number is reproducible from normalized design facts; no AI participates. Stringers are deliberately limited to two visualization paths and do not claim an estimate-grade or structurally adequate count.
+The current projection reports geometry-derived conceptual quantities: platform area, surface board rows and linear feet, joist count and linear feet, one beam line, post count, railing length and unique railing-post count, stair tread/run and two side-stringer paths, optional top-landing area/rails/support locations, and a visible screw allowance. A recorded top landing can continue straight or turn the descending flight left/right; a turning landing must be at least as deep as the stair width. Rounding happens only at named output boundaries. Every number is reproducible from normalized design facts; no AI participates. Stringers are deliberately limited to two visualization paths and do not claim an estimate-grade or structurally adequate count.
 
 The browser workspace presents Deck Layout and Railings as separate UI stages. This stage is intentionally not stored in DeckDesign v3: locking the layout changes which editing controls are available but does not create a second geometry model or mutate the design. The railing stage selects the same exact geometric edge IDs, refuses house-attached edges, and records enabled free edges in deterministic platform-edge order. Returning to layout preserves the existing explicit-review boundary for any edge-referenced house, stair, or railing facts.
 
-Every free platform edge has a stable semantic ID. Rectangles expose `front`, `left`, and `right`; L-shapes additionally expose `notch-horizontal` and `notch-vertical`. When enabled, stairs attach to one recorded edge ID. The attachment offset and width create the railing opening; the edge direction and deterministic outward normal orient the run. Elevation and maximum-riser intent produce equal conceptual rises and tread count. An optional recorded top-landing depth shifts the run outward and produces a separate landing-area projection. Undo/redo restores recorded facts as a new monotonic revision rather than silently moving the authoritative revision backward.
+Every free platform edge has a stable semantic ID. Rectangles expose `front`, `left`, and `right`; L-shapes additionally expose `notch-horizontal` and `notch-vertical`. When enabled, stairs attach to one recorded edge ID. The attachment offset and width create the railing opening; the edge direction and deterministic outward normal orient the run. Elevation and maximum-riser intent produce equal conceptual rises and tread count. An optional recorded top-landing depth shifts the run outward and produces a separate landing-area projection. Its explicit `landingTurn` is `straight`, `left`, or `right`, defined while walking down from the deck; no collision or code-compliance conclusion is inferred. Older v3 documents without this field normalize to `straight`. Undo/redo restores recorded facts as a new monotonic revision rather than silently moving the authoritative revision backward.
 
 Normalization accepts the prototype's earlier local `edge: "front-outer"` field and projects it to `edgeId: "front"`. This is a local prototype compatibility rule, not an authorized shared migration.
 

@@ -60,4 +60,21 @@ describe("DeckDesign v3 immutable command history", () => {
     expect(designHistoryReducerV3(history, { type: "undo" })).toBe(history);
     expect(designHistoryReducerV3(history, { type: "redo" })).toBe(history);
   });
+
+  it("undoes and redoes an explicit landing turn without losing its exact stair edge", () => {
+    const source = safeNotchSource();
+    const platform = source.platforms[0];
+    const turned = normalizeDeckDesignV3({
+      ...source,
+      platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, landingEnabled: true, landingDepth: 48, landingTurn: "left" } } }],
+      metadata: { ...source.metadata, revision: source.metadata.revision + 1 },
+    });
+    const applied = designHistoryReducerV3(createHistoryV3(source), { type: "apply", design: turned });
+    const undone = designHistoryReducerV3(applied, { type: "undo" });
+    const redone = designHistoryReducerV3(undone, { type: "redo" });
+    expect(undone.present.platforms[0].construction.stairs.landingTurn).toBe("straight");
+    expect(redone.present.platforms[0].construction.stairs.landingTurn).toBe("left");
+    expect(redone.present.platforms[0].construction.stairs.edgeId).toBe(platform.construction.stairs.edgeId);
+    expect([applied.present, undone.present, redone.present].map((design) => design.metadata.revision)).toEqual([2, 3, 4]);
+  });
 });

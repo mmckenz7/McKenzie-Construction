@@ -1,5 +1,15 @@
 # Browser QA record
 
+## 2026-08-20 landing and stair-turn check
+
+- The existing v3 top-landing fact is now exposed only inside the active stair card, keeping the Deck Layout page staged and uncluttered.
+- Enabling the landing reveals one exact depth field and three touch-sized choices: Straight, Left, and Right. Left/right are defined while walking down from the deck.
+- Desktop visual QA confirmed the same recorded turn updates the measured plan, the framed 3D model, landing rails/supports, and conceptual quantities in real time.
+- At 390 × 844, the landing controls remain one-column, the three direction choices stay fully visible, and the selected direction has a clear active state. There were no browser warnings or errors.
+- A turning landing shallower than the stair width is rejected, restores the prior valid dimension, and explains the limit. Older v3 JSON without `landingTurn` normalizes to `straight`.
+- Locking the layout still moves to the dedicated railing stage with zero corner/segment/stair movement handles; the turned stair and its deterministic opening remain part of the same design.
+- The validated bundle budgets are now 92 KiB initial entry and 228 KiB total gzip, a one-KiB increase for this complete geometry/UI slice.
+
 ## 2026-08-20 staged railing-workspace check
 
 - Deck Layout and Railings are separate internal prototype stages; the layout stage contains shape, house, and stair controls but no railing action.

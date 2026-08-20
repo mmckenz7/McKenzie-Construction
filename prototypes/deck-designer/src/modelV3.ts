@@ -25,7 +25,10 @@ export type DeckPlatformV3 = Readonly<{
     decking: DeckDesign["construction"]["decking"];
     framing: DeckDesign["construction"]["framing"];
     railing: Readonly<{ height: number; enabledEdgeIds: readonly string[] }>;
-    stairs: Omit<DeckDesign["construction"]["stairs"], "edgeId"> & Readonly<{ edgeId: string }>;
+    stairs: Omit<DeckDesign["construction"]["stairs"], "edgeId"> & Readonly<{
+      edgeId: string;
+      landingTurn: "straight" | "left" | "right";
+    }>;
   }>;
 }>;
 
@@ -94,6 +97,7 @@ function migrateNormalizedV2(design: DeckDesign): DeckDesignV3 {
       stairs: Object.freeze({
         ...design.construction.stairs,
         edgeId: semanticEdges[design.construction.stairs.edgeId],
+        landingTurn: "straight" as const,
       }),
     }),
   });
@@ -167,9 +171,16 @@ function normalizePlatformV3(
     throw new RangeError("V3 stairs must reference a recorded free edge.");
   }
   const stairEdge = edges.find((edge) => edge.id === platform.construction.stairs.edgeId)!;
+  const landingTurn = platform.construction.stairs.landingTurn ?? "straight";
+  if (!["straight", "left", "right"].includes(landingTurn)) {
+    throw new TypeError("V3 stair landingTurn must be straight, left, or right.");
+  }
   if (platform.construction.stairs.enabled &&
       shared.construction.stairs.offset + shared.construction.stairs.width > stairEdge.length) {
     throw new RangeError("V3 stairs must fit within their recorded free edge.");
+  }
+  if (platform.construction.stairs.enabled && shared.construction.stairs.landingEnabled && landingTurn !== "straight" && shared.construction.stairs.landingDepth < shared.construction.stairs.width) {
+    throw new RangeError("A turning landing must be at least as deep as the stair width.");
   }
   return Object.freeze({
     id: platform.id,
@@ -187,6 +198,7 @@ function normalizePlatformV3(
         ...shared.construction.stairs,
         enabled: platform.construction.stairs.enabled,
         edgeId: platform.construction.stairs.edgeId,
+        landingTurn,
       }),
     }),
   });
