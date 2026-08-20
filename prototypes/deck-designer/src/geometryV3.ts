@@ -214,8 +214,8 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
     corners: landingCorners,
   }) : null;
   const landingRailSegments = landing ? Object.freeze([
-    ...(turn !== "left" ? [Object.freeze({ id: "landing-rail-left", start: landingCorners[0], end: landingCorners[3] })] : []),
-    ...(turn !== "right" ? [Object.freeze({ id: "landing-rail-right", start: landingCorners[1], end: landingCorners[2] })] : []),
+    ...(turn !== "right" ? [Object.freeze({ id: "landing-rail-left", start: landingCorners[0], end: landingCorners[3] })] : []),
+    ...(turn !== "left" ? [Object.freeze({ id: "landing-rail-right", start: landingCorners[1], end: landingCorners[2] })] : []),
   ]) : Object.freeze([]);
   const landingRailPointMap = new Map<string, PolygonPoint>();
   for (const segment of landingRailSegments) {
