@@ -141,8 +141,8 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
         landingNearCenter.z + upperDirection.z * stair.landingDepth,
       )
     : point(
-        landingCenter.x + lowerDirection.x * stair.width / 2,
-        landingCenter.z + lowerDirection.z * stair.width / 2,
+        landingCenter.x + lowerDirection.x * stair.landingWidth / 2,
+        landingCenter.z + lowerDirection.z * stair.landingWidth / 2,
       );
   const landingRotationY = -Math.atan2(stairDz, stairDx);
   const flightTreads = (
@@ -230,8 +230,8 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
     Object.freeze({ id: `stair-rail-post-${index + 1}-top`, x: segment.start.x, y: segment.start.y - platform.construction.railing.height + 2, z: segment.start.z, height: platform.construction.railing.height }),
     Object.freeze({ id: `stair-rail-post-${index + 1}-bottom`, x: segment.end.x, y: segment.end.y - platform.construction.railing.height + 2, z: segment.end.z, height: platform.construction.railing.height }),
   ]));
-  const landingAlongX = stairDx * stair.width / 2;
-  const landingAlongZ = stairDz * stair.width / 2;
+  const landingAlongX = stairDx * stair.landingWidth / 2;
+  const landingAlongZ = stairDz * stair.landingWidth / 2;
   const landingOutX = stairEdge.outward.x * stair.landingDepth / 2;
   const landingOutZ = stairEdge.outward.z * stair.landingDepth / 2;
   const landingCorners = Object.freeze([
@@ -245,7 +245,7 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
     position: landingPosition,
     y: landingElevation,
     depth: stair.landingDepth,
-    width: stair.width,
+    width: stair.landingWidth,
     center: landingCenter,
     rotationY: landingRotationY,
     corners: landingCorners,

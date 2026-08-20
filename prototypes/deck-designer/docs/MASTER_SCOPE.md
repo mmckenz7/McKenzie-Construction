@@ -32,6 +32,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Deterministic straight-stair side-stringer visualization and generic quantity projection
 - [x] Deterministic stair-side handrails and separate generic stair-railing quantity projection
 - [x] Optional intermediate-height landing with deterministic two-flight stairs
+- [x] Exact landing width and depth independent of stair width
 - [ ] Switchback stairs, chained landings, and configurations beyond two flights
 - [x] Edge selection with contextual railing/stair actions and explainable conceptual warnings
 - [x] Drag handles and selectable grid snapping for rectangle and L-cutout dimensions

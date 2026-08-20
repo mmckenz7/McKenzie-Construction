@@ -146,4 +146,17 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(geometry.stairRailPosts).toHaveLength(8);
     expect(geometry.landingSupportPosts.every((post) => post.top < platform.elevation)).toBe(true);
   });
+
+  it("sizes a landing independently while keeping both flights centered on it", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, landingEnabled: true, landingPosition: "midway", upperFlightRisers: 3, landingWidth: 72, landingDepth: 60, landingTurn: "right" } } }],
+    });
+    const geometry = derivePlatformGeometryV3(design, platform.id);
+    expect(geometry.landing).toMatchObject({ width: 72, depth: 60 });
+    expect(Math.hypot(geometry.landing!.corners[1].x - geometry.landing!.corners[0].x, geometry.landing!.corners[1].z - geometry.landing!.corners[0].z)).toBeCloseTo(72);
+    expect(Math.hypot(geometry.stairTreads[3].x - geometry.landing!.center.x, geometry.stairTreads[3].z - geometry.landing!.center.z)).toBeCloseTo(41);
+  });
 });

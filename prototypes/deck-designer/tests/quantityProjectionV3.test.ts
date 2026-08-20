@@ -85,4 +85,16 @@ describe("v3 accessory quantity projection", () => {
     expect(byKey["stair-landing-area"].explanation).toMatch(/midway landing at 27\.43 in elevation/i);
     expect(stableDeckAccessoryProjectionV3Json(report)).toBe(stableDeckAccessoryProjectionV3Json(report));
   });
+
+  it("projects exact landing area from independently recorded width and depth", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, landingEnabled: true, landingWidth: 72, landingDepth: 60 } } }],
+    });
+    const landing = deriveDeckAccessoryProjectionV3(design, platform.id).quantities.find((line) => line.key === "stair-landing-area")!;
+    expect(landing.amount).toBe(30);
+    expect(landing.explanation).toMatch(/72 in by 60 in/i);
+  });
 });

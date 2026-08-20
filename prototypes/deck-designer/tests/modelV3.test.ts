@@ -23,7 +23,7 @@ describe("isolated DeckDesign v3 migration spike", () => {
     expect(migrated.platforms[0].edgeConditions.filter((condition) => condition.condition === "house_attachment")).toHaveLength(1);
     expect(migrated.platforms[0].edgeConditions.filter((condition) => condition.condition === "free")).toHaveLength(3);
     expect(migrated.platforms[0].construction.railing.enabledEdgeIds).toHaveLength(3);
-    expect(migrated.platforms[0].construction.stairs).toMatchObject({ landingPosition: "top", upperFlightRisers: 3 });
+    expect(migrated.platforms[0].construction.stairs).toMatchObject({ landingPosition: "top", upperFlightRisers: 3, landingWidth: 48 });
     expect(Object.keys(migrated.platforms[0])).not.toEqual(expect.arrayContaining(["kind", "width", "projection", "cutoutWidth", "cutoutDepth"]));
   });
 
@@ -53,12 +53,17 @@ describe("isolated DeckDesign v3 migration spike", () => {
     const legacy = JSON.parse(stableDeckDesignV3Json(migrated));
     delete legacy.platforms[0].construction.stairs.landingPosition;
     delete legacy.platforms[0].construction.stairs.upperFlightRisers;
-    expect(migrateDeckDesignToV3(legacy).platforms[0].construction.stairs).toMatchObject({ landingPosition: "top", upperFlightRisers: 3 });
+    delete legacy.platforms[0].construction.stairs.landingWidth;
+    expect(migrateDeckDesignToV3(legacy).platforms[0].construction.stairs).toMatchObject({ landingPosition: "top", upperFlightRisers: 3, landingWidth: 48 });
     const platform = migrated.platforms[0];
     expect(() => normalizeDeckDesignV3({
       ...migrated,
       platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, landingEnabled: true, landingPosition: "midway", upperFlightRisers: 7 } } }],
     })).toThrow(/at least one riser in each flight/i);
+    expect(() => normalizeDeckDesignV3({
+      ...migrated,
+      platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, landingEnabled: true, width: 60, landingWidth: 48 } } }],
+    })).toThrow(/at least as wide as the stairs/i);
   });
 
   it("rejects railing or stairs that reference attached or missing edges", () => {

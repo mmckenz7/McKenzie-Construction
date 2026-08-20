@@ -30,6 +30,7 @@ export type DeckPlatformV3 = Readonly<{
       landingTurn: "straight" | "left" | "right";
       landingPosition: "top" | "midway";
       upperFlightRisers: number;
+      landingWidth: number;
     }>;
   }>;
 }>;
@@ -102,6 +103,7 @@ function migrateNormalizedV2(design: DeckDesign): DeckDesignV3 {
         landingTurn: "straight" as const,
         landingPosition: "top" as const,
         upperFlightRisers: 3,
+        landingWidth: design.construction.stairs.width,
       }),
     }),
   });
@@ -189,12 +191,19 @@ function normalizePlatformV3(
   if (!Number.isInteger(upperFlightRisers) || upperFlightRisers < 1) {
     throw new RangeError("V3 upperFlightRisers must be a positive whole number.");
   }
+  const landingWidth = platform.construction.stairs.landingWidth ?? shared.construction.stairs.width;
+  if (!Number.isFinite(landingWidth) || landingWidth < 30 || landingWidth > 144) {
+    throw new RangeError("V3 landingWidth must be between 30 and 144 inches.");
+  }
   if (platform.construction.stairs.enabled &&
       shared.construction.stairs.offset + shared.construction.stairs.width > stairEdge.length) {
     throw new RangeError("V3 stairs must fit within their recorded free edge.");
   }
   if (platform.construction.stairs.enabled && shared.construction.stairs.landingEnabled && landingTurn !== "straight" && shared.construction.stairs.landingDepth < shared.construction.stairs.width) {
     throw new RangeError("A turning landing must be at least as deep as the stair width.");
+  }
+  if (platform.construction.stairs.enabled && shared.construction.stairs.landingEnabled && landingWidth < shared.construction.stairs.width) {
+    throw new RangeError("A landing must be at least as wide as the stairs.");
   }
   if (platform.construction.stairs.enabled && shared.construction.stairs.landingEnabled && landingPosition === "midway" && (totalRisers < 2 || upperFlightRisers >= totalRisers)) {
     throw new RangeError(`A midway landing must leave at least one riser in each flight; this stair has ${totalRisers} total risers.`);
@@ -218,6 +227,7 @@ function normalizePlatformV3(
         landingTurn,
         landingPosition,
         upperFlightRisers,
+        landingWidth,
       }),
     }),
   });

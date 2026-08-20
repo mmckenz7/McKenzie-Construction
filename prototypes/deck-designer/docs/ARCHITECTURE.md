@@ -71,13 +71,13 @@ This tracer is not photogrammetry and performs no image analysis or AI calls: im
     "decking": { "boardWidth": 5.5, "gap": 0.25 },
     "framing": { "joistSpacing": 16, "beamInset": 24, "maxPostSpacing": 72 },
     "railing": { "height": 36, "enabledEdges": ["front", "left", "right"] },
-    "stairs": { "enabled": false, "edgeId": "front", "offset": 48, "width": 48, "treadDepth": 10, "maxRiserHeight": 7.75, "landingEnabled": false, "landingDepth": 48, "landingPosition": "top", "upperFlightRisers": 3, "landingTurn": "straight" }
+    "stairs": { "enabled": false, "edgeId": "front", "offset": 48, "width": 48, "treadDepth": 10, "maxRiserHeight": 7.75, "landingEnabled": false, "landingWidth": 48, "landingDepth": 48, "landingPosition": "top", "upperFlightRisers": 3, "landingTurn": "straight" }
   },
   "metadata": { "status": "conceptual", "revision": 1 }
 }
 ```
 
-The active browser document is DeckDesign v3. Legacy v1/v2 imports migrate to polygon platforms plus geometric edge references. Earlier v3 documents remain accepted and normalize missing stair facts to `landingPosition: "top"`, `upperFlightRisers: 3`, and `landingTurn: "straight"`. New v3 saves and downloads always include those explicit fields.
+The active browser document is DeckDesign v3. Legacy v1/v2 imports migrate to polygon platforms plus geometric edge references. Earlier v3 documents remain accepted and normalize missing stair facts to `landingPosition: "top"`, `upperFlightRisers: 3`, `landingWidth: stairs.width`, and `landingTurn: "straight"`. New v3 saves and downloads always include those explicit fields.
 
 ## Deterministic quantity policy
 
@@ -85,7 +85,7 @@ The current projection reports geometry-derived conceptual quantities: platform 
 
 The browser workspace presents Deck Layout and Railings as separate UI stages. This stage is intentionally not stored in DeckDesign v3: locking the layout changes which editing controls are available but does not create a second geometry model or mutate the design. The railing stage selects the same exact geometric edge IDs, refuses house-attached edges, and records enabled free edges in deterministic platform-edge order. Its read-only assembly summary exposes deck-edge, descending stair-side, and landing-side railings as separate groups derived from the same geometry; it introduces no second railing model. Returning to layout preserves the existing explicit-review boundary for any edge-referenced house, stair, or railing facts.
 
-Every free platform edge has a stable semantic ID. Rectangles expose `front`, `left`, and `right`; L-shapes additionally expose `notch-horizontal` and `notch-vertical`. When enabled, stairs attach to one recorded edge ID. The attachment offset and width create the railing opening; the edge direction and deterministic outward normal orient the run. Elevation and maximum-riser intent produce equal conceptual rises and tread count. A landing records its depth and whether it is at the deck or midway down the stairs. For a midway landing, `upperFlightRisers` deterministically splits the total rise while requiring at least one riser in each flight. Its explicit `landingTurn` is `straight`, `left`, or `right`, defined while walking down from the deck; no collision or code-compliance conclusion is inferred. The same derived flights drive 2D, 3D, stringers, stair railings, landing protection, and quantities. Undo/redo restores recorded facts as a new monotonic revision rather than silently moving the authoritative revision backward.
+Every free platform edge has a stable semantic ID. Rectangles expose `front`, `left`, and `right`; L-shapes additionally expose `notch-horizontal` and `notch-vertical`. When enabled, stairs attach to one recorded edge ID. The attachment offset and width create the railing opening; the edge direction and deterministic outward normal orient the run. Elevation and maximum-riser intent produce equal conceptual rises and tread count. A landing records independent width/depth plus whether it is at the deck or midway down the stairs; width cannot be narrower than the attached stair. For a midway landing, `upperFlightRisers` deterministically splits the total rise while requiring at least one riser in each flight. Its explicit `landingTurn` is `straight`, `left`, or `right`, defined while walking down from the deck; no collision or code-compliance conclusion is inferred. The same derived flights drive 2D, 3D, stringers, stair railings, landing protection, and quantities. Undo/redo restores recorded facts as a new monotonic revision rather than silently moving the authoritative revision backward.
 
 Normalization accepts the prototype's earlier local `edge: "front-outer"` field and projects it to `edgeId: "front"`. This is a local prototype compatibility rule, not an authorized shared migration.
 

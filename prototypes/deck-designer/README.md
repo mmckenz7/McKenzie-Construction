@@ -20,7 +20,7 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Any-free-edge conceptual stairs with an explicit railing opening
 - Deterministic conceptual stair side-stringer paths in 2D, 3D, and quantities
 - Recorded grade, multiple editable house walls/attachment intent, and multiple selectable conceptual door/window openings per wall
-- Optional top or midway landing with deterministic two-flight orientation and area
+- Optional top or midway landing with exact independent width/depth, deterministic two-flight orientation, and area
 - Conceptual landing side rails, stair rails, rail posts, and outer support locations
 - Command-based undo and redo
 - Direct plan handles for width, projection, and L-cutout dimensions with selectable 1, 6, or 12 inch snapping
