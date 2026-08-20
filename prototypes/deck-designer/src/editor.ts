@@ -40,19 +40,6 @@ export function stairOffsetFromPoint(
   );
 }
 
-export function firstAvailableStairOffset(
-  edgeLength: number,
-  stairWidth: number,
-  occupied: readonly Readonly<{ start: number; end: number }>[],
-): number | null {
-  let cursor = 0;
-  for (const { start, end } of [...occupied].sort((left, right) => left.start - right.start)) {
-    if (start - cursor >= stairWidth) return cursor;
-    cursor = Math.max(cursor, end);
-  }
-  return edgeLength - cursor >= stairWidth ? cursor : null;
-}
-
 function stairSpan(design: DeckDesign, edgeId: DeckDesign["construction"]["stairs"]["edgeId"]): number {
   const stairs = design.construction.stairs;
   return stairs.enabled && stairs.edgeId === edgeId ? stairs.offset + stairs.width : 0;
