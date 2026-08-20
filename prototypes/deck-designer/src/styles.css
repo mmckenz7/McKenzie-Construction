@@ -154,6 +154,15 @@ button:hover { transform: translateY(-1px); }
 .photo-error { margin: 0; padding: 0 22px 14px; background: #f4f6f2; }
 .workspace { display: grid; grid-template-columns: 294px minmax(0, 1fr); min-height: 640px; }
 .mobile-workspace-nav, .mobile-plan-edge-actions { display: none; }
+.plan-action-tray { display: grid; gap: 10px; padding: 12px; border-top: 1px solid var(--line); background: #f4f6f2; }
+.plan-action-copy strong, .plan-action-copy small { display: block; }
+.plan-action-copy strong { color: var(--ink); font-size: 12px; }
+.plan-action-copy small { margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.35; }
+.plan-action-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.plan-action-fields .field { margin: 0; }
+.plan-action-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 7px; }
+.plan-action-buttons button { min-height: 44px; border-color: #aebbb2; background: white; color: #34473f; font-size: 10px; font-weight: 750; }
+.plan-action-buttons button.primary { border-color: #aabd2f; background: var(--lime); color: #17231e; }
 .designer-stage-nav { display: flex; align-items: center; gap: 8px; padding: 10px clamp(18px, 4vw, 60px); border-bottom: 1px solid var(--line); background: #edf1ec; }
 .designer-stage-nav button { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 7px 13px; border-color: #aebbb2; background: white; color: #42554b; font-size: 11px; font-weight: 800; }
 .designer-stage-nav button span { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 50%; background: #e4e9e4; }
@@ -288,6 +297,7 @@ button:hover { transform: translateY(-1px); }
 .design-notices p.review { border-left-color: #c3973d; background: #f7efd8; color: #66501e; }
 .visual-area { position: sticky; top: 0; align-self: start; min-width: 0; padding: 18px; display: grid; grid-template-columns: minmax(280px, .85fr) minmax(380px, 1.15fr); align-items: start; gap: 14px; background: #e6e9e4; }
 .view-card { min-width: 0; height: 530px; display: flex; flex-direction: column; overflow: hidden; background: white; border: 1px solid #d3d8d1; border-radius: 12px; box-shadow: 0 5px 20px #182b2210; }
+.plan-card { height: auto; min-height: 530px; }
 .card-title { min-height: 57px; padding: 11px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e1e4df; }
 .card-title span { display: block; font-size: 12px; font-weight: 700; }
 .card-title small { color: #78837d; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
