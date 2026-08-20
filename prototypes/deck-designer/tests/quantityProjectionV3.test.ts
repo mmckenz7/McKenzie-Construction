@@ -35,7 +35,9 @@ describe("v3 accessory quantity projection", () => {
         .map((line) => [line.id, line.quantity]),
     );
     const report = deriveDeckAccessoryProjectionV3(migrateDeckDesignToV3(v2), "platform-1");
-    const actual = Object.fromEntries(report.quantities.map((line) => [line.key, line.amount]));
+    const actual = Object.fromEntries(report.quantities
+      .filter((line) => accessoryKeys.includes(line.key as typeof accessoryKeys[number]))
+      .map((line) => [line.key, line.amount]));
     expect(actual).toEqual(expected);
     expect(report.quantities.every((line) => line.sourceGeometry.length > 0 || line.amount === 0)).toBe(true);
     expect(stableDeckAccessoryProjectionV3Json(report)).toBe(stableDeckAccessoryProjectionV3Json(report));
@@ -62,5 +64,9 @@ describe("v3 accessory quantity projection", () => {
     expect(byKey["landing-railing-linear-feet"].amount).toBe(5);
     expect(byKey["landing-railing-post-count"].amount).toBe(2);
     expect(byKey["stair-tread-count"].sourceGeometry).toHaveLength(7);
+    expect(byKey["stair-railing-linear-feet"].amount).toBe(14.15);
+    expect(byKey["stair-railing-post-count"].amount).toBe(4);
+    expect(byKey["stair-railing-linear-feet"].assemblyIntent).toBe("stair_railing");
+    expect(byKey["railing-linear-feet"].assemblyIntent).toBe("railing");
   });
 });

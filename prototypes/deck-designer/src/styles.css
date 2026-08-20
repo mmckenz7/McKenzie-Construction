@@ -246,8 +246,12 @@ button:hover { transform: translateY(-1px); }
 .stair-landing-controls fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .stair-landing-controls legend { margin-bottom: 7px; color: #55635c; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .stair-landing-controls small { margin-top: 7px; color: #657169; }
+.stair-railing-note { display: grid !important; gap: 3px !important; margin-top: 12px; padding: 9px; border-left: 3px solid #6f8879; border-radius: 5px; background: #e2eae4; text-transform: none !important; letter-spacing: 0 !important; }
+.stair-railing-note strong { color: #29463a; font-size: 10px; }
+.stair-railing-note small { margin: 0; color: #5a6a61; }
 .remove-stairs { width: 100%; border-color: #b8c2bb; background: white; color: #526058; }
 .plan-landing-rail { stroke-width: 2.4; }
+.plan-stair-rail { stroke: #203b30; stroke-width: 2.2; stroke-linecap: round; }
 .design-facts { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 8px; }
 .design-facts div { display: flex; justify-content: space-between; gap: 10px; font-size: 10px; }
 .design-facts span { color: #79847e; text-transform: uppercase; letter-spacing: .08em; }

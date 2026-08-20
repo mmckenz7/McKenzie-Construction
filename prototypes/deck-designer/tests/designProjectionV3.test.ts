@@ -32,6 +32,7 @@ describe("v3 design-level deterministic projection", () => {
     ]);
     expect(totals["platform-area"]).toBe(singleTotals["platform-area"] * 2);
     expect(totals["railing-linear-feet"]).toBe(singleTotals["railing-linear-feet"] * 2);
+    expect(totals["stair-railing-linear-feet"]).toBeGreaterThan(singleTotals["stair-railing-linear-feet"]);
     expect(totals["stair-stringer-linear-feet"]).toBeGreaterThan(singleTotals["stair-stringer-linear-feet"]);
     expect(report.aggregateQuantities.every((line) => line.platformIds.length > 0)).toBe(true);
     expect(report.warnings).toContain("inter_platform_connections_not_determined");

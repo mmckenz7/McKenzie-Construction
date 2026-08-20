@@ -97,6 +97,7 @@ export function PlanViewV3({ platform, geometry, houseGeometry, snapIncrement, e
     {geometry.landing && <polygon points={geometry.landing.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-landing" />}
     {geometry.landingRailSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-rail plan-landing-rail" />)}
     {geometry.stairTreads.map((tread) => <polygon key={tread.id} points={tread.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-stair" />)}
+    {geometry.stairRailSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-stair-rail" />)}
     {geometry.platformEdges.map((edge, index) => {
       const midpoint = { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 };
       const hit = 6;

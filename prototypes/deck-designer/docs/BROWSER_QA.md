@@ -1,5 +1,14 @@
 # Browser QA record
 
+## 2026-08-20 separate stair-railing check
+
+- Every enabled stair now projects two deterministic descending-side handrail paths and four conceptual endpoint posts from the same run, rise, width, and landing-turn facts.
+- Desktop visual QA confirmed the handrails slope with straight stairs and rotate with a left-turn landing in both the measured plan and 3D model.
+- `stair-railing-linear-feet` and `stair-railing-post-count` appear as separate conceptual quantity cards; the original `railing-linear-feet` and `railing-post-count` remain deck-edge-only.
+- The stair card explains that both descending sides are included separately, while the dedicated Railings stage explicitly states that it controls deck-edge railings only.
+- At 390 × 844, the stair-railing notice and separate quantity line remain available with no browser warnings or errors.
+- The validated bundle budgets remain 92 KiB initial entry and increase from 228 to 229 KiB total gzip for the sloped 3D rail geometry and separate projection semantics.
+
 ## 2026-08-20 landing and stair-turn check
 
 - The existing v3 top-landing fact is now exposed only inside the active stair card, keeping the Deck Layout page staged and uncluttered.

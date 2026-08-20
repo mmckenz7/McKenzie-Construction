@@ -6,7 +6,7 @@ export type DeckProjectionQuantityV3 = Readonly<{
   quantityClass: "takeoff_candidate" | "visualization";
   amount: number;
   unit: "sq ft" | "lin ft" | "each";
-  assemblyIntent: "railing" | "stair" | "stair_stringer" | "stair_landing";
+  assemblyIntent: "railing" | "stair" | "stair_stringer" | "stair_landing" | "stair_railing";
   sourceGeometry: readonly string[];
   explanation: string;
 }>;
@@ -66,6 +66,11 @@ export function deriveDeckAccessoryProjectionV3(
       stringer.end.y - stringer.start.y,
       stringer.end.z - stringer.start.z,
     ), 0);
+    const stairRailInches = geometry.stairRailSegments.reduce((sum, rail) => sum + Math.hypot(
+      rail.end.x - rail.start.x,
+      rail.end.y - rail.start.y,
+      rail.end.z - rail.start.z,
+    ), 0);
     quantities.push(
       Object.freeze({
         key: "stair-tread-count",
@@ -102,6 +107,24 @@ export function deriveDeckAccessoryProjectionV3(
         assemblyIntent: "stair_stringer" as const,
         sourceGeometry: Object.freeze(geometry.stairStringers.map((stringer) => `${platformId}:${stringer.id}`)),
         explanation: `${geometry.stairStringers.length} conceptual side paths totaling ${round(stringerInches)} in; structural sizing is not determined`,
+      }),
+      Object.freeze({
+        key: "stair-railing-linear-feet",
+        quantityClass: "takeoff_candidate" as const,
+        amount: feet(stairRailInches),
+        unit: "lin ft" as const,
+        assemblyIntent: "stair_railing" as const,
+        sourceGeometry: Object.freeze(geometry.stairRailSegments.map((rail) => `${platformId}:${rail.id}`)),
+        explanation: `${geometry.stairRailSegments.length} conceptual descending-side handrail paths totaling ${round(stairRailInches)} in; final code and product assembly require review`,
+      }),
+      Object.freeze({
+        key: "stair-railing-post-count",
+        quantityClass: "visualization" as const,
+        amount: geometry.stairRailPosts.length,
+        unit: "each" as const,
+        assemblyIntent: "stair_railing" as const,
+        sourceGeometry: Object.freeze(geometry.stairRailPosts.map((post) => `${platformId}:${post.id}`)),
+        explanation: "Conceptual top and bottom posts on both stair sides; intermediate balusters and final assembly are not determined",
       }),
     );
     if (geometry.landing) {

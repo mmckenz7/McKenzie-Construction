@@ -4,6 +4,8 @@ import { normalizeDeckDesignV3, type DeckDesignV3 } from "./modelV3";
 
 type Point3 = Readonly<{ x: number; y: number; z: number }>;
 type Post = Readonly<{ id: string; x: number; z: number; top: number }>;
+type StairRailPostV3 = Readonly<{ id: string; x: number; y: number; z: number; height: number }>;
+type StairRailSegmentV3 = Readonly<{ id: string; start: Point3; end: Point3 }>;
 type RailSegmentV3 = ProjectedMember & Readonly<{ edgeId: string }>;
 type StairTreadV3 = Readonly<{
   id: string;
@@ -37,6 +39,8 @@ export type DeckPlatformGeometryV3 = Readonly<{
   stairOpening: ProjectedMember | null;
   stairTreads: readonly StairTreadV3[];
   stairStringers: readonly Readonly<{ id: string; start: Point3; end: Point3 }>[];
+  stairRailSegments: readonly StairRailSegmentV3[];
+  stairRailPosts: readonly StairRailPostV3[];
   stairRise: number;
   landing: LandingV3 | null;
   landingRailSegments: readonly ProjectedMember[];
@@ -168,6 +172,24 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
         ),
       })))
     : Object.freeze([]);
+  const stairRailSideOffset = Math.max(0, stair.width / 2 - 2);
+  const stairRailSegments = stair.enabled ? Object.freeze([-1, 1].map((side, index) => Object.freeze({
+    id: `stair-rail-side-${index + 1}`,
+    start: point3(
+      runOrigin.x + widthDirection.x * stairRailSideOffset * side,
+      platform.elevation + platform.construction.railing.height - 2,
+      runOrigin.z + widthDirection.z * stairRailSideOffset * side,
+    ),
+    end: point3(
+      runOrigin.x + widthDirection.x * stairRailSideOffset * side + runDirection.x * stairRun,
+      gradeElevation + platform.construction.railing.height - 2,
+      runOrigin.z + widthDirection.z * stairRailSideOffset * side + runDirection.z * stairRun,
+    ),
+  }))) : Object.freeze([]);
+  const stairRailPosts = Object.freeze(stairRailSegments.flatMap((segment, index) => [
+    Object.freeze({ id: `stair-rail-post-${index + 1}-top`, x: segment.start.x, y: platform.elevation, z: segment.start.z, height: platform.construction.railing.height }),
+    Object.freeze({ id: `stair-rail-post-${index + 1}-bottom`, x: segment.end.x, y: gradeElevation, z: segment.end.z, height: platform.construction.railing.height }),
+  ]));
   const landingCenter = point(
     stairCenterOnEdge.x + stairEdge.outward.x * stair.landingDepth / 2,
     stairCenterOnEdge.z + stairEdge.outward.z * stair.landingDepth / 2,
@@ -225,6 +247,8 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
     }) : null,
     stairTreads,
     stairStringers,
+    stairRailSegments,
+    stairRailPosts,
     stairRise,
     landing,
     landingRailSegments,

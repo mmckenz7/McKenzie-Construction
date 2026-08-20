@@ -46,6 +46,25 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(() => derivePlatformGeometryV3(design, "missing")).toThrow(/does not exist/);
   });
 
+  it("projects two deterministic sloped stair rails and four endpoint posts", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, offset: 48, width: 48 } } }],
+    });
+    const geometry = derivePlatformGeometryV3(design, platform.id);
+    expect(geometry.stairRailSegments).toHaveLength(2);
+    expect(geometry.stairRailPosts).toHaveLength(4);
+    expect(geometry.stairRailSegments[0]).toEqual({
+      id: "stair-rail-side-1",
+      start: { x: 142, y: 82, z: 144 },
+      end: { x: 142, y: 34, z: 214 },
+    });
+    expect(geometry.stairRailSegments[1].start.x).toBe(98);
+    expect(geometry.stairRailSegments.every((rail) => rail.end.z - rail.start.z === 70)).toBe(true);
+  });
+
   it("normalizes older v3 stairs to a straight landing and round-trips the explicit turn", () => {
     const design = migrateDeckDesignToV3(lShapeLandingFixture.design);
     const legacyV3 = JSON.parse(stableDeckDesignV3Json(design));
@@ -77,6 +96,10 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(left.stairTreads[1].z - left.stairTreads[0].z).toBe(0);
     expect(right.stairTreads[1].x - right.stairTreads[0].x).toBe(-10);
     expect(right.stairTreads[1].z - right.stairTreads[0].z).toBe(0);
+    expect(left.stairRailSegments.every((rail) => rail.end.x > rail.start.x)).toBe(true);
+    expect(right.stairRailSegments.every((rail) => rail.end.x < rail.start.x)).toBe(true);
+    expect(left.stairRailPosts).toHaveLength(4);
+    expect(right.stairRailPosts).toHaveLength(4);
     expect(left.landingRailSegments.map((segment) => segment.id)).toEqual(["landing-rail-right"]);
     expect(right.landingRailSegments.map((segment) => segment.id)).toEqual(["landing-rail-left"]);
     expect(left.landingRailPosts).toHaveLength(2);

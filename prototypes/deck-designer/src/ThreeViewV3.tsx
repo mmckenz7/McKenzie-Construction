@@ -18,6 +18,14 @@ function member(group: THREE.Group, value: Readonly<{ start: { x: number; z: num
   mesh.rotation.y = -Math.atan2(dz, dx); mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
 }
 
+function slopedMember(group: THREE.Group, value: Readonly<{ start: { x: number; y: number; z: number }; end: { x: number; y: number; z: number } }>, thickness: number, material: THREE.Material) {
+  const direction = new THREE.Vector3(value.end.x - value.start.x, value.end.y - value.start.y, value.end.z - value.start.z);
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(direction.length(), thickness, thickness), material);
+  mesh.position.set((value.start.x + value.end.x) / 2, (value.start.y + value.end.y) / 2, (value.start.z + value.end.z) / 2);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), direction.normalize());
+  mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+}
+
 export function ThreeViewV3({ platform, geometry, houseGeometry, gradeElevation, preset, presetRequest, showFraming, quality }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -48,6 +56,8 @@ export function ThreeViewV3({ platform, geometry, houseGeometry, gradeElevation,
     for (const segment of geometry.railSegments) { member(model, segment, platform.elevation + platform.construction.railing.height - 2, 3, 2.5, rail); member(model, segment, platform.elevation + 7, 2, 2, rail); }
     for (const segment of geometry.landingRailSegments) { member(model, segment, platform.elevation + platform.construction.railing.height - 2, 3, 2.5, rail); member(model, segment, platform.elevation + 7, 2, 2, rail); }
     for (const post of [...geometry.railPosts, ...geometry.landingRailPosts]) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, platform.construction.railing.height, 4), rail); mesh.position.set(post.x, platform.elevation + platform.construction.railing.height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
+    for (const segment of geometry.stairRailSegments) slopedMember(model, segment, 3, rail);
+    for (const post of geometry.stairRailPosts) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, post.height, 4), rail); mesh.position.set(post.x, post.y + post.height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
     for (const tread of geometry.stairTreads) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(tread.width, Math.max(1.5, tread.rise), tread.depth), deck); mesh.position.set(tread.x, tread.y + Math.max(1.5, tread.rise) / 2, tread.z); mesh.rotation.y = tread.rotationY; mesh.castShadow = true; model.add(mesh); }
     if (geometry.landing) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(geometry.landing.width, 5.5, geometry.landing.depth), deck); mesh.position.set(geometry.landing.center.x, platform.elevation - 2.25, geometry.landing.center.z); mesh.rotation.y = geometry.landing.rotationY; model.add(mesh); }
     if (showFraming) for (const post of geometry.landingSupportPosts) { const height = Math.max(1, post.top - gradeElevation); const mesh = new THREE.Mesh(new THREE.BoxGeometry(6, height, 6), frame); mesh.position.set(post.x, gradeElevation + height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
