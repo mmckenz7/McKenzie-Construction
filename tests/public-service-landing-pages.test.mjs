@@ -120,10 +120,15 @@ test("project gallery has search metadata and a path to consultation", () => {
   const gallery = read("src/app/projects/gallery/page.tsx");
 
   assert.match(gallery, /canonical: "\/projects\/gallery"/);
-  assert.match(gallery, /Browse Project Stories/);
+  assert.match(gallery, /Choose a project to see the complete photo story/);
   assert.match(gallery, /\/contact\?projectType=New%20Deck/);
-  assert.match(gallery, /\/projects\/completed-renovations\/renovation-one-exterior\.jpg/);
-  assert.match(gallery, /\/projects\/completed-renovations\/renovation-two-living-room\.jpg/);
+  assert.match(gallery, /\/projects\/knoxville-trex-deck-replacement/);
+  assert.match(gallery, /\/projects\/tellico-village-screened-porch/);
+  assert.match(gallery, /\/projects\/island-ford/);
+  assert.match(gallery, /\/projects\/east-tennessee-ranch-renovation/);
+  assert.match(gallery, /\/projects\/east-tennessee-cottage-renovation/);
+  assert.match(gallery, /project\.photoCount/);
+  assert.doesNotMatch(gallery, /columns-1/);
   assert.doesNotMatch(gallery, /Cecil Avenue|Valley View/);
 });
 
