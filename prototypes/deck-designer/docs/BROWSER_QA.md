@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-20 visible landing-railing groups
+
+- Enabling `Add top landing` now states directly in Deck Layout that protected landing sides receive railings automatically while the stair opening stays open.
+- The dedicated Railings stage shows deck-edge, stair-side, and landing railings as three separate groups rather than hiding landing railings in the model or quantity list.
+- A 48-inch-deep straight landing displayed 2 protected landing sides and 8′ 0″ of landing railing, matching the separate deterministic quantity projection.
+- The 2D and 3D views showed the same landing, stair opening, stair rails, and landing rails; the local browser reported no errors.
+
 ## 2026-08-20 separate stair-railing check
 
 - Every enabled stair now projects two deterministic descending-side handrail paths and four conceptual endpoint posts from the same run, rise, width, and landing-turn facts.

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { DeckPlatformGeometryV3 } from "./geometryV3";
 import type { DeckPlatformV3 } from "./modelV3";
 import { formatFeetInches } from "./PlanView";
-import { railingStageSummary, toggleRailingOnExactEdge } from "./railingEditorV3";
+import { railingAssemblySummary, railingStageSummary, toggleRailingOnExactEdge } from "./railingEditorV3";
 
 type Props = Readonly<{
   platform: DeckPlatformV3;
@@ -15,6 +15,7 @@ type Props = Readonly<{
 
 export function RailingStageControls({ platform, geometry, selectedEdgeId, onRailingChange, onHeight, onBack }: Props) {
   const summary = railingStageSummary(platform);
+  const assemblies = railingAssemblySummary(platform, geometry);
   const edge = geometry.platformEdges.find((item) => item.id === selectedEdgeId) ?? null;
   const condition = edge ? platform.edgeConditions.find((item) => item.edgeId === edge.id) : null;
   const enabled = edge ? platform.construction.railing.enabledEdgeIds.includes(edge.id) : false;
@@ -23,7 +24,12 @@ export function RailingStageControls({ platform, geometry, selectedEdgeId, onRai
 
   return <>
     <div className="section-heading" id="railing-controls"><span>02</span><div><p>Railings</p><small>The deck layout is locked on this page</small></div></div>
-    <section className="railing-stage-summary"><strong>{summary.enabledEdgeCount} of {summary.freeEdgeCount} free sides have railing</strong><p>Tap one side in the railing plan, then add or remove its railing. This page controls deck-edge railings only; stair-side railings are tracked separately whenever stairs are present.</p></section>
+    <section className="railing-stage-summary"><strong>{summary.enabledEdgeCount} of {summary.freeEdgeCount} free sides have railing</strong><p>Tap one side in the railing plan, then add or remove its railing. Deck, stair, and landing railings stay separate so their quantities remain clear.</p></section>
+    <section className="railing-assembly-list" aria-label="Railing groups">
+      <article className="railing-assembly-card"><div><strong>Deck-edge railings</strong><span>{assemblies.deck.segmentCount} {assemblies.deck.segmentCount === 1 ? "section" : "sections"}</span></div><p>{formatFeetInches(assemblies.deck.linearInches)} along the selected deck sides.</p></article>
+      {assemblies.stairs.present && <article className="railing-assembly-card"><div><strong>Stair-side railings</strong><span>{assemblies.stairs.segmentCount} {assemblies.stairs.segmentCount === 1 ? "side" : "sides"}</span></div><p>{formatFeetInches(assemblies.stairs.linearInches)} of conceptual sloped railing, tracked separately.</p></article>}
+      {assemblies.landing.present ? <article className="railing-assembly-card landing"><div><strong>Landing railings</strong><span>{assemblies.landing.segmentCount} protected {assemblies.landing.segmentCount === 1 ? "side" : "sides"}</span></div><p>{formatFeetInches(assemblies.landing.linearInches)} around the landing; the stair opening remains open.</p></article> : assemblies.stairs.present && <article className="railing-assembly-card muted"><div><strong>Landing railings</strong><span>Not added</span></div><p>Add a top landing from Deck Layout when the stairs need room before descending.</p></article>}
+    </section>
     {edge ? <section className="selected-edge-card railing-selection"><strong>{formatFeetInches(edge.length)} side selected</strong><p>{condition?.condition === "house_attachment" ? "This is the house side; railing is not available here." : enabled ? "Railing is currently shown on this side." : "This side is currently open."}</p><button className={enabled ? "" : "primary"} disabled={condition?.condition !== "free"} onClick={() => { const railing = toggleRailingOnExactEdge(platform, edge.id); onRailingChange(railing, railing.enabledEdgeIds.includes(edge.id) ? "Railing added to the selected side." : "Railing removed from the selected side."); }}>{condition?.condition === "house_attachment" ? "House side stays open" : enabled ? "Remove railing from this side" : "Add railing to this side"}</button></section> : <p className="section-help railing-help">Tap a side in the plan. The selected side will highlight before anything changes.</p>}
     <div className="railing-height-field"><label className="field"><span>Railing height (inches)</span><input type="number" min="30" max="48" step="1" value={height} onChange={(event) => setHeight(event.target.value)} onBlur={() => { onHeight(Number(height)); setHeight(String(platform.construction.railing.height)); }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></label></div>
     <button className="back-to-layout" onClick={onBack}>Back to deck layout</button>

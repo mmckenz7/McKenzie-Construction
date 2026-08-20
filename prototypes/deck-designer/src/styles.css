@@ -216,6 +216,14 @@ button:hover { transform: translateY(-1px); }
 .railing-stage-summary { margin-bottom: 14px; padding: 12px; border: 1px solid #b7c5bb; border-radius: 9px; background: #eef2ec; }
 .railing-stage-summary strong { font-size: 12px; }
 .railing-stage-summary p { margin: 6px 0 0; color: #506058; font-size: 10px; line-height: 1.45; }
+.railing-assembly-list { display: grid; gap: 8px; margin-bottom: 14px; }
+.railing-assembly-card { padding: 10px 11px; border: 1px solid #c5d0c8; border-left: 3px solid #6f8879; border-radius: 8px; background: #f7f9f5; }
+.railing-assembly-card.landing { border-left-color: #c4a33c; background: #fbf7e9; }
+.railing-assembly-card.muted { border-left-color: #b7bdb9; background: #f3f4f2; }
+.railing-assembly-card > div { display: flex; justify-content: space-between; gap: 8px; }
+.railing-assembly-card strong { color: #29463a; font-size: 10px; }
+.railing-assembly-card span { color: #657169; font-size: 9px; }
+.railing-assembly-card p { margin: 5px 0 0; color: #5a6a61; font-size: 9px; line-height: 1.4; }
 .railing-selection button, .back-to-layout { width: 100%; min-height: 44px; }
 .railing-height-field { margin: 16px 0; }
 .back-to-layout { margin: 8px 0; border-color: #aebbb2; background: white; color: #34473f; }
@@ -249,6 +257,9 @@ button:hover { transform: translateY(-1px); }
 .stair-railing-note { display: grid !important; gap: 3px !important; margin-top: 12px; padding: 9px; border-left: 3px solid #6f8879; border-radius: 5px; background: #e2eae4; text-transform: none !important; letter-spacing: 0 !important; }
 .stair-railing-note strong { color: #29463a; font-size: 10px; }
 .stair-railing-note small { margin: 0; color: #5a6a61; }
+.landing-railing-note { display: grid; gap: 3px; padding: 9px; border-left: 3px solid #c4a33c; border-radius: 5px; background: #f5edcf; }
+.landing-railing-note strong { color: #5d4b17; font-size: 10px; }
+.landing-railing-note small { margin: 0; color: #6d622f; }
 .remove-stairs { width: 100%; border-color: #b8c2bb; background: white; color: #526058; }
 .plan-landing-rail { stroke-width: 2.4; }
 .plan-stair-rail { stroke: #203b30; stroke-width: 2.2; stroke-linecap: round; }

@@ -1,3 +1,4 @@
+import type { DeckPlatformGeometryV3 } from "./geometryV3";
 import type { DeckPlatformV3 } from "./modelV3";
 
 export function toggleRailingOnExactEdge(platform: DeckPlatformV3, edgeId: string): DeckPlatformV3["construction"]["railing"] {
@@ -15,5 +16,37 @@ export function railingStageSummary(platform: DeckPlatformV3) {
   return Object.freeze({
     freeEdgeCount: freeEdgeIds.length,
     enabledEdgeCount: freeEdgeIds.filter((edgeId) => platform.construction.railing.enabledEdgeIds.includes(edgeId)).length,
+  });
+}
+
+export function railingAssemblySummary(platform: DeckPlatformV3, geometry: DeckPlatformGeometryV3) {
+  const deckLinearInches = geometry.railSegments.reduce((sum, rail) => sum + Math.hypot(
+    rail.end.x - rail.start.x,
+    rail.end.z - rail.start.z,
+  ), 0);
+  const stairLinearInches = geometry.stairRailSegments.reduce((sum, rail) => sum + Math.hypot(
+    rail.end.x - rail.start.x,
+    rail.end.y - rail.start.y,
+    rail.end.z - rail.start.z,
+  ), 0);
+  const landingLinearInches = geometry.landingRailSegments.reduce((sum, rail) => sum + Math.hypot(
+    rail.end.x - rail.start.x,
+    rail.end.z - rail.start.z,
+  ), 0);
+
+  return Object.freeze({
+    deck: Object.freeze({ segmentCount: geometry.railSegments.length, linearInches: deckLinearInches }),
+    stairs: Object.freeze({
+      present: platform.construction.stairs.enabled,
+      segmentCount: geometry.stairRailSegments.length,
+      postCount: geometry.stairRailPosts.length,
+      linearInches: stairLinearInches,
+    }),
+    landing: Object.freeze({
+      present: platform.construction.stairs.enabled && platform.construction.stairs.landingEnabled,
+      segmentCount: geometry.landingRailSegments.length,
+      postCount: geometry.landingRailPosts.length,
+      linearInches: landingLinearInches,
+    }),
   });
 }
