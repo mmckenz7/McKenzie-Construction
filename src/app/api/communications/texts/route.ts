@@ -60,6 +60,7 @@ export async function POST(request: Request) {
   }
 
   let recipient: string | null = null;
+  let participantRecipient: string | null = null;
   let displayName = "customer";
   if (threadId) {
     const thread = await supabase.from("communication_threads")
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
     }
     leadId = thread.data.lead_id ?? leadId;
     customerId = thread.data.customer_id ?? customerId;
-    recipient = (thread.data.participant_addresses as string[])
+    participantRecipient = (thread.data.participant_addresses as string[])
       .map((address) => e164UsPhone(String(address)))
       .find((address) => Boolean(address && address !== sender)) ?? null;
   }
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
     if (lead.error || !lead.data) {
       return Response.json({ success: false, error: "The lead could not be found." }, { status: 404 });
     }
-    recipient = recipient ?? e164UsPhone(lead.data.phone ?? "");
+    recipient = e164UsPhone(lead.data.phone ?? "") ?? recipient;
     displayName = lead.data.name?.trim() || displayName;
   }
   if (customerId) {
@@ -96,6 +97,7 @@ export async function POST(request: Request) {
     leadId = leadId ?? customer.data.source_lead_id ?? null;
     displayName = customer.data.customer_name?.trim() || displayName;
   }
+  recipient = recipient ?? participantRecipient;
   if (!recipient) {
     return Response.json({ success: false, error: "This lead or customer does not have a valid 10-digit phone number." }, { status: 400 });
   }

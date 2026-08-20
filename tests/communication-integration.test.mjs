@@ -22,6 +22,7 @@ const customerCommunicationPanel = readFileSync("src/components/customer-communi
 const threadControlsRoute = readFileSync("src/app/api/communications/threads/[threadId]/route.ts", "utf8");
 const threadControls = readFileSync("src/components/communication-thread-controls.tsx", "utf8");
 const threadMessages = readFileSync("src/components/communication-thread-messages.tsx", "utf8");
+const textRoute = readFileSync("src/app/api/communications/texts/route.ts", "utf8");
 
 test("communication history and consent tables are service-role only", () => {
   assert.match(migration, /create table if not exists public\.communication_messages/);
@@ -92,6 +93,13 @@ test("Mission Control replies are server validated, sandboxed, threaded, and aud
   assert.match(replyRoute, /thread_id: threadId/);
   assert.match(replyRoute, /lead_activities/);
   assert.match(provider, /headers: message\.headers/);
+});
+
+test("text replies prefer the matched CRM phone over stale thread participants", () => {
+  assert.match(textRoute, /let participantRecipient: string \| null = null/);
+  assert.match(textRoute, /participantRecipient = \(thread\.data\.participant_addresses as string\[\]\)/);
+  assert.match(textRoute, /recipient = e164UsPhone\(lead\.data\.phone \?\? ""\) \?\? recipient/);
+  assert.match(textRoute, /recipient = recipient \?\? participantRecipient/);
 });
 
 test("the shared channel-first composer is available from inbox, lead, and customer records", () => {
