@@ -7,6 +7,7 @@
 - When side references lock the outline, the bumpout action stays disabled and explains that Shape must be unlocked first.
 - In photo-reference tracing, the row of per-side offset buttons is gone. Selecting one side reveals one Add bumpout here action and its exact length field.
 - The same selected-side panel now shows Add stairs here beside Add bumpout here. Selecting stairs immediately renders the centered stair treads outside the orange-marked exact side and carries that same placement into the confirmed design; house and short sides reject stair placement.
+- Photo-outline stairs now expose an orange touch handle for rough sliding along the selected side plus synchronized From left/right or From top/bottom measurements for exact placement. Both routes preserve the full four-foot stair width and carry the recorded offset into the authoritative design.
 
 ## 2026-08-19 responsive smoke check
 

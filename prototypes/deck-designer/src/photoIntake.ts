@@ -2,7 +2,7 @@ import { DEFAULT_DESIGN, normalizeDesign, updateDesign, type HouseAttachment } f
 import { migrateDeckDesignToV3, type DeckDesignV3 } from "./modelV3";
 import { deriveGeometricPolygonEdges, geometricPolygonEdgeId, type PolygonPoint } from "./polygon";
 import { normalizePolygonRegion } from "./polygonRegion";
-import { centeredStairOffset } from "./photoTraceStairs";
+import { centeredStairOffset, validateStairOffset } from "./photoTraceStairs";
 
 export type ConfirmedPhotoFacts = Readonly<{
   designName: string;
@@ -99,7 +99,7 @@ export function reviewPhotoCoverage(
   return Object.freeze({ addedCount, missingRecommendedRoles, message });
 }
 
-export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: ConfirmedPhotoFacts, confirmedOuter?: readonly PolygonPoint[], preferredStairEdgeId?: string | null): DeckDesignV3 {
+export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: ConfirmedPhotoFacts, confirmedOuter?: readonly PolygonPoint[], preferredStairEdgeId?: string | null, preferredStairOffset?: number | null): DeckDesignV3 {
   const normalized = normalizeConfirmedPhotoFacts(facts);
   const currentElevation = base.platforms[0]?.elevation ?? DEFAULT_DESIGN.platform.surfaceElevation;
   const legacy = updateDesign(DEFAULT_DESIGN, {
@@ -139,7 +139,7 @@ export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: C
       construction: {
         ...platform.construction,
         railing: { ...platform.construction.railing, enabledEdgeIds: freeEdges.map((edge) => edge.id) },
-        stairs: { ...platform.construction.stairs, enabled: Boolean(preferredStairEdgeId), edgeId: stairEdge.id, offset: preferredStairEdgeId ? centeredStairOffset(stairEdge.length, platform.construction.stairs.width) : 0 },
+        stairs: { ...platform.construction.stairs, enabled: Boolean(preferredStairEdgeId), edgeId: stairEdge.id, offset: preferredStairEdgeId ? preferredStairOffset === null || preferredStairOffset === undefined ? centeredStairOffset(stairEdge.length, platform.construction.stairs.width) : validateStairOffset(stairEdge.length, preferredStairOffset, platform.construction.stairs.width) : 0 },
       },
     }],
   });

@@ -10,7 +10,7 @@ type Props = Readonly<{
   fallbackSurfaceElevation: number;
   gradeElevation: number;
   onCancel: () => void;
-  onStartDesign: (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number, confirmedOuter?: readonly PolygonPoint[], stairEdgeId?: string | null) => void;
+  onStartDesign: (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number, confirmedOuter?: readonly PolygonPoint[], stairEdgeId?: string | null, stairOffset?: number | null) => void;
 }>;
 
 const PHOTO_SLOTS: readonly Readonly<{ role: GuidedPhotoRole; title: string; help: string }>[] = [
@@ -41,6 +41,7 @@ export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeEleva
   const [attachment, setAttachment] = useState<HouseAttachment>(initialFacts.attachment);
   const [traceOuter, setTraceOuter] = useState<readonly PolygonPoint[]>(() => rectangleTrace(initialFacts.width, initialFacts.projection));
   const [traceStairEdgeId, setTraceStairEdgeId] = useState<string | null>(null);
+  const [traceStairOffset, setTraceStairOffset] = useState<number | null>(null);
   const [error, setError] = useState("");
   useEffect(() => () => { for (const url of urls.current) URL.revokeObjectURL(url); }, []);
 
@@ -66,10 +67,11 @@ export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeEleva
     if (Number.isFinite(numericWidth) && Number.isFinite(numericProjection) && numericWidth >= 48 && numericProjection >= 48) {
       setTraceOuter(rectangleTrace(numericWidth, numericProjection));
       setTraceStairEdgeId(null);
+      setTraceStairOffset(null);
     }
   }, [numericProjection, numericWidth]);
   useEffect(() => {
-    if (traceStairEdgeId && !deriveGeometricPolygonEdges(traceOuter).some((edge) => edge.id === traceStairEdgeId)) setTraceStairEdgeId(null);
+    if (traceStairEdgeId && !deriveGeometricPolygonEdges(traceOuter).some((edge) => edge.id === traceStairEdgeId)) { setTraceStairEdgeId(null); setTraceStairOffset(null); }
   }, [traceOuter, traceStairEdgeId]);
 
   const choosePhoto = (role: GuidedPhotoRole, file: File | undefined) => {
@@ -119,7 +121,7 @@ export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeEleva
       if (normalized.layoutIntent === "non-standard" && (!confirmedOuter || isRectangleTrace(confirmedOuter, normalized.width, normalized.projection))) {
         throw new RangeError("Add and adjust at least one offset before starting a non-standard design.");
       }
-      onStartDesign(normalized, reviewConfirmedPhotoFacts(normalized, Boolean(confirmedOuter)), coverage.addedCount, confirmedOuter, traceStairEdgeId);
+      onStartDesign(normalized, reviewConfirmedPhotoFacts(normalized, Boolean(confirmedOuter)), coverage.addedCount, confirmedOuter, traceStairEdgeId, traceStairOffset);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Review the confirmed dimensions before starting.");
     }
@@ -141,7 +143,7 @@ export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeEleva
         <label className="field full"><span>Connection to house</span><select value={attachment} onChange={(event) => setAttachment(event.target.value as HouseAttachment)}><option value="unknown">Unknown / field verify</option><option value="ledger">Ledger attached</option><option value="non-ledger">Freestanding / non-ledger</option></select></label>
       </div></section>
       <section id="photo-step-review"><div className="photo-step"><span>3</span><div><strong>Review before creating geometry</strong><small>No photo-derived measurement is applied automatically.</small></div></div>{review ? <div className="photo-review"><div><strong>Confirmed</strong>{review.confirmed.map((item) => <p key={item}>✓ {item}</p>)}</div><div><strong>Still verify</strong>{review.fieldVerification.map((item) => <p key={item}>• {item}</p>)}</div></div> : <p className="photo-review-error">Enter a valid deck width and distance from the house.</p>}</section>
-      {layoutIntent === "non-standard" && Number.isFinite(numericWidth) && Number.isFinite(numericProjection) && <section id="photo-step-outline"><div className="photo-step"><span>4</span><div><strong>Trace and confirm the real outline</strong><small>Use the photos beside the measured plan. This step—not the photo pixels—creates geometry.</small></div></div><PhotoOutlineTracer width={numericWidth} projection={numericProjection} photos={allPhotos} outer={traceOuter} stairEdgeId={traceStairEdgeId} surfaceElevation={draft.surfaceElevation ?? fallbackSurfaceElevation} gradeElevation={gradeElevation} onChange={setTraceOuter} onStairEdgeChange={setTraceStairEdgeId} onError={setError} /><div className={`trace-status${traced ? " ready" : ""}`} role="status"><strong>{traced ? `Outline ready · ${traceOuter.length} confirmed corners${traceStairEdgeId ? " · stairs selected" : ""}` : "The outline is still a rectangle"}</strong><span>{traced ? "Start the design when the corners match the job." : "Tap a non-house edge to add an offset, then drag its handles into position."}</span></div></section>}
+      {layoutIntent === "non-standard" && Number.isFinite(numericWidth) && Number.isFinite(numericProjection) && <section id="photo-step-outline"><div className="photo-step"><span>4</span><div><strong>Trace and confirm the real outline</strong><small>Use the photos beside the measured plan. This step—not the photo pixels—creates geometry.</small></div></div><PhotoOutlineTracer width={numericWidth} projection={numericProjection} photos={allPhotos} outer={traceOuter} stairEdgeId={traceStairEdgeId} stairOffset={traceStairOffset} surfaceElevation={draft.surfaceElevation ?? fallbackSurfaceElevation} gradeElevation={gradeElevation} onChange={setTraceOuter} onStairPlacementChange={(edgeId, offset) => { setTraceStairEdgeId(edgeId); setTraceStairOffset(offset); }} onError={setError} /><div className={`trace-status${traced ? " ready" : ""}`} role="status"><strong>{traced ? `Outline ready · ${traceOuter.length} confirmed corners${traceStairEdgeId ? " · stairs selected" : ""}` : "The outline is still a rectangle"}</strong><span>{traced ? "Start the design when the corners match the job." : "Tap a non-house edge to add an offset, then drag its handles into position."}</span></div></section>}
     </div>
     <footer><div><strong>{coverage.addedCount} photo{coverage.addedCount === 1 ? "" : "s"} added</strong><small>{layoutIntent === "non-standard" ? "A changed outline is required before starting." : "You can start with zero photos and enter dimensions manually."}</small></div><div><button onClick={onCancel}>Keep current design</button><button className="primary" disabled={layoutIntent === "non-standard" && !traced} onClick={start}>{layoutIntent === "non-standard" ? "Start from confirmed outline" : "Start rectangle design"}</button></div></footer>
     {error && <p className="photo-error" role="alert">{error}</p>}

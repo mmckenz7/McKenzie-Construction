@@ -70,6 +70,18 @@ describe("local-only photo-assisted start", () => {
     expect(() => createDesignFromConfirmedPhotoFacts(base, facts, outer, edges[0].id)).toThrow(/no longer exists/i);
   });
 
+  it("carries an exact photo-trace stair offset into the authoritative design", () => {
+    const outer = [{ x: 0, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 72 }, { x: 96, z: 72 }, { x: 96, z: 144 }, { x: 0, z: 144 }];
+    const stairEdge = deriveGeometricPolygonEdges(outer)[5];
+    const facts = { designName: "Precisely placed stairs", layoutIntent: "non-standard" as const, width: 144, projection: 144, surfaceElevation: 48, doorWidth: null, attachment: "ledger" as const };
+    const next = createDesignFromConfirmedPhotoFacts(base, facts, outer, stairEdge.id, 24);
+    expect(next.platforms[0].construction.stairs).toMatchObject({ enabled: true, edgeId: stairEdge.id, offset: 24 });
+    const geometry = derivePlatformGeometryV3(next, "platform-1");
+    const preview = derivePhotoTraceStairPreview(outer, stairEdge.id, 48, 0, 48, 10, 7.75, 24);
+    expect(preview.treads).toEqual(geometry.stairTreads.map((tread) => tread.corners));
+    expect(() => createDesignFromConfirmedPhotoFacts(base, facts, outer, stairEdge.id, stairEdge.length - 24)).toThrow(/full stair width/i);
+  });
+
   it("keeps one straight house edge while allowing an aligned corner to extend it", () => {
     const rectangle = rectangleTrace(144, 144);
     expect(isRectangleTrace(rectangle, 144, 144)).toBe(true);

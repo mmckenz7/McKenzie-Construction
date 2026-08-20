@@ -14,6 +14,13 @@ export function centeredStairOffset(edgeLength: number, stairWidth = 48, snapInc
   return Math.min(edgeLength - stairWidth, Math.max(0, Math.round((edgeLength - stairWidth) / 2 / snapIncrement) * snapIncrement));
 }
 
+export function validateStairOffset(edgeLength: number, offset: number, stairWidth = 48): number {
+  if (!Number.isFinite(offset) || offset < 0 || offset + stairWidth > edgeLength) {
+    throw new RangeError("Stair position must keep the full stair width on the selected side.");
+  }
+  return offset;
+}
+
 export function derivePhotoTraceStairPreview(
   outer: readonly PolygonPoint[],
   edgeId: string,
@@ -22,10 +29,11 @@ export function derivePhotoTraceStairPreview(
   stairWidth = 48,
   treadDepth = 10,
   maxRiserHeight = 7.75,
+  requestedOffset?: number,
 ): PhotoTraceStairPreview {
   const edge = deriveGeometricPolygonEdges(outer).find((candidate) => candidate.id === edgeId);
   if (!edge) throw new RangeError("The selected stair side no longer exists.");
-  const offset = centeredStairOffset(edge.length, stairWidth);
+  const offset = requestedOffset === undefined ? centeredStairOffset(edge.length, stairWidth) : validateStairOffset(edge.length, requestedOffset, stairWidth);
   const rise = surfaceElevation - gradeElevation;
   if (!Number.isFinite(rise) || rise <= 0) throw new RangeError("Deck height must remain above grade to preview stairs.");
   const riserCount = Math.ceil(rise / maxRiserHeight);
