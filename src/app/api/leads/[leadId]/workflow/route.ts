@@ -3,8 +3,14 @@ import {
   getAuthenticatedApiUser,
 } from "@/lib/api-auth";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
-import { isConsultationDateTimeAllowed } from "@/lib/consultation-hours";
-import { companyEmailSignature } from "@/lib/crm/company-signature";
+import {
+  consultationDateTimeToDate,
+  isConsultationDateTimeAllowed,
+} from "@/lib/consultation-hours";
+import {
+  COMPANY_PHONE_DISPLAY,
+  companyEmailSignature,
+} from "@/lib/crm/company-signature";
 
 type RouteContext = {
   params: Promise<{
@@ -509,7 +515,7 @@ export async function POST(
         body.appointmentAt,
       );
 
-      const appointmentDate = new Date(
+      const appointmentDate = consultationDateTimeToDate(
         appointmentAt,
       );
 
@@ -532,9 +538,7 @@ export async function POST(
 
       if (
         !appointmentAt ||
-        Number.isNaN(
-          appointmentDate.getTime(),
-        )
+        !appointmentDate
       ) {
         return Response.json(
           {
@@ -788,7 +792,7 @@ ${
   notes
     ? `Reason or additional information: ${notes}\n\n`
     : ""
-}Please reply to this email or call 865-263-3811 if you would like to reschedule.
+}Please reply to this email or call ${COMPANY_PHONE_DISPLAY} if you would like to reschedule.
 
 Thank you,
 

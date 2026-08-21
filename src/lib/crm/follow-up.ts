@@ -11,7 +11,7 @@ export function callbackApplies(outcome: FollowUpOutcome) {
 export function followUpDraft(outcome: FollowUpOutcome, name: string | null, projectType: string | null) {
   const greeting = `Hi ${name ?? "there"},`;
   const project = projectType ?? "project";
-  const closing = `Please reply to this email or call our office if we can help with the next step.\n\nThank you,\n\nMcKenzie Construction\n865-263-3811`;
+  const closing = `Please reply to this email or call our office if we can help with the next step.\n\nThank you,\n\nMcKenzie Construction\n865-433-3325`;
   const templates = {
     spoke: {
       templateKey: "estimate_follow_up_spoke",

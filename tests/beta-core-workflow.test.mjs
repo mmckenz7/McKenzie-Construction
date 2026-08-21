@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { consultationTimeOptions, isConsultationDateTimeAllowed, isConsultationTimeAllowed } from "../src/lib/consultation-hours.ts";
+import { consultationDateTimeToDate, consultationTimeOptions, isConsultationDateTimeAllowed, isConsultationTimeAllowed } from "../src/lib/consultation-hours.ts";
 import { callbackApplies, followUpDraft } from "../src/lib/crm/follow-up.ts";
 import { projectNextActions, selectCanonicalGeneratedTasks } from "../src/lib/projects/next-actions.ts";
 import { companyEmailSignature } from "../src/lib/crm/company-signature.ts";
@@ -14,6 +14,12 @@ test("consultation choices use half-hour increments within configured hours", ()
   assert.equal(isConsultationDateTimeAllowed("2026-08-04T16:30", { start: "09:00", end: "17:00" }), true);
   assert.equal(isConsultationDateTimeAllowed("2026-08-04T16:15", { start: "09:00", end: "17:00" }), false);
   assert.equal(isConsultationDateTimeAllowed("2026-08-04T17:30", { start: "09:00", end: "17:00" }), false);
+});
+
+test("consultation wall-clock times are stored in the Knoxville time zone", () => {
+  assert.equal(consultationDateTimeToDate("2026-10-10T12:30")?.toISOString(), "2026-10-10T16:30:00.000Z");
+  assert.equal(consultationDateTimeToDate("2026-01-10T12:30")?.toISOString(), "2026-01-10T17:30:00.000Z");
+  assert.equal(consultationDateTimeToDate("2026-03-08T02:30"), null);
 });
 
 test("lead workflow only offers configured consultation times", async () => {
@@ -49,7 +55,7 @@ test("follow-up drafts match all outcomes and use company signature", () => {
   assert.match(drafts[2].body, /left a voicemail/);
   assert.match(drafts[3].body, /request for a callback/);
   for (const draft of drafts) assert.doesNotMatch(draft.body, /Michael/);
-  assert.equal(companyEmailSignature("BuildCo"), "BuildCo\n865-263-3811");
+  assert.equal(companyEmailSignature("BuildCo"), "BuildCo\n865-433-3325");
 });
 
 const completeProject = { id: "p1", projectName: "Deck", status: "planning", projectType: "Deck", description: "Replace deck", propertyAddress: "1 Main", projectManagerId: "tm1", estimatedValue: 20000, contractValue: null, startDate: "2026-09-01", targetCompletionDate: "2026-10-01", externalPartyCount: 1, subcontractorScheduleEligible: true, vendorBidEligible: false, materialPhaseCount: 1, hasOpenChangeOrder: false };

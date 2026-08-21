@@ -8,6 +8,84 @@ export const DEFAULT_CONSULTATION_HOURS: ConsultationHours = {
   end: "17:00",
 };
 
+export const BUSINESS_TIME_ZONE = "America/New_York";
+
+function timeZoneOffsetMilliseconds(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+
+  return Date.UTC(
+    values.year,
+    values.month - 1,
+    values.day,
+    values.hour,
+    values.minute,
+    values.second,
+  ) - date.getTime();
+}
+
+export function consultationDateTimeToDate(value: string) {
+  const localMatch = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+
+  if (!localMatch) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const [, year, month, day, hour, minute] = localMatch;
+  const wallClockUtc = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+  );
+  let instant = wallClockUtc;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const next = wallClockUtc - timeZoneOffsetMilliseconds(new Date(instant));
+    if (next === instant) break;
+    instant = next;
+  }
+
+  const parsed = new Date(instant);
+  const confirmation = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(parsed);
+  const confirmed = Object.fromEntries(
+    confirmation
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+
+  return confirmed.year === year &&
+    confirmed.month === month &&
+    confirmed.day === day &&
+    confirmed.hour === hour &&
+    confirmed.minute === minute
+    ? parsed
+    : null;
+}
+
 function minutes(value: string) {
   const match = /^(\d{2}):(\d{2})/.exec(value);
   if (!match) return null;

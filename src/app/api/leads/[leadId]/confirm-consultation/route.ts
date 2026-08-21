@@ -9,7 +9,10 @@ import {
   type TaskAssignmentStrategy,
 } from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
-import { isConsultationDateTimeAllowed } from "@/lib/consultation-hours";
+import {
+  consultationDateTimeToDate,
+  isConsultationDateTimeAllowed,
+} from "@/lib/consultation-hours";
 import { companyEmailSignature } from "@/lib/crm/company-signature";
 
 type RouteContext = {
@@ -137,14 +140,12 @@ export async function POST(
         : "";
 
     const appointmentDate =
-      new Date(appointmentAt);
+      consultationDateTimeToDate(appointmentAt);
     const customerConfirmed = body.customerConfirmed === true;
 
     if (
       !appointmentAt ||
-      Number.isNaN(
-        appointmentDate.getTime(),
-      )
+      !appointmentDate
     ) {
       return Response.json(
         {
