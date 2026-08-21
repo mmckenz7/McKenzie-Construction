@@ -70,6 +70,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 ## Phase C — configuration depth and polish
 
 - [x] Multiple editable levels with exact elevation/position and combined 2D/3D context
+- [x] Selectable level-layer workflow with selected-only/combined views and whole-layer placement controls
 - [x] Explicit target-level stair intent with exact destination elevation and deterministic flight projection
 - [ ] Exact target-edge attachment and spatial alignment for level-to-level stairs
 - [x] Prototype-only deterministic multi-platform projection and quantity aggregation

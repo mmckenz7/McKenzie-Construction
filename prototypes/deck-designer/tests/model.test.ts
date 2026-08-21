@@ -234,6 +234,11 @@ describe("DeckDesign normalization", () => {
     expect(() => normalizeDesign({ ...DEFAULT_DESIGN, platform: { ...DEFAULT_DESIGN.platform, width: Number.NaN } })).toThrow(/between/);
   });
 
+  it("accepts an explicitly measured 15-foot deck level and rejects heights above the prototype bound", () => {
+    expect(updateDesign(DEFAULT_DESIGN, { surfaceElevation: 180 }).platform.surfaceElevation).toBe(180);
+    expect(() => updateDesign(DEFAULT_DESIGN, { surfaceElevation: 361 })).toThrow(/between 6 and 360/i);
+  });
+
   it("migrates schema v1 JSON to an explicit conceptual site context", () => {
     const legacy = JSON.parse(JSON.stringify(DEFAULT_DESIGN));
     legacy.schemaVersion = 1;

@@ -18,9 +18,12 @@ type Props = {
   selectedEdgeId: string | null;
   selectedHoleIndex?: number | null;
   contextPlatforms?: readonly ContextPlatform[];
+  platformMoveEnabled?: boolean;
   onSelectEdge: (edgeId: string) => void;
   onSelectHole?: (index: number) => void;
   onSelectContextPlatform?: (platformId: string) => void;
+  onPlatformPreview?: (delta: Point) => void;
+  onPlatformCommit?: (delta: Point) => void;
   onHolePreview?: (index: number, hole: readonly Point[]) => void;
   onHoleCommit?: (index: number, hole: readonly Point[]) => void;
   onCornerPreview: (index: number, point: Point) => void;
@@ -45,10 +48,11 @@ export function planEdgeDimensionLabel(edge: Readonly<{ start: Point; end: Point
   });
 }
 
-export function PlanViewV3({ platform, activeStairSystem = null, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, selectedHoleIndex = null, contextPlatforms = [], onSelectEdge, onSelectHole, onSelectContextPlatform, onHolePreview, onHoleCommit, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit }: Props) {
+export function PlanViewV3({ platform, activeStairSystem = null, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, selectedHoleIndex = null, contextPlatforms = [], platformMoveEnabled = false, onSelectEdge, onSelectHole, onSelectContextPlatform, onPlatformPreview, onPlatformCommit, onHolePreview, onHoleCommit, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const segmentDrag = useRef<Readonly<{ index: number; midpoint: Point; outward: Point }> | null>(null);
   const holeDrag = useRef<Readonly<{ index: number; mode: "move" | number; start: Point; hole: readonly Point[] }> | null>(null);
+  const platformDrag = useRef<Readonly<{ start: Point }> | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const all = [...geometry.footprint, ...contextPlatforms.flatMap((item) => item.footprint), ...geometry.stairTreads.flatMap((tread) => tread.corners), ...geometry.landings.flatMap((landing) => landing.corners), ...houseGeometry.houseWallPanels.flatMap((panel) => [panel.start, panel.end])];
   const minX = Math.min(...all.map((point) => point.x));
@@ -106,6 +110,12 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
   };
   const selectedHole = selectedHoleIndex === null ? null : platform.region.holes[selectedHoleIndex] ?? null;
   const selectedHoleCenter = selectedHole ? { x: selectedHole.reduce((sum, point) => sum + point.x, 0) / selectedHole.length, z: selectedHole.reduce((sum, point) => sum + point.z, 0) / selectedHole.length } : null;
+  const platformCenter = { x: platform.region.outer.reduce((sum, point) => sum + point.x, 0) / platform.region.outer.length, z: platform.region.outer.reduce((sum, point) => sum + point.z, 0) / platform.region.outer.length };
+  const platformDelta = (event: PointerEvent<SVGCircleElement>): Point | null => {
+    const drag = platformDrag.current, pointer = localPoint(event);
+    if (!drag || !pointer) return null;
+    return { x: Math.round((pointer.x - drag.start.x) / snapIncrement) * snapIncrement, z: Math.round((pointer.z - drag.start.z) / snapIncrement) * snapIncrement };
+  };
   const nudgeHole = (mode: "move" | number, event: KeyboardEvent<SVGElement>) => {
     if (!selectedHole || selectedHoleIndex === null) return;
     const directions: Record<string, Point> = { ArrowLeft: { x: -snapIncrement, z: 0 }, ArrowRight: { x: snapIncrement, z: 0 }, ArrowUp: { x: 0, z: -snapIncrement }, ArrowDown: { x: 0, z: snapIncrement } };
@@ -130,6 +140,7 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
     {geometry.landingRailSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-rail plan-landing-rail" />)}
     {geometry.stairTreads.map((tread) => <polygon key={tread.id} points={tread.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-stair" />)}
     {geometry.stairRailSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-stair-rail" />)}
+    {editingEnabled && platformMoveEnabled && <><circle cx={x(platformCenter.x)} cy={y(platformCenter.z)} r="20" className="level-move-hit" role="button" tabIndex={0} aria-label="Move selected level in combined view" onKeyDown={(event) => { const directions: Record<string, Point> = { ArrowLeft: { x: -snapIncrement, z: 0 }, ArrowRight: { x: snapIncrement, z: 0 }, ArrowUp: { x: 0, z: -snapIncrement }, ArrowDown: { x: 0, z: snapIncrement } }; const delta = directions[event.key]; if (!delta) return; event.preventDefault(); onPlatformCommit?.(delta); }} onPointerDown={(event) => { const start = localPoint(event); if (!start) return; event.currentTarget.setPointerCapture(event.pointerId); platformDrag.current = { start }; setActive("platform-move"); }} onPointerMove={(event) => { if (!platformDrag.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const delta = platformDelta(event); if (delta) onPlatformPreview?.(delta); }} onPointerUp={(event) => { if (!platformDrag.current) return; const delta = platformDelta(event); if (delta) onPlatformCommit?.(delta); event.currentTarget.releasePointerCapture(event.pointerId); platformDrag.current = null; setActive(null); }} onPointerCancel={() => { platformDrag.current = null; setActive(null); onCancel(); }} /><rect x={x(platformCenter.x) - 8} y={y(platformCenter.z) - 8} width="16" height="16" rx="4" className={`level-move-handle${active === "platform-move" ? " active" : ""}`} aria-hidden="true" pointerEvents="none" /><text x={x(platformCenter.x)} y={y(platformCenter.z) - 14} className="level-move-label" textAnchor="middle" aria-hidden="true">MOVE LEVEL</text></>}
     {geometry.platformEdges.map((edge, index) => {
       const midpoint = { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 };
       const hit = 6;

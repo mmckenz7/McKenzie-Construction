@@ -203,7 +203,7 @@ export function normalizeDesign(input: unknown): DeckDesign {
     kind: platform.kind as "rectangle" | "l-shape",
     width: numberInRange(platform.width, "platform.width", 48, 1200),
     projection: numberInRange(platform.projection, "platform.projection", 48, 600),
-    surfaceElevation: numberInRange(platform.surfaceElevation, "platform.surfaceElevation", 6, 144),
+    surfaceElevation: numberInRange(platform.surfaceElevation, "platform.surfaceElevation", 6, 360),
     cutoutWidth: numberInRange(platform.cutoutWidth ?? 48, "platform.cutoutWidth", 12, 480),
     cutoutDepth: numberInRange(platform.cutoutDepth ?? 48, "platform.cutoutDepth", 12, 480),
   };

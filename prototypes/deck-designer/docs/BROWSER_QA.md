@@ -1,5 +1,14 @@
 # Browser QA record
 
+## 2026-08-21 selectable level layers and combined placement
+
+- `Add another level` now requires an entered height above grade, then starts the new platform directly over the selected source layer at zero left/right and zero away-from-house offset instead of inventing elevation or a 22-foot side placement.
+- Level cards show each recorded height above grade and switch the editing authority without changing geometry. Selected-layer view hides other levels; Combined view restores all 2D/3D context and exposes a selected-level move handle plus exact position fields.
+- A live pass entered 15 feet above grade and confirmed that the layer card, measured-plan header, 3D projection, and design revision all used the same 180-inch fact. The conceptual height bound now supports 6 through 360 inches and rejects values above it.
+- Whole-layer keyboard movement shifted the selected level by the active six-inch snap while preserving shape and cutouts. The same control exposes a pointer/touch drag path; exact left/right and house-distance fields remain the fine-adjustment fallback.
+- At 390 × 844, both level cards, the height-above-grade field, view switch, combined move control, and exact placement fields were available with no horizontal overflow.
+- Full validation passed 165 tests. The measured bundle is 98.9 KiB initial and 239.8 KiB total gzip under 99/240 KiB ceilings; the 170 KiB largest-chunk ceiling is unchanged.
+
 ## 2026-08-20 direct cutout editing and target-level stair intent
 
 - A selected rectangular cutout now exposes a center move target and four resize targets in the measured plan. The same safe region command drives direct manipulation, arrow-key snapping, and exact numeric fields; a live keyboard pass moved the center from 10 to 10.5 feet and resized the width from 3 to 3.5 feet while quantities updated from the normalized region.
