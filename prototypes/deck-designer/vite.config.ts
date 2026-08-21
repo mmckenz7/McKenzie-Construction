@@ -9,7 +9,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks(id) {
+        manualChunks(id: string) {
           if (["LandingConnectionsEditor", "LevelCutoutControls", "HouseConnectionEditor", "RailingStageControls", "PhotoIntakeDialog", "platformCommandsV3", "levelConnectionAlignmentV3", "connectedStairAssemblyV3"].some((name) => id.includes(`/${name}.`))) return "designer-controls";
         },
       },
