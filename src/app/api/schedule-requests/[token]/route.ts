@@ -9,6 +9,7 @@ import {
   publicTokenJson,
 } from "@/lib/public-token-api";
 import { enforcePublicTokenRateLimit } from "@/lib/public-token-rate-limit";
+import { hasValidScheduleRequestDurations } from "@/lib/schedule-request-validation";
 
 type RouteContext = {
   params: Promise<{
@@ -159,14 +160,10 @@ export async function POST(
   }
 
   if (
-    typeof body.demoDurationDays !== "number" ||
-    typeof body.totalDurationDays !== "number" ||
-    !Number.isInteger(body.demoDurationDays) ||
-    !Number.isInteger(body.totalDurationDays) ||
-    body.demoDurationDays < 1 ||
-    body.demoDurationDays > 365 ||
-    body.totalDurationDays < body.demoDurationDays ||
-    body.totalDurationDays > 730 ||
+    !hasValidScheduleRequestDurations(
+      body.demoDurationDays,
+      body.totalDurationDays,
+    ) ||
     (body.notes?.length ?? 0) > 4_000
   ) {
     return publicTokenJson(
