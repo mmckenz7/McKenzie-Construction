@@ -22,6 +22,7 @@ type UpdateBody = {
   installerEarliestConstructionStart?: string | null;
   expectedDemoDurationDays?: number | null;
   expectedTotalDurationDays?: number | null;
+  materialsNotRequired?: boolean;
   confirmedMaterialDeliveryDate?: string | null;
   deliveryBufferWorkdays?: number;
   confirmedDemoStart?: string | null;
@@ -76,6 +77,8 @@ function normalizeReadiness(
       "number"
         ? record.expected_total_duration_days
         : null,
+    materialsNotRequired:
+      record.materials_not_required === true,
     confirmedMaterialDeliveryDate:
       record.confirmed_material_delivery_date
         ? String(
@@ -329,6 +332,10 @@ export async function PATCH(
       "expected_total_duration_days",
     ],
     [
+      "materialsNotRequired",
+      "materials_not_required",
+    ],
+    [
       "confirmedMaterialDeliveryDate",
       "confirmed_material_delivery_date",
     ],
@@ -359,6 +366,11 @@ export async function PATCH(
       updateData[column] =
         body[bodyKey];
     }
+  }
+
+  if (body.materialsNotRequired === true) {
+    updateData.confirmed_material_delivery_date =
+      null;
   }
 
   const supabase =

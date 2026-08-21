@@ -46,6 +46,8 @@ function normalizeReadiness(
       record.dumpster_ready === true,
     siteAccessReady:
       record.site_access_ready === true,
+    materialsNotRequired:
+      record.materials_not_required === true,
     installerEarliestDemoStart:
       record.installer_earliest_demo_start
         ? String(

@@ -16,6 +16,7 @@ type Readiness = {
   installerEarliestConstructionStart: string | null;
   expectedDemoDurationDays: number | null;
   expectedTotalDurationDays: number | null;
+  materialsNotRequired: boolean;
   confirmedMaterialDeliveryDate: string | null;
   deliveryBufferWorkdays: number;
   calculatedMaterialSafeStart: string | null;
@@ -156,6 +157,8 @@ export function ProjectScheduleReadiness({
               readiness.expectedDemoDurationDays,
             expectedTotalDurationDays:
               readiness.expectedTotalDurationDays,
+            materialsNotRequired:
+              readiness.materialsNotRequired,
             confirmedMaterialDeliveryDate:
               readiness.confirmedMaterialDeliveryDate,
             deliveryBufferWorkdays:
@@ -253,9 +256,13 @@ export function ProjectScheduleReadiness({
 
         <Summary
           label="Material-safe start"
-          value={formatDate(
-            readiness.calculatedMaterialSafeStart,
-          )}
+          value={
+            readiness.materialsNotRequired
+              ? "Not required"
+              : formatDate(
+                  readiness.calculatedMaterialSafeStart,
+                )
+          }
         />
 
         <Summary
@@ -332,6 +339,41 @@ export function ProjectScheduleReadiness({
             }
           />
         </div>
+
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <input
+            type="checkbox"
+            checked={
+              readiness.materialsNotRequired
+            }
+            onChange={(event) =>
+              setReadiness({
+                ...readiness,
+                materialsNotRequired:
+                  event.target.checked,
+                confirmedMaterialDeliveryDate:
+                  event.target.checked
+                    ? null
+                    : readiness.confirmedMaterialDeliveryDate,
+              })
+            }
+            className="mt-0.5 h-5 w-5"
+          />
+
+          <span>
+            <span className="block text-sm font-bold text-slate-950">
+              No material delivery required before
+              construction
+            </span>
+
+            <span className="mt-1 block text-sm leading-6 text-slate-700">
+              Use this only when the project can truly
+              start without waiting for a material
+              delivery. It does not remove materials or
+              costs from the estimate.
+            </span>
+          </span>
+        </label>
 
         <div className="grid gap-5 md:grid-cols-2">
           <DateField
@@ -437,6 +479,9 @@ export function ProjectScheduleReadiness({
               readiness.confirmedMaterialDeliveryDate ??
               ""
             }
+            disabled={
+              readiness.materialsNotRequired
+            }
             onChange={(value) =>
               setReadiness({
                 ...readiness,
@@ -457,6 +502,9 @@ export function ProjectScheduleReadiness({
               ["2", "2 working days"],
               ["3", "3 working days"],
             ]}
+            disabled={
+              readiness.materialsNotRequired
+            }
             onChange={(value) =>
               setReadiness({
                 ...readiness,

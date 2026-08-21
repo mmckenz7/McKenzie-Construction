@@ -14,6 +14,7 @@ type Readiness = {
   permitReady: boolean;
   dumpsterReady: boolean;
   siteAccessReady: boolean;
+  materialsNotRequired: boolean;
   installerEarliestDemoStart:
     | string
     | null;
@@ -300,10 +301,15 @@ export default function OperationsSchedulePage() {
 
                     <Info
                       label="Material-safe"
-                      value={formatDate(
+                      value={
                         readiness
-                          ?.calculatedMaterialSafeStart,
-                      )}
+                          ?.materialsNotRequired
+                          ? "Not required"
+                          : formatDate(
+                              readiness
+                                ?.calculatedMaterialSafeStart,
+                            )
+                      }
                     />
 
                     <Info
