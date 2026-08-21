@@ -11,7 +11,7 @@ import { saveDeckDesignV3 } from "./storageV3";
 import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
 import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment, resizePolygonEdge } from "./polygonEditorV3";
-import { createDesignFromConfirmedPhotoFacts, type ConfirmedPhotoFacts, type PhotoIntakeReview } from "./photoIntake";
+import type { ConfirmedPhotoFacts, PhotoIntakeReview } from "./photoIntake";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { V3NumberField } from "./V3NumberField";
@@ -273,7 +273,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     if (landingPositionMode === "distance") return activeLanding.afterRiser * activeStairSystem.treadDepth;
     return landingPositionMode === "above" ? activeTotalRisers - activeLanding.afterRiser : activeLanding.afterRiser;
   };
-  const addLandingConnection = (destination: "deck" | "grade", targetPlatformId?: string) => {
+  const addLandingConnection = (destination: "deck" | "grade", targetPlatformId?: string, targetEdgeId?: string) => {
     if (!activeStairSystem || !activeLanding?.locked) { setMessage("Lock the landing before adding a flight."); return; }
     if (destination === "deck" && !targetPlatformId && activeLanding.afterRiser === 0) { setMessage("Choose another level or move this landing below the deck first."); return; }
     const last = activeLanding.connections.at(-1);
@@ -282,8 +282,8 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     const direction = (["left", "right", "straight"] as const).find((candidate) => !usedDirections.has(candidate));
     if (!direction) { setMessage("All landing sides are used."); return; }
     const id = `${activeLanding.id}-connection-${activeLanding.connections.length + 1}`;
-    const connection: StairLandingConnectionV3 = Object.freeze({ id, locked: false, destination, direction, width: activeStairSystem.width, treadDepth: activeStairSystem.treadDepth, ...(targetPlatformId ? { targetPlatformId } : {}) });
-    updateLanding({ connections: [...activeLanding.connections, connection] }, targetPlatformId ? `${targetPlatformId.replaceAll("-", " ")} elevation recorded for this connected flight. Exact edge alignment remains for review.` : `Connected another stair ${destination === "deck" ? "up to deck" : "down to grade"} through this shared landing.`);
+    const connection: StairLandingConnectionV3 = Object.freeze({ id, locked: false, destination, direction, width: activeStairSystem.width, treadDepth: activeStairSystem.treadDepth, ...(targetPlatformId ? { targetPlatformId } : {}), ...(targetEdgeId ? { targetEdgeId } : {}) });
+    updateLanding({ connections: [...activeLanding.connections, connection] }, targetPlatformId ? `Choose the arrival side and direction for ${targetPlatformId.replaceAll("-", " ")}.` : "Connected another stair down to grade through this shared landing.");
   };
   const lockLanding = () => updateLanding({ locked: true }, "Landing locked. Another may now be added.");
   const lockStairSystem = () => {
@@ -317,8 +317,10 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     surfaceElevation: null,
     doorWidth: null,
     attachment: platform.edgeConditions.find((condition) => condition.condition === "house_attachment")?.attachment as "unknown" | "ledger" | "non-ledger" | undefined ?? "unknown",
+    additionalLevelElevations: design.platforms.filter((item) => item.id !== platform.id).map((item) => item.elevation),
   };
-  const startFromPhotos = (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number, confirmedOuter?: readonly PolygonPoint[], stairEdgeId?: string | null, stairOffset?: number | null, stairWidth?: number) => {
+  const startFromPhotos = async (facts: ConfirmedPhotoFacts, review: PhotoIntakeReview, photoCount: number, confirmedOuter?: readonly PolygonPoint[], stairEdgeId?: string | null, stairOffset?: number | null, stairWidth?: number) => {
+    const { createDesignFromConfirmedPhotoFacts } = await import("./PhotoIntakeDialog");
     const next = createDesignFromConfirmedPhotoFacts(history.present, facts, confirmedOuter, stairEdgeId, stairOffset, stairWidth);
     setPreview(null);
     dispatch({ type: "reset", design: next });
@@ -379,7 +381,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
                   <div className="field-grid"><V3NumberField label="Landing width (feet)" value={Math.round(activeLanding.width / 12 * 100) / 100} step={.5} onCommit={(value) => updateLanding({ width: value * 12 }, "Landing width updated exactly.")} /><V3NumberField label="Landing depth (feet)" value={Math.round(activeLanding.depth / 12 * 100) / 100} step={.5} onCommit={(value) => updateLanding({ depth: value * 12 }, "Landing depth updated exactly.")} /></div>
                   <fieldset><legend>Direction after landing</legend><div className="toggle-grid">{(["straight", "left", "right"] as const).map((turn) => <button type="button" key={turn} className={`toggle${activeLanding.turn === turn ? " active" : ""}`} onClick={() => updateLanding({ turn, depth: turn === "straight" ? activeLanding.depth : Math.max(activeLanding.depth, activeStairSystem.width) }, `Stairs continue ${turn}.`)}>{turn}</button>)}</div><small>Viewed walking down.</small></fieldset>
                   {!activeLanding.locked && <button className="primary" onClick={lockLanding}>Finish landing details</button>}
-                  {activeLanding.locked && <Suspense fallback={<div className="house-editor-loading" role="status">Preparing shared landing controls…</div>}><LandingConnectionsEditor landing={activeLanding} destinationPlatforms={design.platforms.filter((item) => item.id !== platform.id).map((item) => ({ id: item.id, label: `${item.id.replaceAll("-", " ")} · ${formatFeetInches(item.elevation)} high` }))} onAdd={addLandingConnection} onUpdateLanding={(connections, nextMessage) => updateLanding({ connections }, nextMessage)} onUpdateConnection={updateLandingConnection} /></Suspense>}
+                  {activeLanding.locked && <Suspense fallback={<div className="house-editor-loading" role="status">Preparing level connection controls…</div>}><LandingConnectionsEditor landing={activeLanding} destinationPlatforms={design.platforms.filter((item) => item.id !== platform.id).map((item) => ({ id: item.id, label: `${item.id.replaceAll("-", " ")} · ${formatFeetInches(item.elevation)} high`, edges: deriveGeometricPolygonEdges(item.region.outer).filter((edge) => item.edgeConditions.some((condition) => condition.edgeId === edge.id && condition.condition === "free")).map((edge, index) => ({ id: edge.id, label: `Side ${index + 1} · ${formatFeetInches(edge.length)}` })) }))} onAdd={addLandingConnection} onUpdateLanding={(connections, nextMessage) => updateLanding({ connections }, nextMessage)} onUpdateConnection={updateLandingConnection} /></Suspense>}
                 </div>}
                 <button className="remove-stairs" onClick={() => { const remaining = platform.construction.stairSystems.filter((system) => system.id !== activeStairSystem.id); replaceStairSystems(remaining, "Stairs removed from this side."); setSelectedStairSystemId(null); setSelectedLandingId(null); }}>Remove stairs from this side</button>
               </>}

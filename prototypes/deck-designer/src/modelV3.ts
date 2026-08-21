@@ -50,6 +50,8 @@ export type StairLandingConnectionV3 = Readonly<{
   treadDepth: number;
   /** Exact destination for a deck-bound flight. Absent only for legacy generic deck connections. */
   targetPlatformId?: string;
+  /** Exact free edge on the destination platform. Absent only for legacy level connections. */
+  targetEdgeId?: string;
 }>;
 
 export type StairSystemV3 = Readonly<{
@@ -338,6 +340,7 @@ function normalizePlatformV3(
         connectionIds.add(connectionId);
         const destination = connection.destination ?? "grade";
         const targetPlatformId = connection.targetPlatformId;
+        const targetEdgeId = connection.targetEdgeId;
         const direction = connection.direction ?? (["left", "right", "straight"] as const).find((candidateDirection) => !usedDirections.has(candidateDirection)) ?? "straight";
         if (destination !== "deck" && destination !== "grade") throw new TypeError("A shared-landing stair connection must lead to deck or grade.");
         if (!["straight", "left", "right"].includes(direction)) throw new TypeError("A shared-landing stair direction must be straight, left, or right.");
@@ -347,16 +350,20 @@ function normalizePlatformV3(
           if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(targetPlatformId) || targetPlatformId === platform.id) throw new RangeError("A level connection must name another stable platform ID.");
           const target = design.platforms.find((item) => item.id === targetPlatformId);
           if (!target) throw new RangeError(`Destination platform ${targetPlatformId} does not exist.`);
+          if (targetEdgeId !== undefined && !target.edgeConditions.some((condition) => condition.edgeId === targetEdgeId && condition.condition === "free")) {
+            throw new RangeError("A level connection must reference an exact free side on its destination level.");
+          }
           const actualRise = totalRisers > 0 ? (shared.platform.surfaceElevation - shared.siteContext.gradeElevation) / totalRisers : 0;
           const landingElevation = shared.platform.surfaceElevation - afterRiser * actualRise;
           if (Math.abs(target.elevation - landingElevation) < .01) throw new RangeError("A connected level must be above or below the shared landing.");
-        } else if (destination === "deck" && afterRiser === 0) throw new RangeError("A legacy deck-bound merged stair requires a landing below deck elevation.");
+        } else if (targetEdgeId !== undefined) throw new RangeError("A destination side requires a destination level.");
+        else if (destination === "deck" && afterRiser === 0) throw new RangeError("A legacy deck-bound merged stair requires a landing below deck elevation.");
         usedDirections.add(direction);
         const connectionWidth = connection.width ?? normalizedStair.width;
         const connectionTreadDepth = connection.treadDepth ?? normalizedStair.treadDepth;
         if (!Number.isFinite(connectionWidth) || connectionWidth < 30 || connectionWidth > 96 || connectionWidth > width) throw new RangeError("A merged stair must be 30–96 inches wide and fit its shared landing.");
         if (!Number.isFinite(connectionTreadDepth) || connectionTreadDepth < 9 || connectionTreadDepth > 14) throw new RangeError("A merged stair tread depth must be between 9 and 14 inches.");
-        return Object.freeze({ id: connectionId, locked: connection.locked === true, destination, direction, width: connectionWidth, treadDepth: connectionTreadDepth, ...(targetPlatformId === undefined ? {} : { targetPlatformId }) });
+        return Object.freeze({ id: connectionId, locked: connection.locked === true, destination, direction, width: connectionWidth, treadDepth: connectionTreadDepth, ...(targetPlatformId === undefined ? {} : { targetPlatformId }), ...(targetEdgeId === undefined ? {} : { targetEdgeId }) });
       }));
       return Object.freeze({ id: landingId, locked: landing.locked === true, afterRiser, width, depth, turn, connections });
     }));

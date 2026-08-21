@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-21 measured multi-level start and exact destination-side connections
+
+- The project-information dialog now asks how many deck levels are planned and requires a measured height above grade for every additional layer; a two-level 10-foot/4-foot test created stacked, independently selectable platforms without invented offsets or elevations.
+- A locked midway landing can connect to another level through an explicit destination-level and destination-free-side selection. The level height drives the stair rise, left/straight/right controls the route, and house-attached or missing destination sides are rejected by normalization.
+- Desktop browser QA created two levels, added stairs and a midway landing, selected Level 2 Side 1, finished the connection, and confirmed both levels in Combined View with no alerts or horizontal overflow at the active desktop viewport.
+- The destination edge is now authoritative in JSON, validation, undo/redo, and storage round-trips. Automatic endpoint realignment after either whole level moves remains a deliberate next geometry slice; the prototype does not silently move decks or claim that an unaligned route is construction-ready.
+- Full validation passed 167 tests. The measured bundle is 97.4 KiB initial and 240.6 KiB total gzip under 99/241 KiB ceilings; level setup and connection controls remain lazy-loaded.
+
 ## 2026-08-21 selectable level layers and combined placement
 
 - `Add another level` now requires an entered height above grade, then starts the new platform directly over the selected source layer at zero left/right and zero away-from-house offset instead of inventing elevation or a 22-foot side placement.

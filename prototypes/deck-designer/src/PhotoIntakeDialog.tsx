@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { HouseAttachment } from "./model";
 import { normalizeConfirmedPhotoFacts, reviewConfirmedPhotoFacts, reviewPhotoCoverage, type ConfirmedPhotoFacts, type GuidedPhotoRole, type PhotoIntakeReview } from "./photoIntake";
+export { createDesignFromConfirmedPhotoFacts } from "./photoIntake";
 import { isRectangleTrace, PhotoOutlineTracer, rectangleTrace, validatePhotoTrace } from "./PhotoOutlineTracer";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 
@@ -26,7 +27,7 @@ const ROLE_LABELS: Readonly<Record<GuidedPhotoRole, string>> = Object.freeze(Obj
 
 const feet = (inches: number): string => String(Math.round(inches / 12 * 100) / 100);
 const parseFeet = (value: string): number => Number(value) * 12;
-const parseOptionalInches = (value: string): number | null => value.trim() ? Number(value) : null;
+const parseOptionalFeet = (value: string): number | null => value.trim() ? parseFeet(value) : null;
 
 export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeElevation, onCancel, onStartDesign }: Props) {
   const [photos, setPhotos] = useState<Partial<Record<GuidedPhotoRole, LocalPhoto>>>({});
@@ -36,7 +37,9 @@ export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeEleva
   const [layoutIntent, setLayoutIntent] = useState<ConfirmedPhotoFacts["layoutIntent"]>(initialFacts.layoutIntent);
   const [width, setWidth] = useState(feet(initialFacts.width));
   const [projection, setProjection] = useState(feet(initialFacts.projection));
-  const [surfaceElevation, setSurfaceElevation] = useState(initialFacts.surfaceElevation === null ? "" : String(initialFacts.surfaceElevation));
+  const [surfaceElevation, setSurfaceElevation] = useState(initialFacts.surfaceElevation === null ? "" : feet(initialFacts.surfaceElevation));
+  const [levelCount, setLevelCount] = useState(1 + (initialFacts.additionalLevelElevations?.length ?? 0));
+  const [additionalLevelHeights, setAdditionalLevelHeights] = useState<readonly string[]>(() => (initialFacts.additionalLevelElevations ?? []).map(feet));
   const [doorWidth, setDoorWidth] = useState(initialFacts.doorWidth === null ? "" : feet(initialFacts.doorWidth));
   const [attachment, setAttachment] = useState<HouseAttachment>(initialFacts.attachment);
   const [traceOuter, setTraceOuter] = useState<readonly PolygonPoint[]>(() => rectangleTrace(initialFacts.width, initialFacts.projection));
@@ -51,10 +54,11 @@ export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeEleva
     layoutIntent,
     width: parseFeet(width),
     projection: parseFeet(projection),
-    surfaceElevation: parseOptionalInches(surfaceElevation),
+    surfaceElevation: parseOptionalFeet(surfaceElevation),
     doorWidth: doorWidth.trim() ? parseFeet(doorWidth) : null,
     attachment,
-  }), [attachment, designName, doorWidth, layoutIntent, projection, surfaceElevation, width]);
+    additionalLevelElevations: additionalLevelHeights.slice(0, levelCount - 1).map((value) => value.trim() ? parseFeet(value) : Number.NaN),
+  }), [additionalLevelHeights, attachment, designName, doorWidth, layoutIntent, levelCount, projection, surfaceElevation, width]);
   let review: PhotoIntakeReview | null = null;
   try { review = reviewConfirmedPhotoFacts(draft); } catch { /* show validation only when submitted */ }
   const guidedRoles = Object.keys(photos) as GuidedPhotoRole[];
@@ -139,7 +143,9 @@ export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeEleva
         <label className="field full"><span>Design name</span><input value={designName} onChange={(event) => setDesignName(event.target.value)} /></label>
         <label className="field"><span>Deck width (feet)</span><input inputMode="decimal" type="number" min="4" step="0.25" value={width} onChange={(event) => setWidth(event.target.value)} /></label>
         <label className="field"><span>Distance from house (feet)</span><input inputMode="decimal" type="number" min="4" step="0.25" value={projection} onChange={(event) => setProjection(event.target.value)} /></label>
-        <label className="field"><span>Deck height (inches, verify)</span><input inputMode="decimal" type="number" min="6" step="0.25" placeholder="Unknown" value={surfaceElevation} onChange={(event) => setSurfaceElevation(event.target.value)} /></label>
+        <label className="field"><span>Level 1 height above grade (feet)</span><input inputMode="decimal" type="number" min="0.5" max="30" step="0.25" placeholder="Unknown" value={surfaceElevation} onChange={(event) => setSurfaceElevation(event.target.value)} /></label>
+        <label className="field"><span>How many deck levels?</span><select value={levelCount} onChange={(event) => { const count = Number(event.target.value); setLevelCount(count); setAdditionalLevelHeights((current) => Array.from({ length: count - 1 }, (_, index) => current[index] ?? "")); }}>{[1, 2, 3, 4].map((count) => <option key={count} value={count}>{count}</option>)}</select></label>
+        {Array.from({ length: levelCount - 1 }, (_, index) => <label className="field" key={index}><span>Level {index + 2} height above grade (feet)</span><input inputMode="decimal" type="number" min="0.5" max="30" step="0.25" placeholder="Enter measured height" value={additionalLevelHeights[index] ?? ""} onChange={(event) => setAdditionalLevelHeights((current) => Array.from({ length: levelCount - 1 }, (_, itemIndex) => itemIndex === index ? event.target.value : current[itemIndex] ?? ""))} /></label>)}
         <label className="field"><span>Door width (feet)</span><input inputMode="decimal" type="number" min="1" step="0.25" placeholder="Optional reference" value={doorWidth} onChange={(event) => setDoorWidth(event.target.value)} /></label>
         <label className="field full"><span>Connection to house</span><select value={attachment} onChange={(event) => setAttachment(event.target.value as HouseAttachment)}><option value="unknown">Unknown / field verify</option><option value="ledger">Ledger attached</option><option value="non-ledger">Freestanding / non-ledger</option></select></label>
       </div></section>

@@ -109,4 +109,15 @@ describe("isolated DeckDesign v3 migration spike", () => {
     expect(() => normalizeDeckDesignV3(withConnection("platform-1"))).toThrow(/another stable platform/i);
     expect(() => normalizeDeckDesignV3(withConnection("missing-level"))).toThrow(/does not exist/i);
   });
+
+  it("records an exact free destination side for a level connection", () => {
+    const migrated = migrateDeckDesignToV3(lShapeLandingFixture.design);
+    const platform = migrated.platforms[0], system = platform.construction.stairSystems[0], landing = system.landings[0];
+    const second = { ...platform, id: "platform-2", elevation: 24, edgeConditions: platform.edgeConditions.map((condition) => ({ ...condition, condition: "free" as const, attachment: "none" as const })), construction: { ...platform.construction, stairSystems: [] } };
+    const targetEdgeId = second.edgeConditions[0].edgeId;
+    const connection = { id: "exact-level-link", locked: true, destination: "deck" as const, direction: "left" as const, width: system.width, treadDepth: 10, targetPlatformId: second.id, targetEdgeId };
+    const design = normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings: [{ ...landing, connections: [connection] }] }] } }, second] });
+    expect(design.platforms[0].construction.stairSystems[0].landings[0].connections[0]).toMatchObject({ targetPlatformId: "platform-2", targetEdgeId });
+    expect(() => normalizeDeckDesignV3({ ...design, platforms: [{ ...design.platforms[0], construction: { ...design.platforms[0].construction, stairSystems: [{ ...design.platforms[0].construction.stairSystems[0], landings: [{ ...design.platforms[0].construction.stairSystems[0].landings[0], connections: [{ ...connection, targetEdgeId: "missing-edge" }] }] }] } }, design.platforms[1]] })).toThrow(/exact free side/i);
+  });
 });

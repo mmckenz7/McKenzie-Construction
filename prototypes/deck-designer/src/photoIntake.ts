@@ -3,6 +3,7 @@ import { migrateDeckDesignToV3, type DeckDesignV3 } from "./modelV3";
 import { deriveGeometricPolygonEdges, geometricPolygonEdgeId, type PolygonPoint } from "./polygon";
 import { normalizePolygonRegion } from "./polygonRegion";
 import { centeredStairOffset, validateStairOffset } from "./photoTraceStairs";
+import { addPlatformLevelV3 } from "./platformCommandsV3";
 
 export type ConfirmedPhotoFacts = Readonly<{
   designName: string;
@@ -12,6 +13,8 @@ export type ConfirmedPhotoFacts = Readonly<{
   surfaceElevation: number | null;
   doorWidth: number | null;
   attachment: HouseAttachment;
+  /** Measured heights above grade for Level 2 and higher. */
+  additionalLevelElevations?: readonly number[];
 }>;
 
 export type PhotoIntakeReview = Readonly<{
@@ -43,14 +46,19 @@ export function normalizeConfirmedPhotoFacts(facts: ConfirmedPhotoFacts): Confir
   if (!designName || designName.length > 120) throw new TypeError("Design name is required and must be 120 characters or fewer.");
   if (facts.layoutIntent !== "rectangle" && facts.layoutIntent !== "non-standard") throw new TypeError("Choose rectangle or non-standard layout intent.");
   if (!["unknown", "ledger", "non-ledger"].includes(facts.attachment)) throw new TypeError("Choose a supported house attachment status.");
+  const additionalLevelElevations = Object.freeze((facts.additionalLevelElevations ?? []).map((elevation, index) => inches(elevation, `Level ${index + 2} height`, 6, 360)));
+  const recordedElevations = [facts.surfaceElevation, ...additionalLevelElevations].filter((value): value is number => value !== null);
+  if (additionalLevelElevations.length > 0 && facts.surfaceElevation === null) throw new RangeError("Enter Level 1 height above grade before adding more levels.");
+  if (new Set(recordedElevations).size !== recordedElevations.length) throw new RangeError("Each deck level needs a different measured height above grade.");
   return Object.freeze({
     designName,
     layoutIntent: facts.layoutIntent,
     width: inches(facts.width, "Deck width", 48, 1200),
     projection: inches(facts.projection, "Deck projection", 48, 600),
-    surfaceElevation: facts.surfaceElevation === null ? null : inches(facts.surfaceElevation, "Deck height", 6, 144),
+    surfaceElevation: facts.surfaceElevation === null ? null : inches(facts.surfaceElevation, "Deck height", 6, 360),
     doorWidth: facts.doorWidth === null ? null : inches(facts.doorWidth, "Door width", 12, 240),
     attachment: facts.attachment,
+    additionalLevelElevations,
   });
 }
 
@@ -61,6 +69,8 @@ export function reviewConfirmedPhotoFacts(facts: ConfirmedPhotoFacts, outlineCon
       `Layout intent: ${normalized.layoutIntent}`,
       `Deck footprint: ${normalized.width} × ${normalized.projection} inches`,
       ...(normalized.surfaceElevation === null ? [] : [`Deck height: ${normalized.surfaceElevation} inches`]),
+      `Deck levels planned: ${1 + (normalized.additionalLevelElevations?.length ?? 0)}`,
+      ...(normalized.additionalLevelElevations ?? []).map((elevation, index) => `Level ${index + 2} height: ${elevation} inches`),
       ...(normalized.doorWidth === null ? [] : [`Door width reference: ${normalized.doorWidth} inches`]),
       `House attachment response: ${normalized.attachment}`,
     ]),
@@ -115,33 +125,25 @@ export function createDesignFromConfirmedPhotoFacts(base: DeckDesignV3, facts: C
     id: base.id,
     metadata: { ...legacy.metadata, revision: base.metadata.revision + 1 },
   }));
-  if (!confirmedOuter) return migrated;
-  if (normalized.layoutIntent !== "non-standard") throw new TypeError("A traced outline requires non-standard layout intent.");
-  const region = normalizePolygonRegion({ outer: confirmedOuter, holes: [] });
-  const edges = deriveGeometricPolygonEdges(region.outer);
-  const houseEdges = edges.filter((edge) => Math.abs(edge.start.z) < .01 && Math.abs(edge.end.z) < .01);
-  if (houseEdges.length !== 1) throw new RangeError("The traced outline must preserve one straight edge along the house line.");
-  const houseEdgeId = geometricPolygonEdgeId(houseEdges[0].start, houseEdges[0].end);
-  const freeEdges = edges.filter((edge) => edge.id !== houseEdgeId);
-  if (freeEdges.length === 0) throw new RangeError("The traced outline must expose a free edge.");
-  const stairEdge = preferredStairEdgeId
-    ? freeEdges.find((edge) => edge.id === preferredStairEdgeId)
-    : [...freeEdges].sort((first, second) => second.length - first.length || first.id.localeCompare(second.id))[0];
-  if (!stairEdge) throw new RangeError("The selected stair side no longer exists. Select it again on the confirmed outline.");
-  const stairWidth = preferredStairWidth ?? migrated.platforms[0].construction.stairs.width;
-  if (preferredStairEdgeId && (stairWidth < 30 || stairWidth > 96 || stairEdge.length < stairWidth)) throw new RangeError("The selected stair side cannot contain the recorded stair width.");
-  const platform = migrated.platforms[0];
-  return migrateDeckDesignToV3({
-    ...migrated,
-    platforms: [{
-      ...platform,
-      region,
-      edgeConditions: edges.map((edge) => ({ edgeId: edge.id, condition: edge.id === houseEdgeId ? "house_attachment" : "free", attachment: edge.id === houseEdgeId ? normalized.attachment : "none" })),
-      construction: {
-        ...platform.construction,
-        railing: { ...platform.construction.railing, enabledEdgeIds: freeEdges.map((edge) => edge.id) },
-        stairs: { ...platform.construction.stairs, enabled: Boolean(preferredStairEdgeId), edgeId: stairEdge.id, width: stairWidth, offset: preferredStairEdgeId ? preferredStairOffset === null || preferredStairOffset === undefined ? centeredStairOffset(stairEdge.length, stairWidth) : validateStairOffset(stairEdge.length, preferredStairOffset, stairWidth) : 0 },
-      },
-    }],
-  });
+  let result = migrated;
+  if (confirmedOuter) {
+    if (normalized.layoutIntent !== "non-standard") throw new TypeError("A traced outline requires non-standard layout intent.");
+    const region = normalizePolygonRegion({ outer: confirmedOuter, holes: [] });
+    const edges = deriveGeometricPolygonEdges(region.outer);
+    const houseEdges = edges.filter((edge) => Math.abs(edge.start.z) < .01 && Math.abs(edge.end.z) < .01);
+    if (houseEdges.length !== 1) throw new RangeError("The traced outline must preserve one straight edge along the house line.");
+    const houseEdgeId = geometricPolygonEdgeId(houseEdges[0].start, houseEdges[0].end);
+    const freeEdges = edges.filter((edge) => edge.id !== houseEdgeId);
+    if (freeEdges.length === 0) throw new RangeError("The traced outline must expose a free edge.");
+    const stairEdge = preferredStairEdgeId ? freeEdges.find((edge) => edge.id === preferredStairEdgeId) : [...freeEdges].sort((first, second) => second.length - first.length || first.id.localeCompare(second.id))[0];
+    if (!stairEdge) throw new RangeError("The selected stair side no longer exists. Select it again on the confirmed outline.");
+    const stairWidth = preferredStairWidth ?? migrated.platforms[0].construction.stairs.width;
+    if (preferredStairEdgeId && (stairWidth < 30 || stairWidth > 96 || stairEdge.length < stairWidth)) throw new RangeError("The selected stair side cannot contain the recorded stair width.");
+    const platform = migrated.platforms[0];
+    result = migrateDeckDesignToV3({ ...migrated, platforms: [{ ...platform, region, edgeConditions: edges.map((edge) => ({ edgeId: edge.id, condition: edge.id === houseEdgeId ? "house_attachment" : "free", attachment: edge.id === houseEdgeId ? normalized.attachment : "none" })), construction: { ...platform.construction, railing: { ...platform.construction.railing, enabledEdgeIds: freeEdges.map((edge) => edge.id) }, stairs: { ...platform.construction.stairs, enabled: Boolean(preferredStairEdgeId), edgeId: stairEdge.id, width: stairWidth, offset: preferredStairEdgeId ? preferredStairOffset === null || preferredStairOffset === undefined ? centeredStairOffset(stairEdge.length, stairWidth) : validateStairOffset(stairEdge.length, preferredStairOffset, stairWidth) : 0 } } }] });
+  }
+  for (const [index, elevation] of (normalized.additionalLevelElevations ?? []).entries()) {
+    result = addPlatformLevelV3(result, "platform-1", `platform-${index + 2}`, elevation, { x: 0, z: 0 }).design;
+  }
+  return result;
 }

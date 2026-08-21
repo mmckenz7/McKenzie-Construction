@@ -31,6 +31,14 @@ describe("local-only photo-assisted start", () => {
     expect(next.metadata.revision).toBe(base.metadata.revision + 1);
   });
 
+  it("creates measured stacked level layers from initial project information", () => {
+    const next = createDesignFromConfirmedPhotoFacts(base, { designName: "Two level deck", layoutIntent: "rectangle", width: 144, projection: 144, surfaceElevation: 120, doorWidth: null, attachment: "ledger", additionalLevelElevations: [48] });
+    expect(next.platforms.map((platform) => ({ id: platform.id, elevation: platform.elevation }))).toEqual([{ id: "platform-1", elevation: 120 }, { id: "platform-2", elevation: 48 }]);
+    expect(next.platforms[1].region.outer).toEqual(next.platforms[0].region.outer);
+    expect(next.platforms[1].construction.stairSystems).toEqual([]);
+    expect(() => normalizeConfirmedPhotoFacts({ designName: "Bad levels", layoutIntent: "rectangle", width: 144, projection: 144, surfaceElevation: 48, doorWidth: null, attachment: "unknown", additionalLevelElevations: [48] })).toThrow(/different measured height/i);
+  });
+
   it("creates a confirmed non-standard polygon instead of a rectangle envelope", () => {
     const base = migrateDeckDesignToV3(DEFAULT_DESIGN);
     const outer = [{ x: 0, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 72 }, { x: 96, z: 72 }, { x: 96, z: 144 }, { x: 0, z: 144 }];
