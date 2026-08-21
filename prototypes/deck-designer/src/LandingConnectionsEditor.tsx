@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import type { StairLandingConnectionV3, StairLandingV3 } from "./modelV3";
 
-export function LandingConnectionsEditor({ landing, destinationPlatforms, onAdd, onUpdateLanding, onUpdateConnection }: Readonly<{
+export function LandingConnectionsEditor({ landing, destinationPlatforms, onAdd, onAlign, onUpdateLanding, onUpdateConnection }: Readonly<{
   landing: StairLandingV3;
   destinationPlatforms: readonly Readonly<{ id: string; label: string; edges: readonly Readonly<{ id: string; label: string }>[] }>[];
   onAdd: (destination: "deck" | "grade", targetPlatformId?: string, targetEdgeId?: string) => void;
+  onAlign: (connectionId: string) => void;
   onUpdateLanding: (connections: readonly StairLandingConnectionV3[], message: string) => void;
   onUpdateConnection: (connectionId: string, update: Partial<StairLandingConnectionV3>, message: string) => void;
 }>) {
@@ -23,6 +24,7 @@ export function LandingConnectionsEditor({ landing, destinationPlatforms, onAdd,
         <div className="field-grid"><ConnectionNumberField label="Connected stair width" value={connection.width} onCommit={(value) => onUpdateConnection(connection.id, { width: value }, "Connected stair width updated exactly.")} /><ConnectionNumberField label="Connected step depth" value={connection.treadDepth} onCommit={(value) => onUpdateConnection(connection.id, { treadDepth: value }, "Connected step depth updated exactly.")} /></div>
         <button className="primary" disabled={connection.destination === "deck" && (!connection.targetPlatformId || !connection.targetEdgeId)} onClick={() => onUpdateConnection(connection.id, { locked: true }, "Level connection locked from this landing to the selected destination side.")}>Finish connection</button>
       </>}
+      {connection.locked && connection.destination === "deck" && connection.targetPlatformId && connection.targetEdgeId && <button className="primary" onClick={() => onAlign(connection.id)}>Align connected level</button>}
       <button onClick={() => onUpdateLanding(landing.connections.filter((other) => other.id !== connection.id), "Connected flight removed; the shared landing remains.")}>Remove connected flight</button>
     </article>)}
     <div className="selected-edge-actions contextual"><button disabled={Boolean(pending) || landing.connections.length >= 2} onClick={() => onAdd("grade")}>Continue to ground</button><button disabled={destinationPlatforms.length === 0 || Boolean(pending) || landing.connections.length >= 2} onClick={() => onAdd("deck", destinationPlatforms[0]?.id, destinationPlatforms[0]?.edges[0]?.id)}>Connect to another level</button></div>

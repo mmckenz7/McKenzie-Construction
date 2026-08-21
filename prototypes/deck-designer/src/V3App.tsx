@@ -222,9 +222,31 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
     if (!activeStairSystem || !activeLanding) { setMessage("Select a landing first."); return; }
     updateStairSystem({ landings: activeStairSystem.landings.map((landing) => landing.id === activeLanding.id ? { ...landing, ...update } : landing) }, nextMessage);
   };
-  const updateLandingConnection = (connectionId: string, update: Partial<StairLandingConnectionV3>, nextMessage: string) => {
+  const updateLandingConnection = async (connectionId: string, update: Partial<StairLandingConnectionV3>, nextMessage: string) => {
     if (!activeLanding) return;
-    updateLanding({ connections: activeLanding.connections.map((connection) => connection.id === connectionId ? { ...connection, ...update } : connection) }, nextMessage);
+    const connections = activeLanding.connections.map((connection) => connection.id === connectionId ? { ...connection, ...update } : connection);
+    if (update.locked === true && activeStairSystem) {
+      try {
+        const current = history.present.platforms.find((item) => item.id === platform.id)!;
+        const source = { ...current, construction: { ...current.construction, stairSystems: current.construction.stairSystems.map((system) => system.id === activeStairSystem.id ? { ...system, landings: system.landings.map((landing) => landing.id === activeLanding.id ? { ...landing, connections } : landing) } : system) } };
+        const prepared = revisePlatform(history.present, source);
+        const { alignLevelConnectionV3 } = await import("./levelConnectionAlignmentV3");
+        const aligned = alignLevelConnectionV3(prepared, platform.id, activeStairSystem.id, activeLanding.id, connectionId);
+        apply(aligned.design, `${nextMessage} ${aligned.movedPlatformId.replaceAll("-", " ")} aligned to the stair endpoint.`);
+        setLevelView("combined");
+        return;
+      } catch (error) { setMessage(error instanceof Error ? error.message : "Level alignment rejected."); return; }
+    }
+    updateLanding({ connections }, nextMessage);
+  };
+  const alignExistingLevelConnection = async (connectionId: string) => {
+    if (!activeStairSystem || !activeLanding) return;
+    try {
+      const { alignLevelConnectionV3 } = await import("./levelConnectionAlignmentV3");
+      const aligned = alignLevelConnectionV3(history.present, platform.id, activeStairSystem.id, activeLanding.id, connectionId);
+      apply(aligned.design, `${aligned.movedPlatformId.replaceAll("-", " ")} aligned to the stair endpoint.`);
+      setLevelView("combined");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Level alignment rejected."); }
   };
   const nextSystemId = () => { let index = 1; const used = new Set(platform.construction.stairSystems.map((system) => system.id)); while (used.has(`stair-system-${index}`)) index += 1; return `stair-system-${index}`; };
   const lockStairData = (system: StairSystemV3): StairSystemV3 => ({ ...system, locked: true, landings: system.landings.map((landing) => ({ ...landing, locked: true, connections: landing.connections.map((connection) => ({ ...connection, locked: true })) })) });
@@ -381,7 +403,7 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
                   <div className="field-grid"><V3NumberField label="Landing width (feet)" value={Math.round(activeLanding.width / 12 * 100) / 100} step={.5} onCommit={(value) => updateLanding({ width: value * 12 }, "Landing width updated exactly.")} /><V3NumberField label="Landing depth (feet)" value={Math.round(activeLanding.depth / 12 * 100) / 100} step={.5} onCommit={(value) => updateLanding({ depth: value * 12 }, "Landing depth updated exactly.")} /></div>
                   <fieldset><legend>Direction after landing</legend><div className="toggle-grid">{(["straight", "left", "right"] as const).map((turn) => <button type="button" key={turn} className={`toggle${activeLanding.turn === turn ? " active" : ""}`} onClick={() => updateLanding({ turn, depth: turn === "straight" ? activeLanding.depth : Math.max(activeLanding.depth, activeStairSystem.width) }, `Stairs continue ${turn}.`)}>{turn}</button>)}</div><small>Viewed walking down.</small></fieldset>
                   {!activeLanding.locked && <button className="primary" onClick={lockLanding}>Finish landing details</button>}
-                  {activeLanding.locked && <Suspense fallback={<div className="house-editor-loading" role="status">Preparing level connection controls…</div>}><LandingConnectionsEditor landing={activeLanding} destinationPlatforms={design.platforms.filter((item) => item.id !== platform.id).map((item) => ({ id: item.id, label: `${item.id.replaceAll("-", " ")} · ${formatFeetInches(item.elevation)} high`, edges: deriveGeometricPolygonEdges(item.region.outer).filter((edge) => item.edgeConditions.some((condition) => condition.edgeId === edge.id && condition.condition === "free")).map((edge, index) => ({ id: edge.id, label: `Side ${index + 1} · ${formatFeetInches(edge.length)}` })) }))} onAdd={addLandingConnection} onUpdateLanding={(connections, nextMessage) => updateLanding({ connections }, nextMessage)} onUpdateConnection={updateLandingConnection} /></Suspense>}
+                  {activeLanding.locked && <Suspense fallback={<div className="house-editor-loading" role="status">Preparing level connection controls…</div>}><LandingConnectionsEditor landing={activeLanding} destinationPlatforms={design.platforms.filter((item) => item.id !== platform.id).map((item) => ({ id: item.id, label: `${item.id.replaceAll("-", " ")} · ${formatFeetInches(item.elevation)} high`, edges: deriveGeometricPolygonEdges(item.region.outer).filter((edge) => item.edgeConditions.some((condition) => condition.edgeId === edge.id && condition.condition === "free")).map((edge, index) => ({ id: edge.id, label: `Side ${index + 1} · ${formatFeetInches(edge.length)}` })) }))} onAdd={addLandingConnection} onAlign={alignExistingLevelConnection} onUpdateLanding={(connections, nextMessage) => updateLanding({ connections }, nextMessage)} onUpdateConnection={updateLandingConnection} /></Suspense>}
                 </div>}
                 <button className="remove-stairs" onClick={() => { const remaining = platform.construction.stairSystems.filter((system) => system.id !== activeStairSystem.id); replaceStairSystems(remaining, "Stairs removed from this side."); setSelectedStairSystemId(null); setSelectedLandingId(null); }}>Remove stairs from this side</button>
               </>}

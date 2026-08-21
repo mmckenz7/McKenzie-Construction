@@ -1,5 +1,14 @@
 # Browser QA record
 
+## 2026-08-21 automatic destination-layer alignment
+
+- Finishing an exact level connection now translates the destination deck layer as one rigid body until the selected destination-side midpoint meets the connected stair centerline endpoint.
+- The same atomic command remaps destination edge conditions, railings, stairs, and every incoming `targetEdgeId`, then advances the design revision once so Undo restores the previous whole-layer placement.
+- The alignment command is deterministic across replays and rejects missing connections, levels, sides, or unresolved stair endpoints instead of partially moving geometry.
+- Live desktop QA created 10-foot and 4-foot stacked levels, added a midway landing, connected left to Level 2 Side 1, and confirmed that `Finish connection` aligned Level 2 to the stair endpoint, opened Combined View, and reported no browser alerts.
+- Previously locked exact connections expose `Align connected level`, allowing older local designs to run the same deterministic alignment without deleting their stair or landing facts.
+- Full validation passed 168 tests. The alignment logic is an on-demand 0.86 KiB gzip chunk; the measured bundle is 97.6 KiB initial and 241.7 KiB total under 99/242 KiB ceilings.
+
 ## 2026-08-21 measured multi-level start and exact destination-side connections
 
 - The project-information dialog now asks how many deck levels are planned and requires a measured height above grade for every additional layer; a two-level 10-foot/4-foot test created stacked, independently selectable platforms without invented offsets or elevations.
