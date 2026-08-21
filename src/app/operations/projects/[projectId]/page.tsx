@@ -116,7 +116,7 @@ export default async function ProjectWorkspacePage({ params }: ProjectPageProps)
   return (
     <main className="mx-auto max-w-[1500px] space-y-7 px-5 py-8 lg:px-8">
       <nav className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
-        <Link href="/operations/projects" className="font-semibold text-blue-400 hover:text-blue-300">
+        <Link href="/operations/projects" className="font-semibold text-blue-700 hover:text-blue-900">
           Projects
         </Link>
         <span>/</span>
@@ -167,9 +167,9 @@ export default async function ProjectWorkspacePage({ params }: ProjectPageProps)
 
       <section id="costs" className="scroll-mt-24">
         <div className="mb-4">
-          <p className="text-xs font-bold uppercase tracking-[.15em] text-emerald-500">Job financials</p>
-          <h2 className="mt-2 text-2xl font-bold text-white">Costs, payments, and projected margin</h2>
-          <p className="mt-2 text-sm text-slate-400">Enter real job costs here; the project and financial dashboards use the same ledger.</p>
+          <p className="text-xs font-bold uppercase tracking-[.15em] text-emerald-700">Job financials</p>
+          <h2 className="mt-2 text-2xl font-bold text-slate-950">Costs, payments, and projected margin</h2>
+          <p className="mt-2 text-sm text-slate-600">Enter real job costs here; the project and financial dashboards use the same ledger.</p>
         </div>
         <ProjectCostManager projectId={projectId} />
       </section>
