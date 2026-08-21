@@ -5,6 +5,7 @@ import type { DeckPlatformV3, StairSystemV3 } from "./modelV3";
 import { formatFeetInches } from "./PlanView";
 import type { HouseContextGeometry } from "./houseContextGeometry";
 import { moveRectangularHole, resizeRectangularHole } from "./holeEditorV3";
+import { deriveCornerAlignmentGuides } from "./polygonEditorV3";
 
 type Point = Readonly<{ x: number; z: number }>;
 type ContextPlatform = Readonly<{ id: string; elevation: number; footprint: readonly Point[] }>;
@@ -20,6 +21,9 @@ type Props = {
   contextPlatforms?: readonly ContextPlatform[];
   platformMoveEnabled?: boolean;
   onSelectEdge: (edgeId: string) => void;
+  onSelectStairSystem?: (systemId: string) => void;
+  onSelectLanding?: (systemId: string, landingId: string) => void;
+  onSelectHouseOpening?: (openingId: string) => void;
   onSelectHole?: (index: number) => void;
   onSelectContextPlatform?: (platformId: string) => void;
   onPlatformPreview?: (delta: Point) => void;
@@ -27,7 +31,7 @@ type Props = {
   onHolePreview?: (index: number, hole: readonly Point[]) => void;
   onHoleCommit?: (index: number, hole: readonly Point[]) => void;
   onCornerPreview: (index: number, point: Point) => void;
-  onCornerCommit: (index: number, point: Point) => void;
+  onCornerCommit: (index: number, point: Point, magnetic?: boolean) => void;
   onCancel: () => void;
   onStairPreview: (offset: number) => void;
   onStairCommit: (offset: number) => void;
@@ -36,6 +40,11 @@ type Props = {
 };
 
 const snap = (value: number, increment: number) => Math.round(value / increment) * increment;
+const openingHitCorners = (start: Point, end: Point, width = 18): readonly Point[] => {
+  const length = Math.hypot(end.x - start.x, end.z - start.z) || 1;
+  const nx = -(end.z - start.z) / length * width / 2, nz = (end.x - start.x) / length * width / 2;
+  return [{ x: start.x + nx, z: start.z + nz }, { x: end.x + nx, z: end.z + nz }, { x: end.x - nx, z: end.z - nz }, { x: start.x - nx, z: start.z - nz }];
+};
 
 export function planEdgeDimensionLabel(edge: Readonly<{ start: Point; end: Point; length: number; outward: Point }>, offset = 18) {
   const rawAngle = Math.atan2(edge.end.z - edge.start.z, edge.end.x - edge.start.x) * 180 / Math.PI;
@@ -48,12 +57,14 @@ export function planEdgeDimensionLabel(edge: Readonly<{ start: Point; end: Point
   });
 }
 
-export function PlanViewV3({ platform, activeStairSystem = null, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, selectedHoleIndex = null, contextPlatforms = [], platformMoveEnabled = false, onSelectEdge, onSelectHole, onSelectContextPlatform, onPlatformPreview, onPlatformCommit, onHolePreview, onHoleCommit, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit }: Props) {
+export function PlanViewV3({ platform, activeStairSystem = null, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, selectedHoleIndex = null, contextPlatforms = [], platformMoveEnabled = false, onSelectEdge, onSelectStairSystem, onSelectLanding, onSelectHouseOpening, onSelectHole, onSelectContextPlatform, onPlatformPreview, onPlatformCommit, onHolePreview, onHoleCommit, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const segmentDrag = useRef<Readonly<{ index: number; midpoint: Point; outward: Point }> | null>(null);
   const holeDrag = useRef<Readonly<{ index: number; mode: "move" | number; start: Point; hole: readonly Point[] }> | null>(null);
   const platformDrag = useRef<Readonly<{ start: Point }> | null>(null);
   const [active, setActive] = useState<string | null>(null);
+  const activeCornerIndex = active?.startsWith("corner-") ? Number(active.slice("corner-".length)) : null;
+  const alignmentGuides = activeCornerIndex === null ? null : deriveCornerAlignmentGuides(platform.region.outer, activeCornerIndex);
   const all = [...geometry.footprint, ...contextPlatforms.flatMap((item) => item.footprint), ...geometry.stairTreads.flatMap((tread) => tread.corners), ...geometry.landings.flatMap((landing) => landing.corners), ...houseGeometry.houseWallPanels.flatMap((panel) => [panel.start, panel.end])];
   const minX = Math.min(...all.map((point) => point.x));
   const maxX = Math.max(...all.map((point) => point.x));
@@ -91,7 +102,7 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
     if (event.key === "ArrowRight") point.x += snapIncrement;
     if (event.key === "ArrowUp") point.z -= snapIncrement;
     if (event.key === "ArrowDown") point.z += snapIncrement;
-    onCornerCommit(index, point);
+    onCornerCommit(index, point, false);
   };
   const segmentDistance = (event: PointerEvent<SVGRectElement>): number | null => {
     const origin = segmentDrag.current;
@@ -128,6 +139,8 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
   return <svg ref={ref} className="plan-svg v3-plan" viewBox={`0 0 ${maxX - minX + margin * 2} ${maxZ - minZ + margin * 2}`} role="img" aria-label={editingEnabled ? `Editable ${geometry.footprint.length}-corner deck outline` : `Railing selection plan with ${geometry.platformEdges.length} deck sides`}>
     <defs><pattern id="v3-grid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#a9b4ad" strokeWidth=".4" /></pattern></defs>
     <rect width="100%" height="100%" fill="url(#v3-grid)" />
+    {alignmentGuides && alignmentGuides.x !== null && <line x1={x(alignmentGuides.x)} y1="0" x2={x(alignmentGuides.x)} y2="100%" className="plan-alignment-guide" aria-hidden="true" />}
+    {alignmentGuides && alignmentGuides.z !== null && <line x1="0" y1={y(alignmentGuides.z)} x2="100%" y2={y(alignmentGuides.z)} className="plan-alignment-guide" aria-hidden="true" />}
     {houseGeometry.houseWallPanels.map((panel) => <line key={panel.id} x1={x(panel.start.x)} y1={y(panel.start.z)} x2={x(panel.end.x)} y2={y(panel.end.z)} className="plan-house-wall" />)}
     {houseGeometry.houseOpenings.map((opening) => <line key={`${opening.wallId}-${opening.id}`} x1={x(opening.start.x)} y1={y(opening.start.z)} x2={x(opening.end.x)} y2={y(opening.end.z)} className={`plan-house-opening ${opening.kind}`} />)}
     {contextPlatforms.map((item) => <polygon key={item.id} points={item.footprint.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-context-platform" role={editingEnabled ? "button" : undefined} tabIndex={editingEnabled ? 0 : undefined} aria-label={`Edit ${item.id} at ${formatFeetInches(item.elevation)} high`} onClick={() => editingEnabled && onSelectContextPlatform?.(item.id)} onKeyDown={(event) => { if (!editingEnabled || (event.key !== "Enter" && event.key !== " ")) return; event.preventDefault(); onSelectContextPlatform?.(item.id); }} />)}
@@ -136,9 +149,9 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
     {geometry.surfaceBoards.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-board" />)}
     {geometry.joists.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-joist" />)}
     {geometry.railSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-rail" />)}
-    {geometry.landings.map((landing) => <polygon key={landing.id} points={landing.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-landing" />)}
+    {geometry.landings.map((landing) => <polygon key={landing.id} points={landing.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className={`plan-landing${activeStairSystem?.id === landing.systemId ? " selected-object" : ""}`} />)}
     {geometry.landingRailSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-rail plan-landing-rail" />)}
-    {geometry.stairTreads.map((tread) => <polygon key={tread.id} points={tread.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-stair" />)}
+    {geometry.stairTreads.map((tread) => <polygon key={tread.id} points={tread.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className={`plan-stair${activeStairSystem?.id === tread.systemId ? " selected-object" : ""}`} />)}
     {geometry.stairRailSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-stair-rail" />)}
     {editingEnabled && platformMoveEnabled && <><circle cx={x(platformCenter.x)} cy={y(platformCenter.z)} r="20" className="level-move-hit" role="button" tabIndex={0} aria-label="Move selected level in combined view" onKeyDown={(event) => { const directions: Record<string, Point> = { ArrowLeft: { x: -snapIncrement, z: 0 }, ArrowRight: { x: snapIncrement, z: 0 }, ArrowUp: { x: 0, z: -snapIncrement }, ArrowDown: { x: 0, z: snapIncrement } }; const delta = directions[event.key]; if (!delta) return; event.preventDefault(); onPlatformCommit?.(delta); }} onPointerDown={(event) => { const start = localPoint(event); if (!start) return; event.currentTarget.setPointerCapture(event.pointerId); platformDrag.current = { start }; setActive("platform-move"); }} onPointerMove={(event) => { if (!platformDrag.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const delta = platformDelta(event); if (delta) onPlatformPreview?.(delta); }} onPointerUp={(event) => { if (!platformDrag.current) return; const delta = platformDelta(event); if (delta) onPlatformCommit?.(delta); event.currentTarget.releasePointerCapture(event.pointerId); platformDrag.current = null; setActive(null); }} onPointerCancel={() => { platformDrag.current = null; setActive(null); onCancel(); }} /><rect x={x(platformCenter.x) - 8} y={y(platformCenter.z) - 8} width="16" height="16" rx="4" className={`level-move-handle${active === "platform-move" ? " active" : ""}`} aria-hidden="true" pointerEvents="none" /><text x={x(platformCenter.x)} y={y(platformCenter.z) - 14} className="level-move-label" textAnchor="middle" aria-hidden="true">MOVE LEVEL</text></>}
     {geometry.platformEdges.map((edge, index) => {
@@ -159,6 +172,8 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
       const labelY = y(label.z);
       return <text key={`dimension-${edge.id}`} x={labelX} y={labelY} transform={`rotate(${label.angle} ${labelX} ${labelY})`} className="v3-edge-dimension">{label.text}</text>;
     })}
+    {editingEnabled && geometry.landings.map((landing) => <polygon key={`select-${landing.id}`} points={landing.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-object-hit" role="button" tabIndex={0} aria-label={`Edit landing in ${landing.systemId.replaceAll("-", " ")}`} onClick={() => onSelectLanding?.(landing.systemId, landing.landingId)} onKeyDown={(event) => { if (event.key !== "Enter" && event.key !== " ") return; event.preventDefault(); onSelectLanding?.(landing.systemId, landing.landingId); }} />)}
+    {editingEnabled && geometry.stairTreads.map((tread) => <polygon key={`select-${tread.id}`} points={tread.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-object-hit" role="button" tabIndex={0} aria-label={`Edit ${tread.systemId.replaceAll("-", " ")}`} onClick={() => onSelectStairSystem?.(tread.systemId)} onKeyDown={(event) => { if (event.key !== "Enter" && event.key !== " ") return; event.preventDefault(); onSelectStairSystem?.(tread.systemId); }} />)}
     {editingEnabled && geometry.platformEdges.map((edge, index) => {
       const midpoint = { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 };
       return <rect key={`segment-${index}`} x={x(midpoint.x) - 4.5} y={y(midpoint.z) - 4.5} width="9" height="9" rx="2" className={`segment-move-handle${active === `segment-${index}` ? " active" : ""}`} role="button" tabIndex={0} aria-label={`Move ${planEdgeDimensionLabel(edge).text} side; drag perpendicular to reshape attached sides`} onKeyDown={(event) => { const directions: Record<string, Point> = { ArrowLeft: { x: -1, z: 0 }, ArrowRight: { x: 1, z: 0 }, ArrowUp: { x: 0, z: -1 }, ArrowDown: { x: 0, z: 1 } }; const direction = directions[event.key]; if (!direction) return; const projection = direction.x * edge.outward.x + direction.z * edge.outward.z; if (Math.abs(projection) < .5) return; event.preventDefault(); onSegmentCommit(index, Math.sign(projection) * snapIncrement); }} onPointerDown={(event) => { onSelectEdge(edge.id); event.currentTarget.setPointerCapture(event.pointerId); segmentDrag.current = { index, midpoint, outward: edge.outward }; setActive(`segment-${index}`); }} onPointerMove={(event) => { if (active !== `segment-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const distance = segmentDistance(event); if (distance !== null) onSegmentPreview(index, distance); }} onPointerUp={(event) => { if (active !== `segment-${index}`) return; const distance = segmentDistance(event); if (distance !== null) onSegmentCommit(index, distance); event.currentTarget.releasePointerCapture(event.pointerId); segmentDrag.current = null; setActive(null); }} onPointerCancel={() => { segmentDrag.current = null; setActive(null); onCancel(); }} />;
@@ -170,5 +185,6 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
     </>}
     {editingEnabled && platform.region.outer.map((point, index) => <circle key={index} cx={x(point.x)} cy={y(point.z)} r={active === `corner-${index}` ? 7 : 5.5} className="dimension-handle corner-handle" role="button" tabIndex={0} aria-label={`Editable corner at ${point.x} inches left/right and ${point.z} inches away; drag or use arrow keys`} onKeyDown={(event) => nudgeCorner(index, event)} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive(`corner-${index}`); }} onPointerMove={(event) => { if (active === `corner-${index}` && event.currentTarget.hasPointerCapture(event.pointerId)) { const point = localPoint(event); if (point) onCornerPreview(index, point); } }} onPointerUp={(event) => { if (active !== `corner-${index}`) return; const point = localPoint(event); if (point) onCornerCommit(index, point); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />)}
     {editingEnabled && stair && !stair.locked && stairCenter && <circle cx={x(stairCenter.x)} cy={y(stairCenter.z)} r={active === "stairs" ? 8 : 6.5} className="stair-move-handle" role="button" tabIndex={0} aria-label={`Move ${stair.id} along selected geometric edge`} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive("stairs"); }} onPointerMove={(event) => { if (active === "stairs" && event.currentTarget.hasPointerCapture(event.pointerId)) stairPointer(event, false); }} onPointerUp={(event) => { if (active !== "stairs") return; stairPointer(event, true); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />}
+    {editingEnabled && houseGeometry.houseOpenings.filter((opening) => opening.kind === "door").map((opening) => <polygon key={`select-${opening.wallId}-${opening.id}`} points={openingHitCorners(opening.start, opening.end).map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-house-opening-hit" role="button" tabIndex={0} aria-label={`Edit recorded door ${opening.id.replaceAll("-", " ")}`} onClick={() => onSelectHouseOpening?.(opening.id)} onKeyDown={(event) => { if (event.key !== "Enter" && event.key !== " ") return; event.preventDefault(); onSelectHouseOpening?.(opening.id); }} />)}
   </svg>;
 }

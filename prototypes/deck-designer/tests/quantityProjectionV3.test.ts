@@ -11,6 +11,7 @@ import { deriveQuantities } from "../src/quantities";
 import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
 import lShapeLandingFixture from "./fixtures/l-shape-landing.json";
 import multiWallContextFixture from "./fixtures/multi-wall-context.json";
+import { addPlatformLevelV3 } from "../src/platformCommandsV3";
 
 const fixtures = [rectangleFoundationFixture, lShapeLandingFixture, multiWallContextFixture];
 const accessoryKeys = [
@@ -130,5 +131,20 @@ describe("v3 accessory quantity projection", () => {
     expect(byKey["stair-landing-area"].sourceGeometry).toHaveLength(1);
     expect(byKey["stair-tread-count"].amount).toBe(14);
     expect(byKey["stair-stringer-count"].amount).toBe(8);
+  });
+
+  it("counts only the upper flight when its final landing terminates at a lower deck level", () => {
+    const migrated = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const raised = normalizeDeckDesignV3({ ...migrated, platforms: [{ ...migrated.platforms[0], elevation: 168 }] });
+    const added = addPlatformLevelV3(raised, "platform-1", "platform-2", 48, { x: 0, z: 0 }).design;
+    const source = added.platforms[0], target = added.platforms[1];
+    const system = { id: "upper-stairs", locked: true, edgeId: source.edgeConditions.find((condition) => condition.condition === "free")!.edgeId, offset: 48, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [{ id: "shared-landing", locked: true, afterRiser: 16, width: 48, depth: 48, turn: "straight" as const, connections: [], terminalPlatformId: target.id, terminalEdgeId: target.edgeConditions.find((condition) => condition.condition === "free")!.edgeId }] };
+    const design = normalizeDeckDesignV3({ ...added, platforms: [{ ...source, construction: { ...source.construction, stairSystems: [system] } }, target] });
+    const report = deriveDeckAccessoryProjectionV3(design, source.id);
+    const byKey = Object.fromEntries(report.quantities.map((line) => [line.key, line]));
+    expect(byKey["stair-tread-count"].amount).toBe(16);
+    expect(byKey["stair-stringer-count"].amount).toBe(2);
+    expect(byKey["stair-landing-area"].amount).toBe(16);
+    expect(stableDeckAccessoryProjectionV3Json(report)).toBe(stableDeckAccessoryProjectionV3Json(report));
   });
 });

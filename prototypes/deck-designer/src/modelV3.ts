@@ -37,8 +37,12 @@ export type StairLandingV3 = Readonly<{
   afterRiser: number;
   width: number;
   depth: number;
-  turn: "straight" | "left" | "right";
+  turn: "straight" | "left" | "right" | "switchback";
   connections: readonly StairLandingConnectionV3[];
+  /** When present, this landing terminates the primary stair route at another deck level. */
+  terminalPlatformId?: string;
+  /** Exact free edge that receives the terminal landing. */
+  terminalEdgeId?: string;
 }>;
 
 export type StairLandingConnectionV3 = Readonly<{
@@ -67,7 +71,7 @@ export type StairSystemV3 = Readonly<{
 
 type LegacyStairsV3 = Omit<DeckDesign["construction"]["stairs"], "edgeId"> & Readonly<{
       edgeId: string;
-      landingTurn: "straight" | "left" | "right";
+      landingTurn: "straight" | "left" | "right" | "switchback";
       landingPosition: "top" | "midway";
       upperFlightRisers: number;
       landingWidth: number;
@@ -330,8 +334,11 @@ function normalizePlatformV3(
       const turn = landing.turn ?? "straight";
       if (!Number.isFinite(width) || width < 30 || width > 144 || width < normalizedStair.width) throw new RangeError("A landing must be 30–144 inches wide and at least as wide as its stairs.");
       if (!Number.isFinite(depth) || depth < 24 || depth > 120) throw new RangeError("A landing depth must be between 24 and 120 inches.");
-      if (!["straight", "left", "right"].includes(turn)) throw new TypeError("A landing turn must be straight, left, or right.");
+      if (!["straight", "left", "right", "switchback"].includes(turn)) throw new TypeError("A landing turn must be straight, left, right, or switchback.");
       if (turn !== "straight" && depth < normalizedStair.width) throw new RangeError("A turning landing must be at least as deep as the stair width.");
+      if (turn === "switchback" && (afterRiser === 0 || width < normalizedStair.width * 2)) throw new RangeError("A switchback needs a midway landing at least twice the stair width.");
+      if (turn === "switchback" && afterRiser < Math.ceil(totalRisers / 2)) throw new RangeError("A switchback landing must be at or beyond the halfway riser so the lower flight stays outside the deck.");
+      if (turn === "switchback" && (landing.connections?.length ?? 0) > 0) throw new RangeError("A switchback landing cannot also branch into another stair flight.");
       const connectionIds = new Set<string>();
       const usedDirections = new Set<string>([turn]);
       const connections = Object.freeze((landing.connections ?? []).map((connection, connectionIndex): StairLandingConnectionV3 => {
@@ -365,7 +372,21 @@ function normalizePlatformV3(
         if (!Number.isFinite(connectionTreadDepth) || connectionTreadDepth < 9 || connectionTreadDepth > 14) throw new RangeError("A merged stair tread depth must be between 9 and 14 inches.");
         return Object.freeze({ id: connectionId, locked: connection.locked === true, destination, direction, width: connectionWidth, treadDepth: connectionTreadDepth, ...(targetPlatformId === undefined ? {} : { targetPlatformId }), ...(targetEdgeId === undefined ? {} : { targetEdgeId }) });
       }));
-      return Object.freeze({ id: landingId, locked: landing.locked === true, afterRiser, width, depth, turn, connections });
+      const terminalPlatformId = landing.terminalPlatformId;
+      const terminalEdgeId = landing.terminalEdgeId;
+      if ((terminalPlatformId === undefined) !== (terminalEdgeId === undefined)) throw new RangeError("A terminal landing requires both a destination level and its exact free side.");
+      if (terminalPlatformId !== undefined && terminalEdgeId !== undefined) {
+        if (landingIndex !== (candidate.landings?.length ?? 0) - 1) throw new RangeError("Only the final landing can terminate an upper stair route at another level.");
+        if (connections.length > 0) throw new RangeError("A terminal level landing cannot also create another connected flight.");
+        const target = design.platforms.find((item) => item.id === terminalPlatformId);
+        if (!target || target.id === platform.id) throw new RangeError("A terminal landing must name another recorded deck level.");
+        if (target.elevation >= shared.platform.surfaceElevation) throw new RangeError("A terminal landing must connect to a lower deck level.");
+        if (target.elevation <= shared.siteContext.gradeElevation) throw new RangeError("A terminal landing must remain above recorded grade.");
+        if (!target.edgeConditions.some((condition) => condition.edgeId === terminalEdgeId && condition.condition === "free")) throw new RangeError("A terminal landing must reference an exact free side on the lower level.");
+        const expectedRisers = Math.ceil((shared.platform.surfaceElevation - target.elevation) / normalizedStair.maxRiserHeight);
+        if (afterRiser !== expectedRisers) throw new RangeError("A terminal landing riser count must match the measured difference between deck levels.");
+      }
+      return Object.freeze({ id: landingId, locked: landing.locked === true, afterRiser, width, depth, turn, connections, ...(terminalPlatformId === undefined ? {} : { terminalPlatformId }), ...(terminalEdgeId === undefined ? {} : { terminalEdgeId }) });
     }));
     return Object.freeze({ id, locked: candidate.locked === true, edgeId, offset: normalizedStair.offset, width: normalizedStair.width, treadDepth: normalizedStair.treadDepth, maxRiserHeight: normalizedStair.maxRiserHeight, landings });
   }));

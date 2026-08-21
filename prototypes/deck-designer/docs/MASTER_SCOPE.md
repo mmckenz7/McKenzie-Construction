@@ -20,6 +20,14 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 
 ## Phase B — richer single-level editing
 
+- [x] Deterministic one-level layout review gate before the dedicated railing stage
+- [x] Explainable stair-route collision blockers and cutout-clearance review notices
+- [x] Explainable stair-route collision checks against the selected deck footprint and recorded house-wall context
+- [x] Visible corner-alignment guides with deterministic attached-side snap priority
+- [x] Optional keep-square corner constraint that moves both attached sides together
+- [x] Direct measured-plan selection for exact stair systems, landings, and cutouts
+- [x] Direct touch/keyboard selection for a recorded plan door and its measured house-connection controls
+
 - [x] Parametric L-shape cutout with deterministic 2D/3D/quantity projections
 - [x] Custom polygon corners and repeatable rectangular offsets with general polygon validation
 - [x] Click-to-add rectangular bumpouts with parallel outer segments and attached-endpoint segment dragging
@@ -36,12 +44,13 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Multiple independently locked stair systems and ordered, system-associated chained landings
 - [x] Multiple unfinished landings may be added and positioned before finishing their details
 - [x] Shared-landing merger junctions with multiple independently locked deck- or grade-bound flights
-- [ ] Switchback stairs and collision-aware configurations beyond straight/left/right chained flights
+- [x] Conservative midway switchback with adjacent opposing flights and deterministic landing bounds
+- [ ] Winder, spiral, and collision-aware stair configurations beyond straight/left/right/switchback flights
 - [x] Edge selection with contextual railing/stair actions and explainable conceptual warnings
 - [x] Drag handles and selectable grid snapping for rectangle and L-cutout dimensions
 - [x] Direct bounded stair movement along exact v3 geometric edges
 - [x] Staged Deck Layout → locked Railings workflow with a dedicated uncluttered railing-selection page
-- [ ] Angle constraints, alignment guides, and broader object selection
+- [ ] Arbitrary angle constraints and broader accessory selection
 - [x] Prototype-only canonical custom-polygon kernel and contract spike (not yet part of DeckDesign)
 - [x] Prototype-only contained-hole region kernel with subtractive area and split member intervals
 - [x] Browser editor for exact rectangular cutouts/obstacles on the selected platform

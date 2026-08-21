@@ -92,12 +92,22 @@ describe("isolated DeckDesign v3 migration spike", () => {
     expect(() => normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [first, { ...first, id: "stair-system-2" }] } }] })).toThrow(/cannot overlap/i);
   });
 
+  it("requires a switchback to use a wide midway landing without branch flights", () => {
+    const migrated = migrateDeckDesignToV3(lShapeLandingFixture.design);
+    const platform = migrated.platforms[0], system = platform.construction.stairSystems[0], landing = system.landings[0];
+    const withLanding = (update: object) => normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings: [{ ...landing, ...update }] }] } }] });
+    expect(() => withLanding({ turn: "switchback", afterRiser: 0, width: 96 })).toThrow(/midway landing/i);
+    expect(() => withLanding({ turn: "switchback", afterRiser: 3, width: 72 })).toThrow(/twice the stair width/i);
+    expect(() => withLanding({ turn: "switchback", afterRiser: 3, width: 96 })).toThrow(/halfway riser/i);
+    expect(() => withLanding({ turn: "switchback", afterRiser: 4, width: 96, connections: [{ id: "branch", locked: true, destination: "grade", direction: "left", width: 48, treadDepth: 10 }] })).toThrow(/cannot also branch/i);
+  });
+
   it("validates shared-landing merger sides and deck-bound rise", () => {
     const migrated = migrateDeckDesignToV3(lShapeLandingFixture.design);
     const platform = migrated.platforms[0];
     const system = platform.construction.stairSystems[0];
     const landing = system.landings[0];
-    expect(() => normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings: [{ ...landing, connections: [{ id: "duplicate-side", locked: true, destination: "grade", direction: landing.turn, width: system.width, treadDepth: 10 }] }] }] } }] })).toThrow(/different open sides/i);
+    expect(() => normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings: [{ ...landing, connections: [{ id: "duplicate-side", locked: true, destination: "grade", direction: "straight", width: system.width, treadDepth: 10 }] }] }] } }] })).toThrow(/different open sides/i);
     expect(() => normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings: [{ ...landing, afterRiser: 0, connections: [{ id: "deck-at-deck", locked: true, destination: "deck", direction: "left", width: system.width, treadDepth: 10 }] }] }] } }] })).toThrow(/below deck elevation/i);
   });
 

@@ -11,9 +11,9 @@ function snapCoordinateToCorners(
 ): number {
   if (threshold <= 0) return value;
   const nearest = values
-    .map((candidate) => ({ candidate, distance: Math.abs(candidate - value) }))
+    .map((candidate, priority) => ({ candidate, distance: Math.abs(candidate - value), priority }))
     .filter(({ distance }) => distance <= threshold + .01)
-    .sort((first, second) => first.distance - second.distance || first.candidate - second.candidate)[0];
+    .sort((first, second) => first.distance - second.distance || first.priority - second.priority)[0];
   return nearest?.candidate ?? value;
 }
 
@@ -83,12 +83,52 @@ export function movePolygonCorner(
 ): readonly PolygonPoint[] {
   if (!outer[cornerIndex]) throw new RangeError("Select an existing corner before moving it.");
   const next = [...outer];
-  const otherCorners = outer.filter((_, index) => index !== cornerIndex);
+  const adjacentIndexes = [(cornerIndex - 1 + outer.length) % outer.length, (cornerIndex + 1) % outer.length];
+  const otherCorners = [...adjacentIndexes.map((index) => outer[index]), ...outer.filter((_, index) => index !== cornerIndex && !adjacentIndexes.includes(index))];
   next[cornerIndex] = Object.freeze({
     x: snapCoordinateToCorners(point.x, otherCorners.map((candidate) => candidate.x), alignmentThreshold),
     z: snapCoordinateToCorners(point.z, otherCorners.map((candidate) => candidate.z), alignmentThreshold),
   });
   return mergeCoincident ? mergeCoincidentNeighbors(next) : Object.freeze(next);
+}
+
+export function moveOrthogonalPolygonCorner(
+  outer: readonly PolygonPoint[],
+  cornerIndex: number,
+  point: PolygonPoint,
+  mergeCoincident = true,
+  alignmentThreshold = 0,
+): readonly PolygonPoint[] {
+  const current = outer[cornerIndex];
+  if (!current) throw new RangeError("Select an existing corner before moving it.");
+  const previousIndex = (cornerIndex - 1 + outer.length) % outer.length;
+  const nextIndex = (cornerIndex + 1) % outer.length;
+  const previous = outer[previousIndex];
+  const following = outer[nextIndex];
+  const previousAxis = Math.abs(previous.x - current.x) < .01 ? "x" : Math.abs(previous.z - current.z) < .01 ? "z" : null;
+  const followingAxis = Math.abs(following.x - current.x) < .01 ? "x" : Math.abs(following.z - current.z) < .01 ? "z" : null;
+  if (!previousAxis || !followingAxis || previousAxis === followingAxis) {
+    throw new RangeError("This corner is angled. Turn off Keep attached sides square to move it freely.");
+  }
+  const snappedCorner = movePolygonCorner(outer, cornerIndex, point, false, alignmentThreshold)[cornerIndex];
+  const moved = [...outer];
+  moved[cornerIndex] = snappedCorner;
+  moved[previousIndex] = Object.freeze({ ...previous, [previousAxis]: snappedCorner[previousAxis] });
+  moved[nextIndex] = Object.freeze({ ...following, [followingAxis]: snappedCorner[followingAxis] });
+  return mergeCoincident ? mergeCoincidentNeighbors(moved) : Object.freeze(moved);
+}
+
+export function deriveCornerAlignmentGuides(
+  outer: readonly PolygonPoint[],
+  cornerIndex: number,
+): Readonly<{ x: number | null; z: number | null }> {
+  const corner = outer[cornerIndex];
+  if (!corner) return Object.freeze({ x: null, z: null });
+  const others = outer.filter((_, index) => index !== cornerIndex);
+  return Object.freeze({
+    x: others.some((candidate) => Math.abs(candidate.x - corner.x) < .01) ? corner.x : null,
+    z: others.some((candidate) => Math.abs(candidate.z - corner.z) < .01) ? corner.z : null,
+  });
 }
 
 export function movePolygonSegment(

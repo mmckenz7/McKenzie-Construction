@@ -1,5 +1,81 @@
 # Browser QA record
 
+## 2026-08-21 phone-width door selection
+
+- A recorded door now has a wide transparent plan target above the generic house-side and segment handles. Tapping or keyboard-selecting it returns directly to the existing measured door width/offset controls and names the selected opening.
+- Windows remain visible reference context but are not falsely exposed as editable by the current door-only House connection workflow.
+- At a real 390-by-844 viewport, the square-corner control and recorded-door target remained available, the page had no horizontal overflow, and tapping the door exposed its measured width controls and selected-door status. The viewport override was reset after QA.
+- Full validation passed 187 tests, isolation, build, and golden fixtures. The measured bundle is 87.9 KiB initial and 243.5 KiB total gzip under the 99/170/244 KiB initial/largest/total ceilings.
+
+## 2026-08-21 conservative midway switchback
+
+- A midway landing now offers **Switchback** beside Straight, Left, and Right. Selecting it expands the landing to at least twice the stair width and reverses the lower flight beside the upper flight.
+- The first live render exposed a lower-flight re-entry risk when a seven-riser stair switched back after only three risers. The normalized rule now requires the landing at or beyond the halfway riser, and selection automatically moved that case to step four. Invalid imported or typed facts reject instead of drawing beneath the deck.
+- Switchbacks cannot be top landings or merger junctions. The landing must be at least one stair width deep and two stair widths wide; the returning route keeps its separate treads, stringers, stair rails, and quantities.
+- Live desktop QA created a four-foot-high switchback: the landing moved to after step 4, widened to 8 feet for a 4-foot stair, retained seven treads, projected four stringers and four stair-railing paths, and reported a separate 32-square-foot landing. The layout review confirmed **Geometry conflicts — None detected** and allowed the railing handoff.
+- Full validation passed 187 tests, isolation, build, and golden fixtures. The measured bundle is 87.7 KiB initial and 243.3 KiB total gzip under the 99/170/244 KiB initial/largest/total ceilings.
+
+## 2026-08-21 keep-square corner editing
+
+- **Keep attached sides square** is on by default. Moving one corner also updates the two neighboring endpoints, so both attached sides remain perpendicular and the full region is still normalized as one authoritative edit.
+- Turning the switch off retains intentional angled-outline editing. If an already angled corner is used while the square constraint is on, the edit is rejected with a direct instruction to turn the switch off.
+- Live desktop QA unlocked a 20-by-12-foot rectangle and nudged its lower-right corner left by one six-inch step. Both right-side corners moved from 240 to 234 inches, both horizontal sides changed to 19′ 6″, and both vertical sides remained 12′ 0″. With the switch off, nudging only the upper-right corner down created the requested angled edge and reported **Corner moved freely**.
+- Full validation passed 185 tests, isolation, build, and golden fixtures. The measured bundle is 87.6 KiB initial and 243.1 KiB total gzip under narrowly revised 99/170/244 KiB initial/largest/total ceilings.
+
+## 2026-08-21 direct stair and landing selection
+
+- Every visible stair tread is now a touch, pointer, and keyboard selection target for its exact owning stair system. Selecting even the tread that overlaps the source deck edge reopens stair position, width, and landing controls instead of selecting the underlying deck side.
+- Every visible landing carries its authoritative landing ID and reopens that exact landing editor. This source metadata is projection-only and does not alter design JSON, quantities, or geometry.
+- Live desktop QA selected the first tread in a seven-tread run, confirmed the exact **Stairs selected for editing** state and contextual stair controls, added a midway landing, then selected it directly and confirmed **Landing selected for editing**. No browser alerts were reported.
+- Full validation passed 183 tests, isolation, build, and golden fixtures. The measured bundle is 87.5 KiB initial and 242.8 KiB total gzip under the 99/170/243 KiB initial/largest/total ceilings.
+
+## 2026-08-21 collision review and visible alignment
+
+- The layout review now includes a separate **Geometry conflicts** result. Positive-area overlap between two stair systems blocks the railing handoff with an exact move/reroute instruction; mere touching does not count as a collision.
+- Cutouts under 12 inches from the deck edge or another cutout remain valid but produce a measured field-verification note rather than an invented code ruling.
+- While a round corner handle is dragged onto another corner axis, orange dashed horizontal/vertical guides show the exact snap. If two axes are equally close, an attached side wins before an unrelated corner line.
+- Live desktop QA added a 3-by-3-foot cutout, set its center two feet from the left origin, and confirmed the review reported **0 collisions · 1 clearance note** plus the exact six-inch edge clearance. The pre-existing unfinished stair remained a separate blocker, proving advisory and blocking states do not overwrite each other. The browser reported no alerts.
+- Full validation passed 181 tests. Initial JavaScript is 86.8 KiB gzip and total JavaScript is 242.2 KiB under the narrowly revised 99/170/243 KiB initial/largest/total ceilings.
+- Follow-up geometry coverage blocks a turned route that re-enters the solid part of an L-shaped deck and a route crossing a separately recorded house wall. A route merely sharing the wall or deck boundary is not treated as an interior collision.
+
+## 2026-08-21 single-level layout review gate
+
+- **Review deck layout** and the Railings tab now open the same compact geometry review instead of moving stages immediately.
+- The review reads the normalized DeckDesign v3 and deterministic projection: outline area/perimeter/side count, height above grade, house-connection status, stair/landing counts, and cutout count.
+- Unfinished stair systems, landings, or landing connections disable the continue action with exact finish instructions. Unknown or missing house attachment remains a visible field-verification note and does not falsely block conceptual design.
+- The review is transient UI state only; it does not mutate or serialize a second geometry model.
+- Live desktop QA loaded a saved layout with one unfinished stair system, confirmed the disabled continue action and exact blocker, then cleared edge-linked options and confirmed the ready state advanced to the dedicated Railings stage with no browser alerts. Full validation passed 175 tests; initial JavaScript is 85.8 KiB gzip and total JavaScript is 241.1 KiB under the enforced budgets.
+
+## 2026-08-21 single-level workflow reset
+
+- Multi-level authoring and level-connection prompts are paused in the active interface after field testing showed the connected stair flow was not yet intuitive enough.
+- Deck setup now shows one clear **Deck height** control and no **Add another level** action. Rectangle/L-shape, custom outline, cutouts, stairs, landings, railings, photos, local JSON, and deterministic quantities remain available for one deck level.
+- A loaded experimental multi-level draft gets one explicit **Keep selected level only** recovery action. It removes cross-level stair references before normalization rather than leaving broken targets or silently choosing a different level.
+- Live desktop QA confirmed the ordinary local design opens as one platform, exposes no level-connection controls, and reports quantities from one platform only. The experimental multi-level engine remains isolated in source for a later redesign.
+
+## 2026-08-21 terminal shared-level landing
+
+### Fixed-level turned assembly correction
+
+- The primary two-level workflow now leaves both deck regions fixed. It adds an upper top landing, deterministically chooses a left/right turn, runs the measured flight to the lower elevation, and intersects a lower-level top landing with an exact recorded free edge.
+- Moving the connected stair handle refits the stair assembly only. It never translates either deck layer; an arrangement with no bounded exact fit is rejected instead of distorted.
+- The old **Align lower level** action is no longer exposed for terminal landings. The interface identifies the upper and lower landings separately and states that both deck layers remain fixed.
+- Live desktop QA stacked 14-foot and 4-foot levels with both exact position fields at zero, selected the upper 16-foot outer side, and created a right-turning 16-riser assembly with distinct upper and lower four-foot landings. The plan, 3D view, status, and deterministic quantities agreed on 16 treads and 32 square feet of landing area.
+- Entering a different stair offset kept both platform-position fields at zero and selected the nearest valid connected fit. The status reports that fitted position instead of implying that an impossible requested position was accepted.
+
+- Added two stacked levels at 4 and 14 feet, selected a free upper-deck side, added stairs and a midway landing, and chose **Stop upper stairs at this level** with an exact lower-level free side.
+- The command recalculated the upper flight to 16 equal risers over the measured 10-foot level difference, changed to Combined View, aligned the lower deck side to the landing, and reported that the upper route now stops at Level 1.
+- Live 2D and 3D inspection confirmed that the former six-riser continuation to grade disappeared. Aggregate tread quantity changed from 29 to 23: sixteen upper-level treads plus the lower level's existing seven-tread stair system. The landing remained one 16-square-foot geometry item.
+- The terminal controls explain that the lower level's stairs are the sole remaining route to grade and provide explicit Align lower level and Disconnect level actions. No production, catalog, estimating, database, or network dependency was introduced.
+- Full validation passed 171 tests. Initial JavaScript is 82.5 KiB gzip and total JavaScript is 241.5 KiB under the enforced 99/242 KiB budgets.
+
+### Two-level connected assembly follow-up
+
+- From a clean 4-foot rectangle, added a 14-foot second level. The setup panel immediately asked whether the levels connect by stairs; **Yes — connect levels** selected the upper layer and requested one outer side.
+- Selecting the 16-foot outer side and **Add connected stair assembly** created the complete 16-riser upper flight plus one lower landing, switched to Combined View, and snapped the lower platform's nearest free outer edge to that landing without exposing platform IDs or a separate destination editor.
+- Changed the exact stair position from 4 to 6 feet. The upper flight, terminal landing, and lower platform remained aligned as one draggable assembly; the status confirmed the two-foot move and deterministic quantities remained 16 treads plus one 16-square-foot landing.
+- The setup card then read **Levels connected by stairs** and exposed one **Edit connected stairs** action. The measured plan and 3D model showed the same aligned arrangement.
+
 ## 2026-08-21 automatic destination-layer alignment
 
 - Finishing an exact level connection now translates the destination deck layer as one rigid body until the selected destination-side midpoint meets the connected stair centerline endpoint.

@@ -6,6 +6,15 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "./",
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (["LandingConnectionsEditor", "LevelCutoutControls", "HouseConnectionEditor", "RailingStageControls", "PhotoIntakeDialog", "platformCommandsV3", "levelConnectionAlignmentV3", "connectedStairAssemblyV3"].some((name) => id.includes(`/${name}.`))) return "designer-controls";
+        },
+      },
+    },
+  },
   test: {
     environment: "node",
   },

@@ -9,25 +9,12 @@ export type LevelConnectionAlignmentResultV3 = Readonly<{
   delta: Readonly<{ x: number; z: number }>;
 }>;
 
-export function alignLevelConnectionV3(design: DeckDesignV3, sourcePlatformId: string, systemId: string, landingId: string, connectionId: string): LevelConnectionAlignmentResultV3 {
-  const normalized = normalizeDeckDesignV3(design);
-  const source = normalized.platforms.find((platform) => platform.id === sourcePlatformId);
-  const system = source?.construction.stairSystems.find((item) => item.id === systemId);
-  const landing = system?.landings.find((item) => item.id === landingId);
-  const connection = landing?.connections.find((item) => item.id === connectionId);
-  if (!source || !system || !landing || !connection) throw new RangeError("The level connection to align no longer exists.");
-  if (connection.destination !== "deck" || !connection.targetPlatformId || !connection.targetEdgeId) throw new RangeError("Only an exact deck-side connection can align levels.");
-  const target = normalized.platforms.find((platform) => platform.id === connection.targetPlatformId);
-  if (!target) throw new RangeError("The destination level no longer exists.");
+function moveTargetPlatform(design: DeckDesignV3, target: DeckPlatformV3, targetEdgeId: string, destination: Readonly<{ x: number; z: number }>): LevelConnectionAlignmentResultV3 {
   const oldEdges = deriveGeometricPolygonEdges(target.region.outer);
-  const targetEdge = oldEdges.find((edge) => edge.id === connection.targetEdgeId);
+  const targetEdge = oldEdges.find((edge) => edge.id === targetEdgeId);
   if (!targetEdge) throw new RangeError("The destination side no longer exists.");
-  const route = derivePlatformGeometryV3(normalized, source.id);
-  const stringerEnds = route.stairStringers.filter((stringer) => stringer.id.includes(connection.id)).map((stringer) => stringer.end);
-  if (stringerEnds.length !== 2) throw new RangeError("The connected stair endpoint could not be resolved deterministically.");
-  const stairEnd = { x: (stringerEnds[0].x + stringerEnds[1].x) / 2, z: (stringerEnds[0].z + stringerEnds[1].z) / 2 };
   const edgeCenter = { x: (targetEdge.start.x + targetEdge.end.x) / 2, z: (targetEdge.start.z + targetEdge.end.z) / 2 };
-  const delta = Object.freeze({ x: Math.round((stairEnd.x - edgeCenter.x) * 100) / 100, z: Math.round((stairEnd.z - edgeCenter.z) * 100) / 100 });
+  const delta = Object.freeze({ x: Math.round((destination.x - edgeCenter.x) * 100) / 100, z: Math.round((destination.z - edgeCenter.z) * 100) / 100 });
   const region = translatePlatformRegion(target.region, delta);
   const newEdges = deriveGeometricPolygonEdges(region.outer);
   const edgeMap = new Map(oldEdges.map((edge, index) => [edge.id, newEdges[index].id]));
@@ -42,9 +29,26 @@ export function alignLevelConnectionV3(design: DeckDesignV3, sourcePlatformId: s
       stairSystems: target.construction.stairSystems.map((item) => ({ ...item, edgeId: remap(item.edgeId) })),
     },
   };
-  const platforms = normalized.platforms.map((platform) => {
+  const platforms = design.platforms.map((platform) => {
     const current = platform.id === target.id ? moved : platform;
-    return { ...current, construction: { ...current.construction, stairSystems: current.construction.stairSystems.map((item) => ({ ...item, landings: item.landings.map((itemLanding) => ({ ...itemLanding, connections: itemLanding.connections.map((itemConnection) => itemConnection.targetPlatformId === target.id && itemConnection.targetEdgeId ? { ...itemConnection, targetEdgeId: remap(itemConnection.targetEdgeId) } : itemConnection) })) })) } };
+    return { ...current, construction: { ...current.construction, stairSystems: current.construction.stairSystems.map((item) => ({ ...item, landings: item.landings.map((landing) => ({ ...landing, terminalEdgeId: landing.terminalPlatformId === target.id && landing.terminalEdgeId ? remap(landing.terminalEdgeId) : landing.terminalEdgeId, connections: landing.connections.map((connection) => connection.targetPlatformId === target.id && connection.targetEdgeId ? { ...connection, targetEdgeId: remap(connection.targetEdgeId) } : connection) })) })) } };
   });
-  return Object.freeze({ design: normalizeDeckDesignV3({ ...normalized, platforms, metadata: { ...normalized.metadata, revision: normalized.metadata.revision + 1 } }), movedPlatformId: target.id, delta });
+  return Object.freeze({ design: normalizeDeckDesignV3({ ...design, platforms, metadata: { ...design.metadata, revision: design.metadata.revision + 1 } }), movedPlatformId: target.id, delta });
+}
+
+export function alignLevelConnectionV3(design: DeckDesignV3, sourcePlatformId: string, systemId: string, landingId: string, connectionId: string): LevelConnectionAlignmentResultV3 {
+  const normalized = normalizeDeckDesignV3(design);
+  const source = normalized.platforms.find((platform) => platform.id === sourcePlatformId);
+  const system = source?.construction.stairSystems.find((item) => item.id === systemId);
+  const landing = system?.landings.find((item) => item.id === landingId);
+  const connection = landing?.connections.find((item) => item.id === connectionId);
+  if (!source || !system || !landing || !connection) throw new RangeError("The level connection to align no longer exists.");
+  if (connection.destination !== "deck" || !connection.targetPlatformId || !connection.targetEdgeId) throw new RangeError("Only an exact deck-side connection can align levels.");
+  const target = normalized.platforms.find((platform) => platform.id === connection.targetPlatformId);
+  if (!target) throw new RangeError("The destination level no longer exists.");
+  const route = derivePlatformGeometryV3(normalized, source.id);
+  const stringerEnds = route.stairStringers.filter((stringer) => stringer.id.includes(connection.id)).map((stringer) => stringer.end);
+  if (stringerEnds.length !== 2) throw new RangeError("The connected stair endpoint could not be resolved deterministically.");
+  const stairEnd = { x: (stringerEnds[0].x + stringerEnds[1].x) / 2, z: (stringerEnds[0].z + stringerEnds[1].z) / 2 };
+  return moveTargetPlatform(normalized, target, connection.targetEdgeId, stairEnd);
 }

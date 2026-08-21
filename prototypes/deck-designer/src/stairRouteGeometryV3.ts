@@ -2,8 +2,8 @@ import type { StairLandingConnectionV3, StairSystemV3 } from "./modelV3";
 import type { PolygonEdge, PolygonPoint } from "./polygon";
 
 export type StairPoint3V3 = Readonly<{ x: number; y: number; z: number }>;
-export type StairTreadV3 = Readonly<{ id: string; x: number; z: number; y: number; width: number; depth: number; rise: number; rotationY: number; corners: readonly PolygonPoint[] }>;
-export type StairLandingGeometryV3 = Readonly<{ id: string; systemId: string; afterRiser: number; position: "top" | "midway"; y: number; depth: number; width: number; center: PolygonPoint; rotationY: number; corners: readonly PolygonPoint[] }>;
+export type StairTreadV3 = Readonly<{ id: string; systemId: string; x: number; z: number; y: number; width: number; depth: number; rise: number; rotationY: number; corners: readonly PolygonPoint[] }>;
+export type StairLandingGeometryV3 = Readonly<{ id: string; systemId: string; landingId: string; afterRiser: number; position: "top" | "midway"; y: number; depth: number; width: number; center: PolygonPoint; rotationY: number; corners: readonly PolygonPoint[] }>;
 export type StairPostV3 = Readonly<{ id: string; x: number; z: number; top: number }>;
 export type StairRailPostV3 = Readonly<{ id: string; x: number; y: number; z: number; height: number }>;
 export type StairRouteGeometryV3 = Readonly<{
@@ -22,11 +22,11 @@ export type StairRouteGeometryV3 = Readonly<{
 
 const point = (x: number, z: number): PolygonPoint => Object.freeze({ x, z });
 const point3 = (x: number, y: number, z: number): StairPoint3V3 => Object.freeze({ x, y, z });
-const rotate = (direction: PolygonPoint, turn: "straight" | "left" | "right"): PolygonPoint => turn === "left"
+const rotate = (direction: PolygonPoint, turn: "straight" | "left" | "right" | "switchback"): PolygonPoint => turn === "left"
   ? point(direction.z, -direction.x)
   : turn === "right"
     ? point(-direction.z, direction.x)
-    : direction;
+    : turn === "switchback" ? point(-direction.x, -direction.z) : direction;
 
 export function deriveStairRouteGeometryV3(args: Readonly<{
   system: StairSystemV3;
@@ -41,7 +41,11 @@ export function deriveStairRouteGeometryV3(args: Readonly<{
   const edgeDx = (edge.end.x - edge.start.x) / edge.length;
   const edgeDz = (edge.end.z - edge.start.z) / edge.length;
   const onEdge = (distance: number) => point(edge.start.x + edgeDx * distance, edge.start.z + edgeDz * distance);
-  const rise = platformElevation - gradeElevation;
+  const terminalLanding = system.landings.at(-1)?.terminalPlatformId ? system.landings.at(-1) : undefined;
+  const terminalElevation = terminalLanding?.terminalPlatformId ? targetPlatformElevations[terminalLanding.terminalPlatformId] : undefined;
+  if (terminalLanding && terminalElevation === undefined) throw new RangeError(`Terminal platform ${terminalLanding.terminalPlatformId} has no recorded elevation.`);
+  const routeEndElevation = terminalElevation ?? gradeElevation;
+  const rise = platformElevation - routeEndElevation;
   const totalRisers = Math.ceil(rise / system.maxRiserHeight);
   const actualRise = totalRisers > 0 ? rise / totalRisers : 0;
   const root = namespaceIds ? `${system.id}-` : "";
@@ -74,7 +78,7 @@ export function deriveStairRouteGeometryV3(args: Readonly<{
       const alongZ = widthDirection.z * connection.width / 2;
       const outX = branchDirection.x * connection.treadDepth / 2;
       const outZ = branchDirection.z * connection.treadDepth / 2;
-      treads.push(Object.freeze({ id: `${root}${connection.id}-tread-${index + 1}`, x: center.x, z: center.z, y: landingElevation + actualConnectionRise * (index + 1), width: connection.width, depth: connection.treadDepth, rise: Math.abs(actualConnectionRise), rotationY: -Math.atan2(widthDirection.z, widthDirection.x), corners: Object.freeze([
+      treads.push(Object.freeze({ id: `${root}${connection.id}-tread-${index + 1}`, systemId: system.id, x: center.x, z: center.z, y: landingElevation + actualConnectionRise * (index + 1), width: connection.width, depth: connection.treadDepth, rise: Math.abs(actualConnectionRise), rotationY: -Math.atan2(widthDirection.z, widthDirection.x), corners: Object.freeze([
         point(center.x - alongX - outX, center.z - alongZ - outZ), point(center.x + alongX - outX, center.z + alongZ - outZ),
         point(center.x + alongX + outX, center.z + alongZ + outZ), point(center.x - alongX + outX, center.z - alongZ + outZ),
       ]) }));
@@ -101,7 +105,7 @@ export function deriveStairRouteGeometryV3(args: Readonly<{
       const alongZ = widthDirection.z * system.width / 2;
       const outX = direction.x * system.treadDepth / 2;
       const outZ = direction.z * system.treadDepth / 2;
-      treads.push(Object.freeze({ id: `${root}stair-tread-${globalIndex + 1}`, x: center.x, z: center.z, y: Math.max(gradeElevation, startElevation - actualRise * (index + 1)), width: system.width, depth: system.treadDepth, rise: actualRise, rotationY: -Math.atan2(widthDirection.z, widthDirection.x), corners: Object.freeze([
+      treads.push(Object.freeze({ id: `${root}stair-tread-${globalIndex + 1}`, systemId: system.id, x: center.x, z: center.z, y: Math.max(routeEndElevation, startElevation - actualRise * (index + 1)), width: system.width, depth: system.treadDepth, rise: actualRise, rotationY: -Math.atan2(widthDirection.z, widthDirection.x), corners: Object.freeze([
         point(center.x - alongX - outX, center.z - alongZ - outZ), point(center.x + alongX - outX, center.z + alongZ - outZ),
         point(center.x + alongX + outX, center.z + alongZ + outZ), point(center.x - alongX + outX, center.z - alongZ + outZ),
       ]) }));
@@ -125,7 +129,8 @@ export function deriveStairRouteGeometryV3(args: Readonly<{
     const landingElevation = platformElevation - landing.afterRiser * actualRise;
     addFlight(flightRisers, landingElevation);
     const widthDirection = point(-direction.z, direction.x);
-    const center = point(origin.x + direction.x * landing.depth / 2, origin.z + direction.z * landing.depth / 2);
+    const switchbackShift = landing.turn === "switchback" ? (landing.width - system.width) / 2 : 0;
+    const center = point(origin.x + direction.x * landing.depth / 2 + widthDirection.x * switchbackShift, origin.z + direction.z * landing.depth / 2 + widthDirection.z * switchbackShift);
     const alongX = widthDirection.x * landing.width / 2;
     const alongZ = widthDirection.z * landing.width / 2;
     const outX = direction.x * landing.depth / 2;
@@ -135,7 +140,7 @@ export function deriveStairRouteGeometryV3(args: Readonly<{
       point(center.x + alongX + outX, center.z + alongZ + outZ), point(center.x - alongX + outX, center.z - alongZ + outZ),
     ]);
     const landingId = !namespaceIds && landingIndex === 0 ? "stair-landing" : `${root}stair-landing-${landingIndex + 1}`;
-    landings.push(Object.freeze({ id: landingId, systemId: system.id, afterRiser: landing.afterRiser, position: landing.afterRiser === 0 ? "top" : "midway", y: landingElevation, depth: landing.depth, width: landing.width, center, rotationY: -Math.atan2(widthDirection.z, widthDirection.x), corners }));
+    landings.push(Object.freeze({ id: landingId, systemId: system.id, landingId: landing.id, afterRiser: landing.afterRiser, position: landing.afterRiser === 0 ? "top" : "midway", y: landingElevation, depth: landing.depth, width: landing.width, center, rotationY: -Math.atan2(widthDirection.z, widthDirection.x), corners }));
     const railPrefix = !namespaceIds && landingIndex === 0 ? "landing-rail" : `${landingId}-rail`;
     const openDirections = new Set([landing.turn, ...landing.connections.map((connection) => connection.direction)]);
     const segments = [
@@ -159,11 +164,13 @@ export function deriveStairRouteGeometryV3(args: Readonly<{
     const nextDirection = rotate(direction, landing.turn);
     origin = landing.turn === "straight"
       ? point(origin.x + direction.x * landing.depth, origin.z + direction.z * landing.depth)
-      : point(center.x + nextDirection.x * landing.width / 2, center.z + nextDirection.z * landing.width / 2);
+      : landing.turn === "switchback"
+        ? point(origin.x + widthDirection.x * switchbackShift * 2, origin.z + widthDirection.z * switchbackShift * 2)
+        : point(center.x + nextDirection.x * landing.width / 2, center.z + nextDirection.z * landing.width / 2);
     direction = nextDirection;
     startElevation = landingElevation;
   }
-  addFlight(totalRisers - completedRisers, gradeElevation);
+  if (!terminalLanding) addFlight(totalRisers - completedRisers, gradeElevation);
   const railPosts = Object.freeze(rails.flatMap((segment, index) => [
     Object.freeze({ id: `${segment.id}-post-start`, x: segment.start.x, y: segment.start.y - railingHeight + 2, z: segment.start.z, height: railingHeight }),
     Object.freeze({ id: `${segment.id}-post-end`, x: segment.end.x, y: segment.end.y - railingHeight + 2, z: segment.end.z, height: railingHeight }),

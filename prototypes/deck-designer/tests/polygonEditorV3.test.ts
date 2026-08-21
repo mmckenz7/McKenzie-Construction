@@ -1,6 +1,6 @@
 // @ts-ignore The production root intentionally does not install this isolated prototype package's test runner.
 import { describe, expect, it } from "vitest";
-import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment, resizePolygonEdge } from "../src/polygonEditorV3";
+import { addBumpoutOnEdge, deriveCornerAlignmentGuides, moveOrthogonalPolygonCorner, movePolygonCorner, movePolygonSegment, resizePolygonEdge } from "../src/polygonEditorV3";
 import { normalizePolygon } from "../src/polygon";
 
 const rectangle = Object.freeze([{ x: 0, z: 0 }, { x: 192, z: 0 }, { x: 192, z: 144 }, { x: 0, z: 144 }]);
@@ -19,6 +19,17 @@ describe("direct v3 polygon authoring", () => {
     const next = movePolygonSegment(rectangle, 2, 24, 6);
     expect(next).toEqual([{ x: 0, z: 0 }, { x: 192, z: 0 }, { x: 192, z: 168 }, { x: 0, z: 168 }]);
     expect(normalizePolygon(next)).toEqual(next);
+  });
+
+  it("moves a square corner and both attached sides as one orthogonal edit", () => {
+    const next = moveOrthogonalPolygonCorner(rectangle, 2, { x: 150, z: 102 }, false, 6);
+    expect(next).toEqual([{ x: 0, z: 0 }, { x: 150, z: 0 }, { x: 150, z: 102 }, { x: 0, z: 102 }]);
+    expect(normalizePolygon(next)).toEqual(next);
+  });
+
+  it("requires free-corner mode when either attached side is angled", () => {
+    const angled = [{ x: 0, z: 0 }, { x: 180, z: 12 }, { x: 192, z: 144 }, { x: 0, z: 144 }];
+    expect(() => moveOrthogonalPolygonCorner(angled, 1, { x: 160, z: 24 }, false, 6)).toThrow(/Turn off Keep attached sides square/i);
   });
 
   it("changes only the selected side length while its connected side follows", () => {
@@ -57,6 +68,16 @@ describe("direct v3 polygon authoring", () => {
     expect(next).toHaveLength(6);
     expect(next[1]).toEqual({ x: 198, z: 0 });
     expect(normalizePolygon(next)).toEqual(next);
+  });
+
+  it("prefers attached sides when two alignment lines are equally close", () => {
+    const next = movePolygonCorner(rectangle, 2, { x: 96, z: 144 }, false, 96);
+    expect(next[2]).toEqual({ x: 192, z: 144 });
+  });
+
+  it("reports visible axes for a corner that is aligned with the outline", () => {
+    expect(deriveCornerAlignmentGuides(rectangle, 2)).toEqual({ x: 192, z: 144 });
+    expect(deriveCornerAlignmentGuides(rectangle, 99)).toEqual({ x: null, z: null });
   });
 
   it("magnetically aligns a moved side to a nearby corner line", () => {

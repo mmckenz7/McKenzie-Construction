@@ -24,4 +24,5 @@ describe("level connection alignment", () => {
     expect(aligned.design.metadata.revision).toBe(design.metadata.revision + 1);
     expect(alignLevelConnectionV3(design, source.id, system.id, "landing-1", "level-link")).toEqual(aligned);
   });
+
 });

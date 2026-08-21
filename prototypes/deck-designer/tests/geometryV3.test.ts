@@ -33,7 +33,7 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(geometry.railSegments).toHaveLength(oldGeometry.railSegments.length);
     expect(totalLength(geometry.railSegments)).toBe(totalLength(oldGeometry.railSegments));
     expect(geometry.railPosts).toHaveLength(oldGeometry.railPosts.length);
-    expect(geometry.stairTreads).toEqual(oldGeometry.stairTreads);
+    expect(geometry.stairTreads.map(({ systemId: _systemId, ...tread }) => tread)).toEqual(oldGeometry.stairTreads);
     expect(geometry.stairStringers).toEqual(oldGeometry.stairStringers);
     expect(geometry.stairRise).toBe(oldGeometry.stairRise);
     if (oldGeometry.landing) {
@@ -142,6 +142,24 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(geometry.landingSupportPosts.every((post) => post.top < platform.elevation)).toBe(true);
   });
 
+  it("reverses a lower flight beside the upper flight on a wide midway switchback landing", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{ ...platform, construction: { ...platform.construction, stairs: { ...platform.construction.stairs, enabled: true, landingEnabled: true, landingPosition: "midway", upperFlightRisers: 4, landingWidth: 96, landingDepth: 48, landingTurn: "switchback" } } }],
+    });
+    const geometry = derivePlatformGeometryV3(design, platform.id);
+    expect(geometry.stairTreads).toHaveLength(7);
+    expect(geometry.stairStringers).toHaveLength(4);
+    expect(geometry.stairRailSegments).toHaveLength(4);
+    expect(geometry.landing).toMatchObject({ afterRiser: 4, width: 96, depth: 48 });
+    const upperDirection = { x: geometry.stairTreads[1].x - geometry.stairTreads[0].x, z: geometry.stairTreads[1].z - geometry.stairTreads[0].z };
+    const lowerDirection = { x: geometry.stairTreads[5].x - geometry.stairTreads[4].x, z: geometry.stairTreads[5].z - geometry.stairTreads[4].z };
+    expect(upperDirection.x * lowerDirection.x + upperDirection.z * lowerDirection.z).toBeLessThan(0);
+    expect(Math.hypot(geometry.stairTreads[3].x - geometry.stairTreads[4].x, geometry.stairTreads[3].z - geometry.stairTreads[4].z)).toBeCloseTo(48);
+  });
+
   it("derives top and midway landings independently or together", () => {
     const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
     const platform = base.platforms[0];
@@ -199,7 +217,9 @@ describe("v3 free-edge geometry equivalence", () => {
     const geometry = derivePlatformGeometryV3(design, platform.id);
     expect(geometry.stairOpenings).toHaveLength(2);
     expect(geometry.landings.map((landing) => landing.systemId)).toEqual(["stair-system-1", "stair-system-1"]);
+    expect(geometry.landings.map((landing) => landing.landingId)).toEqual(["stair-system-1-landing-1", "stair-system-1-landing-2"]);
     expect(geometry.stairTreads).toHaveLength(14);
+    expect(new Set(geometry.stairTreads.map((tread) => tread.systemId))).toEqual(new Set(["stair-system-1", "stair-system-2"]));
     expect(geometry.stairStringers).toHaveLength(6);
     expect(geometry.stairRailSegments).toHaveLength(6);
     expect(geometry.stairRailPosts).toHaveLength(12);
@@ -239,5 +259,23 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(connected).toHaveLength(8);
     expect(connected.at(-1)?.y).toBeCloseTo(84);
     expect(derivePlatformGeometryV3(design, platform.id)).toEqual(geometry);
+  });
+
+  it("stops an upper stair route at a shared lower-level landing instead of continuing to grade", () => {
+    const migrated = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const raised = normalizeDeckDesignV3({ ...migrated, platforms: [{ ...migrated.platforms[0], elevation: 168 }] });
+    const added = addPlatformLevelV3(raised, "platform-1", "platform-2", 48, { x: 0, z: 0 }).design;
+    const source = added.platforms[0], target = added.platforms[1];
+    const edgeId = source.edgeConditions.find((condition) => condition.condition === "free")!.edgeId;
+    const targetEdgeId = target.edgeConditions.find((condition) => condition.condition === "free")!.edgeId;
+    const system = { id: "upper-stairs", locked: true, edgeId, offset: 48, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [{ id: "shared-landing", locked: true, afterRiser: 16, width: 48, depth: 48, turn: "straight" as const, connections: [], terminalPlatformId: target.id, terminalEdgeId: targetEdgeId }] };
+    const design = normalizeDeckDesignV3({ ...added, platforms: [{ ...source, construction: { ...source.construction, stairSystems: [system] } }, target] });
+    const geometry = derivePlatformGeometryV3(design, source.id);
+    expect(geometry.stairTreads).toHaveLength(16);
+    expect(geometry.stairTreads.at(-1)?.y).toBeCloseTo(target.elevation);
+    expect(geometry.landings).toHaveLength(1);
+    expect(geometry.landings[0].y).toBeCloseTo(target.elevation);
+    expect(geometry.stairRailSegments.every((rail) => rail.end.y >= target.elevation + source.construction.railing.height - 2)).toBe(true);
+    expect(derivePlatformGeometryV3(design, source.id)).toEqual(geometry);
   });
 });

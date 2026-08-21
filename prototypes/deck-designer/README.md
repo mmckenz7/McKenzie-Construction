@@ -21,14 +21,23 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Deterministic conceptual stair side-stringer paths in 2D, 3D, and quantities
 - Recorded grade, multiple editable house walls/attachment intent, and multiple selectable conceptual door/window openings per wall
 - Ordered, stair-system-associated landings with exact step position, independent width/depth, deterministic straight/left/right routing, and area
+- Conservative midway switchbacks with two adjacent opposing flights, automatic halfway-or-later placement, and a landing at least twice the stair width
 - Explicit shared-landing junctions where additional flights can merge from deck or diverge toward grade without duplicating the landing
+- Terminal shared-level landings that stop an upper stair route at an exact lower platform elevation and free side, leaving that lower level's stairs as the sole route to grade
+- A preserved but UI-paused two-level experiment; the active designer workflow is intentionally single-level while connected-level stair geometry is revisited later
+- A compact deterministic layout review before railings, with unfinished geometry blockers kept separate from non-blocking field-verification notes
+- Deterministic plan-collision review for intersecting stair systems, routes returning through the deck, and routes crossing recorded house walls, plus explicit clearance notes for cutouts near deck or other cutout edges
+- Visible horizontal/vertical alignment guides during corner dragging, with attached-side alignment winning ambiguous snap ties
+- Default keep-square corner movement updates both neighboring endpoints so the two attached sides remain perpendicular; the switch can be turned off for intentionally angled outlines
+- Direct stair-tread and landing selection in the measured plan reopens the exact owning stair system and landing controls
 - Conceptual landing side rails, stair rails, rail posts, and outer support locations
 - Command-based undo and redo
 - Direct plan handles for width, projection, and L-cutout dimensions with selectable 1, 6, or 12 inch snapping
 - Flexible polygon corner handles, exact corner coordinates, and repeatable rectangular offsets
 - Click-to-add rectangular bumpouts with parallel outer segments, magnetic corner-axis alignment, and draggable segment handles that move both attached endpoints
 - Direct movement of the active stair system along exact geometric edges with bounds and grid snapping
-- Keyboard/click edge selection with contextual railing and stair actions
+- Keyboard/touch/click selection for edges, stair treads, landings, and cutouts with contextual actions
+- Direct plan-door selection with an 18-inch touch target that returns to the measured House connection controls
 - Deterministic, explainable conceptual review notices
 - Three generic geometry templates plus a local duplicate-design command
 - Versioned rectangle, L-shape, and multi-wall/opening golden fixtures for deterministic regression checks
