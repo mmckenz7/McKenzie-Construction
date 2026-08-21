@@ -22,8 +22,8 @@ body {
   --company-primary: #3b82f6;
   --company-accent: #d2a679;
   min-height: 100vh;
-  background: #070d17;
-  color: #e5eaf3;
+  background: #f3f5f8;
+  color: #172033;
 }
 
 .platform-sidebar {
@@ -34,7 +34,7 @@ body {
   width: 228px;
   flex-direction: column;
   border-right: 1px solid #1d2939;
-  background: linear-gradient(180deg, #060b13 0%, #09111d 100%);
+  background: #0b1220;
   padding: 18px 12px;
 }
 
@@ -45,13 +45,13 @@ body {
 .platform-nav::-webkit-scrollbar { width: 10px; }
 .platform-nav::-webkit-scrollbar-track { border-radius: 999px; background: #111c2b; }
 .platform-nav::-webkit-scrollbar-thumb { border-radius: 999px; background: color-mix(in srgb, var(--company-primary) 55%, #334155); }
-.platform-nav-link { display: flex; min-height: 42px; align-items: center; gap: 12px; border: 1px solid transparent; border-radius: 10px; padding: 9px 12px; color: #aeb8c8; font-size: 14px; font-weight: 600; transition: .18s ease; }
+.platform-nav-link { display: flex; min-height: 42px; align-items: center; gap: 12px; border: 1px solid transparent; border-radius: 8px; padding: 9px 12px; color: #c5cedc; font-size: 14px; font-weight: 650; transition: .18s ease; }
 .platform-nav-link svg { width: 19px; height: 19px; flex: 0 0 auto; color: color-mix(in srgb, var(--company-primary) 82%, white); }
-.platform-nav-link:hover { border-color: color-mix(in srgb, var(--company-primary) 35%, #243247); background: color-mix(in srgb, var(--company-primary) 13%, #0d1726); color: #fff; }
-.platform-nav-link-active { border-color: color-mix(in srgb, var(--company-primary) 42%, #243247); background: color-mix(in srgb, var(--company-primary) 16%, #0d1726); color: #fff; }
+.platform-nav-link:hover { border-color: #34435a; background: #162238; color: #fff; }
+.platform-nav-link-active { border-color: color-mix(in srgb, var(--company-primary) 58%, #334155); background: color-mix(in srgb, var(--company-primary) 24%, #142033); color: #fff; }
 .platform-nav-group { min-height: max-content; flex: 0 0 auto; overflow: visible; border: 1px solid transparent; border-radius: 10px; }
-.platform-nav-group[open] { border-color: #1d2939; background: #0a1320; }
-.platform-nav-group-summary { display: flex; min-height: 42px; cursor: pointer; list-style: none; align-items: center; justify-content: space-between; border-radius: 9px; padding: 9px 12px; color: #aeb8c8; font-size: 13px; font-weight: 800; letter-spacing: .03em; }
+.platform-nav-group[open] { border-color: #263449; background: #101a2b; }
+.platform-nav-group-summary { display: flex; min-height: 42px; cursor: pointer; list-style: none; align-items: center; justify-content: space-between; border-radius: 8px; padding: 9px 12px; color: #d7deea; font-size: 13px; font-weight: 800; letter-spacing: .03em; }
 .platform-nav-group-summary::-webkit-details-marker { display: none; }
 .platform-nav-group-summary:hover, .platform-nav-group-active { color: #fff; }
 .platform-nav-chevron { color: var(--company-primary); font-size: 20px; line-height: 1; transition: transform .18s ease; }
@@ -59,40 +59,37 @@ body {
 .platform-nav-children { display: grid; gap: 2px; padding: 0 5px 6px; }
 .platform-nav-link-nested { min-height: 35px; border-radius: 7px; padding: 6px 9px; font-size: 12px; }
 .platform-nav-link-nested svg { width: 14px; height: 14px; }
-.platform-sidebar-footer { margin-top: 12px; flex: 0 0 auto; border: 1px solid #1d2939; border-radius: 12px; background: #0d1624; padding: 14px; color: #748196; font-size: 11px; }
-.platform-company-name { color: #d9e0eb; font-size: 13px; font-weight: 700; }
+.platform-sidebar-footer { margin-top: 12px; flex: 0 0 auto; border: 1px solid #29374b; border-radius: 10px; background: #111c2d; padding: 14px; color: #a7b2c3; font-size: 11px; }
+.platform-company-name { color: #f4f7fb; font-size: 13px; font-weight: 700; }
 .platform-main { min-height: 100vh; padding-left: 228px; }
-.platform-topbar { position: sticky; top: 0; z-index: 50; display: flex; min-height: 78px; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid #1d2939; background: rgb(8 14 24 / 92%); padding: 12px 28px; backdrop-filter: blur(18px); }
-.platform-context { display: flex; align-items: center; gap: 12px; color: #dbe3ef; }
-.platform-context-mark { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid #26364d; border-radius: 50%; color: var(--company-primary); }
+.platform-topbar { position: sticky; top: 0; z-index: 50; display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid #d9e0e9; background: rgb(255 255 255 / 94%); padding: 12px 28px; box-shadow: 0 1px 2px rgb(15 23 42 / 4%); backdrop-filter: blur(18px); }
+.platform-context { display: flex; align-items: center; gap: 12px; color: #172033; }
+.platform-context-mark { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid #cbd5e1; border-radius: 9px; background: #f8fafc; color: var(--company-primary); }
 .platform-context-mark svg { width: 18px; height: 18px; }
-.platform-context p { color: #738198; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.platform-context p { color: #64748b; font-size: 10px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
 .platform-context strong { font-size: 14px; }
 .platform-account { display: flex; align-items: center; gap: 12px; }
-.platform-avatar { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid color-mix(in srgb, var(--company-accent) 60%, #253348); border-radius: 50%; background: #172235; color: var(--company-accent); font-weight: 800; }
+.platform-avatar { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid color-mix(in srgb, var(--company-accent) 48%, #cbd5e1); border-radius: 9px; background: #f8fafc; color: #7c5632; font-weight: 800; }
 .platform-user { display: grid; min-width: 130px; }
-.platform-user strong { color: #f4f7fb; font-size: 13px; }
-.platform-user span { color: #7f8ba0; font-size: 11px; }
-.platform-signout { border: 1px solid #2b394e; border-radius: 8px; padding: 8px 11px; color: #aeb8c8; font-size: 12px; font-weight: 700; }
-.platform-signout:hover { border-color: #ef4444; color: #fecaca; }
-.platform-content { min-height: calc(100vh - 78px); background: radial-gradient(circle at 70% 0%, color-mix(in srgb, var(--company-primary) 8%, transparent), transparent 32%), #09111d; }
+.platform-user strong { color: #172033; font-size: 13px; }
+.platform-user span { color: #64748b; font-size: 11px; }
+.platform-signout { border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; padding: 8px 11px; color: #334155; font-size: 12px; font-weight: 700; }
+.platform-signout:hover { border-color: #b91c1c; color: #991b1b; }
+.platform-content { min-height: calc(100vh - 72px); background: #f3f5f8; }
 
-/* Shared dark application surfaces. Public marketing pages are outside .platform-content. */
-.platform-content .bg-white { background-color: #0d1726 !important; }
-.platform-content .bg-slate-50, .platform-content .bg-slate-100 { background-color: #111d2e !important; }
-.platform-content .text-slate-950, .platform-content .text-slate-900, .platform-content .text-slate-800 { color: #eef3fa !important; }
-.platform-content .text-slate-700, .platform-content .text-slate-600 { color: #a7b3c6 !important; }
-.platform-content .text-slate-500, .platform-content .text-slate-400 { color: #77859a !important; }
-.platform-content .border-slate-100, .platform-content .border-slate-200, .platform-content .border-slate-300 { border-color: #223047 !important; }
-.platform-content input, .platform-content select, .platform-content textarea { border-color: #2b3a52 !important; background: #0a1320 !important; color: #eef3fa !important; }
-.platform-content input:focus, .platform-content select:focus, .platform-content textarea:focus { border-color: var(--company-primary) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--company-primary) 20%, transparent) !important; }
-.platform-content .estimate-pricing-control { border: 1px solid #223047; background: #111d2e; }
+/* Internal application surfaces use their authored light palette. These shared
+   controls guarantee readable text without overriding semantic status cards. */
+.platform-content input, .platform-content select, .platform-content textarea { color-scheme: light; color: #0f172a; }
+.platform-content input::placeholder, .platform-content textarea::placeholder { color: #64748b; opacity: 1; }
+.platform-content input:focus, .platform-content select:focus, .platform-content textarea:focus { border-color: var(--company-primary) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--company-primary) 16%, transparent) !important; }
+.platform-content :focus-visible { outline: 3px solid color-mix(in srgb, var(--company-primary) 46%, #ffffff); outline-offset: 2px; }
+.platform-content .estimate-pricing-control { border: 1px solid #cbd5e1; background: #fff; }
 .platform-content .estimate-pricing-control input[type="range"] { background: transparent !important; box-shadow: none !important; accent-color: var(--company-primary); }
-.platform-content .estimate-editor-panel { border-color: color-mix(in srgb, var(--company-primary) 52%, #26364d); background: #111d2e; }
-.platform-content .estimate-live-preview-note { border: 1px solid color-mix(in srgb, var(--company-primary) 32%, #26364d); background: color-mix(in srgb, var(--company-primary) 11%, #111d2e); color: #c8d8f2; }
-.platform-content .estimate-sheet-header { position: static; border-bottom: 1px solid #223047; background: #111d2e; }
+.platform-content .estimate-editor-panel { border-color: color-mix(in srgb, var(--company-primary) 42%, #cbd5e1); background: #fff; }
+.platform-content .estimate-live-preview-note { border: 1px solid color-mix(in srgb, var(--company-primary) 30%, #cbd5e1); background: color-mix(in srgb, var(--company-primary) 7%, #ffffff); color: #334155; }
+.platform-content .estimate-sheet-header { position: static; border-bottom: 1px solid #dbe2ea; background: #fff; }
 .platform-content .estimate-sheet-row { transition: background-color .15s ease; }
-.platform-content .estimate-sheet-row-dirty { background: color-mix(in srgb, var(--company-primary) 8%, #0d1726); }
+.platform-content .estimate-sheet-row-dirty { background: color-mix(in srgb, var(--company-primary) 7%, #ffffff); }
 .platform-content .estimate-customer-document { --company-primary: var(--estimate-document-primary); --company-accent: var(--estimate-document-accent); background: #fff !important; color: #0f172a !important; }
 .platform-content .estimate-customer-document .bg-slate-50 { background: #f8fafc !important; }
 .platform-content .estimate-customer-document .bg-slate-950 { background: #020617 !important; }
