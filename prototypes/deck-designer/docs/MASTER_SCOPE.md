@@ -45,6 +45,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Prototype-only canonical custom-polygon kernel and contract spike (not yet part of DeckDesign)
 - [x] Prototype-only contained-hole region kernel with subtractive area and split member intervals
 - [x] Browser editor for exact rectangular cutouts/obstacles on the selected platform
+- [x] Direct cutout center/corner editing with pointer, touch, keyboard, and exact numeric fallback
 - [x] Prototype-only concave triangulation and deterministic board/joist segmentation around holes
 - [x] Prototype-only neutral polygon measurement/quantity report with explicit classification and warnings
 - [x] Prototype-only geometric edge identity experiment with localized edit stability
@@ -69,7 +70,8 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 ## Phase C — configuration depth and polish
 
 - [x] Multiple editable levels with exact elevation/position and combined 2D/3D context
-- [ ] Explicit inter-level connections and level-to-level stairs
+- [x] Explicit target-level stair intent with exact destination elevation and deterministic flight projection
+- [ ] Exact target-edge attachment and spatial alignment for level-to-level stairs
 - [x] Prototype-only deterministic multi-platform projection and quantity aggregation
 - [x] Prototype-only immutable duplicate/remove platform commands with history coverage
 - [x] Controller-approved v3 browser/local-state activation with preserved v2 fallback

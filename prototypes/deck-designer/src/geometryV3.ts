@@ -54,6 +54,7 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
     gradeElevation: normalized.siteContext.gradeElevation,
     railingHeight: platform.construction.railing.height,
     namespaceIds: platform.construction.stairSystems.length > 1 || index > 0,
+    targetPlatformElevations: Object.fromEntries(normalized.platforms.map((item) => [item.id, item.elevation])),
   }));
   const stairOpenings = Object.freeze(stairRoutes.map((route) => route.opening));
   const railSegments = Object.freeze(edges

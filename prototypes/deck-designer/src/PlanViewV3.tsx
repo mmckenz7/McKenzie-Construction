@@ -4,6 +4,7 @@ import type { DeckPlatformGeometryV3 } from "./geometryV3";
 import type { DeckPlatformV3, StairSystemV3 } from "./modelV3";
 import { formatFeetInches } from "./PlanView";
 import type { HouseContextGeometry } from "./houseContextGeometry";
+import { moveRectangularHole, resizeRectangularHole } from "./holeEditorV3";
 
 type Point = Readonly<{ x: number; z: number }>;
 type ContextPlatform = Readonly<{ id: string; elevation: number; footprint: readonly Point[] }>;
@@ -20,6 +21,8 @@ type Props = {
   onSelectEdge: (edgeId: string) => void;
   onSelectHole?: (index: number) => void;
   onSelectContextPlatform?: (platformId: string) => void;
+  onHolePreview?: (index: number, hole: readonly Point[]) => void;
+  onHoleCommit?: (index: number, hole: readonly Point[]) => void;
   onCornerPreview: (index: number, point: Point) => void;
   onCornerCommit: (index: number, point: Point) => void;
   onCancel: () => void;
@@ -42,9 +45,10 @@ export function planEdgeDimensionLabel(edge: Readonly<{ start: Point; end: Point
   });
 }
 
-export function PlanViewV3({ platform, activeStairSystem = null, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, selectedHoleIndex = null, contextPlatforms = [], onSelectEdge, onSelectHole, onSelectContextPlatform, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit }: Props) {
+export function PlanViewV3({ platform, activeStairSystem = null, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, selectedHoleIndex = null, contextPlatforms = [], onSelectEdge, onSelectHole, onSelectContextPlatform, onHolePreview, onHoleCommit, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const segmentDrag = useRef<Readonly<{ index: number; midpoint: Point; outward: Point }> | null>(null);
+  const holeDrag = useRef<Readonly<{ index: number; mode: "move" | number; start: Point; hole: readonly Point[] }> | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const all = [...geometry.footprint, ...contextPlatforms.flatMap((item) => item.footprint), ...geometry.stairTreads.flatMap((tread) => tread.corners), ...geometry.landings.flatMap((landing) => landing.corners), ...houseGeometry.houseWallPanels.flatMap((panel) => [panel.start, panel.end])];
   const minX = Math.min(...all.map((point) => point.x));
@@ -91,6 +95,26 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
     if (!origin || !point) return null;
     return (point.x - origin.midpoint.x) * origin.outward.x + (point.z - origin.midpoint.z) * origin.outward.z;
   };
+  const draggedHole = (event: PointerEvent<SVGCircleElement | SVGRectElement>): readonly Point[] | null => {
+    const drag = holeDrag.current, pointer = localPoint(event);
+    if (!drag || !pointer) return null;
+    if (drag.mode === "move") {
+      const dx = pointer.x - drag.start.x, dz = pointer.z - drag.start.z;
+      return moveRectangularHole(drag.hole, { x: dx, z: dz });
+    }
+    return resizeRectangularHole(drag.hole, drag.mode, pointer);
+  };
+  const selectedHole = selectedHoleIndex === null ? null : platform.region.holes[selectedHoleIndex] ?? null;
+  const selectedHoleCenter = selectedHole ? { x: selectedHole.reduce((sum, point) => sum + point.x, 0) / selectedHole.length, z: selectedHole.reduce((sum, point) => sum + point.z, 0) / selectedHole.length } : null;
+  const nudgeHole = (mode: "move" | number, event: KeyboardEvent<SVGElement>) => {
+    if (!selectedHole || selectedHoleIndex === null) return;
+    const directions: Record<string, Point> = { ArrowLeft: { x: -snapIncrement, z: 0 }, ArrowRight: { x: snapIncrement, z: 0 }, ArrowUp: { x: 0, z: -snapIncrement }, ArrowDown: { x: 0, z: snapIncrement } };
+    const direction = directions[event.key];
+    if (!direction) return;
+    event.preventDefault();
+    const next = mode === "move" ? moveRectangularHole(selectedHole, direction) : resizeRectangularHole(selectedHole, mode, { x: selectedHole[mode].x + direction.x, z: selectedHole[mode].z + direction.z });
+    onHoleCommit?.(selectedHoleIndex, next);
+  };
   return <svg ref={ref} className="plan-svg v3-plan" viewBox={`0 0 ${maxX - minX + margin * 2} ${maxZ - minZ + margin * 2}`} role="img" aria-label={editingEnabled ? `Editable ${geometry.footprint.length}-corner deck outline` : `Railing selection plan with ${geometry.platformEdges.length} deck sides`}>
     <defs><pattern id="v3-grid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#a9b4ad" strokeWidth=".4" /></pattern></defs>
     <rect width="100%" height="100%" fill="url(#v3-grid)" />
@@ -128,6 +152,11 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
       const midpoint = { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 };
       return <rect key={`segment-${index}`} x={x(midpoint.x) - 4.5} y={y(midpoint.z) - 4.5} width="9" height="9" rx="2" className={`segment-move-handle${active === `segment-${index}` ? " active" : ""}`} role="button" tabIndex={0} aria-label={`Move ${planEdgeDimensionLabel(edge).text} side; drag perpendicular to reshape attached sides`} onKeyDown={(event) => { const directions: Record<string, Point> = { ArrowLeft: { x: -1, z: 0 }, ArrowRight: { x: 1, z: 0 }, ArrowUp: { x: 0, z: -1 }, ArrowDown: { x: 0, z: 1 } }; const direction = directions[event.key]; if (!direction) return; const projection = direction.x * edge.outward.x + direction.z * edge.outward.z; if (Math.abs(projection) < .5) return; event.preventDefault(); onSegmentCommit(index, Math.sign(projection) * snapIncrement); }} onPointerDown={(event) => { onSelectEdge(edge.id); event.currentTarget.setPointerCapture(event.pointerId); segmentDrag.current = { index, midpoint, outward: edge.outward }; setActive(`segment-${index}`); }} onPointerMove={(event) => { if (active !== `segment-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const distance = segmentDistance(event); if (distance !== null) onSegmentPreview(index, distance); }} onPointerUp={(event) => { if (active !== `segment-${index}`) return; const distance = segmentDistance(event); if (distance !== null) onSegmentCommit(index, distance); event.currentTarget.releasePointerCapture(event.pointerId); segmentDrag.current = null; setActive(null); }} onPointerCancel={() => { segmentDrag.current = null; setActive(null); onCancel(); }} />;
     })}
+    {editingEnabled && selectedHole && selectedHoleIndex !== null && selectedHoleCenter && <>
+      <rect x={x(selectedHoleCenter.x) - 18} y={y(selectedHoleCenter.z) - 18} width="36" height="36" rx="8" className="cutout-move-hit" role="button" tabIndex={0} aria-label={`Move cutout ${selectedHoleIndex + 1}`} onKeyDown={(event) => nudgeHole("move", event)} onPointerDown={(event) => { const start = localPoint(event); if (!start) return; event.currentTarget.setPointerCapture(event.pointerId); holeDrag.current = { index: selectedHoleIndex, mode: "move", start, hole: selectedHole }; setActive("hole-move"); }} onPointerMove={(event) => { const drag = holeDrag.current; if (drag?.index !== selectedHoleIndex || drag.mode !== "move" || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const hole = draggedHole(event); if (hole) onHolePreview?.(selectedHoleIndex, hole); }} onPointerUp={(event) => { const drag = holeDrag.current; if (drag?.index !== selectedHoleIndex || drag.mode !== "move") return; const hole = draggedHole(event); if (hole) onHoleCommit?.(selectedHoleIndex, hole); event.currentTarget.releasePointerCapture(event.pointerId); holeDrag.current = null; setActive(null); }} onPointerCancel={() => { holeDrag.current = null; setActive(null); onCancel(); }} />
+      <rect x={x(selectedHoleCenter.x) - 6} y={y(selectedHoleCenter.z) - 6} width="12" height="12" rx="3" className="cutout-move-handle" aria-hidden="true" pointerEvents="none" />
+      {selectedHole.map((point, cornerIndex) => <g key={`hole-handle-${cornerIndex}`}><circle cx={x(point.x)} cy={y(point.z)} r="16" className="cutout-resize-hit" role="button" tabIndex={0} aria-label={`Resize cutout ${selectedHoleIndex + 1} from corner ${cornerIndex + 1}`} onKeyDown={(event) => nudgeHole(cornerIndex, event)} onPointerDown={(event) => { const start = localPoint(event); if (!start) return; event.currentTarget.setPointerCapture(event.pointerId); holeDrag.current = { index: selectedHoleIndex, mode: cornerIndex, start, hole: selectedHole }; setActive(`hole-corner-${cornerIndex}`); }} onPointerMove={(event) => { const drag = holeDrag.current; if (drag?.index !== selectedHoleIndex || drag.mode !== cornerIndex || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const hole = draggedHole(event); if (hole) onHolePreview?.(selectedHoleIndex, hole); }} onPointerUp={(event) => { const drag = holeDrag.current; if (drag?.index !== selectedHoleIndex || drag.mode !== cornerIndex) return; const hole = draggedHole(event); if (hole) onHoleCommit?.(selectedHoleIndex, hole); event.currentTarget.releasePointerCapture(event.pointerId); holeDrag.current = null; setActive(null); }} onPointerCancel={() => { holeDrag.current = null; setActive(null); onCancel(); }} /><circle cx={x(point.x)} cy={y(point.z)} r="5.5" className="cutout-resize-handle" aria-hidden="true" pointerEvents="none" /></g>)}
+    </>}
     {editingEnabled && platform.region.outer.map((point, index) => <circle key={index} cx={x(point.x)} cy={y(point.z)} r={active === `corner-${index}` ? 7 : 5.5} className="dimension-handle corner-handle" role="button" tabIndex={0} aria-label={`Editable corner at ${point.x} inches left/right and ${point.z} inches away; drag or use arrow keys`} onKeyDown={(event) => nudgeCorner(index, event)} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive(`corner-${index}`); }} onPointerMove={(event) => { if (active === `corner-${index}` && event.currentTarget.hasPointerCapture(event.pointerId)) { const point = localPoint(event); if (point) onCornerPreview(index, point); } }} onPointerUp={(event) => { if (active !== `corner-${index}`) return; const point = localPoint(event); if (point) onCornerCommit(index, point); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />)}
     {editingEnabled && stair && !stair.locked && stairCenter && <circle cx={x(stairCenter.x)} cy={y(stairCenter.z)} r={active === "stairs" ? 8 : 6.5} className="stair-move-handle" role="button" tabIndex={0} aria-label={`Move ${stair.id} along selected geometric edge`} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive("stairs"); }} onPointerMove={(event) => { if (active === "stairs" && event.currentTarget.hasPointerCapture(event.pointerId)) stairPointer(event, false); }} onPointerUp={(event) => { if (active !== "stairs") return; stairPointer(event, true); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />}
   </svg>;

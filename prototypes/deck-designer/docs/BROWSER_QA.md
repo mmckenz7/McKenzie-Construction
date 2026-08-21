@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-20 direct cutout editing and target-level stair intent
+
+- A selected rectangular cutout now exposes a center move target and four resize targets in the measured plan. The same safe region command drives direct manipulation, arrow-key snapping, and exact numeric fields; a live keyboard pass moved the center from 10 to 10.5 feet and resized the width from 3 to 3.5 feet while quantities updated from the normalized region.
+- A connected landing flight can explicitly select another platform as its destination. The target platform supplies the exact final elevation, while the interface states that target-edge alignment is not inferred and remains for review.
+- Focused geometry coverage confirms an eight-tread connected flight terminates exactly at the recorded 84-inch target elevation. Normalization rejects missing, same-platform, grade-bound, and same-elevation target IDs.
+- At 390 × 844, direct cutout controls, visible Undo, `Connect another level`, the destination selector, and the alignment warning remained available. The browser reported no warnings or errors.
+- Full validation passed 162 tests. The measured bundle is 98.3 KiB initial and 238.6 KiB total gzip under 99/239 KiB ceilings; the 170 KiB largest-chunk ceiling is unchanged.
+
 ## 2026-08-20 flexible landings, levels, cutouts, and visible history
 
 - Added two unfinished midway landings consecutively on one stair system at a 6-foot level; both appeared in the deterministic sequence without requiring the first landing to be finished.

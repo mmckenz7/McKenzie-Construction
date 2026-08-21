@@ -8,6 +8,7 @@ import { migrateDeckDesignToV3, normalizeDeckDesignV3, stableDeckDesignV3Json } 
 import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
 import lShapeLandingFixture from "./fixtures/l-shape-landing.json";
 import multiWallContextFixture from "./fixtures/multi-wall-context.json";
+import { addPlatformLevelV3 } from "../src/platformCommandsV3";
 
 const fixtures = [rectangleFoundationFixture, lShapeLandingFixture, multiWallContextFixture];
 const totalLength = (members: readonly Readonly<{ start: { x: number; z: number }; end: { x: number; z: number } }>[]) =>
@@ -225,5 +226,18 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(new Set(geometry.stairTreads.map((tread) => tread.id)).size).toBe(14);
     expect(geometry.stairTreads.find((tread) => tread.id.includes("merge-up-tread-3"))?.y).toBeCloseTo(platform.elevation);
     expect(geometry.stairTreads.find((tread) => tread.id.includes("merge-down-tread-4"))?.y).toBeCloseTo(base.siteContext.gradeElevation);
+  });
+
+  it("derives a connected flight to the exact elevation of another recorded level", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const added = addPlatformLevelV3(base, "platform-1", "platform-2", 84, { x: 300, z: 0 }).design;
+    const platform = added.platforms[0];
+    const system = { id: "stair-system-1", locked: true, edgeId: platform.edgeConditions.find((condition) => condition.condition === "free")!.edgeId, offset: 48, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [{ id: "landing-1", locked: true, afterRiser: 3, width: 48, depth: 48, turn: "straight" as const, connections: [{ id: "to-platform-2", locked: true, destination: "deck" as const, targetPlatformId: "platform-2", direction: "left" as const, width: 48, treadDepth: 10 }] }] };
+    const design = normalizeDeckDesignV3({ ...added, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [system] } }, added.platforms[1]] });
+    const geometry = derivePlatformGeometryV3(design, platform.id);
+    const connected = geometry.stairTreads.filter((tread) => tread.id.includes("to-platform-2"));
+    expect(connected).toHaveLength(8);
+    expect(connected.at(-1)?.y).toBeCloseTo(84);
+    expect(derivePlatformGeometryV3(design, platform.id)).toEqual(geometry);
   });
 });

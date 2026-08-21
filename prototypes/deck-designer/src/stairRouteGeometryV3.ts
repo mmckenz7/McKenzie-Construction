@@ -35,8 +35,9 @@ export function deriveStairRouteGeometryV3(args: Readonly<{
   gradeElevation: number;
   railingHeight: number;
   namespaceIds: boolean;
+  targetPlatformElevations?: Readonly<Record<string, number>>;
 }>): StairRouteGeometryV3 {
-  const { system, edge, platformElevation, gradeElevation, railingHeight, namespaceIds } = args;
+  const { system, edge, platformElevation, gradeElevation, railingHeight, namespaceIds, targetPlatformElevations = {} } = args;
   const edgeDx = (edge.end.x - edge.start.x) / edge.length;
   const edgeDz = (edge.end.z - edge.start.z) / edge.length;
   const onEdge = (distance: number) => point(edge.start.x + edgeDx * distance, edge.start.z + edgeDz * distance);
@@ -58,19 +59,22 @@ export function deriveStairRouteGeometryV3(args: Readonly<{
   let flightIndex = 0;
 
   const addConnectedFlight = (connection: StairLandingConnectionV3, branchOrigin: PolygonPoint, branchDirection: PolygonPoint, landingElevation: number, afterRiser: number) => {
-    const count = connection.destination === "grade" ? totalRisers - afterRiser : afterRiser;
+    const targetElevation = connection.destination === "grade" ? gradeElevation : connection.targetPlatformId ? targetPlatformElevations[connection.targetPlatformId] : platformElevation;
+    if (targetElevation === undefined) throw new RangeError(`Destination platform ${connection.targetPlatformId} has no recorded elevation.`);
+    const connectionRise = targetElevation - landingElevation;
+    const count = Math.ceil(Math.abs(connectionRise) / system.maxRiserHeight);
     if (count <= 0) return;
     const widthDirection = point(-branchDirection.z, branchDirection.x);
     const flightRun = count * connection.treadDepth;
-    const endElevation = connection.destination === "grade" ? gradeElevation : platformElevation;
-    const elevationDirection = connection.destination === "grade" ? -1 : 1;
+    const endElevation = targetElevation;
+    const actualConnectionRise = connectionRise / count;
     for (let index = 0; index < count; index += 1) {
       const center = point(branchOrigin.x + branchDirection.x * connection.treadDepth * (index + .5), branchOrigin.z + branchDirection.z * connection.treadDepth * (index + .5));
       const alongX = widthDirection.x * connection.width / 2;
       const alongZ = widthDirection.z * connection.width / 2;
       const outX = branchDirection.x * connection.treadDepth / 2;
       const outZ = branchDirection.z * connection.treadDepth / 2;
-      treads.push(Object.freeze({ id: `${root}${connection.id}-tread-${index + 1}`, x: center.x, z: center.z, y: landingElevation + elevationDirection * actualRise * (index + 1), width: connection.width, depth: connection.treadDepth, rise: actualRise, rotationY: -Math.atan2(widthDirection.z, widthDirection.x), corners: Object.freeze([
+      treads.push(Object.freeze({ id: `${root}${connection.id}-tread-${index + 1}`, x: center.x, z: center.z, y: landingElevation + actualConnectionRise * (index + 1), width: connection.width, depth: connection.treadDepth, rise: Math.abs(actualConnectionRise), rotationY: -Math.atan2(widthDirection.z, widthDirection.x), corners: Object.freeze([
         point(center.x - alongX - outX, center.z - alongZ - outZ), point(center.x + alongX - outX, center.z + alongZ - outZ),
         point(center.x + alongX + outX, center.z + alongZ + outZ), point(center.x - alongX + outX, center.z - alongZ + outZ),
       ]) }));

@@ -180,6 +180,10 @@ button:hover { transform: translateY(-1px); }
 .plan-hole { fill: #eef2ec; stroke: #b56d37; stroke-width: 2.5px; cursor: pointer; }
 .plan-hole.selected { fill: #fff2bf; stroke: #1f5643; stroke-width: 4px; }
 .plan-context-platform { fill: #cad5cc; fill-opacity: .72; stroke: #6c7f74; stroke-width: 2px; stroke-dasharray: 7 5; cursor: pointer; }
+.cutout-move-handle { fill: var(--lime); stroke: #24543f; stroke-width: 2.5px; cursor: grab; touch-action: none; }
+.cutout-resize-handle { fill: white; stroke: #b56d37; stroke-width: 2.5px; cursor: nwse-resize; touch-action: none; }
+.cutout-move-hit, .cutout-resize-hit { fill: transparent; pointer-events: all; cursor: grab; touch-action: none; }
+.cutout-move-hit:focus, .cutout-resize-hit:focus { outline: none; stroke: #0b5fc6; stroke-width: 2px; }
 .automatic-standard-note { display: grid; gap: 3px; padding: 9px; border-left: 3px solid #6f8879; border-radius: 5px; background: #e2eae4; }
 .automatic-standard-note strong { color: #29463a; font-size: 10px; }
 .automatic-standard-note small { color: #5a6a61; font-size: 9px; line-height: 1.4; }
@@ -323,7 +327,7 @@ button:hover { transform: translateY(-1px); }
 .card-title span { display: block; font-size: 12px; font-weight: 700; }
 .card-title small { color: #78837d; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
 .card-title strong { font-size: 10px; color: #637069; }
-.plan-svg { width: 100%; height: auto; min-height: 0; flex: 1; }
+.plan-svg { width: 100%; height: auto; min-height: 0; flex: 1; touch-action: none; }
 .plan-platform { fill: #d6b590; stroke: #263d33; stroke-width: 1.5; }
 .plan-house-wall { stroke: #c8c2b5; stroke-width: 8; }
 .plan-house-opening { stroke: #6b8277; stroke-width: 5; stroke-dasharray: 3 1; }

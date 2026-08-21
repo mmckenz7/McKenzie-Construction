@@ -100,4 +100,13 @@ describe("isolated DeckDesign v3 migration spike", () => {
     expect(() => normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings: [{ ...landing, connections: [{ id: "duplicate-side", locked: true, destination: "grade", direction: landing.turn, width: system.width, treadDepth: 10 }] }] }] } }] })).toThrow(/different open sides/i);
     expect(() => normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings: [{ ...landing, afterRiser: 0, connections: [{ id: "deck-at-deck", locked: true, destination: "deck", direction: "left", width: system.width, treadDepth: 10 }] }] }] } }] })).toThrow(/below deck elevation/i);
   });
+
+  it("requires an explicit level connection to reference another existing platform", () => {
+    const migrated = migrateDeckDesignToV3(lShapeLandingFixture.design);
+    const platform = migrated.platforms[0], system = platform.construction.stairSystems[0], landing = system.landings[0];
+    const connection = { id: "level-link", locked: true, destination: "deck" as const, direction: "left" as const, width: system.width, treadDepth: 10 };
+    const withConnection = (targetPlatformId: string) => ({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{ ...system, landings: [{ ...landing, connections: [{ ...connection, targetPlatformId }] }] }] } }] });
+    expect(() => normalizeDeckDesignV3(withConnection("platform-1"))).toThrow(/another stable platform/i);
+    expect(() => normalizeDeckDesignV3(withConnection("missing-level"))).toThrow(/does not exist/i);
+  });
 });
