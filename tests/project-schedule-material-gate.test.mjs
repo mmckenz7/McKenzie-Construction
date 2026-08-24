@@ -47,6 +47,25 @@ test("project and schedule APIs expose the same material-gate state", () => {
   assert.match(schedulePage, /\? "Not required"/);
 });
 
+test("ready schedules have one explicit calculated-start confirmation", () => {
+  assert.match(
+    form,
+    /scheduleStatus !==[\s\S]*"ready_to_confirm"/,
+  );
+  assert.match(
+    form,
+    /confirmedConstructionStart:[\s\S]*readiness\.calculatedConstructionStart/,
+  );
+  assert.match(
+    form,
+    /scheduleStatus: "confirmed"/,
+  );
+  assert.match(
+    form,
+    /Confirm calculated construction start/,
+  );
+});
+
 test("the database bypasses only the material gate and preserves every other readiness gate", () => {
   assert.match(
     migration,

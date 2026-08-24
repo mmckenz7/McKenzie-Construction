@@ -117,15 +117,10 @@ export function ProjectScheduleReadiness({
     void loadReadiness();
   }, [projectId]);
 
-  async function saveReadiness(
-    event: FormEvent<HTMLFormElement>,
+  async function persistReadiness(
+    nextReadiness: Readiness,
+    successMessage: string,
   ) {
-    event.preventDefault();
-
-    if (!readiness) {
-      return;
-    }
-
     setSaving(true);
     setMessage("");
 
@@ -140,37 +135,37 @@ export function ProjectScheduleReadiness({
               "application/json",
           },
           body: JSON.stringify({
-            hasDemo: readiness.hasDemo,
+            hasDemo: nextReadiness.hasDemo,
             customerReady:
-              readiness.customerReady,
+              nextReadiness.customerReady,
             permitReady:
-              readiness.permitReady,
+              nextReadiness.permitReady,
             dumpsterReady:
-              readiness.dumpsterReady,
+              nextReadiness.dumpsterReady,
             siteAccessReady:
-              readiness.siteAccessReady,
+              nextReadiness.siteAccessReady,
             installerEarliestDemoStart:
-              readiness.installerEarliestDemoStart,
+              nextReadiness.installerEarliestDemoStart,
             installerEarliestConstructionStart:
-              readiness.installerEarliestConstructionStart,
+              nextReadiness.installerEarliestConstructionStart,
             expectedDemoDurationDays:
-              readiness.expectedDemoDurationDays,
+              nextReadiness.expectedDemoDurationDays,
             expectedTotalDurationDays:
-              readiness.expectedTotalDurationDays,
+              nextReadiness.expectedTotalDurationDays,
             materialsNotRequired:
-              readiness.materialsNotRequired,
+              nextReadiness.materialsNotRequired,
             confirmedMaterialDeliveryDate:
-              readiness.confirmedMaterialDeliveryDate,
+              nextReadiness.confirmedMaterialDeliveryDate,
             deliveryBufferWorkdays:
-              readiness.deliveryBufferWorkdays,
+              nextReadiness.deliveryBufferWorkdays,
             confirmedDemoStart:
-              readiness.confirmedDemoStart,
+              nextReadiness.confirmedDemoStart,
             confirmedConstructionStart:
-              readiness.confirmedConstructionStart,
+              nextReadiness.confirmedConstructionStart,
             scheduleStatus:
-              readiness.scheduleStatus,
+              nextReadiness.scheduleStatus,
             schedulingNotes:
-              readiness.schedulingNotes,
+              nextReadiness.schedulingNotes,
           }),
         },
       );
@@ -186,8 +181,8 @@ export function ProjectScheduleReadiness({
         return;
       }
 
-      setMessage("Schedule updated.");
       await loadReadiness();
+      setMessage(successMessage);
     } catch {
       setMessage(
         "Could not save schedule readiness.",
@@ -195,6 +190,46 @@ export function ProjectScheduleReadiness({
     } finally {
       setSaving(false);
     }
+  }
+
+  async function saveReadiness(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!readiness) {
+      return;
+    }
+
+    await persistReadiness(
+      readiness,
+      "Schedule updated.",
+    );
+  }
+
+  async function confirmCalculatedStart() {
+    if (
+      !readiness ||
+      readiness.scheduleStatus !==
+        "ready_to_confirm" ||
+      !readiness.calculatedConstructionStart
+    ) {
+      return;
+    }
+
+    const confirmedReadiness = {
+      ...readiness,
+      confirmedConstructionStart:
+        readiness.calculatedConstructionStart,
+      scheduleStatus: "confirmed",
+    };
+
+    setReadiness(confirmedReadiness);
+
+    await persistReadiness(
+      confirmedReadiness,
+      "Construction start confirmed.",
+    );
   }
 
   if (loading) {
@@ -277,6 +312,36 @@ export function ProjectScheduleReadiness({
         onSubmit={saveReadiness}
         className="mt-6 space-y-7"
       >
+        {readiness.scheduleStatus ===
+          "ready_to_confirm" &&
+          readiness.calculatedConstructionStart && (
+            <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-5">
+              <p className="text-sm font-bold text-emerald-950">
+                All scheduling requirements are ready.
+              </p>
+
+              <p className="mt-1 text-sm leading-6 text-emerald-800">
+                Confirm the calculated construction start of{" "}
+                {formatDate(
+                  readiness.calculatedConstructionStart,
+                )}.
+              </p>
+
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() =>
+                  void confirmCalculatedStart()
+                }
+                className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-800 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {saving
+                  ? "Confirming..."
+                  : "Confirm calculated construction start"}
+              </button>
+            </div>
+          )}
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <CheckField
             label="Demo included"
