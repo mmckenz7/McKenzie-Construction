@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-24 single-level interface cleanup
+
+- The active designer now labels both measured and model views as single-level and no longer loads the paused terminal-level connection editor.
+- Experimental multi-level documents remain recoverable through **Keep selected level only**; the underlying v3 model, normalization, and deterministic engine tests remain in place for a later redesign.
+- Full validation passed 190 tests, isolation, build, and golden fixtures. The measured bundle is 86.3 KiB initial, 119.9 KiB largest, and 240.9 KiB total gzip under the 99/170/244 KiB ceilings.
+
 ## 2026-08-24 deterministic board direction
 
 - Deck setup now offers plain-language **Left to right** and **House to yard** choices. The selected direction is an authoritative DeckDesign v3 fact; it is not a visual-only toggle.
