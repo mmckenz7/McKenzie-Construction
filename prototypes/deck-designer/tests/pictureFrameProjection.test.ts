@@ -54,11 +54,22 @@ describe("picture-frame board projection groundwork", () => {
     expect(vertical.fieldBoards).not.toEqual(horizontal.fieldBoards);
   });
 
-  it("fails closed for cutouts and collapsed field regions", () => {
-    expect(() => derivePictureFrameBoards({
+  it("adds cutout borders and clips field rows around their expanded clearance", () => {
+    const projection = derivePictureFrameBoards({
       ...rectangle,
       holes: [[{ x: 48, z: 48 }, { x: 96, z: 48 }, { x: 96, z: 96 }, { x: 48, z: 96 }]],
-    }, options)).toThrow(/cutouts/i);
+    }, options);
+    expect(projection.borderBoards).toHaveLength(8);
+    expect(projection.borderBoards.filter((board) => board.id.includes("hole-1"))).toHaveLength(4);
+    expect(projection.fieldBoards.filter((board) => board.start.z >= 42.25 && board.start.z <= 101.75)
+      .every((board) => board.end.x <= 42.25 || board.start.x >= 101.75)).toBe(true);
+  });
+
+  it("fails closed for colliding cutout borders and collapsed field regions", () => {
+    expect(() => derivePictureFrameBoards({
+      ...rectangle,
+      holes: [[{ x: 3, z: 48 }, { x: 51, z: 48 }, { x: 51, z: 96 }, { x: 3, z: 96 }]],
+    }, options)).toThrow(/inside|contain|intersect/i);
     expect(() => derivePictureFrameBoards({
       outer: [{ x: 0, z: 0 }, { x: 48, z: 0 }, { x: 48, z: 24 }, { x: 0, z: 24 }],
       holes: [],

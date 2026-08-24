@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { signedPolygonArea } from "../src/polygon";
-import { deriveInsetPolygon } from "../src/polygonInset";
+import { deriveExpandedPolygon, deriveInsetPolygon } from "../src/polygonInset";
 
 const rectangle = Object.freeze([
   Object.freeze({ x: 0, z: 0 }),
@@ -49,9 +49,22 @@ describe("deterministic polygon inset groundwork", () => {
     expect(deriveInsetPolygon([...rectangle].reverse(), 0)).toEqual(rectangle);
   });
 
+  it("creates a deterministic outward ring for a cutout", () => {
+    const expanded = deriveExpandedPolygon(rectangle, 6);
+    expect(expanded).toEqual([
+      { x: -6, z: -6 },
+      { x: 198, z: -6 },
+      { x: 198, z: 150 },
+      { x: -6, z: 150 },
+    ]);
+    expect(deriveExpandedPolygon([...rectangle].reverse(), 6)).toEqual(expanded);
+    expect(signedPolygonArea(expanded)).toBeGreaterThan(signedPolygonArea(rectangle));
+  });
+
   it("rejects invalid and collapsed inset requests", () => {
     expect(() => deriveInsetPolygon(rectangle, -1)).toThrow(/non-negative/i);
     expect(() => deriveInsetPolygon(rectangle, Number.NaN)).toThrow(/finite/i);
+    expect(() => deriveExpandedPolygon(rectangle, -1)).toThrow(/non-negative/i);
     expect(() => deriveInsetPolygon(rectangle, 72)).toThrow(/collapse|inside/i);
   });
 });

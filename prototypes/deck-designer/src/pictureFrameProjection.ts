@@ -1,5 +1,5 @@
 import { deriveGeometricPolygonEdges } from "./polygon";
-import { deriveInsetPolygon } from "./polygonInset";
+import { deriveExpandedPolygon, deriveInsetPolygon } from "./polygonInset";
 import { normalizePolygonRegion, type PolygonRegion } from "./polygonRegion";
 import {
   derivePolygonMembers,
@@ -22,8 +22,8 @@ const memberLength = (member: ProjectedMember): number =>
 
 /**
  * Projects one mitered outer picture-frame course and clips field boards to a
- * separate inset region. Hole borders remain deliberately unsupported until
- * their inward/outward offset semantics are reviewed.
+ * separate inset region. Cutout borders expand into the usable deck surface;
+ * normalization rejects any border that collides with the outer ring or another cutout.
  */
 export function derivePictureFrameBoards(
   region: PolygonRegion,
@@ -35,9 +35,6 @@ export function derivePictureFrameBoards(
   }>,
 ): PictureFrameBoardProjection {
   const normalized = normalizePolygonRegion(region);
-  if (normalized.holes.length > 0) {
-    throw new RangeError("Picture-frame board projection does not yet support deck cutouts.");
-  }
   if (!Number.isFinite(options.boardWidth) || options.boardWidth < 2 || options.boardWidth > 12) {
     throw new RangeError("Picture-frame board width must be between 2 and 12 inches.");
   }
@@ -47,13 +44,24 @@ export function derivePictureFrameBoards(
 
   const borderCenterline = deriveInsetPolygon(normalized.outer, options.boardWidth / 2);
   const fieldOuter = deriveInsetPolygon(normalized.outer, options.boardWidth + options.gap);
-  const borderBoards = Object.freeze(deriveGeometricPolygonEdges(borderCenterline).map((edge, index) => Object.freeze({
+  const outerBorderBoards = deriveGeometricPolygonEdges(borderCenterline).map((edge, index) => Object.freeze({
     id: `picture-frame-border-${index + 1}`,
     start: edge.start,
     end: edge.end,
-  })));
+  }));
+  const holeBorderBoards = normalized.holes.flatMap((hole, holeIndex) =>
+    deriveGeometricPolygonEdges(deriveExpandedPolygon(hole, options.boardWidth / 2)).map((edge, edgeIndex) => Object.freeze({
+      id: `picture-frame-hole-${holeIndex + 1}-border-${edgeIndex + 1}`,
+      start: edge.start,
+      end: edge.end,
+    })),
+  );
+  const borderBoards = Object.freeze([...outerBorderBoards, ...holeBorderBoards]);
+  const fieldHoles = Object.freeze(normalized.holes.map((hole) =>
+    deriveExpandedPolygon(hole, options.boardWidth + options.gap),
+  ));
   const fieldProjection = derivePolygonMembers(
-    Object.freeze({ outer: fieldOuter, holes: Object.freeze([]) }),
+    normalizePolygonRegion(Object.freeze({ outer: fieldOuter, holes: fieldHoles })),
     options,
   );
   const fieldBoards = Object.freeze(fieldProjection.surfaceBoards.map((board) => Object.freeze({

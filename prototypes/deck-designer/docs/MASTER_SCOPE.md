@@ -87,6 +87,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Exact left/right or house/yard board direction with perpendicular conceptual joists
 - [x] Fail-closed deterministic inward-offset polygon groundwork for future picture-frame borders
 - [x] Prototype-only mitered outer-border and clipped field-board projection groundwork
+- [x] Prototype-only cutout-border expansion with clipped field boards and collision rejection
 - [ ] Picture frames, borders/inlays
 - [ ] Fascia, skirting, post wraps, lighting, drainage, covers/pergolas
 - [ ] Improved framing intent and explainable clash/constraint warnings
