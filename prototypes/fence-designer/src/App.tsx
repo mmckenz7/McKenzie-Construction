@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
 import {
   EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, movePoint, movePointWithLockedFollowing,
-  pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, totalLengthMm,
+  pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, totalLengthMm,
   type FenceDesign, type GateType,
 } from "./model";
 import { loadLocalDesign, saveLocalDesign } from "./storage";
@@ -57,7 +57,7 @@ export default function App() {
   const [gateType, setGateTypeChoice] = useState<GateType>("single");
   const [gateFeet, setGateFeet] = useState("");
   const [gateInches, setGateInches] = useState("0");
-  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [snapEnabled, setSnapEnabled] = useState(false);
   const [lengthLockEnabled, setLengthLockEnabled] = useState(true);
   const [previewPoint, setPreviewPoint] = useState<Readonly<{ xMm: number; yMm: number }> | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -65,12 +65,39 @@ export default function App() {
   const nextId = useRef(1);
   const activePointers = useRef(new Map<number, PlanPointer>());
   const navigationGesture = useRef<NavigationGesture>(null);
+  const navigationWasActive = useRef(false);
   const design = history.present;
 
   const selectedSegment = selection?.type === "segment" ? design.segments.find(({ id }) => id === selection.id) ?? null : null;
   const selectedPoint = selection?.type === "point" ? design.points.find(({ id }) => id === selection.id) ?? null : null;
   const houseSelected = selection?.type === "house";
   const totals = useMemo(() => ({ all: totalLengthMm(design), gate: design.segments.filter(({ kind }) => kind === "gate").reduce((sum, item) => sum + segmentLengthMm(design, item), 0) }), [design]);
+
+  useEffect(() => {
+    const canvas = svgRef.current;
+    if (!canvas) return;
+    const containWheelZoom = (event: WheelEvent) => {
+      event.preventDefault(); event.stopPropagation();
+      const box = canvas.getBoundingClientRect();
+      const focusX = (event.clientX - box.left) / box.width; const focusY = (event.clientY - box.top) / box.height;
+      setView((current) => zoomViewAt(current, Math.exp(event.deltaY * 0.0015), focusX, focusY));
+    };
+    canvas.addEventListener("wheel", containWheelZoom, { passive: false });
+    return () => canvas.removeEventListener("wheel", containWheelZoom);
+  }, []);
+
+  useEffect(() => {
+    const cancelTool = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      if (drag) setHistory((current) => ({ ...current, present: drag.original }));
+      setDrag(null); setMode("select"); setSelection(null); setGateEditorOpen(false); setPreviewPoint(null);
+      activePointers.current.clear(); navigationGesture.current = null; navigationWasActive.current = false; setIsNavigating(false);
+      setNotice("Current tool canceled. Choose Draw, Edit, or Pan when ready.");
+    };
+    window.addEventListener("keydown", cancelTool);
+    return () => window.removeEventListener("keydown", cancelTool);
+  }, [drag]);
 
   const commit = (next: FenceDesign, message: string) => {
     setHistory((current) => pushHistory(current, next));
@@ -108,30 +135,32 @@ export default function App() {
     const focusY = box && clientY !== undefined ? (clientY - box.top) / box.height : 0.5;
     setView((current) => zoomViewAt(current, scale, focusX, focusY));
   };
-  const handleWheel = (event: ReactWheelEvent<SVGSVGElement>) => {
-    event.preventDefault();
-    zoomAt(Math.exp(event.deltaY * 0.0015), event.clientX, event.clientY);
-  };
   const pointerCenter = (pointers: PlanPointer[]) => ({
     clientX: pointers.reduce((sum, pointer) => sum + pointer.clientX, 0) / pointers.length,
     clientY: pointers.reduce((sum, pointer) => sum + pointer.clientY, 0) / pointers.length,
   });
   const pointerDistance = (pointers: PlanPointer[]) => Math.hypot(pointers[0].clientX - pointers[1].clientX, pointers[0].clientY - pointers[1].clientY);
   const startNavigation = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (mode !== "pan") { addAt(event); return; }
+    const temporaryPan = event.metaKey;
+    const touchCandidate = event.pointerType === "touch";
+    if (mode !== "pan" && !temporaryPan && !touchCandidate) { addAt(event); return; }
     event.preventDefault();
     activePointers.current.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
     event.currentTarget.setPointerCapture(event.pointerId);
     const pointers = [...activePointers.current.values()];
+    if (touchCandidate && mode !== "pan" && pointers.length < 2) {
+      navigationGesture.current = null; navigationWasActive.current = false; return;
+    }
     navigationGesture.current = {
       original: view,
       startCenter: pointerCenter(pointers),
       startDistance: pointers.length >= 2 ? pointerDistance(pointers.slice(0, 2)) : null,
     };
+    navigationWasActive.current = true;
     setIsNavigating(true);
   };
   const moveNavigation = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (mode !== "pan" || !activePointers.current.has(event.pointerId) || !navigationGesture.current) return;
+    if (!activePointers.current.has(event.pointerId) || !navigationGesture.current) return;
     activePointers.current.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
     const box = event.currentTarget.getBoundingClientRect();
     const pointers = [...activePointers.current.values()];
@@ -150,11 +179,14 @@ export default function App() {
     setView(panView(gesture.original, currentCenter.clientX - gesture.startCenter.clientX, currentCenter.clientY - gesture.startCenter.clientY, box.width, box.height));
   };
   const endNavigation = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (mode !== "pan") { endDrag(); return; }
-    activePointers.current.delete(event.pointerId);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    navigationGesture.current = null;
-    setIsNavigating(false);
+    if (activePointers.current.has(event.pointerId)) {
+      const pendingTap = event.type === "pointerup" && event.pointerType === "touch" && !navigationWasActive.current && activePointers.current.size === 1;
+      activePointers.current.clear(); navigationGesture.current = null; navigationWasActive.current = false; setIsNavigating(false);
+      if (pendingTap) addAt(event);
+      return;
+    }
+    endDrag();
   };
   const selectSegment = (id: string) => {
     const segment = design.segments.find((item) => item.id === id);
@@ -165,7 +197,7 @@ export default function App() {
     setGateEditorOpen(false); setSelection({ type: "segment", id }); setMode("select"); setNotice("Span selected. Enter an exact length or edit its gate intent.");
   };
   const startDrag = (event: ReactPointerEvent, pointId: string) => {
-    if (mode === "pan") return;
+    if (mode === "pan" || event.metaKey) return;
     event.stopPropagation();
     setGateEditorOpen(false); setSelection({ type: "point", id: pointId }); setMode("select"); setDrag({ pointId, original: design });
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
@@ -181,7 +213,7 @@ export default function App() {
     setHistory((current) => ({ ...current, present }));
   };
   const moveCanvasPointer = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (mode === "pan") { moveNavigation(event); return; }
+    if (activePointers.current.has(event.pointerId)) { moveNavigation(event); return; }
     if (drag) { dragPoint(event); return; }
     if (mode === "draw") setPreviewPoint(nextPointAt(event.clientX, event.clientY));
   };
@@ -197,7 +229,16 @@ export default function App() {
     if (!selectedSegment) return;
     try {
       const length = feetAndInchesToMm(Number(feet), Number(inches));
-      commit(setSegmentLengthMm(design, selectedSegment.id, length), `Span set to ${formatFeetInches(length)}.`);
+      const end = pointById(design, selectedSegment.toPointId);
+      const house = design.house;
+      const endOnHouse = house && (
+        ((end.xMm === house.xMm || end.xMm === house.xMm + house.lengthMm) && end.yMm >= house.yMm && end.yMm <= house.yMm + house.widthMm)
+        || ((end.yMm === house.yMm || end.yMm === house.yMm + house.widthMm) && end.xMm >= house.xMm && end.xMm <= house.xMm + house.lengthMm)
+      );
+      const next = endOnHouse
+        ? setSegmentLengthKeepingEndMm(design, selectedSegment.id, length, lengthLockEnabled)
+        : setSegmentLengthMm(design, selectedSegment.id, length);
+      commit(next, endOnHouse ? `Span set to ${formatFeetInches(length)} while the house connection stayed fixed.` : `Span set to ${formatFeetInches(length)}.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid length."); }
   };
   const addGate = () => {
@@ -263,7 +304,7 @@ export default function App() {
       <div className="zoom-controls" aria-label="Plan zoom"><button aria-label="Zoom out" onClick={() => zoomAt(1.25)}>−</button><span>{Math.round(DEFAULT_VIEW.width / view.width * 100)}%</span><button aria-label="Zoom in" onClick={() => zoomAt(0.8)}>＋</button></div>
       <button onClick={() => setView(fittedView(design))}>Fit plan</button>
       <button className={houseSelected ? "active-tool" : ""} onClick={selectHouse}>{design.house ? "⌂ House" : "＋ House"}</button>
-      <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setPreviewPoint(null); setNotice(snapEnabled ? "Snap is off. Runs now follow the pointer freely." : "Snap is on: points use the 1-foot grid and new runs lock to 45-degree angles."); }}>{snapEnabled ? "⌁ Snap on" : "⌁ Snap off"}</button>
+      <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setPreviewPoint(null); setNotice(snapEnabled ? "Free angle is on. Runs now follow the measured geometry without angle assumptions." : "45°/90° angle assist is on."); }}>{snapEnabled ? "⌁ 45°/90° assist" : "◌ Free angle"}</button>
       <button aria-pressed={lengthLockEnabled} className={lengthLockEnabled ? "active-tool" : ""} onClick={() => { setLengthLockEnabled((current) => !current); setNotice(lengthLockEnabled ? "Length lock is off. Dragging a point can now change connected measurements." : "Length lock is on. Dragging adjusts the angle while preserving the incoming and following measurements."); }}>{lengthLockEnabled ? "🔒 Lengths" : "🔓 Lengths"}</button>
       <span className="toolbar-spacer" />
       <button onClick={save}>Save local</button><button onClick={load}>Load local</button>
@@ -272,10 +313,10 @@ export default function App() {
     <section className="workspace">
       <div className="canvas-shell">
         <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line preview" /> Live run</span><span><i className="key-line gate" /> Gate intent</span></div>
-        <svg ref={svgRef} className={`plan-canvas ${mode}${isNavigating ? " navigating" : ""}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={startNavigation} onPointerMove={moveCanvasPointer} onPointerLeave={() => { if (!drag && !isNavigating) setPreviewPoint(null); }} onPointerUp={endNavigation} onPointerCancel={endNavigation} onWheel={handleWheel} aria-label="Fence drawing plan">
+        <svg ref={svgRef} className={`plan-canvas ${mode}${isNavigating ? " navigating" : ""}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={startNavigation} onPointerMove={moveCanvasPointer} onPointerLeave={() => { if (!drag && !isNavigating) setPreviewPoint(null); }} onPointerUp={endNavigation} onPointerCancel={endNavigation} aria-label="Fence drawing plan">
           <defs><pattern id="grid" width={GRID_MM} height={GRID_MM} patternUnits="userSpaceOnUse"><path d={`M ${GRID_MM} 0 L 0 0 0 ${GRID_MM}`} fill="none" stroke="#d8ddd7" strokeWidth="18" /></pattern></defs>
           <rect x={view.x} y={view.y} width={view.width} height={view.height} fill="url(#grid)" pointerEvents="none" />
-          {design.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode !== "pan") { event.stopPropagation(); selectHouse(); } }}>
+          {design.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode !== "pan" && !event.metaKey) { event.stopPropagation(); selectHouse(); } }}>
             <rect className="house-hit" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <rect className="house-footprint" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <g transform={`translate(${design.house.xMm + design.house.lengthMm / 2} ${design.house.yMm + design.house.widthMm / 2})`} className="house-label"><rect x="-1050" y="-300" width="2100" height="600" rx="180" /><text textAnchor="middle" dominantBaseline="central">HOUSE · {formatFeetInches(design.house.lengthMm)} × {formatFeetInches(design.house.widthMm)}</text></g>
@@ -284,7 +325,7 @@ export default function App() {
             const start = pointById(design, segment.fromPointId); const end = pointById(design, segment.toPointId);
             const midX = (start.xMm + end.xMm) / 2; const midY = (start.yMm + end.yMm) / 2;
             const selected = selection?.type === "segment" && selection.id === segment.id;
-            return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode !== "pan") { event.stopPropagation(); selectSegment(segment.id); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode !== "pan" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
+            return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode !== "pan" && !event.metaKey) { event.stopPropagation(); selectSegment(segment.id); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode !== "pan" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
               <line className="segment-hit" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <line className="segment-line" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <g transform={`translate(${midX} ${midY})`} className="dimension"><rect x="-760" y="-260" width="1520" height="520" rx="180" /><text textAnchor="middle" dominantBaseline="central">{segment.kind === "gate" ? `${segment.gateType === "double" ? "DOUBLE" : "SINGLE"} GATE · ` : ""}{formatFeetInches(segmentLengthMm(design, segment))}</text></g>
@@ -319,6 +360,6 @@ export default function App() {
         <div className="notice" role="status">{notice}</div>
       </aside>
     </section>
-    <footer className="app-footer"><span>{snapEnabled ? "Snap on · 1 ft grid · house edges · 45° runs" : "Snap off · free placement"} · {lengthLockEnabled ? "drag lengths locked" : "free point reshape"}</span><span>Local browser storage only · schema v{design.schemaVersion} · revision {design.revision}</span></footer>
+    <footer className="app-footer"><span>{snapEnabled ? "45°/90° angle assist" : "Free angle · exact lengths take priority"} · {lengthLockEnabled ? "drag lengths locked" : "free point reshape"} · Esc cancels</span><span>Wheel zoom · two-finger or ⌘-drag pan · local only · revision {design.revision}</span></footer>
   </main>;
 }

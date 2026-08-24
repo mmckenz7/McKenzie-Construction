@@ -30,5 +30,10 @@ Validated workflow:
 22. Confirmed the created gate remains selectable and its single/double intent can be edited without introducing products or pricing.
 23. Drew two 18′ 0″ runs, dragged their shared corner with **Lengths** locked, and confirmed both measurements stayed 18′ 0″ while the shared corner rotated and the following endpoint translated with it.
 24. Turned **Lengths** off, dragged the same corner independently, and confirmed the following endpoint stayed fixed while the two adjacent measurements changed to 18′ 8″ and 26′ 3″.
+25. Confirmed **Free angle** is the default and 45°/90° assistance is explicitly optional.
+26. Scrolled the wheel over the plan and confirmed plan scale changed from 100% to 162% while the surrounding page remained at `scrollY = 0`.
+27. Pressed Escape while Draw was active and confirmed the editor returned to neutral Edit state, cleared the selection/preview, and displayed a cancellation message.
+28. Command-dragged in neutral Edit state and confirmed the view box panned while the stored point coordinate remained unchanged. The same navigation path accepts two simultaneous touch pointers for pan/pinch without placing a point.
+29. Deterministic geometry tests confirm a house-connected exact-length edit keeps the house endpoint fixed, preserves the preceding locked run, selects the nearest valid angle solution, and rejects unreachable locked geometry.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

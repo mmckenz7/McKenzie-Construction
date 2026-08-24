@@ -16,15 +16,18 @@ The authoritative document is a single ordered connected path:
 - geometric segment length is Euclidean distance rounded once to the nearest millimeter;
 - total length is the sum of those rounded integer segment lengths;
 - feet/inches are presentation conversions, rounded to the nearest inch;
-- exact-length editing keeps a segment's start fixed and moves its end along the existing bearing. If the moved point also begins the next segment, that following segment changes visibly and deterministically.
+- exact-length editing normally keeps a segment's start fixed and moves its end along the existing bearing;
+- when a segment ends on the house, that endpoint stays fixed. With length lock enabled, the editor solves the nearest circle intersection that preserves the preceding run and changes only the connecting angles; impossible locked geometry is reported instead of moving the house connection or changing a measured length.
 
 The first and last points are open endpoints. Interior points are corners when their path deflection exceeds two degrees. Adding a gate at a point consumes the entered total width from the following span and splits that span, or extends the path along the preceding bearing when the selected point is the final endpoint. A lone point cannot supply a direction. Single/double is opening intent only; it carries no leaf-sizing formula, product, assembly, post, hardware, or pricing rules.
 
 Undo/redo stores validated whole-document snapshots. Stable JSON is schema-versioned and saved only to browser local storage after an explicit Save action. Loading validates and normalizes the document before it becomes active.
 
-Snap is UI editing state rather than a design fact. When enabled, pointer placement rounds to the nearest 305 millimeters (approximately one foot), and a point within 460 millimeters of any house edge lands exactly on that edge so a fence may connect midway along the house. When disabled, pointer placement rounds only to the nearest millimeter and does not magnetize to the house. Exact numeric edits bypass pointer snapping.
+Angle assistance is UI editing state rather than a design fact and defaults off. Free-angle placement rounds only to the nearest millimeter and treats exact lengths as authoritative. When optional 45°/90° assistance is enabled, pointer placement also uses the nearest 305-millimeter grid interval and a point within 460 millimeters of any house edge lands exactly on that edge. Exact numeric edits bypass pointer snapping.
 
 Length lock is also UI editing state. When enabled, dragging the first point translates the whole path. Dragging any later point preserves the incoming segment length, moves that point around the preceding point, and translates every following point by the same delta. This preserves all segment and gate widths while angles change. Disabling length lock restores free single-point movement and allows adjacent dimensions to change.
+
+Interaction state is cancelable with Escape. A non-passive canvas wheel handler prevents plan zoom from scrolling the surrounding OS page. Dedicated Pan mode remains available, while Command-drag temporarily pans from any tool and two simultaneous touch pointers pan/pinch without placing a drawing point.
 
 ## Explicit boundary and next slice
 

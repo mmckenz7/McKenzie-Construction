@@ -285,6 +285,41 @@ export function setSegmentLengthMm(design: FenceDesign, segmentId: string, lengt
   return movePoint(design, end.id, Math.round(start.xMm + ux * lengthMm), Math.round(start.yMm + uy * lengthMm));
 }
 
+export function setSegmentLengthKeepingEndMm(design: FenceDesign, segmentId: string, lengthMm: number, lockPreviousLength: boolean): FenceDesign {
+  if (!Number.isSafeInteger(lengthMm) || lengthMm < 25 || lengthMm > 304_800) throw new RangeError("Segment length must be from 1 inch through 1,000 feet.");
+  const segmentIndex = design.segments.findIndex(({ id }) => id === segmentId);
+  if (segmentIndex < 0) throw new TypeError("Segment does not exist.");
+  const segment = design.segments[segmentIndex];
+  const start = pointById(design, segment.fromPointId);
+  const end = pointById(design, segment.toPointId);
+  let xMm: number; let yMm: number;
+
+  if (lockPreviousLength && segmentIndex > 0) {
+    const previous = design.points[segmentIndex - 1];
+    const incomingLength = Math.hypot(start.xMm - previous.xMm, start.yMm - previous.yMm);
+    const centers = Math.hypot(end.xMm - previous.xMm, end.yMm - previous.yMm);
+    if (incomingLength === 0 || centers === 0 || centers > incomingLength + lengthMm || centers < Math.abs(incomingLength - lengthMm)) {
+      throw new RangeError("Those locked lengths cannot reach the fixed house point. Unlock Lengths or adjust another corner first.");
+    }
+    const along = (incomingLength ** 2 - lengthMm ** 2 + centers ** 2) / (2 * centers);
+    const height = Math.sqrt(Math.max(0, incomingLength ** 2 - along ** 2));
+    const ux = (end.xMm - previous.xMm) / centers; const uy = (end.yMm - previous.yMm) / centers;
+    const baseX = previous.xMm + along * ux; const baseY = previous.yMm + along * uy;
+    const candidates = [
+      { xMm: Math.round(baseX - height * uy), yMm: Math.round(baseY + height * ux) },
+      { xMm: Math.round(baseX + height * uy), yMm: Math.round(baseY - height * ux) },
+    ];
+    const chosen = candidates.sort((first, second) => Math.hypot(first.xMm - start.xMm, first.yMm - start.yMm) - Math.hypot(second.xMm - start.xMm, second.yMm - start.yMm))[0];
+    xMm = chosen.xMm; yMm = chosen.yMm;
+  } else {
+    const current = Math.hypot(start.xMm - end.xMm, start.yMm - end.yMm);
+    const ux = current === 0 ? -1 : (start.xMm - end.xMm) / current;
+    const uy = current === 0 ? 0 : (start.yMm - end.yMm) / current;
+    xMm = Math.round(end.xMm + ux * lengthMm); yMm = Math.round(end.yMm + uy * lengthMm);
+  }
+  return movePoint(design, start.id, xMm, yMm);
+}
+
 export function pointRole(design: FenceDesign, pointId: string): "open endpoint" | "corner" | "inline" {
   const index = design.points.findIndex(({ id }) => id === pointId);
   if (index < 0) throw new TypeError("Point does not exist.");

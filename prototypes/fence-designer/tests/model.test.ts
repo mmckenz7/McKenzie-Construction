@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, movePoint, movePointWithLockedFollowing,
-  normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint,
+  normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint,
   stableDesignJson, totalLengthMm,
 } from "../src/model";
 
@@ -27,6 +27,22 @@ describe("deterministic fence geometry", () => {
     expect(edited.points[1]).toMatchObject({ xMm: 3_810, yMm: 0 });
     expect(segmentLengthMm(edited, edited.segments[0])).toBe(3_810);
     expect(segmentLengthMm(edited, edited.segments[1])).toBe(Math.round(Math.hypot(762, 3_048)));
+  });
+
+  it("solves a new angle while keeping a segment end and its preceding length fixed", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: 3_000, yMm: 0 }, "segment-1");
+    design = addPoint(design, { id: "point-3", xMm: 3_000, yMm: 4_000 }, "segment-2");
+    const edited = setSegmentLengthKeepingEndMm(design, "segment-2", 3_000, true);
+    expect(edited.points[2]).toEqual(design.points[2]);
+    expect(segmentLengthMm(edited, edited.segments[0])).toBe(3_000);
+    expect(segmentLengthMm(edited, edited.segments[1])).toBe(3_000);
+    expect(edited.points[1]).not.toEqual(design.points[1]);
+  });
+
+  it("reports when locked geometry cannot reach a fixed endpoint", () => {
+    const design = rectangleCorner();
+    expect(() => setSegmentLengthKeepingEndMm(design, "segment-2", 305, true)).toThrow(/cannot reach/);
   });
 
   it("recalculates connected lengths when a point moves", () => {
