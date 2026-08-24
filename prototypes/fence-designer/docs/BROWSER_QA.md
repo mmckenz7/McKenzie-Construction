@@ -2,7 +2,7 @@
 
 Date: 2026-08-24
 
-Environment: local Vite development server in the Codex in-app browser.
+Environment: local Vite development server and local McKenzie OS development server in the Codex in-app browser.
 
 Validated workflow:
 
@@ -19,5 +19,7 @@ Validated workflow:
 11. Toggled snap off/on and confirmed the visible mode and millimeter/grid behavior.
 12. With snap on, placed a fence point near the middle of the house's top edge and confirmed its accepted plan coordinate landed exactly on that edge (`yMm = 0`).
 13. Confirmed the house footprint, midpoint connection path, controls, labels, and selection feedback were visually clear, then removed all QA measurements from the open design.
+14. Confirmed the embedded OS route is registered at `/sales/fence-designer`, is visible as **Fence Measure** in Sales navigation, and redirects signed-out visitors to `/login?next=%2Fsales%2Ffence-designer`.
+15. Confirmed the scoped designer stylesheet still renders the full desktop workspace correctly without applying its generic button, input, or layout rules outside the designer root.
 
-Repository validation note: the default Turbopack build could not bind an internal CSS-worker port in the managed environment. The supported webpack production build completed successfully, including TypeScript and all 76 static pages.
+Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

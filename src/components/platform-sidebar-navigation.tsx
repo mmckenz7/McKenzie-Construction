@@ -16,7 +16,7 @@ const groups = [
     label: "Sales",
     href: "/sales",
     items: [
-      ["Dashboard", "/sales"], ["Leads", "/sales/leads"], ["Customers", "/sales/customers"], ["Estimates", "/sales/estimates"], ["Communications", "/sales/communications"],
+      ["Dashboard", "/sales"], ["Leads", "/sales/leads"], ["Customers", "/sales/customers"], ["Estimates", "/sales/estimates"], ["Fence Measure", "/sales/fence-designer"], ["Communications", "/sales/communications"],
     ],
   },
   {

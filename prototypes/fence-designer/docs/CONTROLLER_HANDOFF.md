@@ -11,6 +11,8 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 - `src/storage.ts`: explicit browser-local persistence.
 - `src/parent-build-tooling.d.ts`: type-only declarations that let the parent Next.js check this nested package without installing prototype tooling at the repository root.
 - `src/App.tsx` and `src/styles.css`: touch-friendly SVG editor and inspector.
+- `src/app/sales/fence-designer/page.tsx` (repository root): thin OS route adapter that renders the prototype inside the existing protected Sales layout.
+- `src/components/platform-sidebar-navigation.tsx` (repository root): adds the **Fence Measure** entry to Sales navigation.
 - `tests/`: deterministic geometry, edits, totals, topology, history, serialization, and storage coverage.
 - `scripts/check-isolation.mjs`: prevents source imports outside the prototype, Supabase references, environment access, and network primitives.
 - `docs/ARCHITECTURE.md`: scope, measurement contract, boundary, and deferred calibration slice.
@@ -29,7 +31,7 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 - Deck Designer: read-only interaction reference only; no import, copy, runtime dependency, or shared persistence.
 - Estimating Core: none.
 - Material Catalog: none.
-- Mission Control: none.
+- Mission Control: no data or workflow dependency. The tool uses only the existing authenticated Sales shell and shared sidebar navigation.
 - Runtime packages: React and Vite within the isolated prototype; Vitest and TypeScript for validation.
 
 ## Validation
@@ -39,7 +41,8 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 - Prototype isolation guard passed.
 - Prototype production build passed.
 - Browser QA passed for house dimensions, midpoint house-edge snapping, snap on/off, draw, exact edit, gate intent, drag, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
-- Repository production build passed with the supported webpack builder, including a Vercel-equivalent check with the nested prototype `node_modules` absent. Default local Turbopack was blocked only by the managed environment denying its internal CSS-worker port.
+- The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
+- Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 
 ## Risks and limits
 

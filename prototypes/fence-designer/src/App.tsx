@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
 import {
@@ -140,7 +142,7 @@ export default function App() {
     } catch (error) { setNotice(error instanceof Error ? `Saved layout was not opened: ${error.message}` : "Saved layout was not opened."); }
   };
 
-  return <main>
+  return <main className="fence-designer">
     <header className="app-header">
       <div><p className="eyebrow">McKenzie OS · isolated prototype</p><h1>Fence Visual Measure</h1><p>Draw the property-side path. Measurements stay local and contain no pricing or product rules.</p></div>
       <div className="total-card"><span>Total measured length</span><strong>{formatFeetInches(totals.all)}</strong><small>{design.segments.length} span{design.segments.length === 1 ? "" : "s"}{totals.gate ? ` · ${formatFeetInches(totals.gate)} gate intent` : ""}</small></div>
