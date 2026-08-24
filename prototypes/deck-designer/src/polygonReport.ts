@@ -1,6 +1,7 @@
 import { derivePolygonEdges, type PolygonPoint } from "./polygon";
 import { normalizePolygonRegion, polygonRegionArea, type PolygonRegion } from "./polygonRegion";
 import { derivePolygonMembers } from "./polygonProjection";
+import type { DeckBoardDirection } from "./polygonProjection";
 
 export type ProjectionQuantityClass = "takeoff_candidate" | "visualization";
 export type ProjectionQuantity = Readonly<{
@@ -44,7 +45,7 @@ const perimeter = (points: readonly PolygonPoint[]): number =>
 export function derivePolygonProjectionReport(
   regionId: string,
   region: PolygonRegion,
-  options: Readonly<{ boardWidth: number; gap: number; joistSpacing: number }>,
+  options: Readonly<{ boardWidth: number; gap: number; joistSpacing: number; boardDirection?: DeckBoardDirection }>,
 ): PolygonProjectionReport {
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(regionId)) {
     throw new TypeError("Region ID must be a stable lowercase identifier of 1 to 64 characters.");

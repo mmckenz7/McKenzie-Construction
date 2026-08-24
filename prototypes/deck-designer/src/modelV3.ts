@@ -11,6 +11,7 @@ import {
   type PolygonPoint,
 } from "./polygon";
 import { normalizePolygonRegion, type PolygonRegion } from "./polygonRegion";
+import type { DeckBoardDirection } from "./polygonProjection";
 
 export type DeckPlatformV3 = Readonly<{
   id: string;
@@ -22,7 +23,7 @@ export type DeckPlatformV3 = Readonly<{
     attachment: HouseAttachment | "none";
   }>[];
   construction: Readonly<{
-    decking: DeckDesign["construction"]["decking"];
+    decking: DeckDesign["construction"]["decking"] & Readonly<{ direction: DeckBoardDirection }>;
     framing: DeckDesign["construction"]["framing"];
     railing: Readonly<{ height: number; enabledEdgeIds: readonly string[] }>;
     stairSystems: readonly StairSystemV3[];
@@ -133,7 +134,7 @@ function migrateNormalizedV2(design: DeckDesign): DeckDesignV3 {
       attachment: edge.id === houseEdgeId ? houseAttachment : "none" as const,
     }))),
     construction: constructionWithDerivedLegacyStairs({
-      decking: design.construction.decking,
+      decking: Object.freeze({ ...design.construction.decking, direction: "left_right" as const }),
       framing: design.construction.framing,
       railing: Object.freeze({
         height: design.construction.railing.height,
@@ -274,6 +275,10 @@ function normalizePlatformV3(
     },
     metadata: design.metadata,
   });
+  const direction = platform.construction.decking.direction ?? "left_right";
+  if (direction !== "left_right" && direction !== "house_yard") {
+    throw new TypeError("V3 board direction must be left/right or house/yard.");
+  }
   if (!Array.isArray(platform.construction.railing.enabledEdgeIds) ||
       new Set(platform.construction.railing.enabledEdgeIds).size !== platform.construction.railing.enabledEdgeIds.length) {
     throw new RangeError("V3 railing edge references must be a unique list.");
@@ -396,7 +401,7 @@ function normalizePlatformV3(
     region,
     edgeConditions,
     construction: constructionWithDerivedLegacyStairs({
-      decking: shared.construction.decking,
+      decking: Object.freeze({ ...shared.construction.decking, direction }),
       framing: shared.construction.framing,
       railing: Object.freeze({
         height: shared.construction.railing.height,

@@ -16,6 +16,7 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Authoritative DeckDesign v3 JSON in inches with deterministic migration from local v1/v2 files
 - Exact width, projection, and deck-surface elevation inputs
 - Deterministic 2D plan, procedural 3D, and basic quantities
+- Exact left/right or house/yard board direction recorded in v3 and shared by 2D, 3D, conceptual joists, and quantities
 - Simple decking, joists, beam, posts, and railings
 - Multiple independently locked conceptual stair systems on free edges, each with its own explicit railing opening
 - Deterministic conceptual stair side-stringer paths in 2D, 3D, and quantities

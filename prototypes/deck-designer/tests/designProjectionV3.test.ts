@@ -71,4 +71,19 @@ describe("v3 design-level deterministic projection", () => {
     const second = stableDeckDesignProjectionV3Json(deriveDeckDesignProjectionV3(design));
     expect(second).toBe(first);
   });
+
+  it("uses the recorded board direction for geometry and traceable quantities", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const rotated = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{ ...platform, construction: { ...platform.construction, decking: { ...platform.construction.decking, direction: "house_yard" } } }],
+    });
+    const originalProjection = deriveDeckDesignProjectionV3(base);
+    const rotatedProjection = deriveDeckDesignProjectionV3(rotated);
+    expect(rotatedProjection.designFingerprint).not.toBe(originalProjection.designFingerprint);
+    expect(rotatedProjection.platforms[0].surface.quantities.find((line) => line.key === "decking-linear-feet")?.sourceGeometry)
+      .not.toEqual(originalProjection.platforms[0].surface.quantities.find((line) => line.key === "decking-linear-feet")?.sourceGeometry);
+    expect(deriveDeckDesignProjectionV3(rotated)).toEqual(rotatedProjection);
+  });
 });

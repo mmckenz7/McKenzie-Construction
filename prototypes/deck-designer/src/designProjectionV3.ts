@@ -54,6 +54,7 @@ export function deriveDeckDesignProjectionV3(design: DeckDesignV3): DeckDesignPr
       surface: derivePolygonProjectionReport(platform.id, platform.region, {
         boardWidth: platform.construction.decking.boardWidth,
         gap: platform.construction.decking.gap,
+        boardDirection: platform.construction.decking.direction,
         joistSpacing: platform.construction.framing.joistSpacing,
       }),
       accessories: deriveDeckAccessoryProjectionV3(normalized, platform.id),

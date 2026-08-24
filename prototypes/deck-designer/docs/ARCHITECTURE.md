@@ -77,7 +77,7 @@ This tracer is not photogrammetry and performs no image analysis or AI calls: im
 }
 ```
 
-The active browser document is DeckDesign v3. Legacy v1/v2 imports migrate to polygon platforms plus geometric edge references. Earlier v3 documents with the former single `stairs` object remain accepted and normalize into one `stairSystems[]` entry. New v3 saves and downloads serialize only `stairSystems[]`; the old single-stair view is derived in memory for compatibility and is never a second authority.
+The active browser document is DeckDesign v3. Legacy v1/v2 imports migrate to polygon platforms plus geometric edge references. Each v3 platform records decking `direction` as `left_right` or `house_yard`; earlier v3 files without the field normalize to `left_right`, preserving their prior projection. The board direction rotates the deterministic board scan lines and their perpendicular conceptual joists together, so plan, 3D, quantities, JSON, fingerprinting, and undo/redo cannot disagree. This is generic geometric intent—not a product, span, fastening, or structural conclusion. Earlier v3 documents with the former single `stairs` object remain accepted and normalize into one `stairSystems[]` entry. New v3 saves and downloads serialize only `stairSystems[]`; the old single-stair view is derived in memory for compatibility and is never a second authority.
 
 ## Deterministic quantity policy
 

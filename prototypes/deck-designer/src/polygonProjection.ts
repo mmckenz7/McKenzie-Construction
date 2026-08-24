@@ -28,6 +28,8 @@ export type PolygonMemberProjection = Readonly<{
   joistLength: number;
 }>;
 
+export type DeckBoardDirection = "left_right" | "house_yard";
+
 const cross = (a: PolygonPoint, b: PolygonPoint, c: PolygonPoint): number =>
   (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
 
@@ -98,7 +100,7 @@ const memberLength = (member: ProjectedMember): number =>
 
 export function derivePolygonMembers(
   region: PolygonRegion,
-  options: Readonly<{ boardWidth: number; gap: number; joistSpacing: number }>,
+  options: Readonly<{ boardWidth: number; gap: number; joistSpacing: number; boardDirection?: DeckBoardDirection }>,
 ): PolygonMemberProjection {
   const normalized = normalizePolygonRegion(region);
   if (!Number.isFinite(options.boardWidth) || options.boardWidth < 2 || options.boardWidth > 12) {
@@ -110,30 +112,51 @@ export function derivePolygonMembers(
   if (!Number.isFinite(options.joistSpacing) || options.joistSpacing < 8 || options.joistSpacing > 24) {
     throw new RangeError("Joist spacing must be between 8 and 24 inches.");
   }
+  const boardDirection = options.boardDirection ?? "left_right";
+  if (boardDirection !== "left_right" && boardDirection !== "house_yard") {
+    throw new TypeError("Board direction must be left/right or house/yard.");
+  }
   const regionBounds = bounds(normalized.outer);
   const height = regionBounds.maxZ - regionBounds.minZ;
   const width = regionBounds.maxX - regionBounds.minX;
   const pitch = options.boardWidth + options.gap;
-  const rowCount = Math.ceil(height / pitch);
+  const horizontalBoards = boardDirection === "left_right";
+  const rowSpan = horizontalBoards ? height : width;
+  const rowCount = Math.ceil(rowSpan / pitch);
   const surfaceBoards = Object.freeze(Array.from({ length: rowCount }, (_, rowIndex) => {
-    const z = Math.min(
-      regionBounds.maxZ - 0.000001,
-      regionBounds.minZ + options.boardWidth / 2 + rowIndex * pitch,
-    );
-    return horizontalRegionIntervalsAt(normalized, z).map((interval, segmentIndex) => Object.freeze({
+    if (horizontalBoards) {
+      const z = Math.min(regionBounds.maxZ - 0.000001, regionBounds.minZ + options.boardWidth / 2 + rowIndex * pitch);
+      return horizontalRegionIntervalsAt(normalized, z).map((interval, segmentIndex) => Object.freeze({
+        id: `deck-board-${rowIndex + 1}-${segmentIndex + 1}`,
+        start: Object.freeze({ x: interval.start, z: Math.round(z * 100) / 100 }),
+        end: Object.freeze({ x: interval.end, z: Math.round(z * 100) / 100 }),
+      }));
+    }
+    const x = Math.min(regionBounds.maxX - 0.000001, regionBounds.minX + options.boardWidth / 2 + rowIndex * pitch);
+    return verticalRegionIntervalsAt(normalized, x).map((interval, segmentIndex) => Object.freeze({
       id: `deck-board-${rowIndex + 1}-${segmentIndex + 1}`,
-      start: Object.freeze({ x: interval.start, z: Math.round(z * 100) / 100 }),
-      end: Object.freeze({ x: interval.end, z: Math.round(z * 100) / 100 }),
-    }));
-  }).flat());
-  const joistBays = Math.ceil(width / options.joistSpacing);
-  const joists = Object.freeze(Array.from({ length: joistBays + 1 }, (_, columnIndex) => {
-    const x = regionBounds.minX + (width * columnIndex) / joistBays;
-    const sampleX = columnIndex === joistBays ? x - 0.000001 : x;
-    return verticalRegionIntervalsAt(normalized, sampleX).map((interval, segmentIndex) => Object.freeze({
-      id: `joist-${columnIndex + 1}-${segmentIndex + 1}`,
       start: Object.freeze({ x: Math.round(x * 100) / 100, z: interval.start }),
       end: Object.freeze({ x: Math.round(x * 100) / 100, z: interval.end }),
+    }));
+  }).flat());
+  const joistSpan = horizontalBoards ? width : height;
+  const joistBays = Math.ceil(joistSpan / options.joistSpacing);
+  const joists = Object.freeze(Array.from({ length: joistBays + 1 }, (_, joistIndex) => {
+    if (horizontalBoards) {
+      const x = regionBounds.minX + (width * joistIndex) / joistBays;
+      const sampleX = joistIndex === joistBays ? x - 0.000001 : x;
+      return verticalRegionIntervalsAt(normalized, sampleX).map((interval, segmentIndex) => Object.freeze({
+        id: `joist-${joistIndex + 1}-${segmentIndex + 1}`,
+        start: Object.freeze({ x: Math.round(x * 100) / 100, z: interval.start }),
+        end: Object.freeze({ x: Math.round(x * 100) / 100, z: interval.end }),
+      }));
+    }
+    const z = regionBounds.minZ + (height * joistIndex) / joistBays;
+    const sampleZ = joistIndex === joistBays ? z - 0.000001 : z;
+    return horizontalRegionIntervalsAt(normalized, sampleZ).map((interval, segmentIndex) => Object.freeze({
+      id: `joist-${joistIndex + 1}-${segmentIndex + 1}`,
+      start: Object.freeze({ x: interval.start, z: Math.round(z * 100) / 100 }),
+      end: Object.freeze({ x: interval.end, z: Math.round(z * 100) / 100 }),
     }));
   }).flat());
   return Object.freeze({

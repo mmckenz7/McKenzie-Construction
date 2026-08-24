@@ -197,6 +197,10 @@ button:hover { transform: translateY(-1px); }
 .cutout-controls > div:first-child strong { font-size: 11px; }
 .cutout-controls > div:first-child small { margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.4; }
 .cutout-controls > button, .cutout-editor > button { min-height: 42px; border-color: #aebbb2; background: white; color: #34473f; font-size: 10px; font-weight: 750; }
+.surface-direction-controls { display: grid; gap: 10px; margin: 16px 0 12px; padding: 12px; border: 1px solid #c4cec7; border-radius: 9px; background: #f4f6f2; }
+.surface-direction-controls > div:first-child strong, .surface-direction-controls > div:first-child small { display: block; }
+.surface-direction-controls > div:first-child strong { font-size: 11px; }
+.surface-direction-controls small { color: var(--muted); font-size: 9px; line-height: 1.4; }
 .cutout-editor { display: grid; gap: 10px; padding-top: 3px; }
 .plan-hole { fill: #eef2ec; stroke: #b56d37; stroke-width: 2.5px; cursor: pointer; }
 .plan-hole.selected { fill: #fff2bf; stroke: #1f5643; stroke-width: 4px; }

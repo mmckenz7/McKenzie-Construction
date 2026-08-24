@@ -1,5 +1,15 @@
 # Browser QA record
 
+## 2026-08-24 deterministic board direction
+
+- Deck setup now offers plain-language **Left to right** and **House to yard** choices. The selected direction is an authoritative DeckDesign v3 fact; it is not a visual-only toggle.
+- Changing direction rotates board segments and the perpendicular conceptual joists through the same polygon/hole projection. The resulting member counts, linear quantities, JSON fingerprint, 2D plan, and 3D surface all update from that one fact.
+- Earlier v3 files without a direction default to the existing left-to-right projection. Unsupported values fail normalization instead of silently choosing an orientation.
+- Live desktop QA changed a 20-by-12-foot deck from 26 left/right board references and 16 conceptual joist references to 42 house/yard board references and 10 perpendicular joist references. The plan and 3D model visibly rotated together.
+- At 390 by 844, both choices remained visible and tappable in one two-button card. Tapping **Left to right** restored horizontal plan boards, updated the live status, and retained Undo. The viewport override was reset after QA.
+- This slice adds no product IDs, prices, span rules, fastening assumptions, migrations, shared models, APIs, or production dependencies.
+- Full validation passed 190 tests, isolation, build, and golden fixtures; the repository-wide Preview-equivalent build also passed. The measured bundle is 88.3 KiB initial, 119.9 KiB largest, and 244.0 KiB total gzip. Total JavaScript is at the current enforced ceiling, so the next UI slice must first reduce or split weight.
+
 ## 2026-08-21 phone-width door selection
 
 - A recorded door now has a wide transparent plan target above the generic house-side and segment handles. Tapping or keyboard-selecting it returns directly to the existing measured door width/offset controls and names the selected opening.

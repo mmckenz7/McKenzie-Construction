@@ -42,9 +42,30 @@ describe("polygon surface projection spike", () => {
     expect(derivePolygonMembers({ outer, holes: [hole] }, { boardWidth: 12, gap: 1, joistSpacing: 24 })).toEqual(projection);
   });
 
+  it("rotates boards and perpendicular joists deterministically", () => {
+    const leftRight = derivePolygonMembers(
+      { outer, holes: [hole] },
+      { boardWidth: 12, gap: 1, joistSpacing: 24, boardDirection: "left_right" },
+    );
+    const houseYard = derivePolygonMembers(
+      { outer, holes: [hole] },
+      { boardWidth: 12, gap: 1, joistSpacing: 24, boardDirection: "house_yard" },
+    );
+    expect(leftRight.surfaceBoards.every((member) => member.start.z === member.end.z)).toBe(true);
+    expect(leftRight.joists.every((member) => member.start.x === member.end.x)).toBe(true);
+    expect(houseYard.surfaceBoards.every((member) => member.start.x === member.end.x)).toBe(true);
+    expect(houseYard.joists.every((member) => member.start.z === member.end.z)).toBe(true);
+    expect(derivePolygonMembers(
+      { outer, holes: [hole] },
+      { boardWidth: 12, gap: 1, joistSpacing: 24, boardDirection: "house_yard" },
+    )).toEqual(houseYard);
+    expect(houseYard.surfaceBoards).not.toEqual(leftRight.surfaceBoards);
+  });
+
   it("rejects projection parameters outside recorded prototype bounds", () => {
     expect(() => derivePolygonMembers({ outer, holes: [] }, { boardWidth: 1, gap: 0.25, joistSpacing: 16 })).toThrow(/Board width/);
     expect(() => derivePolygonMembers({ outer, holes: [] }, { boardWidth: 5.5, gap: 0, joistSpacing: 16 })).toThrow(/Board gap/);
     expect(() => derivePolygonMembers({ outer, holes: [] }, { boardWidth: 5.5, gap: 0.25, joistSpacing: 30 })).toThrow(/Joist spacing/);
+    expect(() => derivePolygonMembers({ outer, holes: [] }, { boardWidth: 5.5, gap: 0.25, joistSpacing: 16, boardDirection: "diagonal" as never })).toThrow(/Board direction/);
   });
 });

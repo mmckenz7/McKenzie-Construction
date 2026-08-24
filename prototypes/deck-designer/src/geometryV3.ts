@@ -45,6 +45,7 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
   const members = derivePolygonMembers(platform.region, {
     boardWidth: platform.construction.decking.boardWidth,
     gap: platform.construction.decking.gap,
+    boardDirection: platform.construction.decking.direction,
     joistSpacing: platform.construction.framing.joistSpacing,
   });
   const stairRoutes = platform.construction.stairSystems.map((system, index) => deriveStairRouteGeometryV3({

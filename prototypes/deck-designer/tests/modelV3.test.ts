@@ -23,6 +23,7 @@ describe("isolated DeckDesign v3 migration spike", () => {
     expect(migrated.platforms[0].edgeConditions.filter((condition) => condition.condition === "house_attachment")).toHaveLength(1);
     expect(migrated.platforms[0].edgeConditions.filter((condition) => condition.condition === "free")).toHaveLength(3);
     expect(migrated.platforms[0].construction.railing.enabledEdgeIds).toHaveLength(3);
+    expect(migrated.platforms[0].construction.decking.direction).toBe("left_right");
     expect(migrated.platforms[0].construction.stairs).toMatchObject({ landingPosition: "top", upperFlightRisers: 3, landingWidth: 48 });
     expect(Object.keys(migrated.platforms[0])).not.toEqual(expect.arrayContaining(["kind", "width", "projection", "cutoutWidth", "cutoutDepth"]));
   });
@@ -46,6 +47,23 @@ describe("isolated DeckDesign v3 migration spike", () => {
     expect(stableDeckDesignV3Json(second)).toBe(stableDeckDesignV3Json(first));
     expect(deckDesignV3Fingerprint(second)).toBe(deckDesignV3Fingerprint(first));
     expect(deckDesignV3Fingerprint(first)).toMatch(/^v3-[0-9a-f]{8}$/);
+  });
+
+  it("defaults older v3 files and preserves an explicit board direction", () => {
+    const migrated = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const older = JSON.parse(stableDeckDesignV3Json(migrated));
+    delete older.platforms[0].construction.decking.direction;
+    expect(migrateDeckDesignToV3(older).platforms[0].construction.decking.direction).toBe("left_right");
+    const platform = migrated.platforms[0];
+    const rotated = normalizeDeckDesignV3({
+      ...migrated,
+      platforms: [{ ...platform, construction: { ...platform.construction, decking: { ...platform.construction.decking, direction: "house_yard" } } }],
+    });
+    expect(rotated.platforms[0].construction.decking.direction).toBe("house_yard");
+    expect(() => normalizeDeckDesignV3({
+      ...migrated,
+      platforms: [{ ...platform, construction: { ...platform.construction, decking: { ...platform.construction.decking, direction: "diagonal" as never } } }],
+    })).toThrow(/board direction/i);
   });
 
   it("defaults older v3 landings to top and validates a recorded midway split", () => {
