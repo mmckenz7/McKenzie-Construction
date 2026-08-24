@@ -9,6 +9,7 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 - `src/model.ts`: prototype-owned integer-millimeter document, validation, geometry, classification, and feet/inches presentation.
 - `src/history.ts`: whole-document undo/redo snapshots.
 - `src/storage.ts`: explicit browser-local persistence.
+- `src/parent-build-tooling.d.ts`: type-only declarations that let the parent Next.js check this nested package without installing prototype tooling at the repository root.
 - `src/App.tsx` and `src/styles.css`: touch-friendly SVG editor and inspector.
 - `tests/`: deterministic geometry, edits, totals, topology, history, serialization, and storage coverage.
 - `scripts/check-isolation.mjs`: prevents source imports outside the prototype, Supabase references, environment access, and network primitives.
@@ -38,7 +39,7 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 - Prototype isolation guard passed.
 - Prototype production build passed.
 - Browser QA passed for draw, exact edit, gate intent, drag, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
-- Repository production build passed with the supported webpack builder. Default Turbopack was blocked only by the managed environment denying its internal CSS-worker port.
+- Repository production build passed with the supported webpack builder, including a Vercel-equivalent check with the nested prototype `node_modules` absent. Default local Turbopack was blocked only by the managed environment denying its internal CSS-worker port.
 
 ## Risks and limits
 
