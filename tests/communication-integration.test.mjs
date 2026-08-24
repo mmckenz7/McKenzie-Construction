@@ -141,6 +141,7 @@ test("unmatched inbox conversations can be matched once to an exact CRM record",
   assert.match(threadControlsRoute, /action === "match"/);
   assert.match(threadControlsRoute, /communicationWorkspaceMatchesSingletonCompany/);
   assert.match(threadControlsRoute, /This conversation is already matched/);
+  assert.match(threadControlsRoute, /Match the conversation before making other changes/);
   assert.match(threadControlsRoute, /source_lead_id/);
   assert.match(threadControlsRoute, /\.is\("lead_id", null\)/);
   assert.match(threadControlsRoute, /\.is\("customer_id", null\)/);
@@ -150,6 +151,7 @@ test("unmatched inbox conversations can be matched once to an exact CRM record",
   assert.match(threadMatch, /Leave vendor, account, and system mail unmatched/);
   assert.match(threadMatch, /action: "match"/);
   assert.match(threadMatch, /Match conversation/);
+  assert.ok(threadPage.indexOf("customerResult.data ? <Link") < threadPage.indexOf("leadResult.data ? <Link"));
 });
 
 test("conversation threads default to newest first with fast navigation and an order selector", () => {

@@ -89,6 +89,12 @@ export async function PATCH(
       { status: 400 },
     );
   }
+  if (action === "match" && (payload.status !== undefined || payload.isRead !== undefined || payload.assignedToId !== undefined)) {
+    return Response.json(
+      { success: false, error: "Match the conversation before making other changes." },
+      { status: 400 },
+    );
+  }
   if (action !== "match" && status === undefined && isRead === undefined && assignedToId === undefined) {
     return Response.json(
       { success: false, error: "Choose a conversation change." },
