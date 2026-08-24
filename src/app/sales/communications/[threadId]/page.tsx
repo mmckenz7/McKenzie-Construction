@@ -7,7 +7,7 @@ import { CommunicationThreadMatch } from "@/components/communication-thread-matc
 import { CommunicationThreadControls } from "@/components/communication-thread-controls";
 import { CommunicationThreadMessages } from "@/components/communication-thread-messages";
 import { TextMessageComposer } from "@/components/text-message-composer";
-import { findInternalThreadParticipant } from "@/lib/communications/thread-classification";
+import { findInternalThreadParticipant, threadCounterpartyAddresses } from "@/lib/communications/thread-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -64,8 +64,9 @@ export default async function CommunicationThreadPage({ params }: ThreadPageProp
     : matchedRecord?.email ?? threadResult.data.participant_addresses[0] ?? null;
   const activeTeam = (teamResult.data ?? []).map((member) => ({ id: String(member.id), name: String(member.name), email: String(member.email ?? "") }));
   const teamMembers = activeTeam.map((member) => ({ id: member.id, name: member.name }));
+  const latestMessage = messagesResult.data?.[0];
   const internalMember = !matchedRecord
-    ? findInternalThreadParticipant(threadResult.data.participant_addresses, activeTeam, [mailboxResult.data?.address])
+    ? findInternalThreadParticipant(threadCounterpartyAddresses(latestMessage), activeTeam, [mailboxResult.data?.address])
     : null;
   const messages = (messagesResult.data ?? []).map((message) => ({
     id: String(message.id),

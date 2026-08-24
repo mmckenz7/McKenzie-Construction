@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CommunicationAutomationControls } from "@/components/communication-automation-controls";
 import { CommunicationThreadControls } from "@/components/communication-thread-controls";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
-import { findInternalThreadParticipant } from "@/lib/communications/thread-classification";
+import { findInternalThreadParticipant, threadCounterpartyAddresses } from "@/lib/communications/thread-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -144,8 +144,17 @@ export default async function CommunicationsPage({
   }));
   const mailboxAddress = mailboxResult.data?.address ?? null;
   const rawThreads = (threadsResult.data ?? []) as InboxThread[];
+  const allInboxMessages = (messagesResult.data ?? []) as Message[];
+  const rawLatestByThread = new Map<string, Message>();
+  for (const message of allInboxMessages) {
+    if (message.thread_id && !rawLatestByThread.has(message.thread_id)) rawLatestByThread.set(message.thread_id, message);
+  }
   const threads = view === "internal"
-    ? rawThreads.filter((thread) => Boolean(findInternalThreadParticipant(thread.participant_addresses, activeTeam, [mailboxAddress])))
+    ? rawThreads.filter((thread) => Boolean(findInternalThreadParticipant(
+      threadCounterpartyAddresses(rawLatestByThread.get(thread.id)),
+      activeTeam,
+      [mailboxAddress],
+    )))
     : rawThreads;
   const matchedThreadIds = new Set(
     threads.map((thread) => thread.id),
@@ -168,7 +177,7 @@ export default async function CommunicationsPage({
     sent_at: null,
     created_at: message.created_at,
   }));
-  const matchedInboxMessages = ((messagesResult.data ?? []) as Message[])
+  const matchedInboxMessages = allInboxMessages
     .filter((message) =>
       Boolean(
         message.thread_id &&
@@ -259,7 +268,7 @@ export default async function CommunicationsPage({
           const lead = thread.lead_id ? leads.get(thread.lead_id) : null;
           const customer = thread.customer_id ? customers.get(thread.customer_id) : null;
           const internalMember = !lead && !customer
-            ? findInternalThreadParticipant(thread.participant_addresses, activeTeam, [mailboxAddress])
+            ? findInternalThreadParticipant(threadCounterpartyAddresses(latest), activeTeam, [mailboxAddress])
             : null;
           const phone = lead?.phone ?? customer?.phone ?? null;
           const matchedName = customer?.customer_name ?? lead?.name ?? internalMember?.name ?? latest?.sender ?? thread.participant_addresses[0] ?? "Conversation";

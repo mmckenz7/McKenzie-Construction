@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { findInternalThreadParticipant } from "../src/lib/communications/thread-classification.ts";
+import { findInternalThreadParticipant, threadCounterpartyAddresses } from "../src/lib/communications/thread-classification.ts";
 
 const inbox = readFileSync("src/app/sales/communications/page.tsx", "utf8");
 const threadPage = readFileSync("src/app/sales/communications/[threadId]/page.tsx", "utf8");
@@ -20,6 +20,22 @@ test("verified team email recognition is exact, normalized, and excludes the sha
   assert.equal(findInternalThreadParticipant(["info@mckenzie-builds.com"], team, ["INFO@MCKENZIE-BUILDS.COM"]), null);
   assert.equal(findInternalThreadParticipant(["someone@mckenzie-builds.com"], team), null);
   assert.equal(findInternalThreadParticipant(["michael@mckenzie-builds.co"], team), null);
+});
+
+test("recognition uses the latest counterparty instead of every address stored on the thread", () => {
+  const inbound = threadCounterpartyAddresses({
+    direction: "inbound",
+    sender: "customer@example.com",
+    recipient: "michael@mckenzie-builds.com",
+  });
+  const outbound = threadCounterpartyAddresses({
+    direction: "outbound",
+    sender: "info@mckenzie-builds.com",
+    recipient: "michael@mckenzie-builds.com",
+  });
+
+  assert.deepEqual(inbound, ["customer@example.com"]);
+  assert.deepEqual(outbound, ["michael@mckenzie-builds.com"]);
 });
 
 test("internal conversations remain unassigned and never enter the CRM matcher", () => {

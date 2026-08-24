@@ -4,6 +4,12 @@ export type InternalParticipant = {
   email: string;
 };
 
+type ThreadMessageParticipant = {
+  direction: string;
+  sender: string;
+  recipient: string;
+};
+
 function normalizedEmail(value: unknown) {
   if (typeof value !== "string") return null;
   const email = value.trim().toLowerCase();
@@ -29,4 +35,10 @@ export function findInternalThreadParticipant(
   }
 
   return null;
+}
+
+export function threadCounterpartyAddresses(message: ThreadMessageParticipant | null | undefined) {
+  if (!message) return [];
+  const address = message.direction === "inbound" ? message.sender : message.recipient;
+  return normalizedEmail(address) ? [address] : [];
 }
