@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CommunicationAutomationControls } from "@/components/communication-automation-controls";
 import { CommunicationThreadControls } from "@/components/communication-thread-controls";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import { findInternalThreadParticipant } from "@/lib/communications/thread-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,7 @@ const views = [
   ["unread", "Unread"],
   ["closed", "Closed"],
   ["archived", "Archived"],
+  ["internal", "Internal"],
   ["sales", "Sales"],
   ["estimating", "Estimating"],
   ["operations", "Operations"],
@@ -119,7 +121,7 @@ export default async function CommunicationsPage({
       .maybeSingle(),
     supabase
       .from("team_members")
-      .select("id,name")
+      .select("id,name,email")
       .eq("status", "active")
       .order("name", { ascending: true }),
   ]);
@@ -135,7 +137,16 @@ export default async function CommunicationsPage({
     </main>;
   }
 
-  const threads = (threadsResult.data ?? []) as InboxThread[];
+  const activeTeam = (teamResult.data ?? []).map((member) => ({
+    id: String(member.id),
+    name: String(member.name),
+    email: String(member.email ?? ""),
+  }));
+  const mailboxAddress = mailboxResult.data?.address ?? null;
+  const rawThreads = (threadsResult.data ?? []) as InboxThread[];
+  const threads = view === "internal"
+    ? rawThreads.filter((thread) => Boolean(findInternalThreadParticipant(thread.participant_addresses, activeTeam, [mailboxAddress])))
+    : rawThreads;
   const matchedThreadIds = new Set(
     threads.map((thread) => thread.id),
   );
@@ -205,7 +216,7 @@ export default async function CommunicationsPage({
   const failedDeliveries = (outboxResult.data ?? []).filter((message) => ["failed", "canceled"].includes(message.status)).length;
   const schedulerSecretReady = Boolean(process.env.COMMUNICATION_PROCESSOR_SECRET || process.env.CRON_SECRET);
   const resendWebhookReady = Boolean(process.env.RESEND_WEBHOOK_SECRET);
-  const teamMembers = (teamResult.data ?? []).map((member) => ({ id: String(member.id), name: String(member.name) }));
+  const teamMembers = activeTeam.map((member) => ({ id: member.id, name: member.name }));
   const teamById = new Map(teamMembers.map((member) => [member.id, member.name]));
 
   return <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6"><div className="mx-auto max-w-7xl">
@@ -247,12 +258,15 @@ export default async function CommunicationsPage({
           const latest = latestByThread.get(thread.id);
           const lead = thread.lead_id ? leads.get(thread.lead_id) : null;
           const customer = thread.customer_id ? customers.get(thread.customer_id) : null;
+          const internalMember = !lead && !customer
+            ? findInternalThreadParticipant(thread.participant_addresses, activeTeam, [mailboxAddress])
+            : null;
           const phone = lead?.phone ?? customer?.phone ?? null;
-          const matchedName = lead?.name ?? customer?.customer_name ?? latest?.sender ?? thread.participant_addresses[0] ?? "Matched customer";
+          const matchedName = customer?.customer_name ?? lead?.name ?? internalMember?.name ?? latest?.sender ?? thread.participant_addresses[0] ?? "Conversation";
           return <article key={thread.id} className="grid gap-3 px-5 py-5 transition hover:bg-slate-50 lg:grid-cols-[170px_1fr_280px]">
             <div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">{thread.provider === "twilio" ? "Text" : "Email"}</span><span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{thread.department}</span>{thread.unread_count ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">{thread.unread_count} new</span> : null}</div><p className="mt-2 text-xs text-slate-500">{timestamp(thread.last_message_at)}</p>{thread.assigned_to_id ? <p className="mt-1 text-xs text-slate-500">{teamById.get(thread.assigned_to_id) ?? "Assigned"}</p> : null}</div>
-            <div className="min-w-0"><Link href={`/communications/${thread.id}`} className="truncate font-semibold text-slate-950 hover:text-blue-700">{thread.subject || "Customer conversation"}</Link><p className="mt-1 text-sm text-slate-600">{matchedName}</p>{!lead && !customer ? <p className="mt-1 text-xs font-semibold text-amber-700">Not matched to a CRM record yet</p> : null}{latest ? <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{latest.body}</p> : null}</div>
-            <div className="flex flex-wrap items-start justify-end gap-2">{phone ? <a href={`tel:${phone}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Device call</a> : null}{lead || customer ? <><Link href={`/communications/${thread.id}#reply`} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white">Reply</Link><CommunicationThreadControls compact threadId={thread.id} status={thread.status} unreadCount={thread.unread_count} assignedToId={thread.assigned_to_id} teamMembers={teamMembers} /></> : <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Match needed</span>}</div>
+            <div className="min-w-0"><Link href={`/communications/${thread.id}`} className="truncate font-semibold text-slate-950 hover:text-blue-700">{thread.subject || "Conversation"}</Link><p className="mt-1 text-sm text-slate-600">{matchedName}</p>{internalMember ? <p className="mt-1 text-xs font-semibold text-blue-700">Internal team conversation</p> : !lead && !customer ? <p className="mt-1 text-xs font-semibold text-amber-700">Not matched to a CRM record yet</p> : null}{latest ? <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{latest.body}</p> : null}</div>
+            <div className="flex flex-wrap items-start justify-end gap-2">{phone ? <a href={`tel:${phone}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Device call</a> : null}{lead || customer ? <><Link href={`/communications/${thread.id}#reply`} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white">Reply</Link><CommunicationThreadControls compact threadId={thread.id} status={thread.status} unreadCount={thread.unread_count} assignedToId={thread.assigned_to_id} teamMembers={teamMembers} /></> : internalMember ? <span className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800">Internal · Unassigned</span> : <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Match needed</span>}</div>
           </article>;
         })}
       </div>}
