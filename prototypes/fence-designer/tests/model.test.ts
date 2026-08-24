@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, movePoint,
+  EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, movePoint, movePointWithLockedFollowing,
   normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint,
   stableDesignJson, totalLengthMm,
 } from "../src/model";
@@ -32,6 +32,28 @@ describe("deterministic fence geometry", () => {
   it("recalculates connected lengths when a point moves", () => {
     const moved = movePoint(rectangleCorner(), "point-2", 1_524, 0);
     expect(totalLengthMm(moved)).toBe(1_524 + Math.round(Math.hypot(1_524, 3_048)));
+  });
+
+  it("rotates a selected point while translating the following chain with every length locked", () => {
+    const design = rectangleCorner();
+    const moved = movePointWithLockedFollowing(design, "point-2", 2_155, 2_155);
+    expect(moved.points).toEqual([
+      { id: "point-1", xMm: 0, yMm: 0 },
+      { id: "point-2", xMm: 2_155, yMm: 2_155 },
+      { id: "point-3", xMm: 2_155, yMm: 5_203 },
+    ]);
+    expect(moved.segments.map((segment) => segmentLengthMm(moved, segment))).toEqual([3_048, 3_048]);
+  });
+
+  it("translates the whole path when the first point moves with lengths locked", () => {
+    const design = rectangleCorner();
+    const moved = movePointWithLockedFollowing(design, "point-1", 500, -250);
+    expect(moved.points).toEqual([
+      { id: "point-1", xMm: 500, yMm: -250 },
+      { id: "point-2", xMm: 3_548, yMm: -250 },
+      { id: "point-3", xMm: 3_548, yMm: 2_798 },
+    ]);
+    expect(totalLengthMm(moved)).toBe(totalLengthMm(design));
   });
 
   it("identifies open endpoints, corners, and inline points", () => {

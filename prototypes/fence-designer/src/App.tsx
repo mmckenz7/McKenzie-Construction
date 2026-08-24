@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from "react";
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
 import {
-  EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, movePoint,
+  EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, movePoint, movePointWithLockedFollowing,
   pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, totalLengthMm,
   type FenceDesign, type GateType,
 } from "./model";
@@ -58,6 +58,7 @@ export default function App() {
   const [gateFeet, setGateFeet] = useState("");
   const [gateInches, setGateInches] = useState("0");
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const [lengthLockEnabled, setLengthLockEnabled] = useState(true);
   const [previewPoint, setPreviewPoint] = useState<Readonly<{ xMm: number; yMm: number }> | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -171,8 +172,13 @@ export default function App() {
   };
   const dragPoint = (event: ReactPointerEvent) => {
     if (!drag) return;
-    const location = toPlan(event.clientX, event.clientY);
-    setHistory((current) => ({ ...current, present: movePoint(drag.original, drag.pointId, location.xMm, location.yMm) }));
+    let location = toPlan(event.clientX, event.clientY);
+    const pointIndex = drag.original.points.findIndex(({ id }) => id === drag.pointId);
+    if (lengthLockEnabled && snapEnabled && pointIndex > 0) location = snapRunEndpoint(drag.original.points[pointIndex - 1], location, true);
+    const present = lengthLockEnabled
+      ? movePointWithLockedFollowing(drag.original, drag.pointId, location.xMm, location.yMm)
+      : movePoint(drag.original, drag.pointId, location.xMm, location.yMm);
+    setHistory((current) => ({ ...current, present }));
   };
   const moveCanvasPointer = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (mode === "pan") { moveNavigation(event); return; }
@@ -185,7 +191,7 @@ export default function App() {
       && current.present.points.find(({ id }) => id === drag.pointId)?.yMm === drag.original.points.find(({ id }) => id === drag.pointId)?.yMm
       ? { ...current, present: drag.original }
       : { past: [...current.past, drag.original], present: current.present, future: [] });
-    setDrag(null); setNotice("Point moved. Connected measurements updated.");
+    setDrag(null); setNotice(lengthLockEnabled ? "Angle adjusted. Locked lengths stayed fixed and the following path moved with the point." : "Point moved. Connected measurements updated.");
   };
   const applyExactLength = () => {
     if (!selectedSegment) return;
@@ -258,6 +264,7 @@ export default function App() {
       <button onClick={() => setView(fittedView(design))}>Fit plan</button>
       <button className={houseSelected ? "active-tool" : ""} onClick={selectHouse}>{design.house ? "⌂ House" : "＋ House"}</button>
       <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setPreviewPoint(null); setNotice(snapEnabled ? "Snap is off. Runs now follow the pointer freely." : "Snap is on: points use the 1-foot grid and new runs lock to 45-degree angles."); }}>{snapEnabled ? "⌁ Snap on" : "⌁ Snap off"}</button>
+      <button aria-pressed={lengthLockEnabled} className={lengthLockEnabled ? "active-tool" : ""} onClick={() => { setLengthLockEnabled((current) => !current); setNotice(lengthLockEnabled ? "Length lock is off. Dragging a point can now change connected measurements." : "Length lock is on. Dragging adjusts the angle while preserving the incoming and following measurements."); }}>{lengthLockEnabled ? "🔒 Lengths" : "🔓 Lengths"}</button>
       <span className="toolbar-spacer" />
       <button onClick={save}>Save local</button><button onClick={load}>Load local</button>
     </nav>
@@ -307,11 +314,11 @@ export default function App() {
         <p className="eyebrow">Selection</p>
         {!selection && <div className="inspector-empty"><h2>No item selected</h2><p>Tap a span for exact length and gate intent. Tap or drag a point to edit the path.</p></div>}
         {houseSelected && <div><h2>House footprint</h2><p>{design.house ? "This measured footprint is visual context only and is excluded from fence totals." : "Add an optional measured house footprint before drawing the fence."}</p><h3 className="field-heading">House length</h3><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseFeet} onChange={(event) => setHouseFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseInches} onChange={(event) => setHouseInches(event.target.value)} /></label></div><h3 className="field-heading">House width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Width feet" inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseWidthFeet} onChange={(event) => setHouseWidthFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseWidthInches} onChange={(event) => setHouseWidthInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyHouseLength}>{design.house ? "Update house footprint" : "Add house footprint"}</button>{design.house && <button className="danger wide" onClick={() => { commit(removeHouseReference(design), "House footprint removed."); setSelection(null); }}>Remove house footprint</button>}<small>With snap on, fence points placed near any house edge land exactly on that edge. This footprint is not a survey or building record.</small></div>}
-        {selectedPoint && <div><h2>{pointRole(design, selectedPoint.id)}</h2><p className="coordinate">X {formatFeetInches(Math.abs(selectedPoint.xMm))} · Y {formatFeetInches(Math.abs(selectedPoint.yMm))}</p><p>Drag this point on the grid, or use it as the start of a measured gate opening.</p><button className="primary wide" onClick={() => { setGateEditorOpen((current) => !current); setNotice("Choose single or double, then enter the total gate opening width."); }}>{gateEditorOpen ? "Cancel add gate" : "＋ Add gate"}</button>{gateEditorOpen && <div className="gate-editor"><label><span>Gate style</span><select aria-label="Gate style" value={gateType} onChange={(event) => setGateTypeChoice(event.target.value as GateType)}><option value="single">Single gate</option><option value="double">Double gate</option></select></label><h3 className="field-heading">Total gate width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Gate width feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={gateFeet} onChange={(event) => setGateFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Gate width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateInches} onChange={(event) => setGateInches(event.target.value)} /></label></div><button className="primary wide" onClick={addGate}>Place gate from this point</button><small>The total width is the full opening. A double gate is recorded as two-leaf intent only.</small></div>}<button className="danger wide" onClick={removeSelection}>Delete point</button></div>}
+        {selectedPoint && <div><h2>{pointRole(design, selectedPoint.id)}</h2><p className="coordinate">X {formatFeetInches(Math.abs(selectedPoint.xMm))} · Y {formatFeetInches(Math.abs(selectedPoint.yMm))}</p><p>{lengthLockEnabled ? "Drag to adjust the angle. The incoming length stays fixed and every following point moves with it." : "Drag this point freely; connected span lengths will change."}</p><button className="primary wide" onClick={() => { setGateEditorOpen((current) => !current); setNotice("Choose single or double, then enter the total gate opening width."); }}>{gateEditorOpen ? "Cancel add gate" : "＋ Add gate"}</button>{gateEditorOpen && <div className="gate-editor"><label><span>Gate style</span><select aria-label="Gate style" value={gateType} onChange={(event) => setGateTypeChoice(event.target.value as GateType)}><option value="single">Single gate</option><option value="double">Double gate</option></select></label><h3 className="field-heading">Total gate width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Gate width feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={gateFeet} onChange={(event) => setGateFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Gate width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateInches} onChange={(event) => setGateInches(event.target.value)} /></label></div><button className="primary wide" onClick={addGate}>Place gate from this point</button><small>The total width is the full opening. A double gate is recorded as two-leaf intent only.</small></div>}<button className="danger wide" onClick={removeSelection}>Delete point</button></div>}
         {selectedSegment && <div><h2>{selectedSegment.kind === "gate" ? `${selectedSegment.gateType === "double" ? "Double" : "Single"} gate` : "Fence span"}</h2><div className="length-readout">{formatFeetInches(segmentLengthMm(design, selectedSegment))}</div>{selectedSegment.kind === "gate" && <label className="select-field"><span>Gate style</span><select value={selectedSegment.gateType ?? "single"} onChange={(event) => commit(setGateType(design, selectedSegment.id, event.target.value as GateType), "Gate style updated.")}><option value="single">Single gate</option><option value="double">Double gate</option></select></label>}<div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyExactLength}>Apply exact length</button><button className="wide" onClick={() => commit(setSegmentKind(design, selectedSegment.id, selectedSegment.kind === "gate" ? "fence" : "gate"), selectedSegment.kind === "gate" ? "Span restored to fence intent." : "Whole span marked as a single gate.")}>{selectedSegment.kind === "gate" ? "Mark as fence" : "Mark whole span as single gate"}</button><small>Gate intent does not imply products, posts, hardware, or pricing.</small></div>}
         <div className="notice" role="status">{notice}</div>
       </aside>
     </section>
-    <footer className="app-footer"><span>{snapEnabled ? "Snap on · 1 ft grid · house edges · 45° runs" : "Snap off · free placement"} · live feet/inches</span><span>Local browser storage only · schema v{design.schemaVersion} · revision {design.revision}</span></footer>
+    <footer className="app-footer"><span>{snapEnabled ? "Snap on · 1 ft grid · house edges · 45° runs" : "Snap off · free placement"} · {lengthLockEnabled ? "drag lengths locked" : "free point reshape"}</span><span>Local browser storage only · schema v{design.schemaVersion} · revision {design.revision}</span></footer>
   </main>;
 }

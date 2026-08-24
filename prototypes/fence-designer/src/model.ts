@@ -164,6 +164,26 @@ export function movePoint(design: FenceDesign, pointId: string, xMm: number, yMm
   return revise(design, { points: design.points.map((point) => point.id === pointId ? Object.freeze({ ...point, xMm, yMm }) : point) });
 }
 
+export function movePointWithLockedFollowing(design: FenceDesign, pointId: string, candidateXMm: number, candidateYMm: number): FenceDesign {
+  integer(candidateXMm, "Candidate point x"); integer(candidateYMm, "Candidate point y");
+  const index = design.points.findIndex(({ id }) => id === pointId);
+  if (index < 0) throw new TypeError("Point does not exist.");
+  const selected = design.points[index];
+  let xMm = candidateXMm; let yMm = candidateYMm;
+  if (index > 0) {
+    const anchor = design.points[index - 1];
+    const lockedLength = Math.hypot(selected.xMm - anchor.xMm, selected.yMm - anchor.yMm);
+    const candidateLength = Math.hypot(candidateXMm - anchor.xMm, candidateYMm - anchor.yMm);
+    if (lockedLength === 0) throw new RangeError("The incoming span needs a measurable length before it can be locked.");
+    const ux = candidateLength === 0 ? (selected.xMm - anchor.xMm) / lockedLength : (candidateXMm - anchor.xMm) / candidateLength;
+    const uy = candidateLength === 0 ? (selected.yMm - anchor.yMm) / lockedLength : (candidateYMm - anchor.yMm) / candidateLength;
+    xMm = Math.round(anchor.xMm + ux * lockedLength);
+    yMm = Math.round(anchor.yMm + uy * lockedLength);
+  }
+  const dx = xMm - selected.xMm; const dy = yMm - selected.yMm;
+  return revise(design, { points: design.points.map((point, pointIndex) => pointIndex < index ? point : Object.freeze({ ...point, xMm: point.xMm + dx, yMm: point.yMm + dy })) });
+}
+
 export function deletePoint(design: FenceDesign, pointId: string, replacementSegmentId: string): FenceDesign {
   const index = design.points.findIndex(({ id }) => id === pointId);
   if (index < 0) throw new TypeError("Point does not exist.");

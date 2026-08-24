@@ -28,5 +28,7 @@ Validated workflow:
 20. At the same pointer position, confirmed **Snap on** locked the prospective run to a horizontal 45-degree increment while **Snap off** followed the free pointer bearing; the live accessible measurement changed from 28′ 10″ to 28′ 11″.
 21. Selected the start point of a 37′ 0″ fence run, opened **Add gate**, chose **Double gate**, entered a 10′ 0″ total width, and confirmed the run split into a labeled 10′ 0″ double-gate opening plus 27′ 0″ of fence while the total remained 37′ 0″.
 22. Confirmed the created gate remains selectable and its single/double intent can be edited without introducing products or pricing.
+23. Drew two 18′ 0″ runs, dragged their shared corner with **Lengths** locked, and confirmed both measurements stayed 18′ 0″ while the shared corner rotated and the following endpoint translated with it.
+24. Turned **Lengths** off, dragged the same corner independently, and confirmed the following endpoint stayed fixed while the two adjacent measurements changed to 18′ 8″ and 26′ 3″.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

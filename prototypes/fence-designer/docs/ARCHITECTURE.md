@@ -2,7 +2,7 @@
 
 ## Scope
 
-This isolated browser prototype turns an explicitly drawn connected fence path into deterministic plan-view measurements. It supports an optional exact-length-and-width house footprint, point placement, point movement and deletion, exact segment-length edits, measured single/double gate openings anchored at a selected point, undo/redo, snap on/off, and local browser save/load. It does not create estimates, quantities, products, labor, prices, customers, or cloud records.
+This isolated browser prototype turns an explicitly drawn connected fence path into deterministic plan-view measurements. It supports an optional exact-length-and-width house footprint, point placement, locked-length chain movement or free point movement, point deletion, exact segment-length edits, measured single/double gate openings anchored at a selected point, undo/redo, snap on/off, and local browser save/load. It does not create estimates, quantities, products, labor, prices, customers, or cloud records.
 
 Everything under `prototypes/fence-designer/` is prototype-owned. Source cannot import outside this directory, access Supabase, read environment variables, or use browser network primitives. No migration or shared domain model is introduced.
 
@@ -23,6 +23,8 @@ The first and last points are open endpoints. Interior points are corners when t
 Undo/redo stores validated whole-document snapshots. Stable JSON is schema-versioned and saved only to browser local storage after an explicit Save action. Loading validates and normalizes the document before it becomes active.
 
 Snap is UI editing state rather than a design fact. When enabled, pointer placement rounds to the nearest 305 millimeters (approximately one foot), and a point within 460 millimeters of any house edge lands exactly on that edge so a fence may connect midway along the house. When disabled, pointer placement rounds only to the nearest millimeter and does not magnetize to the house. Exact numeric edits bypass pointer snapping.
+
+Length lock is also UI editing state. When enabled, dragging the first point translates the whole path. Dragging any later point preserves the incoming segment length, moves that point around the preceding point, and translates every following point by the same delta. This preserves all segment and gate widths while angles change. Disabling length lock restores free single-point movement and allows adjacent dimensions to change.
 
 ## Explicit boundary and next slice
 
