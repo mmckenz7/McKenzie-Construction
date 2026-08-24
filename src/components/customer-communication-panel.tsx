@@ -47,7 +47,7 @@ export function CustomerCommunicationPanel(props: CustomerCommunicationPanelProp
       {props.threads?.length ? <div className="mt-5 border-t border-slate-200 pt-4">
         <p className="text-[11px] font-semibold uppercase tracking-[.16em] text-slate-500">Conversation history</p>
         <div className="mt-2 divide-y divide-slate-200 rounded-lg border border-slate-200">
-          {props.threads.map((thread) => <Link key={thread.id} href={`/sales/communications/${thread.id}`} className="flex min-h-11 items-center justify-between gap-3 bg-white px-3 py-2 text-sm transition hover:bg-slate-50">
+          {props.threads.map((thread) => <Link key={thread.id} href={`/communications/${thread.id}`} className="flex min-h-11 items-center justify-between gap-3 bg-white px-3 py-2 text-sm transition hover:bg-slate-50">
             <span className="min-w-0 truncate font-semibold text-slate-900">{thread.subject || (thread.provider === "twilio" ? "Text conversation" : "Email conversation")}</span>
             <span className="shrink-0 text-xs text-slate-500">{formatConversationDate(thread.last_message_at)}</span>
           </Link>)}

@@ -82,7 +82,6 @@ export default async function CommunicationsPage({
   let threadQuery = supabase
     .from("communication_threads")
     .select("id,provider,subject,department,status,lead_id,customer_id,assigned_to_id,participant_addresses,unread_count,last_message_at")
-    .or("lead_id.not.is.null,customer_id.not.is.null")
     .order("unread_count", { ascending: false })
     .order("last_message_at", { ascending: false })
     .limit(100);
@@ -128,7 +127,7 @@ export default async function CommunicationsPage({
   if (threadsResult.error || messagesResult.error || outboxResult.error || mailboxResult.error || teamResult.error) {
     return <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <p className="text-xs font-bold uppercase tracking-[.18em] text-blue-400">Sales</p>
-      <h1 className="mt-2 text-3xl font-bold">Customer Inbox</h1>
+      <h1 className="mt-2 text-3xl font-bold">Company Inbox</h1>
       <div className="mt-7 rounded-2xl border border-amber-700/40 bg-amber-950/20 p-6 text-amber-100">
         <h2 className="font-bold">Local Microsoft inbox migration required</h2>
         <p className="mt-2 text-sm text-amber-200/80">Apply the local Microsoft 365 inbox migration before using this screen. No remote database was changed.</p>
@@ -183,7 +182,13 @@ export default async function CommunicationsPage({
   const customers = new Map((customersResult.data ?? []).map((customer) => [String(customer.id), customer]));
   const unread = threads.reduce((total, thread) => total + thread.unread_count, 0);
   const openConversations = threads.filter((thread) => thread.status === "open" || thread.status === "waiting").length;
-  const matchedRecords = new Set(threads.map((thread) => thread.lead_id ? `lead:${thread.lead_id}` : `customer:${thread.customer_id}`)).size;
+  const matchedRecords = new Set(
+    threads.flatMap((thread) => thread.lead_id
+      ? [`lead:${thread.lead_id}`]
+      : thread.customer_id
+        ? [`customer:${thread.customer_id}`]
+        : []),
+  ).size;
   const needsAttention = messages.filter((message) => ["failed", "undelivered"].includes(message.status)).length;
   const mailbox = mailboxResult.data;
   const lastSyncAgeMinutes = mailbox?.last_sync_at
@@ -205,7 +210,7 @@ export default async function CommunicationsPage({
 
   return <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6"><div className="mx-auto max-w-7xl">
     <div className="flex flex-wrap items-end justify-between gap-5">
-      <div><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-slate-500">Mission Control</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Customer inbox</h1><p className="mt-2 max-w-2xl text-sm text-slate-600">Email and text conversations connected to the right lead or customer.</p></div>
+      <div><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-slate-500">Mission Control</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Company Inbox</h1><p className="mt-2 max-w-2xl text-sm text-slate-600">Email and text conversations from across the company in one place. Lead, customer, and project cards show filtered views of this history.</p></div>
       <Link href="/admin/settings/communications" className="min-h-10 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400">Integration settings</Link>
     </div>
 
@@ -215,7 +220,7 @@ export default async function CommunicationsPage({
 
     <section className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div><p className="text-sm font-semibold text-slate-900">{mailbox?.address ?? "Microsoft 365 mailbox not configured"}</p><p className="mt-1 text-xs text-slate-500">{mailbox?.last_sync_at ? `Last synchronized ${timestamp(mailbox.last_sync_at)}` : "Synchronization has not run yet"} · {titleCase(mailbox?.last_sync_status ?? "not configured")}</p></div>
-      <div className="flex flex-wrap gap-1">{views.map(([value, label]) => <Link key={value} href={value === "all" ? "/sales/communications" : `/sales/communications?view=${value}`} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${view === value ? "bg-slate-950 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>{label}</Link>)}</div>
+      <div className="flex flex-wrap gap-1">{views.map(([value, label]) => <Link key={value} href={value === "all" ? "/communications" : `/communications?view=${value}`} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${view === value ? "bg-slate-950 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>{label}</Link>)}</div>
     </section>
 
     <details className="mt-5 rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -237,7 +242,7 @@ export default async function CommunicationsPage({
 
     <section className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 px-5 py-4"><h2 className="font-semibold text-slate-950">Conversations</h2></div>
-      {threads.length === 0 ? <div className="p-10 text-center"><p className="font-semibold text-slate-900">No matched conversations in this view</p><p className="mt-2 text-sm text-slate-500">Replies appear here after Mission Control matches them to a lead or customer.</p></div> : <div className="divide-y divide-slate-200">
+      {threads.length === 0 ? <div className="p-10 text-center"><p className="font-semibold text-slate-900">No conversations in this view</p><p className="mt-2 text-sm text-slate-500">New email and text conversations will appear here.</p></div> : <div className="divide-y divide-slate-200">
         {threads.map((thread) => {
           const latest = latestByThread.get(thread.id);
           const lead = thread.lead_id ? leads.get(thread.lead_id) : null;
@@ -246,8 +251,8 @@ export default async function CommunicationsPage({
           const matchedName = lead?.name ?? customer?.customer_name ?? latest?.sender ?? thread.participant_addresses[0] ?? "Matched customer";
           return <article key={thread.id} className="grid gap-3 px-5 py-5 transition hover:bg-slate-50 lg:grid-cols-[170px_1fr_280px]">
             <div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">{thread.provider === "twilio" ? "Text" : "Email"}</span><span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{thread.department}</span>{thread.unread_count ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">{thread.unread_count} new</span> : null}</div><p className="mt-2 text-xs text-slate-500">{timestamp(thread.last_message_at)}</p>{thread.assigned_to_id ? <p className="mt-1 text-xs text-slate-500">{teamById.get(thread.assigned_to_id) ?? "Assigned"}</p> : null}</div>
-            <div className="min-w-0"><Link href={`/sales/communications/${thread.id}`} className="truncate font-semibold text-slate-950 hover:text-blue-700">{thread.subject || "Customer conversation"}</Link><p className="mt-1 text-sm text-slate-600">{matchedName}</p>{latest ? <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{latest.body}</p> : null}</div>
-            <div className="flex flex-wrap items-start justify-end gap-2">{phone ? <a href={`tel:${phone}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Device call</a> : null}<Link href={`/sales/communications/${thread.id}#reply`} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white">Reply</Link><CommunicationThreadControls compact threadId={thread.id} status={thread.status} unreadCount={thread.unread_count} assignedToId={thread.assigned_to_id} teamMembers={teamMembers} /></div>
+            <div className="min-w-0"><Link href={`/communications/${thread.id}`} className="truncate font-semibold text-slate-950 hover:text-blue-700">{thread.subject || "Customer conversation"}</Link><p className="mt-1 text-sm text-slate-600">{matchedName}</p>{!lead && !customer ? <p className="mt-1 text-xs font-semibold text-amber-700">Not matched to a CRM record yet</p> : null}{latest ? <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{latest.body}</p> : null}</div>
+            <div className="flex flex-wrap items-start justify-end gap-2">{phone ? <a href={`tel:${phone}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Device call</a> : null}{lead || customer ? <><Link href={`/communications/${thread.id}#reply`} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white">Reply</Link><CommunicationThreadControls compact threadId={thread.id} status={thread.status} unreadCount={thread.unread_count} assignedToId={thread.assigned_to_id} teamMembers={teamMembers} /></> : <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Match needed</span>}</div>
           </article>;
         })}
       </div>}

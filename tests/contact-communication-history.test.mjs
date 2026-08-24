@@ -40,7 +40,7 @@ test("lead and customer records expose the same conversation history without cop
   assert.match(leadPage, /loadContactCommunicationThreads/);
   assert.match(customerPage, /loadContactCommunicationThreads/);
   assert.match(communicationPanel, /Conversation history/);
-  assert.match(communicationPanel, /\/sales\/communications\/\$\{thread\.id\}/);
+  assert.match(communicationPanel, /\/communications\/\$\{thread\.id\}/);
   assert.doesNotMatch(loader, /\.insert\(|\.update\(|\.upsert\(/);
 });
 

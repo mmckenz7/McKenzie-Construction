@@ -75,12 +75,13 @@ test("Twilio webhook validation and opt-outs fail closed", () => {
   assert.doesNotMatch(webhook, /validate\s*:\s*false/);
 });
 
-test("sales communications inbox exposes audited statuses and click-to-call", () => {
-  assert.match(navigation, /\["Communications", "\/sales\/communications"\]/);
+test("the company inbox exposes audited statuses and click-to-call", () => {
+  assert.match(navigation, /href="\/communications" label="Company Inbox"/);
   assert.match(inbox, /communication_messages/);
   assert.match(inbox, /communication_outbox/);
   assert.match(inbox, /href=\{`tel:\$\{phone\}`\}/);
   assert.match(inbox, /Needs attention/);
+  assert.doesNotMatch(inbox, /\.or\("lead_id\.not\.is\.null,customer_id\.not\.is\.null"\)/);
 });
 
 test("Mission Control replies are server validated, sandboxed, threaded, and audited", () => {

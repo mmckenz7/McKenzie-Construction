@@ -212,7 +212,7 @@ function getActivityHref(
       "communication_threads" &&
     entry.sourceId
   ) {
-    return `/sales/communications/${entry.sourceId}`;
+    return `/communications/${entry.sourceId}`;
   }
 
   if (

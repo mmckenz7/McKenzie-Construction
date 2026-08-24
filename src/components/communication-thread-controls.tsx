@@ -46,7 +46,7 @@ export function CommunicationThreadControls({
       }
       startTransition(() => {
         if (!compact && payload.status === "archived") {
-          router.push("/sales/communications");
+          router.push("/communications");
         } else {
           router.refresh();
         }

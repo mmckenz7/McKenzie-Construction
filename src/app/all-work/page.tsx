@@ -45,7 +45,6 @@ export default async function MissionControlPage() {
         .from("communication_threads")
         .select("id,subject,department,lead_id,unread_count,last_message_at")
         .neq("status", "archived")
-        .or("lead_id.not.is.null,customer_id.not.is.null")
         .order("unread_count", { ascending: false })
         .order("last_message_at", { ascending: false })
         .limit(8),

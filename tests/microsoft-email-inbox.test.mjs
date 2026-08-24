@@ -105,9 +105,10 @@ test("Microsoft synchronization supports a protected scheduler without exposing 
   assert.match(graph, /normalizedEmailThreadSubject/);
 });
 
-test("Mission Control limits the customer inbox to matched conversations", () => {
+test("Mission Control and Company Inbox retain unmatched conversations", () => {
   const missionControl = readFileSync(new URL("../src/app/all-work/page.tsx", import.meta.url), "utf8");
   const customerInbox = readFileSync(new URL("../src/app/sales/communications/page.tsx", import.meta.url), "utf8");
-  assert.match(missionControl, /lead_id\.not\.is\.null,customer_id\.not\.is\.null/);
-  assert.match(customerInbox, /lead_id\.not\.is\.null,customer_id\.not\.is\.null/);
+  assert.doesNotMatch(missionControl, /lead_id\.not\.is\.null,customer_id\.not\.is\.null/);
+  assert.doesNotMatch(customerInbox, /lead_id\.not\.is\.null,customer_id\.not\.is\.null/);
+  assert.match(customerInbox, /Not matched to a CRM record yet/);
 });

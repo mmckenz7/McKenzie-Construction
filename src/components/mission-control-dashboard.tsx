@@ -117,7 +117,7 @@ export function MissionControlDashboard({
               <QuickLink href="/operations/projects" icon="project">Projects</QuickLink>
               <QuickLink href="/sales/estimates" icon="estimate">Estimates</QuickLink>
               <QuickLink href="/operations/tasks" icon="task">Active work</QuickLink>
-              <QuickLink href="/sales/communications" icon="mail">Inbox</QuickLink>
+              <QuickLink href="/communications" icon="mail">Company Inbox</QuickLink>
             </nav>
           </div>
         </div>
@@ -157,9 +157,9 @@ export function MissionControlDashboard({
           </div>
 
           <aside className="grid min-w-0 content-start gap-5">
-            <Panel title="Customer inbox" eyebrow="Microsoft 365" href="/sales/communications" count={unreadMessages} icon="mail">
+            <Panel title="Company Inbox" eyebrow="Email and text" href="/communications" count={unreadMessages} icon="mail">
               {inboxThreads.length ? inboxThreads.slice(0, 6).map((thread) => (
-                <OperationalRow key={thread.id} href={`/sales/communications/${thread.id}`} title={thread.subject ?? "(No subject)"} detail={`${humanize(thread.department)} · ${formatDateTime(thread.last_message_at)}`} badge={thread.unread_count ? `${thread.unread_count} new` : "Read"} tone={thread.unread_count ? "warning" : "neutral"} />
+                <OperationalRow key={thread.id} href={`/communications/${thread.id}`} title={thread.subject ?? "(No subject)"} detail={`${humanize(thread.department)} · ${formatDateTime(thread.last_message_at)}`} badge={thread.unread_count ? `${thread.unread_count} new` : "Read"} tone={thread.unread_count ? "warning" : "neutral"} />
               )) : <EmptyState icon="mail" title="Inbox is clear" detail="Microsoft 365 customer replies will appear here after synchronization." />}
             </Panel>
 

@@ -58,12 +58,12 @@ const cards = [
     button: "Open Schedule Requests",
   },
   {
-    title: "Messages",
-    value: "Installer communication",
+    title: "Company Inbox",
+    value: "All customer communication",
     description:
-      "Keep project conversations, original messages, translations, and delivery status together.",
-    href: "/operations/messages",
-    button: "Open Messages",
+      "Read and reply to company email and text conversations from one place.",
+    href: "/communications",
+    button: "Open Company Inbox",
   },
 ];
 

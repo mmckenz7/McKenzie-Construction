@@ -16,7 +16,7 @@ const groups = [
     label: "Sales",
     href: "/sales",
     items: [
-      ["Dashboard", "/sales"], ["Leads", "/sales/leads"], ["Customers", "/sales/customers"], ["Estimates", "/sales/estimates"], ["Communications", "/sales/communications"],
+      ["Dashboard", "/sales"], ["Leads", "/sales/leads"], ["Customers", "/sales/customers"], ["Estimates", "/sales/estimates"],
     ],
   },
   {
@@ -24,7 +24,7 @@ const groups = [
     label: "Operations",
     href: "/operations",
     items: [
-      ["Dashboard", "/operations"], ["Inbox", "/operations/inbox"], ["Projects", "/operations/projects"], ["Tasks", "/operations/tasks"], ["Schedule", "/operations/schedule"], ["Materials", "/operations/materials"], ["Material Reviews", "/operations/material-reviews"], ["Installers", "/operations/installers"], ["Messages", "/operations/messages"], ["Schedule Requests", "/operations/schedule-requests"],
+      ["Dashboard", "/operations"], ["Inbox", "/operations/inbox"], ["Projects", "/operations/projects"], ["Tasks", "/operations/tasks"], ["Schedule", "/operations/schedule"], ["Materials", "/operations/materials"], ["Material Reviews", "/operations/material-reviews"], ["Installers", "/operations/installers"], ["Installer Messages", "/operations/messages"], ["Schedule Requests", "/operations/schedule-requests"],
     ],
   },
   {
@@ -40,8 +40,10 @@ const groups = [
 export function PlatformSidebarNavigation({ portalAccess, permissions }: PlatformSidebarNavigationProps) {
   const pathname = usePathname();
   const availableGroups = groups.filter((group) => portalAccess[group.id] === true);
+  const canOpenCompanyInbox = portalAccess.sales === true;
   return <nav aria-label="Application navigation" className="platform-nav">
     {availableGroups.length > 1 ? <SidebarLink href="/all-work" label="Mission Control" active={pathname.startsWith("/all-work")} /> : null}
+    {canOpenCompanyInbox ? <SidebarLink href="/communications" label="Company Inbox" active={pathname.startsWith("/communications")} /> : null}
     {availableGroups.map((group) => {
       const activeGroup = pathname === group.href || pathname.startsWith(`${group.href}/`);
       const visibleItems = group.items.filter((item) => item[2] === undefined || permissions[item[2]] === true);
