@@ -15,6 +15,40 @@ const totalLength = (members: readonly Readonly<{ start: { x: number; z: number 
   Math.round(members.reduce((sum, member) => sum + Math.hypot(member.end.x - member.start.x, member.end.z - member.start.z), 0) * 100) / 100;
 
 describe("v3 free-edge geometry equivalence", () => {
+  it("projects the legacy-equivalent conceptual beam and support locations", () => {
+    const rectangle = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const rectangleGeometry = derivePlatformGeometryV3(rectangle, "platform-1");
+    expect(rectangleGeometry.beams).toEqual([{ id: "beam-1", start: { x: 0, z: 120 }, end: { x: 192, z: 120 } }]);
+    expect(rectangleGeometry.supportPosts).toHaveLength(4);
+    expect(rectangleGeometry.supportPosts.map((post) => post.top)).toEqual([40, 40, 40, 40]);
+    const lShape = migrateDeckDesignToV3(lShapeLandingFixture.design);
+    const lGeometry = derivePlatformGeometryV3(lShape, "platform-1");
+    expect(totalLength(lGeometry.beams)).toBe(168);
+    expect(lGeometry.supportPosts).toHaveLength(4);
+  });
+
+  it("rotates the conceptual beam with framing direction and splits it around a cutout", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const rotated = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{ ...platform, construction: { ...platform.construction, decking: { ...platform.construction.decking, direction: "house_yard" } } }],
+    });
+    const rotatedGeometry = derivePlatformGeometryV3(rotated, platform.id);
+    expect(rotatedGeometry.beams).toEqual([{ id: "beam-1", start: { x: 168, z: 0 }, end: { x: 168, z: 144 } }]);
+    expect(rotatedGeometry.supportPosts).toHaveLength(3);
+    const cutout = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{ ...platform, region: { ...platform.region, holes: [[{ x: 72, z: 96 }, { x: 120, z: 96 }, { x: 120, z: 132 }, { x: 72, z: 132 }]] } }],
+    });
+    const split = derivePlatformGeometryV3(cutout, platform.id);
+    expect(split.beams).toEqual([
+      { id: "beam-1", start: { x: 0, z: 120 }, end: { x: 72, z: 120 } },
+      { id: "beam-2", start: { x: 120, z: 120 }, end: { x: 192, z: 120 } },
+    ]);
+    expect(split.supportPosts).toHaveLength(4);
+  });
+
   it("uses the authoritative picture-frame pattern for outer and cutout borders", () => {
     const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
     const platform = base.platforms[0];

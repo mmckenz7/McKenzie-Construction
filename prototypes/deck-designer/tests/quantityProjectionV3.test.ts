@@ -15,6 +15,8 @@ import { addPlatformLevelV3 } from "../src/platformCommandsV3";
 
 const fixtures = [rectangleFoundationFixture, lShapeLandingFixture, multiWallContextFixture];
 const accessoryKeys = [
+  "beam-linear-feet",
+  "support-post-count",
   "railing-linear-feet",
   "railing-post-count",
   "stair-tread-count",

@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-24 polygon-aware beam and support posts
+
+- The v3 plan and model now render a conceptual main beam and support-post locations from the same existing framing facts used by deterministic quantities.
+- Desktop QA on the 20-by-12-foot rectangle showed one 20-foot beam with five support locations. Changing board direction to house-to-yard rotated the beam from horizontal to vertical and updated it to 12 feet with three support locations; plan IDs and quantity cards changed together.
+- The 3D **Show framing** control hides and restores joists, beam, and main support posts as one presentation choice without changing design facts or quantities.
+- At 390 by 844, the beam, three rotated support locations, both quantity cards, and framing toggle remained available. The viewport override was reset afterward.
+- Full validation passed 207 tests, including rectangle/L-shape legacy equivalence and cutout-split beam coverage. Isolation, build, golden fixtures, and bundle budgets passed at 86.5 KiB initial, 119.9 KiB largest, and 242.8 KiB total gzip.
+
 ## 2026-08-24 exact selected-side direction
 
 - Selecting one blueprint side now exposes its measured length and exact direction together. The plain-language label defines 0° as right and 90° as away from the house.

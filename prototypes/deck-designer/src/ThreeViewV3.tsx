@@ -56,7 +56,11 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = [], houseGe
     for (const view of platformViews) {
       const itemPlatform = view.platform, itemGeometry = view.geometry;
       for (const board of itemGeometry.surfaceBoards) member(model, board, itemPlatform.elevation, 1, itemPlatform.construction.decking.boardWidth, deck);
-      if (showFraming) for (const joist of itemGeometry.joists) member(model, joist, itemPlatform.elevation - 5, 7.25, 1.5, frame);
+      if (showFraming) {
+        for (const joist of itemGeometry.joists) member(model, joist, itemPlatform.elevation - 5, 7.25, 1.5, frame);
+        for (const beam of itemGeometry.beams) member(model, beam, itemPlatform.elevation - 13, 9.25, 4.5, frame);
+        for (const post of itemGeometry.supportPosts) { const height = Math.max(1, post.top - gradeElevation); const mesh = new THREE.Mesh(new THREE.BoxGeometry(5.5, height, 5.5), frame); mesh.position.set(post.x, gradeElevation + height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
+      }
       for (const segment of itemGeometry.railSegments) { member(model, segment, itemPlatform.elevation + itemPlatform.construction.railing.height - 2, 3, 2.5, rail); member(model, segment, itemPlatform.elevation + 7, 2, 2, rail); }
       for (const segment of itemGeometry.landingRailSegments) { member(model, segment, segment.y + itemPlatform.construction.railing.height - 2, 3, 2.5, rail); member(model, segment, segment.y + 7, 2, 2, rail); }
       for (const post of [...itemGeometry.railPosts, ...itemGeometry.landingRailPosts]) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, itemPlatform.construction.railing.height, 4), rail); mesh.position.set(post.x, post.top - itemPlatform.construction.railing.height / 2, post.z); mesh.castShadow = true; model.add(mesh); }

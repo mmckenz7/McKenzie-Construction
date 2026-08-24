@@ -391,6 +391,8 @@ button:hover { transform: translateY(-1px); }
 .plan-edge-hit:hover, .plan-edge-hit:focus { fill: #c8dd3c; fill-opacity: .42; }
 .plan-board { stroke: #987454; stroke-width: .55; }
 .plan-joist { stroke: #365d4a; stroke-width: .75; stroke-dasharray: 3 2; opacity: .72; }
+.plan-beam { stroke: #244638; stroke-width: 2.1; opacity: .82; pointer-events: none; }
+.plan-support-post { fill: #244638; stroke: #f4f7f3; stroke-width: .65; pointer-events: none; }
 .plan-stringer { stroke: #244638; stroke-width: 1.5; stroke-dasharray: 4 2; opacity: .9; }
 .plan-rail { stroke: #142f24; stroke-width: 3.2; }
 .plan-stair { fill: #c39b71; stroke: #30473d; stroke-width: .65; }

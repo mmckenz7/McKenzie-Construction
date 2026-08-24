@@ -1,6 +1,7 @@
 import { deriveGeometricPolygonEdges, type PolygonEdge, type PolygonPoint } from "./polygon";
 import { derivePolygonMembers, type ProjectedMember } from "./polygonProjection";
 import { derivePictureFrameBoards } from "./pictureFrameProjection";
+import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
 import { normalizeDeckDesignV3, type DeckDesignV3 } from "./modelV3";
 import { deriveStairRouteGeometryV3, type StairLandingGeometryV3, type StairRailPostV3, type StairTreadV3 } from "./stairRouteGeometryV3";
 
@@ -15,6 +16,8 @@ export type DeckPlatformGeometryV3 = Readonly<{
   platformEdges: readonly PolygonEdge[];
   surfaceBoards: readonly ProjectedMember[];
   joists: readonly ProjectedMember[];
+  beams: readonly ProjectedMember[];
+  supportPosts: readonly Post[];
   railSegments: readonly RailSegmentV3[];
   railPosts: readonly Post[];
   stairOpenings: readonly ProjectedMember[];
@@ -57,6 +60,34 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
       joistSpacing: platform.construction.framing.joistSpacing,
     }).surfaceBoards
     : members.surfaceBoards;
+  const minX = Math.min(...platform.region.outer.map((item) => item.x));
+  const maxX = Math.max(...platform.region.outer.map((item) => item.x));
+  const minZ = Math.min(...platform.region.outer.map((item) => item.z));
+  const maxZ = Math.max(...platform.region.outer.map((item) => item.z));
+  const horizontalBeam = platform.construction.decking.direction === "left_right";
+  const beamAxisSpan = horizontalBeam ? maxZ - minZ : maxX - minX;
+  const effectiveBeamInset = Math.min(platform.construction.framing.beamInset, beamAxisSpan / 2);
+  const beamCoordinate = horizontalBeam ? maxZ - effectiveBeamInset : maxX - effectiveBeamInset;
+  const beamIntervals = horizontalBeam
+    ? horizontalRegionIntervalsAt(platform.region, beamCoordinate)
+    : verticalRegionIntervalsAt(platform.region, beamCoordinate);
+  const beams = Object.freeze(beamIntervals.map((interval, index) => Object.freeze({
+    id: `beam-${index + 1}`,
+    start: Object.freeze(horizontalBeam ? { x: interval.start, z: beamCoordinate } : { x: beamCoordinate, z: interval.start }),
+    end: Object.freeze(horizontalBeam ? { x: interval.end, z: beamCoordinate } : { x: beamCoordinate, z: interval.end }),
+  })));
+  const supportPosts = Object.freeze(beams.flatMap((beam, beamIndex) => {
+    const beamLength = Math.hypot(beam.end.x - beam.start.x, beam.end.z - beam.start.z);
+    return evenlySpacedPositions(beamLength, platform.construction.framing.maxPostSpacing).map((distance, postIndex) => {
+      const ratio = beamLength === 0 ? 0 : distance / beamLength;
+      return Object.freeze({
+        id: `support-post-${beamIndex + 1}-${postIndex + 1}`,
+        x: beam.start.x + (beam.end.x - beam.start.x) * ratio,
+        z: beam.start.z + (beam.end.z - beam.start.z) * ratio,
+        top: platform.elevation - 8,
+      });
+    });
+  }));
   const stairRoutes = platform.construction.stairSystems.map((system, index) => deriveStairRouteGeometryV3({
     system,
     edge: edges.find((edge) => edge.id === system.edgeId)!,
@@ -109,6 +140,8 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
     platformEdges: edges,
     surfaceBoards,
     joists: members.joists,
+    beams,
+    supportPosts,
     railSegments,
     railPosts: Object.freeze([...railPostMap.values()].sort((a, b) => a.id.localeCompare(b.id))),
     stairOpenings,

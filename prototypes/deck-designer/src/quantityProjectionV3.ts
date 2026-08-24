@@ -6,7 +6,7 @@ export type DeckProjectionQuantityV3 = Readonly<{
   quantityClass: "takeoff_candidate" | "visualization";
   amount: number;
   unit: "sq ft" | "lin ft" | "each";
-  assemblyIntent: "railing" | "stair" | "stair_stringer" | "stair_landing" | "stair_railing";
+  assemblyIntent: "framing" | "railing" | "stair" | "stair_stringer" | "stair_landing" | "stair_railing";
   sourceGeometry: readonly string[];
   explanation: string;
 }>;
@@ -39,7 +39,26 @@ export function deriveDeckAccessoryProjectionV3(
   if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
   const geometry = derivePlatformGeometryV3(normalized, platformId);
   const railInches = geometry.railSegments.reduce((sum, rail) => sum + memberLength(rail), 0);
+  const beamInches = geometry.beams.reduce((sum, beam) => sum + memberLength(beam), 0);
   const quantities: DeckProjectionQuantityV3[] = [
+    Object.freeze({
+      key: "beam-linear-feet",
+      quantityClass: "visualization" as const,
+      amount: feet(beamInches),
+      unit: "lin ft" as const,
+      assemblyIntent: "framing" as const,
+      sourceGeometry: Object.freeze(geometry.beams.map((beam) => `${platformId}:${beam.id}`)),
+      explanation: `${geometry.beams.length} conceptual beam segment${geometry.beams.length === 1 ? "" : "s"} totaling ${round(beamInches)} in; structural sizing and placement require qualified review`,
+    }),
+    Object.freeze({
+      key: "support-post-count",
+      quantityClass: "visualization" as const,
+      amount: geometry.supportPosts.length,
+      unit: "each" as const,
+      assemblyIntent: "framing" as const,
+      sourceGeometry: Object.freeze(geometry.supportPosts.map((post) => `${platformId}:${post.id}`)),
+      explanation: `Conceptual beam endpoints and intermediate support locations in bays not exceeding ${platform.construction.framing.maxPostSpacing} in; footing and structural requirements are not determined`,
+    }),
     Object.freeze({
       key: "railing-linear-feet",
       quantityClass: "takeoff_candidate" as const,
