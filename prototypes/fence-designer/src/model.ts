@@ -4,11 +4,13 @@ export const MM_PER_INCH = 25.4;
 
 export type Point = Readonly<{ id: string; xMm: number; yMm: number }>;
 export type SegmentKind = "fence" | "gate";
+export type GateType = "single" | "double";
 export type Segment = Readonly<{
   id: string;
   fromPointId: string;
   toPointId: string;
   kind: SegmentKind;
+  gateType?: GateType;
 }>;
 export type HouseReference = Readonly<{ xMm: number; yMm: number; lengthMm: number; widthMm: number }>;
 export type FenceDesign = Readonly<{
@@ -56,11 +58,16 @@ export function normalizeDesign(input: unknown): FenceDesign {
   const segments = raw.segments.map((item, index) => {
     if (!item || typeof item !== "object") throw new TypeError(`Segment ${index + 1} must be an object.`);
     const segment = item as Record<string, unknown>;
+    const kind = segment.kind === "gate" ? "gate" as const : segment.kind === "fence" ? "fence" as const : (() => { throw new TypeError(`Segment ${index + 1} kind is invalid.`); })();
+    const gateType = kind === "gate"
+      ? segment.gateType === undefined || segment.gateType === "single" ? "single" as const : segment.gateType === "double" ? "double" as const : (() => { throw new TypeError(`Segment ${index + 1} gate type is invalid.`); })()
+      : undefined;
     const normalized = Object.freeze({
       id: text(segment.id, `Segment ${index + 1} ID`, 80),
       fromPointId: text(segment.fromPointId, `Segment ${index + 1} start`, 80),
       toPointId: text(segment.toPointId, `Segment ${index + 1} end`, 80),
-      kind: segment.kind === "gate" ? "gate" as const : segment.kind === "fence" ? "fence" as const : (() => { throw new TypeError(`Segment ${index + 1} kind is invalid.`); })(),
+      kind,
+      ...(gateType ? { gateType } : {}),
     });
     if (!pointIds.has(normalized.fromPointId) || !pointIds.has(normalized.toPointId)) throw new TypeError(`Segment ${index + 1} references a missing point.`);
     if (normalized.fromPointId === normalized.toPointId) throw new TypeError(`Segment ${index + 1} cannot connect a point to itself.`);
@@ -169,9 +176,65 @@ export function deletePoint(design: FenceDesign, pointId: string, replacementSeg
   return revise(design, { points, segments });
 }
 
-export function setSegmentKind(design: FenceDesign, segmentId: string, kind: SegmentKind): FenceDesign {
+export function setSegmentKind(design: FenceDesign, segmentId: string, kind: SegmentKind, gateType: GateType = "single"): FenceDesign {
   if (!design.segments.some(({ id }) => id === segmentId)) throw new TypeError("Segment does not exist.");
-  return revise(design, { segments: design.segments.map((segment) => segment.id === segmentId ? Object.freeze({ ...segment, kind }) : segment) });
+  return revise(design, { segments: design.segments.map((segment) => segment.id === segmentId
+    ? Object.freeze({ id: segment.id, fromPointId: segment.fromPointId, toPointId: segment.toPointId, kind, ...(kind === "gate" ? { gateType } : {}) })
+    : segment) });
+}
+
+export function setGateType(design: FenceDesign, segmentId: string, gateType: GateType): FenceDesign {
+  const segment = design.segments.find(({ id }) => id === segmentId);
+  if (!segment || segment.kind !== "gate") throw new TypeError("Gate segment does not exist.");
+  return setSegmentKind(design, segmentId, "gate", gateType);
+}
+
+export function insertGateAtPoint(
+  design: FenceDesign,
+  pointId: string,
+  widthMm: number,
+  gateType: GateType,
+  newPointId: string,
+  newGateSegmentId: string,
+): FenceDesign {
+  if (!Number.isSafeInteger(widthMm) || widthMm < 25 || widthMm > 304_800) throw new RangeError("Total gate width must be from 1 inch through 1,000 feet.");
+  if (gateType !== "single" && gateType !== "double") throw new TypeError("Choose a single or double gate.");
+  const pointIndex = design.points.findIndex(({ id }) => id === pointId);
+  if (pointIndex < 0) throw new TypeError("Gate anchor point does not exist.");
+  if (design.points.some(({ id }) => id === newPointId) || design.segments.some(({ id }) => id === newGateSegmentId)) throw new TypeError("Gate point and segment IDs must be unique.");
+  const anchor = design.points[pointIndex];
+  const outgoing = design.segments[pointIndex];
+
+  if (outgoing) {
+    const end = design.points[pointIndex + 1];
+    const runLength = segmentLengthMm(design, outgoing);
+    if (widthMm > runLength) throw new RangeError(`Gate width must fit within the following ${formatFeetInches(runLength)} span.`);
+    if (widthMm === runLength) return setSegmentKind(design, outgoing.id, "gate", gateType);
+    const rawLength = Math.hypot(end.xMm - anchor.xMm, end.yMm - anchor.yMm);
+    if (rawLength === 0) throw new RangeError("The following span needs a measurable direction before adding a gate.");
+    const gateEnd = Object.freeze({
+      id: newPointId,
+      xMm: Math.round(anchor.xMm + (end.xMm - anchor.xMm) / rawLength * widthMm),
+      yMm: Math.round(anchor.yMm + (end.yMm - anchor.yMm) / rawLength * widthMm),
+    });
+    const points = [...design.points.slice(0, pointIndex + 1), gateEnd, ...design.points.slice(pointIndex + 1)];
+    const gate = Object.freeze({ id: newGateSegmentId, fromPointId: anchor.id, toPointId: gateEnd.id, kind: "gate" as const, gateType });
+    const remainder = Object.freeze({ ...outgoing, fromPointId: gateEnd.id });
+    const segments = [...design.segments.slice(0, pointIndex), gate, remainder, ...design.segments.slice(pointIndex + 1)];
+    return revise(design, { points, segments });
+  }
+
+  if (pointIndex === 0) throw new RangeError("Draw one fence run first so the gate has a direction.");
+  const previous = design.points[pointIndex - 1];
+  const rawLength = Math.hypot(anchor.xMm - previous.xMm, anchor.yMm - previous.yMm);
+  if (rawLength === 0) throw new RangeError("The preceding span needs a measurable direction before adding a gate.");
+  const gateEnd = Object.freeze({
+    id: newPointId,
+    xMm: Math.round(anchor.xMm + (anchor.xMm - previous.xMm) / rawLength * widthMm),
+    yMm: Math.round(anchor.yMm + (anchor.yMm - previous.yMm) / rawLength * widthMm),
+  });
+  const gate = Object.freeze({ id: newGateSegmentId, fromPointId: anchor.id, toPointId: gateEnd.id, kind: "gate" as const, gateType });
+  return revise(design, { points: [...design.points, gateEnd], segments: [...design.segments, gate] });
 }
 
 export function pointById(design: FenceDesign, id: string): Point {

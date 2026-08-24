@@ -3,9 +3,9 @@
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from "react";
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
 import {
-  EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, movePoint,
-  pointById, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, totalLengthMm,
-  type FenceDesign,
+  EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, movePoint,
+  pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, totalLengthMm,
+  type FenceDesign, type GateType,
 } from "./model";
 import { loadLocalDesign, saveLocalDesign } from "./storage";
 import { panView, zoomViewAt, type ViewBox } from "./view";
@@ -53,6 +53,10 @@ export default function App() {
   const [houseInches, setHouseInches] = useState("0");
   const [houseWidthFeet, setHouseWidthFeet] = useState("");
   const [houseWidthInches, setHouseWidthInches] = useState("0");
+  const [gateEditorOpen, setGateEditorOpen] = useState(false);
+  const [gateType, setGateTypeChoice] = useState<GateType>("single");
+  const [gateFeet, setGateFeet] = useState("");
+  const [gateInches, setGateInches] = useState("0");
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [previewPoint, setPreviewPoint] = useState<Readonly<{ xMm: number; yMm: number }> | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -157,12 +161,12 @@ export default function App() {
     const totalInches = Math.round(segmentLengthMm(design, segment) / 25.4);
     setFeet(String(Math.floor(totalInches / 12)));
     setInches(String(totalInches % 12));
-    setSelection({ type: "segment", id }); setMode("select"); setNotice("Span selected. Enter an exact length or mark the whole span as a gate.");
+    setGateEditorOpen(false); setSelection({ type: "segment", id }); setMode("select"); setNotice("Span selected. Enter an exact length or edit its gate intent.");
   };
   const startDrag = (event: ReactPointerEvent, pointId: string) => {
     if (mode === "pan") return;
     event.stopPropagation();
-    setSelection({ type: "point", id: pointId }); setMode("select"); setDrag({ pointId, original: design });
+    setGateEditorOpen(false); setSelection({ type: "point", id: pointId }); setMode("select"); setDrag({ pointId, original: design });
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
   };
   const dragPoint = (event: ReactPointerEvent) => {
@@ -190,6 +194,21 @@ export default function App() {
       commit(setSegmentLengthMm(design, selectedSegment.id, length), `Span set to ${formatFeetInches(length)}.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid length."); }
   };
+  const addGate = () => {
+    if (!selectedPoint) return;
+    try {
+      const width = feetAndInchesToMm(Number(gateFeet), Number(gateInches));
+      const id = nextId.current;
+      const next = insertGateAtPoint(design, selectedPoint.id, width, gateType, `point-${id}`, `segment-${id}`);
+      nextId.current += 1;
+      const anchorIndex = next.points.findIndex(({ id: pointId }) => pointId === selectedPoint.id);
+      const gate = next.segments[anchorIndex];
+      commit(next, `${gateType === "double" ? "Double" : "Single"} gate added with a total opening of ${formatFeetInches(width)}.`);
+      const totalInches = Math.round(width / 25.4);
+      setFeet(String(Math.floor(totalInches / 12))); setInches(String(totalInches % 12));
+      setGateFeet(""); setGateInches("0"); setGateEditorOpen(false); setSelection(gate ? { type: "segment", id: gate.id } : null);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid total gate width."); }
+  };
   const selectHouse = () => {
     if (design.house) {
       const totalInches = Math.round(design.house.lengthMm / 25.4);
@@ -197,7 +216,7 @@ export default function App() {
       setHouseFeet(String(Math.floor(totalInches / 12))); setHouseInches(String(totalInches % 12));
       setHouseWidthFeet(String(Math.floor(widthInches / 12))); setHouseWidthInches(String(widthInches % 12));
     }
-    setSelection({ type: "house" }); setMode("select"); setNotice(design.house ? "House reference selected." : "Enter the measured house-wall length to add it.");
+    setGateEditorOpen(false); setSelection({ type: "house" }); setMode("select"); setNotice(design.house ? "House reference selected." : "Enter the measured house-wall length to add it.");
   };
   const applyHouseLength = () => {
     try {
@@ -221,7 +240,7 @@ export default function App() {
     try {
       const loaded = loadLocalDesign(localStorage);
       if (!loaded) { setNotice("No saved layout exists in this browser yet."); return; }
-      setHistory(createHistory(loaded)); nextId.current = nextNumericId(loaded); setSelection(null); setView(fittedView(loaded)); setNotice("Saved local layout loaded.");
+      setHistory(createHistory(loaded)); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setView(fittedView(loaded)); setNotice("Saved local layout loaded.");
     } catch (error) { setNotice(error instanceof Error ? `Saved layout was not opened: ${error.message}` : "Saved layout was not opened."); }
   };
 
@@ -261,7 +280,7 @@ export default function App() {
             return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode !== "pan") { event.stopPropagation(); selectSegment(segment.id); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode !== "pan" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
               <line className="segment-hit" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <line className="segment-line" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
-              <g transform={`translate(${midX} ${midY})`} className="dimension"><rect x="-640" y="-260" width="1280" height="520" rx="180" /><text textAnchor="middle" dominantBaseline="central">{segment.kind === "gate" ? "GATE · " : ""}{formatFeetInches(segmentLengthMm(design, segment))}</text></g>
+              <g transform={`translate(${midX} ${midY})`} className="dimension"><rect x="-760" y="-260" width="1520" height="520" rx="180" /><text textAnchor="middle" dominantBaseline="central">{segment.kind === "gate" ? `${segment.gateType === "double" ? "DOUBLE" : "SINGLE"} GATE · ` : ""}{formatFeetInches(segmentLengthMm(design, segment))}</text></g>
             </g>;
           })}
           {mode === "draw" && previewPoint && design.points.at(-1) && (() => {
@@ -288,8 +307,8 @@ export default function App() {
         <p className="eyebrow">Selection</p>
         {!selection && <div className="inspector-empty"><h2>No item selected</h2><p>Tap a span for exact length and gate intent. Tap or drag a point to edit the path.</p></div>}
         {houseSelected && <div><h2>House footprint</h2><p>{design.house ? "This measured footprint is visual context only and is excluded from fence totals." : "Add an optional measured house footprint before drawing the fence."}</p><h3 className="field-heading">House length</h3><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseFeet} onChange={(event) => setHouseFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseInches} onChange={(event) => setHouseInches(event.target.value)} /></label></div><h3 className="field-heading">House width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Width feet" inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseWidthFeet} onChange={(event) => setHouseWidthFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseWidthInches} onChange={(event) => setHouseWidthInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyHouseLength}>{design.house ? "Update house footprint" : "Add house footprint"}</button>{design.house && <button className="danger wide" onClick={() => { commit(removeHouseReference(design), "House footprint removed."); setSelection(null); }}>Remove house footprint</button>}<small>With snap on, fence points placed near any house edge land exactly on that edge. This footprint is not a survey or building record.</small></div>}
-        {selectedPoint && <div><h2>{pointRole(design, selectedPoint.id)}</h2><p className="coordinate">X {formatFeetInches(Math.abs(selectedPoint.xMm))} · Y {formatFeetInches(Math.abs(selectedPoint.yMm))}</p><p>Drag this point on the grid. Connected span lengths update immediately.</p><button className="danger" onClick={removeSelection}>Delete point</button></div>}
-        {selectedSegment && <div><h2>{selectedSegment.kind === "gate" ? "Gate span" : "Fence span"}</h2><div className="length-readout">{formatFeetInches(segmentLengthMm(design, selectedSegment))}</div><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyExactLength}>Apply exact length</button><button className="wide" onClick={() => commit(setSegmentKind(design, selectedSegment.id, selectedSegment.kind === "gate" ? "fence" : "gate"), selectedSegment.kind === "gate" ? "Span restored to fence intent." : "Whole span marked as gate intent only.")}>{selectedSegment.kind === "gate" ? "Mark as fence" : "Mark whole span as gate"}</button><small>Gate intent does not imply products, posts, hardware, or pricing.</small></div>}
+        {selectedPoint && <div><h2>{pointRole(design, selectedPoint.id)}</h2><p className="coordinate">X {formatFeetInches(Math.abs(selectedPoint.xMm))} · Y {formatFeetInches(Math.abs(selectedPoint.yMm))}</p><p>Drag this point on the grid, or use it as the start of a measured gate opening.</p><button className="primary wide" onClick={() => { setGateEditorOpen((current) => !current); setNotice("Choose single or double, then enter the total gate opening width."); }}>{gateEditorOpen ? "Cancel add gate" : "＋ Add gate"}</button>{gateEditorOpen && <div className="gate-editor"><label><span>Gate style</span><select aria-label="Gate style" value={gateType} onChange={(event) => setGateTypeChoice(event.target.value as GateType)}><option value="single">Single gate</option><option value="double">Double gate</option></select></label><h3 className="field-heading">Total gate width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Gate width feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={gateFeet} onChange={(event) => setGateFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Gate width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateInches} onChange={(event) => setGateInches(event.target.value)} /></label></div><button className="primary wide" onClick={addGate}>Place gate from this point</button><small>The total width is the full opening. A double gate is recorded as two-leaf intent only.</small></div>}<button className="danger wide" onClick={removeSelection}>Delete point</button></div>}
+        {selectedSegment && <div><h2>{selectedSegment.kind === "gate" ? `${selectedSegment.gateType === "double" ? "Double" : "Single"} gate` : "Fence span"}</h2><div className="length-readout">{formatFeetInches(segmentLengthMm(design, selectedSegment))}</div>{selectedSegment.kind === "gate" && <label className="select-field"><span>Gate style</span><select value={selectedSegment.gateType ?? "single"} onChange={(event) => commit(setGateType(design, selectedSegment.id, event.target.value as GateType), "Gate style updated.")}><option value="single">Single gate</option><option value="double">Double gate</option></select></label>}<div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyExactLength}>Apply exact length</button><button className="wide" onClick={() => commit(setSegmentKind(design, selectedSegment.id, selectedSegment.kind === "gate" ? "fence" : "gate"), selectedSegment.kind === "gate" ? "Span restored to fence intent." : "Whole span marked as a single gate.")}>{selectedSegment.kind === "gate" ? "Mark as fence" : "Mark whole span as single gate"}</button><small>Gate intent does not imply products, posts, hardware, or pricing.</small></div>}
         <div className="notice" role="status">{notice}</div>
       </aside>
     </section>

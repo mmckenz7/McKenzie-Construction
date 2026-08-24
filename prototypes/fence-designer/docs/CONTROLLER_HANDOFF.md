@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws one ordered connected path around an optional exact measured house footprint, previews each prospective run with a live feet/inches label, reports deterministic run and total measurements, supports exact edits and point editing, snaps fence points to any house edge or 45-degree run bearing, distinguishes open endpoints and corners, records whole-span gate intent, supports bounded focal-point zoom and dedicated plan panning, maintains undo/redo, and saves/loads validated local JSON.
+Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws one ordered connected path around an optional exact measured house footprint, previews each prospective run with a live feet/inches label, reports deterministic run and total measurements, supports exact edits and point editing, snaps fence points to any house edge or 45-degree run bearing, distinguishes open endpoints and corners, inserts exact-width single/double gate openings from a selected point, supports bounded focal-point zoom and dedicated plan panning, maintains undo/redo, and saves/loads validated local JSON.
 
 ## Files and ownership
 
@@ -37,11 +37,11 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 18 deterministic tests passed.
+- 21 deterministic tests passed.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
-- Browser QA passed for house dimensions, midpoint house-edge snapping, visible 45-degree snap on/off behavior, live prospective run measurements, draw, exact edit, gate intent, point drag, dedicated plan pan, zoom buttons, wheel/trackpad zoom, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
+- Browser QA passed for house dimensions, midpoint house-edge snapping, visible 45-degree snap on/off behavior, live prospective run measurements, native single/double gate insertion and exact total width, draw, exact edit, point drag, dedicated plan pan, zoom buttons, wheel/trackpad zoom, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
 - The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
 - Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 
@@ -50,7 +50,7 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 - The house is a user-measured rectangular context footprint, not a building record. Non-rectangular footprints remain a later extension.
 - Local-plan geometry is not a survey, legal boundary, aerial measurement, or field verification.
 - Exact segment editing moves the end point along the existing bearing, so a following connected span changes; the UI exposes that change immediately.
-- A gate is intent for the selected whole span only. It carries no gate assembly, post, hardware, product, quantity, labor, or price rules.
+- A gate records an exact total opening width and single/double intent. “Double” does not calculate individual leaf sizes and carries no gate assembly, post, hardware, product, quantity, labor, or price rules.
 - Local storage is device/browser specific and has no multi-user or cloud durability.
 - The Deck photo workflow contains no reusable two-point scale calibration. Adding a background image without a trustworthy transform would weaken the measurement boundary, so it is deferred.
 

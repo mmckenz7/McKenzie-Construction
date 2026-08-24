@@ -26,5 +26,7 @@ Validated workflow:
 18. Confirmed mouse-wheel/trackpad input zoomed around the pointer location; deterministic tests cover the same focal-point math, zoom clamps, aspect ratio, and pan conversion used by two-finger pinch navigation.
 19. After placing a start point, confirmed a dashed prospective run followed the pointer and continuously displayed its current feet/inches before placement.
 20. At the same pointer position, confirmed **Snap on** locked the prospective run to a horizontal 45-degree increment while **Snap off** followed the free pointer bearing; the live accessible measurement changed from 28′ 10″ to 28′ 11″.
+21. Selected the start point of a 37′ 0″ fence run, opened **Add gate**, chose **Double gate**, entered a 10′ 0″ total width, and confirmed the run split into a labeled 10′ 0″ double-gate opening plus 27′ 0″ of fence while the total remained 37′ 0″.
+22. Confirmed the created gate remains selectable and its single/double intent can be edited without introducing products or pricing.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

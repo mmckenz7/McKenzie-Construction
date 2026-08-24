@@ -2,7 +2,7 @@
 
 ## Scope
 
-This isolated browser prototype turns an explicitly drawn connected fence path into deterministic plan-view measurements. It supports an optional exact-length-and-width house footprint, point placement, point movement and deletion, exact segment-length edits, whole-run gate labels, undo/redo, snap on/off, and local browser save/load. It does not create estimates, quantities, products, labor, prices, customers, or cloud records.
+This isolated browser prototype turns an explicitly drawn connected fence path into deterministic plan-view measurements. It supports an optional exact-length-and-width house footprint, point placement, point movement and deletion, exact segment-length edits, measured single/double gate openings anchored at a selected point, undo/redo, snap on/off, and local browser save/load. It does not create estimates, quantities, products, labor, prices, customers, or cloud records.
 
 Everything under `prototypes/fence-designer/` is prototype-owned. Source cannot import outside this directory, access Supabase, read environment variables, or use browser network primitives. No migration or shared domain model is introduced.
 
@@ -12,13 +12,13 @@ The authoritative document is a single ordered connected path:
 
 - points store integer local-plan `xMm` and `yMm` coordinates;
 - an optional rectangular house footprint stores integer origin, length, and width values, remains visual context only, and is excluded from fence totals;
-- segments reference adjacent points and carry only `fence` or `gate` intent;
+- segments reference adjacent points and carry `fence` or `gate` intent; gate segments additionally record `single` or `double` opening intent;
 - geometric segment length is Euclidean distance rounded once to the nearest millimeter;
 - total length is the sum of those rounded integer segment lengths;
 - feet/inches are presentation conversions, rounded to the nearest inch;
 - exact-length editing keeps a segment's start fixed and moves its end along the existing bearing. If the moved point also begins the next segment, that following segment changes visibly and deterministically.
 
-The first and last points are open endpoints. Interior points are corners when their path deflection exceeds two degrees. A gate label means only that the selected entire measured span is intended as a gate opening; it carries no product, assembly, post, hardware, or pricing rules.
+The first and last points are open endpoints. Interior points are corners when their path deflection exceeds two degrees. Adding a gate at a point consumes the entered total width from the following span and splits that span, or extends the path along the preceding bearing when the selected point is the final endpoint. A lone point cannot supply a direction. Single/double is opening intent only; it carries no leaf-sizing formula, product, assembly, post, hardware, or pricing rules.
 
 Undo/redo stores validated whole-document snapshots. Stable JSON is schema-versioned and saved only to browser local storage after an explicit Save action. Loading validates and normalizes the document before it becomes active.
 

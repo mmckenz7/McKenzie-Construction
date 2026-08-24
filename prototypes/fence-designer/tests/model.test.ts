@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, movePoint,
+  EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, movePoint,
   normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint,
   stableDesignJson, totalLengthMm,
 } from "../src/model";
@@ -71,13 +71,36 @@ describe("deterministic fence geometry", () => {
     expect(snapRunEndpoint(anchor, { xMm: 3_100, yMm: 4_000 }, true)).toEqual({ xMm: 3_051, yMm: 4_051 });
     expect(snapRunEndpoint(anchor, { xMm: 4_000, yMm: 2_400 }, false)).toEqual({ xMm: 4_000, yMm: 2_400 });
   });
+
+  it("inserts a measured double gate from a selected point and preserves the original total", () => {
+    const design = rectangleCorner();
+    const edited = insertGateAtPoint(design, "point-1", feetAndInchesToMm(4, 0), "double", "point-4", "segment-4");
+    expect(edited.points[1]).toEqual({ id: "point-4", xMm: 1_219, yMm: 0 });
+    expect(edited.segments[0]).toEqual({ id: "segment-4", fromPointId: "point-1", toPointId: "point-4", kind: "gate", gateType: "double" });
+    expect(edited.segments[1]).toMatchObject({ id: "segment-1", fromPointId: "point-4", toPointId: "point-2", kind: "fence" });
+    expect(totalLengthMm(edited)).toBe(totalLengthMm(design));
+  });
+
+  it("extends a measured single gate from the final endpoint along the preceding bearing", () => {
+    const design = rectangleCorner();
+    const edited = insertGateAtPoint(design, "point-3", feetAndInchesToMm(3, 0), "single", "point-4", "segment-4");
+    expect(edited.points.at(-1)).toEqual({ id: "point-4", xMm: 3_048, yMm: 3_962 });
+    expect(edited.segments.at(-1)).toEqual({ id: "segment-4", fromPointId: "point-3", toPointId: "point-4", kind: "gate", gateType: "single" });
+    expect(totalLengthMm(edited)).toBe(totalLengthMm(design) + 914);
+  });
+
+  it("rejects a gate wider than the fence span following its anchor", () => {
+    expect(() => insertGateAtPoint(rectangleCorner(), "point-1", feetAndInchesToMm(12, 0), "single", "point-4", "segment-4")).toThrow(/must fit/);
+  });
 });
 
 describe("validated serialization", () => {
   it("round-trips stable schema-versioned JSON", () => {
-    const design = setSegmentKind(rectangleCorner(), "segment-2", "gate");
+    const design = setSegmentKind(rectangleCorner(), "segment-2", "gate", "double");
     const json = stableDesignJson(design);
-    expect(stableDesignJson(normalizeDesign(JSON.parse(json)))).toBe(json);
+    const restored = normalizeDesign(JSON.parse(json));
+    expect(stableDesignJson(restored)).toBe(json);
+    expect(restored.segments[1]).toMatchObject({ kind: "gate", gateType: "double" });
   });
 
   it("rejects disconnected segment topology", () => {
