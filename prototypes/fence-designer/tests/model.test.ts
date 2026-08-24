@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, movePoint, movePointWithLockedFollowing,
-  normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint,
+  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
+  normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToHouseEdge, solvePathBetweenFixedEndsMm,
   stableDesignJson, totalLengthMm,
 } from "../src/model";
 
@@ -43,6 +43,38 @@ describe("deterministic fence geometry", () => {
   it("reports when locked geometry cannot reach a fixed endpoint", () => {
     const design = rectangleCorner();
     expect(() => setSegmentLengthKeepingEndMm(design, "segment-2", 305, true)).toThrow(/cannot reach/);
+  });
+
+  it("closes a multi-angle path between fixed endpoints while preserving every measured run", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: 3_000, yMm: 0 }, "segment-1");
+    design = addPoint(design, { id: "point-3", xMm: 5_000, yMm: 2_500 }, "segment-2");
+    design = addPoint(design, { id: "point-4", xMm: 7_500, yMm: 4_000 }, "segment-3");
+    design = addPoint(design, { id: "point-5", xMm: 9_500, yMm: 2_000 }, "segment-4");
+    const lengths = design.segments.map((segment) => segmentLengthMm(design, segment));
+    const solved = solvePathBetweenFixedEndsMm(design, { xMm: 8_000, yMm: 1_000 });
+    expect(solved.points[0]).toEqual(design.points[0]);
+    expect(solved.points.at(-1)).toMatchObject({ xMm: 8_000, yMm: 1_000 });
+    solved.segments.forEach((segment, index) => expect(Math.abs(segmentLengthMm(solved, segment) - lengths[index])).toBeLessThanOrEqual(2));
+    expect(solved.points.slice(1, -1)).not.toEqual(design.points.slice(1, -1));
+  });
+
+  it("re-solves all flexible angles when one closed-path measurement changes", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: 3_000, yMm: 0 }, "segment-1");
+    design = addPoint(design, { id: "point-3", xMm: 5_000, yMm: 2_500 }, "segment-2");
+    design = addPoint(design, { id: "point-4", xMm: 7_500, yMm: 4_000 }, "segment-3");
+    const originalLengths = design.segments.map((segment) => segmentLengthMm(design, segment));
+    const solved = solvePathBetweenFixedEndsMm(design, design.points.at(-1)!, { segmentId: "segment-2", lengthMm: 3_500 });
+    expect(solved.points[0]).toEqual(design.points[0]);
+    expect(solved.points.at(-1)).toEqual(design.points.at(-1));
+    expect(Math.abs(segmentLengthMm(solved, solved.segments[0]) - originalLengths[0])).toBeLessThanOrEqual(2);
+    expect(Math.abs(segmentLengthMm(solved, solved.segments[1]) - 3_500)).toBeLessThanOrEqual(2);
+    expect(Math.abs(segmentLengthMm(solved, solved.segments[2]) - originalLengths[2])).toBeLessThanOrEqual(2);
+  });
+
+  it("rejects a closure point outside the measured chain reach", () => {
+    expect(() => solvePathBetweenFixedEndsMm(rectangleCorner(), { xMm: 20_000, yMm: 0 })).toThrow(/cannot reach/);
   });
 
   it("recalculates connected lengths when a point moves", () => {
@@ -101,6 +133,14 @@ describe("deterministic fence geometry", () => {
     expect(snapPlanPosition(6_100, 120, true, house)).toEqual({ xMm: 6_100, yMm: 0 });
     expect(snapPlanPosition(12_050, 4_570, true, house)).toEqual({ xMm: 12_192, yMm: 4_575 });
     expect(snapPlanPosition(6_100, 120, false, house)).toEqual({ xMm: 6_100, yMm: 120 });
+  });
+
+  it("finds and recognizes exact house connections independently of angle assistance", () => {
+    const house = { xMm: 0, yMm: 0, lengthMm: 12_192, widthMm: 9_144 };
+    expect(closestPointOnHouseEdge(house, 12_000, 4_600)).toEqual({ xMm: 12_192, yMm: 4_600 });
+    expect(snapToHouseEdge(12_000, 4_600, house)).toEqual({ xMm: 12_192, yMm: 4_600 });
+    expect(snapToHouseEdge(10_000, 4_600, house)).toBeNull();
+    expect(isPointOnHouseEdge({ xMm: 12_192, yMm: 4_600 }, house)).toBe(true);
   });
 
   it("locks prospective runs to deterministic 45-degree bearings only when snap is on", () => {

@@ -131,6 +131,34 @@ export function snapPlanPosition(xMm: number, yMm: number, enabled: boolean, hou
   return Object.freeze(candidates[0]?.point ?? grid);
 }
 
+export function closestPointOnHouseEdge(house: HouseReference, xMm: number, yMm: number): Readonly<{ xMm: number; yMm: number }> {
+  const left = house.xMm; const right = house.xMm + house.lengthMm;
+  const top = house.yMm; const bottom = house.yMm + house.widthMm;
+  const clamp = (value: number, minimum: number, maximum: number) => Math.max(minimum, Math.min(maximum, value));
+  const candidates = [
+    { xMm: left, yMm: clamp(yMm, top, bottom) },
+    { xMm: right, yMm: clamp(yMm, top, bottom) },
+    { xMm: clamp(xMm, left, right), yMm: top },
+    { xMm: clamp(xMm, left, right), yMm: bottom },
+  ];
+  const chosen = candidates.sort((first, second) => Math.hypot(first.xMm - xMm, first.yMm - yMm) - Math.hypot(second.xMm - xMm, second.yMm - yMm))[0];
+  return Object.freeze({ xMm: Math.round(chosen.xMm), yMm: Math.round(chosen.yMm) });
+}
+
+export function snapToHouseEdge(xMm: number, yMm: number, house: HouseReference | null, toleranceMm = 460): Readonly<{ xMm: number; yMm: number }> | null {
+  if (!house) return null;
+  const edge = closestPointOnHouseEdge(house, xMm, yMm);
+  return Math.hypot(edge.xMm - xMm, edge.yMm - yMm) <= toleranceMm ? edge : null;
+}
+
+export function isPointOnHouseEdge(point: Readonly<{ xMm: number; yMm: number }>, house: HouseReference): boolean {
+  const onVertical = (point.xMm === house.xMm || point.xMm === house.xMm + house.lengthMm)
+    && point.yMm >= house.yMm && point.yMm <= house.yMm + house.widthMm;
+  const onHorizontal = (point.yMm === house.yMm || point.yMm === house.yMm + house.widthMm)
+    && point.xMm >= house.xMm && point.xMm <= house.xMm + house.lengthMm;
+  return onVertical || onHorizontal;
+}
+
 export function snapRunEndpoint(
   anchor: Readonly<{ xMm: number; yMm: number }>,
   candidate: Readonly<{ xMm: number; yMm: number }>,
@@ -318,6 +346,67 @@ export function setSegmentLengthKeepingEndMm(design: FenceDesign, segmentId: str
     xMm = Math.round(end.xMm + ux * lengthMm); yMm = Math.round(end.yMm + uy * lengthMm);
   }
   return movePoint(design, start.id, xMm, yMm);
+}
+
+export function solvePathBetweenFixedEndsMm(
+  design: FenceDesign,
+  target: Readonly<{ xMm: number; yMm: number }>,
+  lengthOverride?: Readonly<{ segmentId: string; lengthMm: number }>,
+): FenceDesign {
+  if (design.segments.length < 2) throw new RangeError("Draw at least two measured runs before closing to the house.");
+  if (!Number.isSafeInteger(target.xMm) || !Number.isSafeInteger(target.yMm)) throw new TypeError("Closure point must use integer millimeters.");
+  if (lengthOverride && (!Number.isSafeInteger(lengthOverride.lengthMm) || lengthOverride.lengthMm < 25 || lengthOverride.lengthMm > 304_800)) {
+    throw new RangeError("Segment length must be from 1 inch through 1,000 feet.");
+  }
+  if (lengthOverride && !design.segments.some(({ id }) => id === lengthOverride.segmentId)) throw new TypeError("Segment does not exist.");
+
+  const lengths = design.segments.map((segment) => segment.id === lengthOverride?.segmentId ? lengthOverride.lengthMm : segmentLengthMm(design, segment));
+  const start = design.points[0];
+  const anchorDistance = Math.hypot(target.xMm - start.xMm, target.yMm - start.yMm);
+  const total = lengths.reduce((sum, length) => sum + length, 0);
+  const longest = Math.max(...lengths);
+  const minimumReach = Math.max(0, longest - (total - longest));
+  if (anchorDistance > total + 1 || anchorDistance < minimumReach - 1) {
+    throw new RangeError("Those measured runs cannot reach that house connection. Add or change a measured run, or choose a reachable house point.");
+  }
+
+  const points = design.points.map(({ xMm, yMm }) => ({ xMm, yMm }));
+  const direction = (from: Readonly<{ xMm: number; yMm: number }>, to: Readonly<{ xMm: number; yMm: number }>, fallbackIndex: number) => {
+    const dx = to.xMm - from.xMm; const dy = to.yMm - from.yMm; const distance = Math.hypot(dx, dy);
+    if (distance > 0.000001) return { x: dx / distance, y: dy / distance };
+    const originalStart = design.points[Math.max(0, fallbackIndex)];
+    const originalEnd = design.points[Math.min(design.points.length - 1, fallbackIndex + 1)];
+    const originalDistance = Math.hypot(originalEnd.xMm - originalStart.xMm, originalEnd.yMm - originalStart.yMm);
+    return originalDistance > 0.000001
+      ? { x: (originalEnd.xMm - originalStart.xMm) / originalDistance, y: (originalEnd.yMm - originalStart.yMm) / originalDistance }
+      : { x: 1, y: 0 };
+  };
+
+  for (let iteration = 0; iteration < 250; iteration += 1) {
+    points[points.length - 1] = { xMm: target.xMm, yMm: target.yMm };
+    for (let index = points.length - 2; index >= 0; index -= 1) {
+      const unit = direction(points[index + 1], points[index], index);
+      points[index] = { xMm: points[index + 1].xMm + unit.x * lengths[index], yMm: points[index + 1].yMm + unit.y * lengths[index] };
+    }
+    points[0] = { xMm: start.xMm, yMm: start.yMm };
+    for (let index = 1; index < points.length; index += 1) {
+      const unit = direction(points[index - 1], points[index], index - 1);
+      points[index] = { xMm: points[index - 1].xMm + unit.x * lengths[index - 1], yMm: points[index - 1].yMm + unit.y * lengths[index - 1] };
+    }
+    if (Math.hypot(points.at(-1)!.xMm - target.xMm, points.at(-1)!.yMm - target.yMm) < 0.05) break;
+  }
+
+  if (Math.hypot(points.at(-1)!.xMm - target.xMm, points.at(-1)!.yMm - target.yMm) >= 0.5) {
+    throw new RangeError("The measured runs could not settle on that house connection. Choose a different connection or adjust one measured run.");
+  }
+  points[0] = { xMm: start.xMm, yMm: start.yMm };
+  points[points.length - 1] = { xMm: target.xMm, yMm: target.yMm };
+  const solved = revise(design, {
+    points: design.points.map((point, index) => Object.freeze({ ...point, xMm: Math.round(points[index].xMm), yMm: Math.round(points[index].yMm) })),
+  });
+  const preserved = solved.segments.every((segment, index) => Math.abs(segmentLengthMm(solved, segment) - lengths[index]) <= 2);
+  if (!preserved) throw new RangeError("The measured runs could not close within field-measurement precision. Adjust one measured run and try again.");
+  return solved;
 }
 
 export function pointRole(design: FenceDesign, pointId: string): "open endpoint" | "corner" | "inline" {

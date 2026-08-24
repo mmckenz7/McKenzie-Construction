@@ -23,11 +23,13 @@ The first and last points are open endpoints. Interior points are corners when t
 
 Undo/redo stores validated whole-document snapshots. Stable JSON is schema-versioned and saved only to browser local storage after an explicit Save action. Loading validates and normalizes the document before it becomes active.
 
-Angle assistance is UI editing state rather than a design fact and defaults off. Free-angle placement rounds only to the nearest millimeter and treats exact lengths as authoritative. When optional 45°/90° assistance is enabled, pointer placement also uses the nearest 305-millimeter grid interval and a point within 460 millimeters of any house edge lands exactly on that edge. Exact numeric edits bypass pointer snapping.
+Angle assistance is UI editing state rather than a design fact and defaults off. Free-angle placement rounds only to the nearest millimeter and treats exact lengths as authoritative. House-edge anchoring is separate and remains active within a 460-millimeter pointer tolerance regardless of angle assistance. When optional 45°/90° assistance is enabled, non-house pointer placement also uses the nearest 305-millimeter grid interval. Exact numeric edits bypass pointer snapping.
 
 Length lock is also UI editing state. When enabled, dragging the first point translates the whole path. Dragging any later point preserves the incoming segment length, moves that point around the preceding point, and translates every following point by the same delta. This preserves all segment and gate widths while angles change. Disabling length lock restores free single-point movement and allows adjacent dimensions to change.
 
 Interaction state is cancelable with Escape. A non-passive canvas wheel handler prevents plan zoom from scrolling the surrounding OS page. Dedicated Pan mode remains available, while Command-drag temporarily pans from any tool and two simultaneous touch pointers pan/pinch without placing a drawing point.
+
+**Close to house** requires the path's first point to be anchored to a house edge and at least two measured runs. The user taps the intended second house connection, which is projected to the nearest footprint edge. A deterministic forward/backward reaching solver keeps the first and last connections fixed, preserves the measured length of every fence and gate run within two millimeters of integer-coordinate rounding, and distributes correction across every available interior angle. Reachability is checked before solving; impossible geometry is reported without changing the design. After closure, changing any exact run length re-solves the whole anchored chain while preserving both house connections and every other measured run.
 
 ## Explicit boundary and next slice
 

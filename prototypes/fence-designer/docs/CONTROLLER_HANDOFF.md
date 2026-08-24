@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws one ordered connected path around an optional exact measured house footprint, defaults to free angles, previews each prospective run with a live feet/inches label, treats exact lengths and house connections as authoritative, supports house-fixed angle solving plus locked-length chain dragging or free point editing, offers optional 45°/90° assistance, distinguishes open endpoints and corners, inserts exact-width single/double gate openings from a selected point, supports contained wheel zoom plus dedicated, two-finger, and Command-drag panning, maintains undo/redo, and saves/loads validated local JSON.
+Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws one ordered connected path around an optional exact measured house footprint, defaults to free angles while keeping house anchors active, previews each prospective run with a live feet/inches label, and treats exact lengths and both house connections as authoritative. A native **Close to house** workflow redistributes correction across multiple odd-angle corners while preserving every measured fence/gate run. The prototype also supports locked-length chain dragging or free point editing, optional 45°/90° assistance, exact-width single/double gates, contained wheel zoom plus dedicated/two-finger/Command-drag panning, undo/redo, and validated local JSON.
 
 ## Files and ownership
 
@@ -37,11 +37,11 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 25 deterministic tests passed.
+- 29 deterministic tests passed.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
-- Browser QA passed for free-angle defaults, optional 45°/90° assistance, house-fixed exact-length solving, locked-length downstream chain dragging, free point reshaping, native single/double gate insertion and exact total width, Escape cancellation, contained wheel zoom, dedicated/two-finger/Command-drag pan, draw, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
+- Browser QA passed for free-angle defaults with independent house anchoring, multi-angle full-chain closure between two house connections, post-closure exact-length solving, optional 45°/90° assistance, locked-length downstream dragging, free point reshaping, native single/double gate insertion and exact total width, Escape cancellation, contained wheel zoom, dedicated/two-finger/Command-drag pan, draw, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
 - The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
 - Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 
@@ -49,8 +49,9 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 - The house is a user-measured rectangular context footprint, not a building record. Non-rectangular footprints remain a later extension.
 - Local-plan geometry is not a survey, legal boundary, aerial measurement, or field verification.
-- Exact segment editing moves the end point along the existing bearing, so a following connected span changes; the UI exposes that change immediately.
+- On an open path, exact segment editing moves the end point along the existing bearing, so a following connected span changes visibly. On a path anchored to the house at both ends, the full chain is re-solved instead.
 - House-connected exact edits preserve the house endpoint and solve the nearest angle when locked geometry can reach it. When it cannot, the editor requires an unlock or another corner adjustment rather than silently changing measurements.
+- Full-chain closure requires the first fence point on the house and at least two measured runs. It preserves displayed run measurements with at most two millimeters of integer-coordinate rounding; impossible target/length combinations are rejected.
 - A gate records an exact total opening width and single/double intent. “Double” does not calculate individual leaf sizes and carries no gate assembly, post, hardware, product, quantity, labor, or price rules.
 - Local storage is device/browser specific and has no multi-user or cloud durability.
 - The Deck photo workflow contains no reusable two-point scale calibration. Adding a background image without a trustworthy transform would weaken the measurement boundary, so it is deferred.

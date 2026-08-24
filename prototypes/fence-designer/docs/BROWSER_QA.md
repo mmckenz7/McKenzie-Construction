@@ -35,5 +35,8 @@ Validated workflow:
 27. Pressed Escape while Draw was active and confirmed the editor returned to neutral Edit state, cleared the selection/preview, and displayed a cancellation message.
 28. Command-dragged in neutral Edit state and confirmed the view box panned while the stored point coordinate remained unchanged. The same navigation path accepts two simultaneous touch pointers for pan/pinch without placing a point.
 29. Deterministic geometry tests confirm a house-connected exact-length edit keeps the house endpoint fixed, preserves the preceding locked run, selects the nearest valid angle solution, and rejects unreachable locked geometry.
+30. With free angle active, placed the first point on a 40′ × 20′ house edge, drew three odd-angle spans measuring 15′ 4″, 24′ 8″, and 24′ 7″, chose **Close to house**, and tapped the second house edge.
+31. Confirmed closure moved the flexible corners, fixed both house connections, and retained all three displayed measurements plus the 64′ 7″ total.
+32. Confirmed the closure success message, enabled endpoint gate workflow, and zero browser console errors.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

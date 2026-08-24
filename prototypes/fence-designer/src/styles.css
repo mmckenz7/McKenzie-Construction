@@ -29,6 +29,7 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .canvas-shell { min-height: 560px; position: relative; overflow: hidden; background: #f7f7f2; }
 .plan-canvas { display: block; width: 100%; height: 100%; min-height: 560px; touch-action: none; overscroll-behavior: contain; user-select: none; }
 .plan-canvas.draw { cursor: crosshair; }
+.plan-canvas.close { cursor: crosshair; }
 .plan-canvas.pan { cursor: grab; }
 .plan-canvas.pan.navigating { cursor: grabbing; }
 .canvas-key { position: absolute; z-index: 2; top: 14px; left: 14px; display: flex; flex-wrap: wrap; gap: 12px; border: 1px solid #d5dbd4; background: rgb(255 255 255 / .92); border-radius: 9px; padding: 8px 10px; font-size: .72rem; font-weight: 700; pointer-events: none; }
@@ -55,6 +56,7 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .house-hit { fill: transparent; stroke: transparent; stroke-width: 850; }
 .house-footprint { fill: #dfe4e5; fill-opacity: .82; stroke: #5c6670; stroke-width: 220; }
 .house-reference.selected .house-footprint { stroke: #e4922d; }
+.plan-canvas.close .house-footprint { stroke: #e4922d; stroke-dasharray: 420 220; }
 .house-label rect { fill: #eef1f2; stroke: #77838a; stroke-width: 28; }
 .house-label text { fill: #39464d; font-size: 250px; font-weight: 850; pointer-events: none; }
 .field-heading { margin: 16px 0 7px; font-size: .76rem; letter-spacing: .04em; text-transform: uppercase; color: #59675f; }
