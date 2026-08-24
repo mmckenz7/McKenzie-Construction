@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import { CommunicationReplyComposer } from "@/components/communication-reply-composer";
+import { CommunicationThreadMatch } from "@/components/communication-thread-match";
 import { CommunicationThreadControls } from "@/components/communication-thread-controls";
 import { CommunicationThreadMessages } from "@/components/communication-thread-messages";
 import { TextMessageComposer } from "@/components/text-message-composer";
@@ -37,7 +38,7 @@ export default async function CommunicationThreadPage({ params }: ThreadPageProp
 
   if (threadResult.error || !threadResult.data) notFound();
 
-  const [messagesResult, leadResult, customerResult, teamResult] = await Promise.all([
+  const [messagesResult, leadResult, customerResult, teamResult, matchLeadsResult, matchCustomersResult] = await Promise.all([
     supabase.from("communication_messages").select("id,direction,sender,recipient,subject,body,status,provider,metadata,is_read,has_attachments,received_at,sent_at,created_at").eq("thread_id", threadId).order("created_at", { ascending: false }),
     threadResult.data.lead_id
       ? supabase.from("leads").select("id,name,email,phone,project_type").eq("id", threadResult.data.lead_id).maybeSingle()
@@ -46,6 +47,12 @@ export default async function CommunicationThreadPage({ params }: ThreadPageProp
       ? supabase.from("customers").select("id,customer_name,email,phone,project_type").eq("id", threadResult.data.customer_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     supabase.from("team_members").select("id,name").eq("status", "active").order("name", { ascending: true }),
+    !threadResult.data.lead_id && !threadResult.data.customer_id
+      ? supabase.from("leads").select("id,name,email,phone,status").neq("status", "lost").order("name", { ascending: true }).limit(250)
+      : Promise.resolve({ data: [], error: null }),
+    !threadResult.data.lead_id && !threadResult.data.customer_id
+      ? supabase.from("customers").select("id,customer_name,email,phone,status").neq("status", "inactive").order("customer_name", { ascending: true }).limit(250)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   const matchedRecord = leadResult.data ?? customerResult.data;
@@ -66,6 +73,16 @@ export default async function CommunicationThreadPage({ params }: ThreadPageProp
     occurredAt: String(message.received_at ?? message.sent_at ?? message.created_at),
     sentAttachments: message.direction === "outbound" && message.has_attachments ? sentAttachments(message.metadata) : [],
   }));
+  const matchLeads = (matchLeadsResult.data ?? []).map((lead) => ({
+    id: String(lead.id),
+    label: String(lead.name),
+    detail: String(lead.email ?? lead.phone ?? "No contact detail"),
+  }));
+  const matchCustomers = (matchCustomersResult.data ?? []).map((customer) => ({
+    id: String(customer.id),
+    label: String(customer.customer_name),
+    detail: String(customer.email ?? customer.phone ?? "No contact detail"),
+  }));
 
   return <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6">
     <div className="mx-auto max-w-5xl">
@@ -74,7 +91,7 @@ export default async function CommunicationThreadPage({ params }: ThreadPageProp
 
     <CommunicationThreadMessages messages={messages} />
 
-    {matchedRecord ? <section id="reply" className="mt-7 scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-slate-950">Reply from Mission Control</h2><p className="mt-1 text-sm text-slate-500">This reply stays attached to the customer record and conversation history.</p><div className="mt-5">{isTextThread ? <TextMessageComposer recipient={recipient} threadId={threadId} leadId={threadResult.data.lead_id} customerId={threadResult.data.customer_id} /> : <CommunicationReplyComposer recipient={recipient} threadId={threadId} leadId={threadResult.data.lead_id} customerId={threadResult.data.customer_id} initialSubject={threadResult.data.subject} />}</div></section> : <section className="mt-7 rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-semibold text-amber-950">Match this conversation before replying</h2><p className="mt-1 text-sm text-amber-800">The complete message stays in the Company Inbox. Connect it to a lead or customer so replies and future history attach to the correct CRM record.</p></section>}
+    {matchedRecord ? <section id="reply" className="mt-7 scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-slate-950">Reply from Mission Control</h2><p className="mt-1 text-sm text-slate-500">This reply stays attached to the customer record and conversation history.</p><div className="mt-5">{isTextThread ? <TextMessageComposer recipient={recipient} threadId={threadId} leadId={threadResult.data.lead_id} customerId={threadResult.data.customer_id} /> : <CommunicationReplyComposer recipient={recipient} threadId={threadId} leadId={threadResult.data.lead_id} customerId={threadResult.data.customer_id} initialSubject={threadResult.data.subject} />}</div></section> : <CommunicationThreadMatch threadId={threadId} leads={matchLeads} customers={matchCustomers} />}
     <div id="thread-bottom" className="flex justify-end py-5"><a href="#thread-messages-top" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-950">↑ Back to top</a></div>
     </div>
   </main>;

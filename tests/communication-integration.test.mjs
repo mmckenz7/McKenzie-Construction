@@ -23,6 +23,7 @@ const threadControlsRoute = readFileSync("src/app/api/communications/threads/[th
 const threadControls = readFileSync("src/components/communication-thread-controls.tsx", "utf8");
 const threadMessages = readFileSync("src/components/communication-thread-messages.tsx", "utf8");
 const textRoute = readFileSync("src/app/api/communications/texts/route.ts", "utf8");
+const threadMatch = readFileSync("src/components/communication-thread-match.tsx", "utf8");
 
 test("communication history and consent tables are service-role only", () => {
   assert.match(migration, /create table if not exists public\.communication_messages/);
@@ -134,6 +135,21 @@ test("matched inbox conversations have server-validated operational controls", (
   assert.match(inbox, /view === "archived"/);
   assert.match(inbox, /CommunicationThreadControls/);
   assert.match(threadPage, /CommunicationThreadControls/);
+});
+
+test("unmatched inbox conversations can be matched once to an exact CRM record", () => {
+  assert.match(threadControlsRoute, /action === "match"/);
+  assert.match(threadControlsRoute, /communicationWorkspaceMatchesSingletonCompany/);
+  assert.match(threadControlsRoute, /This conversation is already matched/);
+  assert.match(threadControlsRoute, /source_lead_id/);
+  assert.match(threadControlsRoute, /\.is\("lead_id", null\)/);
+  assert.match(threadControlsRoute, /\.is\("customer_id", null\)/);
+  assert.match(threadControlsRoute, /communication_messages/);
+  assert.match(threadPage, /CommunicationThreadMatch/);
+  assert.match(threadMatch, /Who does this conversation belong to\?/);
+  assert.match(threadMatch, /Leave vendor, account, and system mail unmatched/);
+  assert.match(threadMatch, /action: "match"/);
+  assert.match(threadMatch, /Match conversation/);
 });
 
 test("conversation threads default to newest first with fast navigation and an order selector", () => {
