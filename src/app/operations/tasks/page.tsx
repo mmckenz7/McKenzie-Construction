@@ -48,6 +48,17 @@ type Lead = {
   lead_status: string | null;
 };
 
+type Project = {
+  id: string;
+  project_name: string;
+  customer_id: string | null;
+};
+
+type Customer = {
+  id: string;
+  customer_name: string;
+};
+
 export default async function TasksPage() {
   const supabase = createAdminServerClient();
 
@@ -55,6 +66,8 @@ export default async function TasksPage() {
     tasksResult,
     teamResult,
     leadsResult,
+    projectsResult,
+    customersResult,
   ] = await Promise.all([
     supabase
       .from("tasks")
@@ -126,6 +139,20 @@ export default async function TasksPage() {
       .order("created_at", {
         ascending: false,
       }),
+
+    supabase
+      .from("projects")
+      .select("id, project_name, customer_id")
+      .order("created_at", {
+        ascending: false,
+      }),
+
+    supabase
+      .from("customers")
+      .select("id, customer_name")
+      .order("customer_name", {
+        ascending: true,
+      }),
   ]);
 
   const tasks =
@@ -136,6 +163,12 @@ export default async function TasksPage() {
 
   const leads =
     (leadsResult.data ?? []) as Lead[];
+
+  const projects =
+    (projectsResult.data ?? []) as Project[];
+
+  const customers =
+    (customersResult.data ?? []) as Customer[];
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 sm:px-6">
@@ -209,14 +242,42 @@ export default async function TasksPage() {
           </section>
         ) : null}
 
+        {projectsResult.error ? (
+          <section className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6">
+            <h2 className="font-bold text-red-800">
+              Unable to load related projects
+            </h2>
+
+            <p className="mt-2 text-sm text-red-700">
+              {projectsResult.error.message}
+            </p>
+          </section>
+        ) : null}
+
+        {customersResult.error ? (
+          <section className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6">
+            <h2 className="font-bold text-red-800">
+              Unable to load related customers
+            </h2>
+
+            <p className="mt-2 text-sm text-red-700">
+              {customersResult.error.message}
+            </p>
+          </section>
+        ) : null}
+
         {!tasksResult.error &&
         !teamResult.error &&
-        !leadsResult.error ? (
+        !leadsResult.error &&
+        !projectsResult.error &&
+        !customersResult.error ? (
           <div className="mt-6">
             <TaskDashboard
               initialTasks={tasks}
               teamMembers={teamMembers}
               leads={leads}
+              projects={projects}
+              customers={customers}
             />
           </div>
         ) : null}

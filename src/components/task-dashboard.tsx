@@ -47,10 +47,23 @@ type Lead = {
   lead_status: string | null;
 };
 
+type Project = {
+  id: string;
+  project_name: string;
+  customer_id: string | null;
+};
+
+type Customer = {
+  id: string;
+  customer_name: string;
+};
+
 type TaskDashboardProps = {
   initialTasks: Task[];
   teamMembers: TeamMember[];
   leads: Lead[];
+  projects: Project[];
+  customers: Customer[];
 };
 
 type TaskFormState = {
@@ -416,6 +429,8 @@ export default function TaskDashboard({
   initialTasks,
   teamMembers,
   leads,
+  projects,
+  customers,
 }: TaskDashboardProps) {
   const router = useRouter();
 
@@ -449,6 +464,28 @@ export default function TaskDashboard({
   const leadMap = useMemo(
     () => new Map(leads.map((lead) => [String(lead.id), lead])),
     [leads],
+  );
+
+  const projectMap = useMemo(
+    () =>
+      new Map(
+        projects.map((project) => [
+          project.id,
+          project,
+        ]),
+      ),
+    [projects],
+  );
+
+  const customerMap = useMemo(
+    () =>
+      new Map(
+        customers.map((customer) => [
+          customer.id,
+          customer,
+        ]),
+      ),
+    [customers],
   );
 
   const existingAutomationKeys = useMemo(
@@ -922,18 +959,30 @@ export default function TaskDashboard({
   }
 
   function getTaskDestination(task: Task) {
-    if (!task.lead_id) {
-      return null;
+    if (task.project_id) {
+      return `/operations/projects/${encodeURIComponent(
+        task.project_id,
+      )}`;
     }
 
-    const anchor =
-      task.task_type === "review_follow_up_email"
-        ? "#email-draft-review"
-        : "#lead-workflow";
+    if (task.lead_id) {
+      const anchor =
+        task.task_type === "review_follow_up_email"
+          ? "#email-draft-review"
+          : "#lead-workflow";
 
-    return `/admin/leads/${encodeURIComponent(
-      task.lead_id,
-    )}${anchor}`;
+      return `/admin/leads/${encodeURIComponent(
+        task.lead_id,
+      )}${anchor}`;
+    }
+
+    if (task.customer_id) {
+      return `/sales/customers/${encodeURIComponent(
+        task.customer_id,
+      )}`;
+    }
+
+    return null;
   }
 
   function renderTaskForm(
@@ -1247,6 +1296,19 @@ export default function TaskDashboard({
       ? leadMap.get(task.lead_id)
       : null;
 
+    const relatedProject = task.project_id
+      ? projectMap.get(task.project_id)
+      : null;
+
+    const relatedCustomerId =
+      task.customer_id ??
+      relatedProject?.customer_id ??
+      null;
+
+    const relatedCustomer = relatedCustomerId
+      ? customerMap.get(relatedCustomerId)
+      : null;
+
     const isUpdating = updatingTaskId === task.id;
     const isEditing = editingTaskId === task.id;
     const destination = getTaskDestination(task);
@@ -1393,6 +1455,42 @@ export default function TaskDashboard({
 
                   <span className="ml-2 font-bold text-slate-500">
                     Open Task →
+                  </span>
+                </button>
+              ) : null}
+
+              {relatedProject || relatedCustomer ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (destination) {
+                      router.push(destination);
+                    }
+                  }}
+                  className="mt-3 block w-full cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-left text-xs text-slate-700 transition hover:border-slate-400 hover:bg-white"
+                >
+                  {relatedProject ? (
+                    <span className="block">
+                      <span className="font-bold">
+                        Project:
+                      </span>{" "}
+                      <span className="font-semibold underline decoration-slate-300 underline-offset-4">
+                        {relatedProject.project_name}
+                      </span>
+                    </span>
+                  ) : null}
+
+                  {relatedCustomer ? (
+                    <span className="mt-1 block">
+                      <span className="font-bold">
+                        Customer:
+                      </span>{" "}
+                      {relatedCustomer.customer_name}
+                    </span>
+                  ) : null}
+
+                  <span className="mt-2 block font-bold text-slate-500">
+                    Open related record →
                   </span>
                 </button>
               ) : null}
