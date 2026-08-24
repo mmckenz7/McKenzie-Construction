@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CustomerProjectManager } from "@/components/customer-project-manager";
 import { CustomerCommunicationPanel } from "@/components/customer-communication-panel";
 import { OsCallButton } from "@/components/os-call-button";
+import { loadContactCommunicationThreads } from "@/lib/communications/contact-threads";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const dynamic = "force-dynamic";
@@ -252,7 +253,7 @@ export default async function CustomerDetailPage({
     projectsResult,
     activeTeamResult,
     companySettingsResult,
-    communicationThreadsResult,
+    communicationThreads,
   ] = await Promise.all([
     customer.assigned_to
       ? supabase
@@ -378,19 +379,17 @@ export default async function CustomerDetailPage({
       .limit(1)
       .maybeSingle(),
 
-    supabase
-      .from("communication_threads")
-      .select("id,subject,provider")
-      .eq("customer_id", customerId)
-      .neq("status", "archived")
-      .order("last_message_at", { ascending: false })
-      .limit(20),
+    loadContactCommunicationThreads(supabase, {
+      customerId,
+      leadId: customer.source_lead_id,
+      email: customer.email,
+      phone: customer.phone,
+    }),
   ]);
 
   const assignedEmployee =
     (assignedEmployeeResult.data ??
       null) as TeamMember | null;
-  const communicationThreads = communicationThreadsResult.data ?? [];
   const emailThread = communicationThreads.find((thread) => thread.provider !== "twilio") ?? null;
   const smsThread = communicationThreads.find((thread) => thread.provider === "twilio") ?? null;
 
@@ -567,6 +566,7 @@ export default async function CustomerDetailPage({
               emailThreadId={emailThread?.id ?? null}
               smsThreadId={smsThread?.id ?? null}
               initialSubject={emailThread?.subject ?? `Regarding your ${customer.project_type?.trim() || "project"}`}
+              threads={communicationThreads}
             />
 
             <CustomerProjectManager

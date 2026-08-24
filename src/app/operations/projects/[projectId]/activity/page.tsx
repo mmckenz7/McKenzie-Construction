@@ -80,6 +80,10 @@ const activityLabels: Record<
   material_issue_updated:
     "Material issue updated",
   message_created: "Message",
+  communication_received:
+    "Customer message received",
+  communication_sent:
+    "Customer message sent",
   project_updated: "Project update",
   project_note: "Project note",
   change_order_created:
@@ -139,7 +143,10 @@ function getCategory(
 
   if (
     activityType ===
-    "message_created"
+      "message_created" ||
+    activityType.startsWith(
+      "communication_",
+    )
   ) {
     return "messages";
   }
@@ -202,6 +209,14 @@ function getActivityHref(
 
   if (
     entry.sourceTable ===
+      "communication_threads" &&
+    entry.sourceId
+  ) {
+    return `/sales/communications/${entry.sourceId}`;
+  }
+
+  if (
+    entry.sourceTable ===
     "project_change_orders"
   ) {
     return `/operations/projects/${projectId}/change-orders`;
@@ -241,6 +256,13 @@ function getActivityLinkLabel(
     "project_messages"
   ) {
     return "Open Messages";
+  }
+
+  if (
+    entry.sourceTable ===
+    "communication_threads"
+  ) {
+    return "Open Conversation";
   }
 
   if (

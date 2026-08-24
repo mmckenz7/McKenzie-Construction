@@ -7,6 +7,7 @@ import {
   createUnauthorizedApiResponse,
   getAuthenticatedApiUser,
 } from "@/lib/api-auth";
+import { loadContactCommunicationThreads } from "@/lib/communications/contact-threads";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 type RouteContext = {
@@ -245,6 +246,138 @@ export async function GET(
     };
   });
 
+  const projectCustomerId =
+    typeof projectResult.data.customer_id === "string"
+      ? projectResult.data.customer_id
+      : null;
+
+  let communicationActivity: typeof activity = [];
+
+  if (projectCustomerId) {
+    const customerResult = await supabase
+      .from("customers")
+      .select("id,source_lead_id,email,phone")
+      .eq("id", projectCustomerId)
+      .maybeSingle();
+
+    if (!customerResult.error && customerResult.data) {
+      const threads =
+        await loadContactCommunicationThreads(
+          supabase,
+          {
+            customerId: customerResult.data.id,
+            leadId:
+              customerResult.data.source_lead_id,
+            email: customerResult.data.email,
+            phone: customerResult.data.phone,
+          },
+        );
+
+      if (threads.length) {
+        const messagesResult = await supabase
+          .from("communication_messages")
+          .select("id,thread_id,channel,direction,subject,body,status,received_at,sent_at,created_at")
+          .in(
+            "thread_id",
+            threads.map((thread) => thread.id),
+          )
+          .order("received_at", {
+            ascending: false,
+            nullsFirst: false,
+          })
+          .order("sent_at", {
+            ascending: false,
+            nullsFirst: false,
+          })
+          .order("created_at", {
+            ascending: false,
+          });
+
+        if (!messagesResult.error) {
+          const latestByThread = new Map<
+            string,
+            (typeof messagesResult.data)[number]
+          >();
+
+          for (const message of messagesResult.data ?? []) {
+            if (
+              message.thread_id &&
+              !latestByThread.has(message.thread_id)
+            ) {
+              latestByThread.set(
+                message.thread_id,
+                message,
+              );
+            }
+          }
+
+          communicationActivity = threads.map(
+            (thread) => {
+              const latest = latestByThread.get(
+                thread.id,
+              );
+              const occurredAt =
+                latest?.received_at ??
+                latest?.sent_at ??
+                latest?.created_at ??
+                thread.last_message_at;
+
+              return {
+                id: `communication:${thread.id}`,
+                activityType:
+                  latest?.direction === "inbound"
+                    ? "communication_received"
+                    : "communication_sent",
+                title:
+                  thread.subject ??
+                  (thread.provider === "twilio"
+                    ? "Text conversation"
+                    : "Email conversation"),
+                description:
+                  latest?.body ?? null,
+                actorType:
+                  latest?.direction === "inbound"
+                    ? "customer"
+                    : "office",
+                actorAppUserId: null,
+                subcontractorId: null,
+                sourceTable:
+                  "communication_threads",
+                sourceId: thread.id,
+                metadata: {
+                  channel:
+                    latest?.channel ??
+                    (thread.provider === "twilio"
+                      ? "sms"
+                      : "email"),
+                  status:
+                    latest?.status ?? thread.status,
+                  relationship:
+                    "exact_contact_identity",
+                },
+                occurredAt,
+                createdAt: occurredAt,
+                subcontractor: null,
+                appUser: null,
+              };
+            },
+          );
+        }
+      }
+    }
+  }
+
+  const combinedActivity = [
+    ...activity,
+    ...communicationActivity,
+  ]
+    .sort(
+      (left, right) =>
+        Date.parse(right.occurredAt) -
+        Date.parse(left.occurredAt),
+    )
+    .slice(0, 250);
+
   return NextResponse.json({
     success: true,
     project: normalizeProject(
@@ -253,6 +386,6 @@ export async function GET(
         unknown
       >,
     ),
-    activity,
+    activity: combinedActivity,
   });
 }

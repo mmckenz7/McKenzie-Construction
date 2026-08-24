@@ -6,6 +6,7 @@ import { CustomerCommunicationPanel } from "@/components/customer-communication-
 import LeadNotesForm from "@/components/lead-notes-form";
 import LeadStageWorkflow from "@/components/lead-stage-workflow";
 import { OsCallButton } from "@/components/os-call-button";
+import { loadContactCommunicationThreads } from "@/lib/communications/contact-threads";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const dynamic = "force-dynamic";
@@ -270,7 +271,6 @@ export default async function LeadDetailPage({
     taskResult,
     activityResult,
     settingsResult,
-    communicationThreadsResult,
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -325,13 +325,6 @@ export default async function LeadDetailPage({
       .limit(1)
       .maybeSingle(),
 
-    supabase
-      .from("communication_threads")
-      .select("id,subject,provider")
-      .eq("lead_id", leadId)
-      .neq("status", "archived")
-      .order("last_message_at", { ascending: false })
-      .limit(20),
   ]);
 
   if (leadResult.error || !leadResult.data) {
@@ -339,7 +332,15 @@ export default async function LeadDetailPage({
   }
 
   const lead = leadResult.data as Lead;
-  const communicationThreads = communicationThreadsResult.data ?? [];
+  const communicationThreads =
+    await loadContactCommunicationThreads(
+      supabase,
+      {
+        leadId,
+        email: lead.email,
+        phone: lead.phone,
+      },
+    );
   const emailThread = communicationThreads.find((thread) => thread.provider !== "twilio") ?? null;
   const smsThread = communicationThreads.find((thread) => thread.provider === "twilio") ?? null;
 
@@ -540,6 +541,7 @@ export default async function LeadDetailPage({
               emailThreadId={emailThread?.id ?? null}
               smsThreadId={smsThread?.id ?? null}
               initialSubject={emailThread?.subject ?? `Regarding your ${lead.project_type?.trim() || "project"}`}
+              threads={communicationThreads}
             />
 
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
