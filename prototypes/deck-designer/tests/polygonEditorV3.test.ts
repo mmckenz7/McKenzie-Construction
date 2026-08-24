@@ -1,6 +1,6 @@
 // @ts-ignore The production root intentionally does not install this isolated prototype package's test runner.
 import { describe, expect, it } from "vitest";
-import { addBumpoutOnEdge, deriveCornerAlignmentGuides, moveOrthogonalPolygonCorner, movePolygonCorner, movePolygonSegment, resizePolygonEdge } from "../src/polygonEditorV3";
+import { addBumpoutOnEdge, deriveCornerAlignmentGuides, moveOrthogonalPolygonCorner, movePolygonCorner, movePolygonSegment, resizePolygonEdge, setPolygonEdgeAngle } from "../src/polygonEditorV3";
 import { normalizePolygon } from "../src/polygon";
 
 const rectangle = Object.freeze([{ x: 0, z: 0 }, { x: 192, z: 0 }, { x: 192, z: 144 }, { x: 0, z: 144 }]);
@@ -40,6 +40,20 @@ describe("direct v3 polygon authoring", () => {
 
   it("rejects a side length that would collapse the selected segment", () => {
     expect(() => resizePolygonEdge(rectangle, 0, 0, 6)).toThrow(/at least 6 inches/i);
+  });
+
+  it("sets an exact side angle while preserving length and the attached outline", () => {
+    const next = setPolygonEdgeAngle(rectangle, 0, 45);
+    expect(next[0]).toEqual(rectangle[0]);
+    expect(next[1]).toEqual({ x: 135.76, z: 135.76 });
+    expect(Math.hypot(next[1].x, next[1].z)).toBeCloseTo(192, 1);
+    expect(normalizePolygon(next)).toEqual(next);
+  });
+
+  it("normalizes wrapped angles and rejects non-finite input", () => {
+    expect(setPolygonEdgeAngle(rectangle, 0, -90)[1]).toEqual({ x: 0, z: -192 });
+    expect(setPolygonEdgeAngle(rectangle, 0, 270)).toEqual(setPolygonEdgeAngle(rectangle, 0, -90));
+    expect(() => setPolygonEdgeAngle(rectangle, 0, Number.NaN)).toThrow(/finite number/i);
   });
 
   it("anchors a bumpout to an existing corner when the click is near the edge endpoint", () => {

@@ -271,8 +271,8 @@ export function PlanView({ design, geometry, showFraming, snapIncrement, onDimen
 
 export function formatFeetInches(inches: number): string {
   const sign = inches < 0 ? "−" : "";
-  const absolute = Math.abs(inches);
-  const feet = Math.floor(absolute / 12);
-  const remainder = Math.round((absolute - feet * 12) * 100) / 100;
+  const rounded = Math.round(Math.abs(inches) * 100) / 100;
+  const feet = Math.floor(rounded / 12);
+  const remainder = Math.round((rounded - feet * 12) * 100) / 100;
   return `${sign}${feet}′ ${remainder}″`;
 }

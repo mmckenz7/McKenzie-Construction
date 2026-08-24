@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-24 exact selected-side direction
+
+- Selecting one blueprint side now exposes its measured length and exact direction together. The plain-language label defines 0° as right and 90° as away from the house.
+- Desktop QA changed a 20-foot upper side from 0° to 15°. Its length stayed exactly 20 feet, the shared end corner moved, the attached next side followed, and the plan, 3D model, area, status, and Undo history updated together.
+- The angled test exposed and fixed a display-only carry error that could format a nearly exact 240-inch member as 19′ 12″. Measurements now carry the rounded inch into feet and display 20′ 0″.
+- Undo restored the original rectangle. At 390 by 844, the contextual direction field remained visible and accepted an exact 10° edit; the viewport override was reset afterward.
+- Full validation passed 205 tests, isolation, build, golden fixtures, and the repository-wide build. The measured bundle is 86.1 KiB initial, 119.9 KiB largest, and 242.3 KiB total gzip under the 99/170/244 KiB ceilings.
+
 ## 2026-08-24 authoritative picture-frame pattern
 
 - Deck setup offers **Standard** and **Picture frame** as plain-language choices. The selection is a DeckDesign v3 fact and older local files default to the prior standard layout.

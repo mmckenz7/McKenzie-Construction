@@ -177,3 +177,26 @@ export function resizePolygonEdge(
   if (Math.abs(alignment) < .99) throw new RangeError("Exact side length requires a square connected side; drag the corner for an angled layout.");
   return movePolygonSegment(outer, connectedEdgeIndex, (length - edge.length) / alignment, snapIncrement);
 }
+
+export function setPolygonEdgeAngle(
+  outer: readonly PolygonPoint[],
+  edgeIndex: number,
+  requestedDegrees: number,
+): readonly PolygonPoint[] {
+  const edges = deriveGeometricPolygonEdges(outer);
+  const edge = edges[edgeIndex];
+  if (!edge) throw new RangeError("Select an existing outline segment before changing its angle.");
+  if (!Number.isFinite(requestedDegrees)) throw new TypeError("Side angle must be a finite number of degrees.");
+  const degrees = ((requestedDegrees % 360) + 360) % 360;
+  const radians = degrees * Math.PI / 180;
+  const round = (value: number) => {
+    const rounded = Math.round(value * 100) / 100;
+    return Object.is(rounded, -0) ? 0 : rounded;
+  };
+  const next = [...outer];
+  next[(edgeIndex + 1) % next.length] = Object.freeze({
+    x: round(edge.start.x + Math.cos(radians) * edge.length),
+    z: round(edge.start.z + Math.sin(radians) * edge.length),
+  });
+  return Object.freeze(next);
+}

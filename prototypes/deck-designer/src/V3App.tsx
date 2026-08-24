@@ -10,7 +10,7 @@ import { formatFeetInches } from "./PlanView";
 import { saveDeckDesignV3 } from "./storageV3";
 import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
-import { addBumpoutOnEdge, moveOrthogonalPolygonCorner, movePolygonCorner, movePolygonSegment, resizePolygonEdge } from "./polygonEditorV3";
+import { addBumpoutOnEdge, moveOrthogonalPolygonCorner, movePolygonCorner, movePolygonSegment, resizePolygonEdge, setPolygonEdgeAngle } from "./polygonEditorV3";
 import type { ConfirmedPhotoFacts, PhotoIntakeReview } from "./photoIntake";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
@@ -124,6 +124,21 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Side length rejected.");
+    }
+  };
+  const updateSegmentAngle = (edgeId: string, degrees: number) => {
+    const edgeIndex = geometry.platformEdges.findIndex((edge) => edge.id === edgeId);
+    if (edgeIndex < 0) { setMessage("Select a side before changing its angle."); return; }
+    try {
+      const current = history.present.platforms.find((item) => item.id === platform.id)!;
+      const nextOuter = setPolygonEdgeAngle(current.region.outer, edgeIndex, degrees);
+      if (replaceRegion(nextOuter, true)) {
+        setSelectedEdgeId(deriveGeometricPolygonEdges(nextOuter)[edgeIndex]?.id ?? null);
+        const normalizedDegrees = ((degrees % 360) + 360) % 360;
+        setMessage(`Selected side changed to ${Math.round(normalizedDegrees * 100) / 100}°.`);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Side angle rejected.");
     }
   };
   const updatePlatform = (update: Partial<DeckPlatformV3>, nextMessage: string) => {
@@ -385,9 +400,10 @@ export function V3App({ initialDesign, initialMessage = "Corner editor ready.", 
             const isFree = platform.edgeConditions.some((condition) => condition.edgeId === edge.id && condition.condition === "free");
             const horizontal = Math.abs(edge.end.x - edge.start.x) >= Math.abs(edge.end.z - edge.start.z);
             const stairReference = horizontal ? edge.start.x <= edge.end.x ? "left" : "right" : edge.start.z <= edge.end.z ? "top" : "bottom";
+            const edgeDirection = Math.round(((((Math.atan2(edge.end.z - edge.start.z, edge.end.x - edge.start.x) * 180 / Math.PI) % 360) + 360) % 360) * 100) / 100;
             return <>
               <div className="plan-action-copy"><strong>{formatFeetInches(edge.length)} side selected</strong><small>{activeStairSystem ? `This side has stairs with ${activeStairSystem.landings.length} landing${activeStairSystem.landings.length === 1 ? "" : "s"}.` : isFree ? "Length, bumpout, and stair controls apply only to this side." : "House side selected. Stairs are unavailable here."}</small></div>
-              <div className="plan-action-fields segment-fields"><V3NumberField label="Deck edge length (feet)" value={Math.round(edge.length / 12 * 100) / 100} step={.5} onCommit={(value) => updateSegmentLength(edge.id, value * 12)} />{activeStairSystem && !activeStairSystem.locked && <><V3NumberField label={`Stairs from ${stairReference} end (feet)`} value={Math.round(activeStairSystem.offset / 12 * 100) / 100} step={.5} onCommit={(value) => moveActiveStairs(value * 12, `Stairs moved to ${value} feet from the ${stairReference} end.`)} /><V3NumberField label="Stair width (feet)" value={Math.round(activeStairSystem.width / 12 * 100) / 100} step={.5} onCommit={(value) => { const width = value * 12; updateStairSystem({ width, landings: activeStairSystem.landings.map((landing) => ({ ...landing, width: Math.max(landing.width, width) })) }, "Stair width updated exactly."); }} /></>}</div>
+              <div className="plan-action-fields segment-fields"><V3NumberField label="Deck edge length (feet)" value={Math.round(edge.length / 12 * 100) / 100} step={.5} onCommit={(value) => updateSegmentLength(edge.id, value * 12)} /><V3NumberField label="Direction · 0° right, 90° away" value={edgeDirection} step={1} onCommit={(value) => updateSegmentAngle(edge.id, value)} />{activeStairSystem && !activeStairSystem.locked && <><V3NumberField label={`Stairs from ${stairReference} end (feet)`} value={Math.round(activeStairSystem.offset / 12 * 100) / 100} step={.5} onCommit={(value) => moveActiveStairs(value * 12, `Stairs moved to ${value} feet from the ${stairReference} end.`)} /><V3NumberField label="Stair width (feet)" value={Math.round(activeStairSystem.width / 12 * 100) / 100} step={.5} onCommit={(value) => { const width = value * 12; updateStairSystem({ width, landings: activeStairSystem.landings.map((landing) => ({ ...landing, width: Math.max(landing.width, width) })) }, "Stair width updated exactly."); }} /></>}</div>
               {!activeStairSystem ? <div className="plan-action-buttons"><button disabled={hasEdgeReferences} onClick={() => addBumpoutToEdge(edge.id)}>{hasEdgeReferences ? "Edit shape first" : "Add bumpout"}</button><button className="primary" disabled={!isFree || edge.length < 48} onClick={() => addStairsToEdge(edge.id, edge.length)}>Add stairs</button></div> : activeStairSystem.locked ? <div className="plan-action-buttons"><button onClick={() => updateStairSystem({ locked: false }, "Stairs reopened for editing.")}>Edit stairs</button><button className="primary" onClick={() => { setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); }}>Close side</button></div> : <>
                 <div className="automatic-standard-note"><strong>Step depth is automatic</strong><small>{activeStairSystem.treadDepth}&quot; conceptual standard; local code and field conditions still require review.</small></div>
                 <div className="plan-action-buttons"><button onClick={() => addLanding("top")}>Add top landing</button><button onClick={() => addLanding("midway")}>Add midway landing</button><button className="primary" onClick={lockStairSystem}>Done with side</button></div>

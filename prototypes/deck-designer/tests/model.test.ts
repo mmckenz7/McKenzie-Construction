@@ -136,6 +136,8 @@ describe("direct plan editing", () => {
   it("formats grade references below the local datum without floor-sign ambiguity", () => {
     expect(formatFeetInches(-6)).toBe("−0′ 6″");
     expect(formatFeetInches(-18)).toBe("−1′ 6″");
+    expect(formatFeetInches(239.999)).toBe("20′ 0″");
+    expect(formatFeetInches(-239.999)).toBe("−20′ 0″");
   });
 
   it("snaps dimensions deterministically", () => {

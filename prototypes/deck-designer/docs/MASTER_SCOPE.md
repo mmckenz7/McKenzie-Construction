@@ -50,7 +50,8 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Drag handles and selectable grid snapping for rectangle and L-cutout dimensions
 - [x] Direct bounded stair movement along exact v3 geometric edges
 - [x] Staged Deck Layout → locked Railings workflow with a dedicated uncluttered railing-selection page
-- [ ] Arbitrary angle constraints and broader accessory selection
+- [x] Exact selected-side angle entry with deterministic attached-corner updates
+- [ ] Multi-side angle constraints and broader accessory selection
 - [x] Prototype-only canonical custom-polygon kernel and contract spike (not yet part of DeckDesign)
 - [x] Prototype-only contained-hole region kernel with subtractive area and split member intervals
 - [x] Browser editor for exact rectangular cutouts/obstacles on the selected platform
