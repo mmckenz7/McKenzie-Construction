@@ -517,13 +517,13 @@ export default async function ProjectsPage({
       <div className="mx-auto max-w-[1500px]">
         <div className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3">
           <Link
-            href="/admin"
+            href="/operations"
             className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
             <span aria-hidden="true">
               ←
             </span>
-            Lead Dashboard
+            Operations Dashboard
           </Link>
 
           <Link
@@ -541,10 +541,10 @@ export default async function ProjectsPage({
           </Link>
 
           <Link
-            href="/admin/team"
+            href="/operations/installers"
             className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
-            Team
+            Installers
           </Link>
         </div>
 

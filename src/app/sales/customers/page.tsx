@@ -115,11 +115,11 @@ export default async function CustomersPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <Link
-            href="/admin"
+            href="/sales"
             className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
             <span aria-hidden="true">←</span>
-            Back to Lead Dashboard
+            Back to Sales
           </Link>
         </div>
 
@@ -201,7 +201,7 @@ export default async function CustomersPage() {
             </p>
 
             <Link
-              href="/admin"
+              href="/sales/leads"
               className="mt-6 inline-flex rounded-lg bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
             >
               View Leads

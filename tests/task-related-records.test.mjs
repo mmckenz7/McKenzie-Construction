@@ -37,3 +37,11 @@ test("both task workspaces load the related-record maps", () => {
     assert.match(page, /customers=\{customers\}/);
   }
 });
+
+test("operations tasks keep non-admin users inside accessible workspaces", () => {
+  assert.match(operationsPage, /href="\/operations"/);
+  assert.match(operationsPage, /Back to Operations/);
+  assert.match(operationsPage, /href="\/all-work"/);
+  assert.match(operationsPage, /Mission Control/);
+  assert.doesNotMatch(operationsPage, /href="\/admin(?:\/team)?"/);
+});

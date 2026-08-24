@@ -932,7 +932,7 @@ export default async function AdminPage({
                 </button>
 
                 <Link
-                  href="/admin"
+                  href="/sales/leads"
                   className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700"
                 >
                   Clear

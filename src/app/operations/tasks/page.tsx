@@ -175,18 +175,18 @@ export default async function TasksPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <Link
-            href="/admin"
+            href="/operations"
             className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
             <span aria-hidden="true">←</span>
-            Back to Lead Dashboard
+            Back to Operations
           </Link>
 
           <Link
-            href="/admin/team"
+            href="/all-work"
             className="text-sm font-bold text-slate-600 underline decoration-slate-300 underline-offset-4 transition hover:text-slate-950"
           >
-            Manage Team
+            Mission Control
           </Link>
         </div>
 

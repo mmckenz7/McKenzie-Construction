@@ -367,11 +367,11 @@ export default async function LeadDetailPage({
       <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <Link
-            href="/admin"
+            href="/sales/leads"
             className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 transition hover:text-slate-950"
           >
             <span aria-hidden="true">←</span>
-            Back to Lead Dashboard
+            Back to Leads
           </Link>
         </div>
 
