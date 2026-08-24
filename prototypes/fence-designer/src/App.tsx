@@ -2,12 +2,12 @@ import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } fro
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
 import {
   EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, movePoint,
-  pointById, pointRole, segmentLengthMm, setSegmentKind, setSegmentLengthMm, totalLengthMm,
+  pointById, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition, totalLengthMm,
   type FenceDesign,
 } from "./model";
 import { loadLocalDesign, saveLocalDesign } from "./storage";
 
-type Selection = Readonly<{ type: "point" | "segment"; id: string }> | null;
+type Selection = Readonly<{ type: "point" | "segment"; id: string } | { type: "house" }> | null;
 type ViewBox = Readonly<{ x: number; y: number; width: number; height: number }>;
 type Drag = Readonly<{ pointId: string; original: FenceDesign }> | null;
 
@@ -15,9 +15,9 @@ const DEFAULT_VIEW: ViewBox = Object.freeze({ x: -1_000, y: -1_000, width: 26_00
 const GRID_MM = 305;
 
 function fittedView(design: FenceDesign): ViewBox {
-  if (design.points.length === 0) return DEFAULT_VIEW;
-  const xs = design.points.map(({ xMm }) => xMm);
-  const ys = design.points.map(({ yMm }) => yMm);
+  if (design.points.length === 0 && !design.house) return DEFAULT_VIEW;
+  const xs = [...design.points.map(({ xMm }) => xMm), ...(design.house ? [design.house.xMm, design.house.xMm + design.house.lengthMm] : [])];
+  const ys = [...design.points.map(({ yMm }) => yMm), ...(design.house ? [design.house.yMm, design.house.yMm + design.house.widthMm] : [])];
   const minX = Math.min(...xs); const maxX = Math.max(...xs);
   const minY = Math.min(...ys); const maxY = Math.max(...ys);
   const width = Math.max(8_000, maxX - minX + 4_000);
@@ -40,12 +40,18 @@ export default function App() {
   const [notice, setNotice] = useState("Choose Draw, then tap the plan to place your first point.");
   const [feet, setFeet] = useState("0");
   const [inches, setInches] = useState("0");
+  const [houseFeet, setHouseFeet] = useState("");
+  const [houseInches, setHouseInches] = useState("0");
+  const [houseWidthFeet, setHouseWidthFeet] = useState("");
+  const [houseWidthInches, setHouseWidthInches] = useState("0");
+  const [snapEnabled, setSnapEnabled] = useState(true);
   const svgRef = useRef<SVGSVGElement>(null);
   const nextId = useRef(1);
   const design = history.present;
 
   const selectedSegment = selection?.type === "segment" ? design.segments.find(({ id }) => id === selection.id) ?? null : null;
   const selectedPoint = selection?.type === "point" ? design.points.find(({ id }) => id === selection.id) ?? null : null;
+  const houseSelected = selection?.type === "house";
   const totals = useMemo(() => ({ all: totalLengthMm(design), gate: design.segments.filter(({ kind }) => kind === "gate").reduce((sum, item) => sum + segmentLengthMm(design, item), 0) }), [design]);
 
   const commit = (next: FenceDesign, message: string) => {
@@ -55,10 +61,9 @@ export default function App() {
   const toPlan = (clientX: number, clientY: number) => {
     const box = svgRef.current?.getBoundingClientRect();
     if (!box) return { xMm: 0, yMm: 0 };
-    return {
-      xMm: Math.round((view.x + (clientX - box.left) / box.width * view.width) / GRID_MM) * GRID_MM,
-      yMm: Math.round((view.y + (clientY - box.top) / box.height * view.height) / GRID_MM) * GRID_MM,
-    };
+    const x = view.x + (clientX - box.left) / box.width * view.width;
+    const y = view.y + (clientY - box.top) / box.height * view.height;
+    return snapPlanPosition(x, y, snapEnabled, design.house, GRID_MM);
   };
   const addAt = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (mode !== "draw" || event.target !== event.currentTarget) return;
@@ -100,6 +105,23 @@ export default function App() {
       commit(setSegmentLengthMm(design, selectedSegment.id, length), `Span set to ${formatFeetInches(length)}.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid length."); }
   };
+  const selectHouse = () => {
+    if (design.house) {
+      const totalInches = Math.round(design.house.lengthMm / 25.4);
+      const widthInches = Math.round(design.house.widthMm / 25.4);
+      setHouseFeet(String(Math.floor(totalInches / 12))); setHouseInches(String(totalInches % 12));
+      setHouseWidthFeet(String(Math.floor(widthInches / 12))); setHouseWidthInches(String(widthInches % 12));
+    }
+    setSelection({ type: "house" }); setMode("select"); setNotice(design.house ? "House reference selected." : "Enter the measured house-wall length to add it.");
+  };
+  const applyHouseLength = () => {
+    try {
+      const length = feetAndInchesToMm(Number(houseFeet), Number(houseInches));
+      const width = feetAndInchesToMm(Number(houseWidthFeet), Number(houseWidthInches));
+      const next = setHouseReference(design, length, width);
+      commit(next, `House footprint set to ${formatFeetInches(length)} × ${formatFeetInches(width)}.`); setView(fittedView(next));
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid house length."); }
+  };
   const removeSelection = () => {
     if (!selection) return;
     if (selection.type === "point") {
@@ -129,6 +151,8 @@ export default function App() {
       <button disabled={history.past.length === 0} onClick={() => { setHistory(undo); setSelection(null); setNotice("Undid the last change."); }}>↶ Undo</button>
       <button disabled={history.future.length === 0} onClick={() => { setHistory(redo); setSelection(null); setNotice("Redid the change."); }}>↷ Redo</button>
       <button onClick={() => setView(fittedView(design))}>Fit plan</button>
+      <button className={houseSelected ? "active-tool" : ""} onClick={selectHouse}>{design.house ? "⌂ House" : "＋ House"}</button>
+      <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setNotice(snapEnabled ? "Snap is off. Points now use nearest-millimeter placement." : "Snap is on at approximately 1-foot intervals."); }}>{snapEnabled ? "⌁ Snap on" : "⌁ Snap off"}</button>
       <span className="toolbar-spacer" />
       <button onClick={save}>Save local</button><button onClick={load}>Load local</button>
     </nav>
@@ -139,6 +163,11 @@ export default function App() {
         <svg ref={svgRef} className={`plan-canvas ${mode}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={addAt} onPointerMove={dragPoint} onPointerUp={endDrag} onPointerCancel={endDrag} aria-label="Fence drawing plan">
           <defs><pattern id="grid" width={GRID_MM} height={GRID_MM} patternUnits="userSpaceOnUse"><path d={`M ${GRID_MM} 0 L 0 0 0 ${GRID_MM}`} fill="none" stroke="#d8ddd7" strokeWidth="18" /></pattern></defs>
           <rect x={view.x} y={view.y} width={view.width} height={view.height} fill="url(#grid)" pointerEvents="none" />
+          {design.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { event.stopPropagation(); selectHouse(); }}>
+            <rect className="house-hit" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
+            <rect className="house-footprint" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
+            <g transform={`translate(${design.house.xMm + design.house.lengthMm / 2} ${design.house.yMm + design.house.widthMm / 2})`} className="house-label"><rect x="-1050" y="-300" width="2100" height="600" rx="180" /><text textAnchor="middle" dominantBaseline="central">HOUSE · {formatFeetInches(design.house.lengthMm)} × {formatFeetInches(design.house.widthMm)}</text></g>
+          </g>}
           {design.segments.map((segment) => {
             const start = pointById(design, segment.fromPointId); const end = pointById(design, segment.toPointId);
             const midX = (start.xMm + end.xMm) / 2; const midY = (start.yMm + end.yMm) / 2;
@@ -156,17 +185,18 @@ export default function App() {
             </g>;
           })}
         </svg>
-        {design.points.length === 0 && <div className="empty-state"><strong>Start with one property point</strong><span>Choose Draw, then tap anywhere on the grid.</span></div>}
+        {design.points.length === 0 && !design.house && <div className="empty-state"><strong>Start with one property point</strong><span>Choose Draw, then tap anywhere on the grid.</span></div>}
       </div>
 
       <aside className="inspector">
         <p className="eyebrow">Selection</p>
         {!selection && <div className="inspector-empty"><h2>No item selected</h2><p>Tap a span for exact length and gate intent. Tap or drag a point to edit the path.</p></div>}
+        {houseSelected && <div><h2>House footprint</h2><p>{design.house ? "This measured footprint is visual context only and is excluded from fence totals." : "Add an optional measured house footprint before drawing the fence."}</p><h3 className="field-heading">House length</h3><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseFeet} onChange={(event) => setHouseFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseInches} onChange={(event) => setHouseInches(event.target.value)} /></label></div><h3 className="field-heading">House width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Width feet" inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseWidthFeet} onChange={(event) => setHouseWidthFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseWidthInches} onChange={(event) => setHouseWidthInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyHouseLength}>{design.house ? "Update house footprint" : "Add house footprint"}</button>{design.house && <button className="danger wide" onClick={() => { commit(removeHouseReference(design), "House footprint removed."); setSelection(null); }}>Remove house footprint</button>}<small>With snap on, fence points placed near any house edge land exactly on that edge. This footprint is not a survey or building record.</small></div>}
         {selectedPoint && <div><h2>{pointRole(design, selectedPoint.id)}</h2><p className="coordinate">X {formatFeetInches(Math.abs(selectedPoint.xMm))} · Y {formatFeetInches(Math.abs(selectedPoint.yMm))}</p><p>Drag this point on the grid. Connected span lengths update immediately.</p><button className="danger" onClick={removeSelection}>Delete point</button></div>}
         {selectedSegment && <div><h2>{selectedSegment.kind === "gate" ? "Gate span" : "Fence span"}</h2><div className="length-readout">{formatFeetInches(segmentLengthMm(design, selectedSegment))}</div><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyExactLength}>Apply exact length</button><button className="wide" onClick={() => commit(setSegmentKind(design, selectedSegment.id, selectedSegment.kind === "gate" ? "fence" : "gate"), selectedSegment.kind === "gate" ? "Span restored to fence intent." : "Whole span marked as gate intent only.")}>{selectedSegment.kind === "gate" ? "Mark as fence" : "Mark whole span as gate"}</button><small>Gate intent does not imply products, posts, hardware, or pricing.</small></div>}
         <div className="notice" role="status">{notice}</div>
       </aside>
     </section>
-    <footer className="app-footer"><span>1 ft snap grid · integer millimeter geometry</span><span>Local browser storage only · schema v1 · revision {design.revision}</span></footer>
+    <footer className="app-footer"><span>{snapEnabled ? "Snap on · approximately 1 ft" : "Snap off · nearest millimeter"} · integer millimeter geometry</span><span>Local browser storage only · schema v{design.schemaVersion} · revision {design.revision}</span></footer>
   </main>;
 }

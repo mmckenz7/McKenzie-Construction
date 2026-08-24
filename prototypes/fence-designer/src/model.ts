@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1 as const;
+export const SCHEMA_VERSION = 2 as const;
 export const MM_PER_FOOT = 304.8;
 export const MM_PER_INCH = 25.4;
 
@@ -10,11 +10,13 @@ export type Segment = Readonly<{
   toPointId: string;
   kind: SegmentKind;
 }>;
+export type HouseReference = Readonly<{ xMm: number; yMm: number; lengthMm: number; widthMm: number }>;
 export type FenceDesign = Readonly<{
   schemaVersion: typeof SCHEMA_VERSION;
   id: string;
   name: string;
   revision: number;
+  house: HouseReference | null;
   points: readonly Point[];
   segments: readonly Segment[];
 }>;
@@ -24,6 +26,7 @@ export const EMPTY_DESIGN: FenceDesign = Object.freeze({
   id: "local-fence-design",
   name: "Untitled fence layout",
   revision: 0,
+  house: null,
   points: Object.freeze([]),
   segments: Object.freeze([]),
 });
@@ -41,7 +44,7 @@ const text = (value: unknown, label: string, max = 120): string => {
 export function normalizeDesign(input: unknown): FenceDesign {
   if (!input || typeof input !== "object") throw new TypeError("Fence design must be an object.");
   const raw = input as Record<string, unknown>;
-  if (raw.schemaVersion !== SCHEMA_VERSION) throw new TypeError("Unsupported fence design schema version.");
+  if (raw.schemaVersion !== 1 && raw.schemaVersion !== SCHEMA_VERSION) throw new TypeError("Unsupported fence design schema version.");
   if (!Array.isArray(raw.points) || !Array.isArray(raw.segments)) throw new TypeError("Fence design points and segments must be arrays.");
   const points = raw.points.map((item, index) => {
     if (!item || typeof item !== "object") throw new TypeError(`Point ${index + 1} must be an object.`);
@@ -68,17 +71,58 @@ export function normalizeDesign(input: unknown): FenceDesign {
   segments.forEach((segment, index) => {
     if (segment.fromPointId !== points[index]?.id || segment.toPointId !== points[index + 1]?.id) throw new TypeError("Fence segments must connect adjacent points in order.");
   });
+  let house: HouseReference | null = null;
+  if (raw.schemaVersion === SCHEMA_VERSION && raw.house !== null) {
+    if (!raw.house || typeof raw.house !== "object") throw new TypeError("House reference must be an object or null.");
+    const item = raw.house as Record<string, unknown>;
+    const lengthMm = integer(item.lengthMm, "House length");
+    const widthMm = integer(item.widthMm, "House width");
+    if (lengthMm < 305 || lengthMm > 304_800 || widthMm < 305 || widthMm > 304_800) throw new RangeError("House length and width must each be from 1 through 1,000 feet.");
+    house = Object.freeze({ xMm: integer(item.xMm, "House x"), yMm: integer(item.yMm, "House y"), lengthMm, widthMm });
+  }
   return Object.freeze({
     schemaVersion: SCHEMA_VERSION,
     id: text(raw.id, "Design ID", 80),
     name: text(raw.name, "Design name"),
     revision: integer(raw.revision, "Revision"),
+    house,
     points: Object.freeze(points),
     segments: Object.freeze(segments),
   });
 }
 
-const revise = (design: FenceDesign, patch: Partial<Pick<FenceDesign, "points" | "segments" | "name">>): FenceDesign => normalizeDesign({ ...design, ...patch, revision: design.revision + 1 });
+const revise = (design: FenceDesign, patch: Partial<Pick<FenceDesign, "points" | "segments" | "name" | "house">>): FenceDesign => normalizeDesign({ ...design, ...patch, revision: design.revision + 1 });
+
+export function setHouseReference(design: FenceDesign, lengthMm: number, widthMm: number): FenceDesign {
+  if (!Number.isSafeInteger(lengthMm) || lengthMm < 305 || lengthMm > 304_800 || !Number.isSafeInteger(widthMm) || widthMm < 305 || widthMm > 304_800) throw new RangeError("House length and width must each be from 1 through 1,000 feet.");
+  const current = design.house;
+  return revise(design, { house: Object.freeze({ xMm: current?.xMm ?? 0, yMm: current?.yMm ?? 0, lengthMm, widthMm }) });
+}
+
+export function removeHouseReference(design: FenceDesign): FenceDesign {
+  return revise(design, { house: null });
+}
+
+export function snapPlanPosition(xMm: number, yMm: number, enabled: boolean, house: HouseReference | null, gridMm = 305, houseToleranceMm = 460): Readonly<{ xMm: number; yMm: number }> {
+  const rounded = { xMm: Math.round(xMm), yMm: Math.round(yMm) };
+  if (!enabled) return Object.freeze(rounded);
+  const grid = { xMm: Math.round(xMm / gridMm) * gridMm, yMm: Math.round(yMm / gridMm) * gridMm };
+  if (!house) return Object.freeze(grid);
+  const left = house.xMm; const right = house.xMm + house.lengthMm;
+  const top = house.yMm; const bottom = house.yMm + house.widthMm;
+  const clamp = (value: number, minimum: number, maximum: number) => Math.max(minimum, Math.min(maximum, value));
+  const candidates = [
+    ...(yMm >= top - houseToleranceMm && yMm <= bottom + houseToleranceMm ? [
+      { distance: Math.abs(xMm - left), point: { xMm: left, yMm: clamp(grid.yMm, top, bottom) } },
+      { distance: Math.abs(xMm - right), point: { xMm: right, yMm: clamp(grid.yMm, top, bottom) } },
+    ] : []),
+    ...(xMm >= left - houseToleranceMm && xMm <= right + houseToleranceMm ? [
+      { distance: Math.abs(yMm - top), point: { xMm: clamp(grid.xMm, left, right), yMm: top } },
+      { distance: Math.abs(yMm - bottom), point: { xMm: clamp(grid.xMm, left, right), yMm: bottom } },
+    ] : []),
+  ].filter(({ distance }) => distance <= houseToleranceMm).sort((first, second) => first.distance - second.distance);
+  return Object.freeze(candidates[0]?.point ?? grid);
+}
 
 export function addPoint(design: FenceDesign, point: Point, segmentId?: string): FenceDesign {
   if (design.points.some(({ id }) => id === point.id)) throw new TypeError("Point ID already exists.");

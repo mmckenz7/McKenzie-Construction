@@ -2,7 +2,7 @@
 
 ## Scope
 
-This isolated browser prototype turns an explicitly drawn connected fence path into deterministic plan-view measurements. It supports point placement, point movement and deletion, exact segment-length edits, whole-run gate labels, undo/redo, and local browser save/load. It does not create estimates, quantities, products, labor, prices, customers, or cloud records.
+This isolated browser prototype turns an explicitly drawn connected fence path into deterministic plan-view measurements. It supports an optional exact-length-and-width house footprint, point placement, point movement and deletion, exact segment-length edits, whole-run gate labels, undo/redo, snap on/off, and local browser save/load. It does not create estimates, quantities, products, labor, prices, customers, or cloud records.
 
 Everything under `prototypes/fence-designer/` is prototype-owned. Source cannot import outside this directory, access Supabase, read environment variables, or use browser network primitives. No migration or shared domain model is introduced.
 
@@ -11,6 +11,7 @@ Everything under `prototypes/fence-designer/` is prototype-owned. Source cannot 
 The authoritative document is a single ordered connected path:
 
 - points store integer local-plan `xMm` and `yMm` coordinates;
+- an optional rectangular house footprint stores integer origin, length, and width values, remains visual context only, and is excluded from fence totals;
 - segments reference adjacent points and carry only `fence` or `gate` intent;
 - geometric segment length is Euclidean distance rounded once to the nearest millimeter;
 - total length is the sum of those rounded integer segment lengths;
@@ -21,6 +22,8 @@ The first and last points are open endpoints. Interior points are corners when t
 
 Undo/redo stores validated whole-document snapshots. Stable JSON is schema-versioned and saved only to browser local storage after an explicit Save action. Loading validates and normalizes the document before it becomes active.
 
+Snap is UI editing state rather than a design fact. When enabled, pointer placement rounds to the nearest 305 millimeters (approximately one foot), and a point within 460 millimeters of any house edge lands exactly on that edge so a fence may connect midway along the house. When disabled, pointer placement rounds only to the nearest millimeter and does not magnetize to the house. Exact numeric edits bypass pointer snapping.
+
 ## Explicit boundary and next slice
 
-The Deck Designer was reviewed only as a read-only interaction reference. Its local-photo flow treats photos as unmeasured visual evidence and provides no reusable two-point pixel calibration. This MVP therefore does not include photo/map upload or calibration. A next slice can add a local image layer, two calibration anchors, an explicitly entered real-world calibration distance, and a versioned pixel-to-millimeter transform—with tests for invalid, zero-length, and round-trip calibration—without changing this document model.
+The Deck Designer was reviewed only as a read-only interaction reference. Its local-photo flow treats photos as unmeasured visual evidence and provides no reusable two-point pixel calibration. This MVP therefore does not include photo/map upload or calibration. Address search, aerial imagery, and parcel/lot context require approved geocoding, imagery, and parcel-provider adapters plus explicit accuracy and legal-boundary warnings; they must not be fabricated or treated as survey truth. A next slice can add those provider-backed context layers or a local image layer with two calibration anchors, an explicitly entered real-world calibration distance, and a versioned pixel-to-millimeter transform.

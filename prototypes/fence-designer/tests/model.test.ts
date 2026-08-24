@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, movePoint,
-  normalizeDesign, pointRole, segmentLengthMm, setSegmentKind, setSegmentLengthMm,
+  normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition,
   stableDesignJson, totalLengthMm,
 } from "../src/model";
 
@@ -49,6 +49,21 @@ describe("deterministic fence geometry", () => {
     expect(edited.points.map(({ id }) => id)).toEqual(["point-1", "point-3"]);
     expect(edited.segments).toEqual([{ id: "segment-3", fromPointId: "point-1", toPointId: "point-3", kind: "fence" }]);
   });
+
+  it("adds, edits, and removes an exact house reference without changing fence totals", () => {
+    const design = rectangleCorner();
+    const withHouse = setHouseReference(design, feetAndInchesToMm(42, 6), feetAndInchesToMm(30, 0));
+    expect(withHouse.house).toEqual({ xMm: 0, yMm: 0, lengthMm: 12_954, widthMm: 9_144 });
+    expect(totalLengthMm(withHouse)).toBe(totalLengthMm(design));
+    expect(removeHouseReference(withHouse).house).toBeNull();
+  });
+
+  it("snaps fence points to the middle of any nearby house edge only when snap is on", () => {
+    const house = { xMm: 0, yMm: 0, lengthMm: 12_192, widthMm: 9_144 };
+    expect(snapPlanPosition(6_100, 120, true, house)).toEqual({ xMm: 6_100, yMm: 0 });
+    expect(snapPlanPosition(12_050, 4_570, true, house)).toEqual({ xMm: 12_192, yMm: 4_575 });
+    expect(snapPlanPosition(6_100, 120, false, house)).toEqual({ xMm: 6_100, yMm: 120 });
+  });
 });
 
 describe("validated serialization", () => {
@@ -61,5 +76,12 @@ describe("validated serialization", () => {
   it("rejects disconnected segment topology", () => {
     const design = rectangleCorner();
     expect(() => normalizeDesign({ ...design, segments: [{ ...design.segments[0], toPointId: "point-3" }, design.segments[1]] })).toThrow(/adjacent points/);
+  });
+
+  it("migrates saved schema-v1 layouts with no invented house measurement", () => {
+    const design = rectangleCorner();
+    const migrated = normalizeDesign({ ...design, schemaVersion: 1, house: undefined });
+    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.house).toBeNull();
   });
 });

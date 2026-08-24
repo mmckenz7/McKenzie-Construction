@@ -15,5 +15,9 @@ Validated workflow:
 7. Deleted the shared corner and confirmed the path reconnected as one span; undo restored both spans and their prior gate intent.
 8. Tested at a 390 × 844 viewport. The page had no horizontal overflow, the canvas and inspector stacked, and every toolbar control measured 44 px high.
 9. Checked browser console warnings and errors: none.
+10. Added a 42′ 6″ × 30′ 0″ house footprint, edited its exact dimensions, and confirmed it remained excluded from fence totals.
+11. Toggled snap off/on and confirmed the visible mode and millimeter/grid behavior.
+12. With snap on, placed a fence point near the middle of the house's top edge and confirmed its accepted plan coordinate landed exactly on that edge (`yMm = 0`).
+13. Confirmed the house footprint, midpoint connection path, controls, labels, and selection feedback were visually clear, then removed all QA measurements from the open design.
 
 Repository validation note: the default Turbopack build could not bind an internal CSS-worker port in the managed environment. The supported webpack production build completed successfully, including TypeScript and all 76 static pages.
