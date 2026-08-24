@@ -12,6 +12,9 @@ import {
 } from "./polygon";
 import { normalizePolygonRegion, type PolygonRegion } from "./polygonRegion";
 import type { DeckBoardDirection } from "./polygonProjection";
+import { derivePictureFrameBoards, type DeckSurfacePattern } from "./pictureFrameProjection";
+
+export type DeckSurfacePatternV3 = DeckSurfacePattern;
 
 export type DeckPlatformV3 = Readonly<{
   id: string;
@@ -23,7 +26,7 @@ export type DeckPlatformV3 = Readonly<{
     attachment: HouseAttachment | "none";
   }>[];
   construction: Readonly<{
-    decking: DeckDesign["construction"]["decking"] & Readonly<{ direction: DeckBoardDirection }>;
+    decking: DeckDesign["construction"]["decking"] & Readonly<{ direction: DeckBoardDirection; pattern: DeckSurfacePatternV3 }>;
     framing: DeckDesign["construction"]["framing"];
     railing: Readonly<{ height: number; enabledEdgeIds: readonly string[] }>;
     stairSystems: readonly StairSystemV3[];
@@ -134,7 +137,7 @@ function migrateNormalizedV2(design: DeckDesign): DeckDesignV3 {
       attachment: edge.id === houseEdgeId ? houseAttachment : "none" as const,
     }))),
     construction: constructionWithDerivedLegacyStairs({
-      decking: Object.freeze({ ...design.construction.decking, direction: "left_right" as const }),
+      decking: Object.freeze({ ...design.construction.decking, direction: "left_right" as const, pattern: "standard" as const }),
       framing: design.construction.framing,
       railing: Object.freeze({
         height: design.construction.railing.height,
@@ -279,6 +282,18 @@ function normalizePlatformV3(
   if (direction !== "left_right" && direction !== "house_yard") {
     throw new TypeError("V3 board direction must be left/right or house/yard.");
   }
+  const pattern = platform.construction.decking.pattern ?? "standard";
+  if (pattern !== "standard" && pattern !== "picture_frame") {
+    throw new TypeError("V3 surface pattern must be standard or picture frame.");
+  }
+  if (pattern === "picture_frame") {
+    derivePictureFrameBoards(region, {
+      boardWidth: shared.construction.decking.boardWidth,
+      gap: shared.construction.decking.gap,
+      boardDirection: direction,
+      joistSpacing: shared.construction.framing.joistSpacing,
+    });
+  }
   if (!Array.isArray(platform.construction.railing.enabledEdgeIds) ||
       new Set(platform.construction.railing.enabledEdgeIds).size !== platform.construction.railing.enabledEdgeIds.length) {
     throw new RangeError("V3 railing edge references must be a unique list.");
@@ -401,7 +416,7 @@ function normalizePlatformV3(
     region,
     edgeConditions,
     construction: constructionWithDerivedLegacyStairs({
-      decking: Object.freeze({ ...shared.construction.decking, direction }),
+      decking: Object.freeze({ ...shared.construction.decking, direction, pattern }),
       framing: shared.construction.framing,
       railing: Object.freeze({
         height: shared.construction.railing.height,

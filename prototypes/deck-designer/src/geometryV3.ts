@@ -1,5 +1,6 @@
 import { deriveGeometricPolygonEdges, type PolygonEdge, type PolygonPoint } from "./polygon";
 import { derivePolygonMembers, type ProjectedMember } from "./polygonProjection";
+import { derivePictureFrameBoards } from "./pictureFrameProjection";
 import { normalizeDeckDesignV3, type DeckDesignV3 } from "./modelV3";
 import { deriveStairRouteGeometryV3, type StairLandingGeometryV3, type StairRailPostV3, type StairTreadV3 } from "./stairRouteGeometryV3";
 
@@ -48,6 +49,14 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
     boardDirection: platform.construction.decking.direction,
     joistSpacing: platform.construction.framing.joistSpacing,
   });
+  const surfaceBoards = platform.construction.decking.pattern === "picture_frame"
+    ? derivePictureFrameBoards(platform.region, {
+      boardWidth: platform.construction.decking.boardWidth,
+      gap: platform.construction.decking.gap,
+      boardDirection: platform.construction.decking.direction,
+      joistSpacing: platform.construction.framing.joistSpacing,
+    }).surfaceBoards
+    : members.surfaceBoards;
   const stairRoutes = platform.construction.stairSystems.map((system, index) => deriveStairRouteGeometryV3({
     system,
     edge: edges.find((edge) => edge.id === system.edgeId)!,
@@ -98,7 +107,7 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
     platformId,
     footprint: platform.region.outer,
     platformEdges: edges,
-    surfaceBoards: members.surfaceBoards,
+    surfaceBoards,
     joists: members.joists,
     railSegments,
     railPosts: Object.freeze([...railPostMap.values()].sort((a, b) => a.id.localeCompare(b.id))),

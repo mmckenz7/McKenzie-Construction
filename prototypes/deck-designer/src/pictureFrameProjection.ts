@@ -7,6 +7,8 @@ import {
   type ProjectedMember,
 } from "./polygonProjection";
 
+export type DeckSurfacePattern = "standard" | "picture_frame";
+
 export type PictureFrameBoardProjection = Readonly<{
   borderBoards: readonly ProjectedMember[];
   fieldBoards: readonly ProjectedMember[];

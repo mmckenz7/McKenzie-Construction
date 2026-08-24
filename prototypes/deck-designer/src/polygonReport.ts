@@ -2,6 +2,7 @@ import { derivePolygonEdges, type PolygonPoint } from "./polygon";
 import { normalizePolygonRegion, polygonRegionArea, type PolygonRegion } from "./polygonRegion";
 import { derivePolygonMembers } from "./polygonProjection";
 import type { DeckBoardDirection } from "./polygonProjection";
+import { derivePictureFrameBoards, type DeckSurfacePattern } from "./pictureFrameProjection";
 
 export type ProjectionQuantityClass = "takeoff_candidate" | "visualization";
 export type ProjectionQuantity = Readonly<{
@@ -45,13 +46,21 @@ const perimeter = (points: readonly PolygonPoint[]): number =>
 export function derivePolygonProjectionReport(
   regionId: string,
   region: PolygonRegion,
-  options: Readonly<{ boardWidth: number; gap: number; joistSpacing: number; boardDirection?: DeckBoardDirection }>,
+  options: Readonly<{ boardWidth: number; gap: number; joistSpacing: number; boardDirection?: DeckBoardDirection; surfacePattern?: DeckSurfacePattern }>,
 ): PolygonProjectionReport {
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(regionId)) {
     throw new TypeError("Region ID must be a stable lowercase identifier of 1 to 64 characters.");
   }
   const normalized = normalizePolygonRegion(region);
-  const members = derivePolygonMembers(normalized, options);
+  const standardMembers = derivePolygonMembers(normalized, options);
+  const pictureFrame = options.surfacePattern === "picture_frame"
+    ? derivePictureFrameBoards(normalized, { ...options, boardDirection: options.boardDirection ?? "left_right" })
+    : null;
+  const members = pictureFrame ? Object.freeze({
+    ...standardMembers,
+    surfaceBoards: pictureFrame.surfaceBoards,
+    surfaceBoardLength: pictureFrame.surfaceBoardLength,
+  }) : standardMembers;
   const grossArea = Math.abs(normalized.outer.reduce((sum, point, index) => {
     const next = normalized.outer[(index + 1) % normalized.outer.length];
     return sum + point.x * next.z - next.x * point.z;

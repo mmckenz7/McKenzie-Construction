@@ -15,6 +15,24 @@ const totalLength = (members: readonly Readonly<{ start: { x: number; z: number 
   Math.round(members.reduce((sum, member) => sum + Math.hypot(member.end.x - member.start.x, member.end.z - member.start.z), 0) * 100) / 100;
 
 describe("v3 free-edge geometry equivalence", () => {
+  it("uses the authoritative picture-frame pattern for outer and cutout borders", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{
+        ...platform,
+        region: { ...platform.region, holes: [[{ x: 48, z: 48 }, { x: 96, z: 48 }, { x: 96, z: 96 }, { x: 48, z: 96 }]] },
+        construction: { ...platform.construction, decking: { ...platform.construction.decking, pattern: "picture_frame" } },
+      }],
+    });
+    const geometry = derivePlatformGeometryV3(design, platform.id);
+    expect(geometry.surfaceBoards.filter((board) => board.id.startsWith("picture-frame-border-"))).toHaveLength(4);
+    expect(geometry.surfaceBoards.filter((board) => board.id.startsWith("picture-frame-hole-1-border-"))).toHaveLength(4);
+    expect(geometry.surfaceBoards.some((board) => board.id.startsWith("picture-frame-field-"))).toBe(true);
+    expect(derivePlatformGeometryV3(design, platform.id)).toEqual(geometry);
+  });
+
   it("moves stairs within exact geometric-edge bounds", () => {
     const design = migrateDeckDesignToV3(rectangleFoundationFixture.design);
     const platform = design.platforms[0];

@@ -24,6 +24,7 @@ describe("isolated DeckDesign v3 migration spike", () => {
     expect(migrated.platforms[0].edgeConditions.filter((condition) => condition.condition === "free")).toHaveLength(3);
     expect(migrated.platforms[0].construction.railing.enabledEdgeIds).toHaveLength(3);
     expect(migrated.platforms[0].construction.decking.direction).toBe("left_right");
+    expect(migrated.platforms[0].construction.decking.pattern).toBe("standard");
     expect(migrated.platforms[0].construction.stairs).toMatchObject({ landingPosition: "top", upperFlightRisers: 3, landingWidth: 48 });
     expect(Object.keys(migrated.platforms[0])).not.toEqual(expect.arrayContaining(["kind", "width", "projection", "cutoutWidth", "cutoutDepth"]));
   });
@@ -64,6 +65,26 @@ describe("isolated DeckDesign v3 migration spike", () => {
       ...migrated,
       platforms: [{ ...platform, construction: { ...platform.construction, decking: { ...platform.construction.decking, direction: "diagonal" as never } } }],
     })).toThrow(/board direction/i);
+  });
+
+  it("defaults older v3 files and round-trips an explicit picture-frame pattern", () => {
+    const migrated = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const older = JSON.parse(stableDeckDesignV3Json(migrated));
+    delete older.platforms[0].construction.decking.pattern;
+    expect(migrateDeckDesignToV3(older).platforms[0].construction.decking.pattern).toBe("standard");
+    const platform = migrated.platforms[0];
+    const pictureFrame = normalizeDeckDesignV3({
+      ...migrated,
+      platforms: [{ ...platform, construction: { ...platform.construction, decking: { ...platform.construction.decking, pattern: "picture_frame" } } }],
+    });
+    expect(pictureFrame.platforms[0].construction.decking.pattern).toBe("picture_frame");
+    expect(deckDesignV3Fingerprint(pictureFrame)).not.toBe(deckDesignV3Fingerprint(migrated));
+    expect(stableDeckDesignV3Json(migrateDeckDesignToV3(JSON.parse(stableDeckDesignV3Json(pictureFrame)))))
+      .toBe(stableDeckDesignV3Json(pictureFrame));
+    expect(() => normalizeDeckDesignV3({
+      ...migrated,
+      platforms: [{ ...platform, construction: { ...platform.construction, decking: { ...platform.construction.decking, pattern: "diagonal" as never } } }],
+    })).toThrow(/surface pattern/i);
   });
 
   it("defaults older v3 landings to top and validates a recorded midway split", () => {

@@ -1,5 +1,14 @@
 # Browser QA record
 
+## 2026-08-24 authoritative picture-frame pattern
+
+- Deck setup offers **Standard** and **Picture frame** as plain-language choices. The selection is a DeckDesign v3 fact and older local files default to the prior standard layout.
+- Picture frame projects one mitered outer border course, borders recorded cutouts, and clips field boards to the remaining inset region. The same member IDs drive plan, 3D, JSON fingerprinting, and traceable conceptual decking length.
+- Invalid inset or cutout-border geometry fails closed instead of rendering or measuring an impossible pattern. Product lengths, fastening, waste, and estimating policy remain undetermined.
+- Desktop QA changed the live rectangle from 26 standard board members and 520 linear feet to 28 picture-frame members and 519.17 linear feet; the status, Undo state, plan, model, and quantity card updated together.
+- At 390 by 844, both pattern choices remained visible and tappable. Tapping **Standard** restored 26 board members and the expected status; the viewport override was reset afterward.
+- Full validation passed 203 tests, isolation, build, golden fixtures, and the repository-wide build. The measured bundle is 86.0 KiB initial, 119.9 KiB largest, and 242.1 KiB total gzip under the 99/170/244 KiB ceilings.
+
 ## 2026-08-24 single-level interface cleanup
 
 - The active designer now labels both measured and model views as single-level and no longer loads the paused terminal-level connection editor.

@@ -86,4 +86,19 @@ describe("v3 design-level deterministic projection", () => {
       .not.toEqual(originalProjection.platforms[0].surface.quantities.find((line) => line.key === "decking-linear-feet")?.sourceGeometry);
     expect(deriveDeckDesignProjectionV3(rotated)).toEqual(rotatedProjection);
   });
+
+  it("uses the recorded picture-frame pattern for traceable deterministic quantities", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV3({
+      ...base,
+      platforms: [{ ...platform, construction: { ...platform.construction, decking: { ...platform.construction.decking, pattern: "picture_frame" } } }],
+    });
+    const standard = deriveDeckDesignProjectionV3(base);
+    const pictureFrame = deriveDeckDesignProjectionV3(design);
+    const line = pictureFrame.platforms[0].surface.quantities.find((item) => item.key === "decking-linear-feet")!;
+    expect(line.sourceGeometry.some((id) => id.includes("picture-frame-border-"))).toBe(true);
+    expect(line.amount).not.toBe(standard.platforms[0].surface.quantities.find((item) => item.key === "decking-linear-feet")?.amount);
+    expect(deriveDeckDesignProjectionV3(design)).toEqual(pictureFrame);
+  });
 });
