@@ -124,6 +124,26 @@ export function snapPlanPosition(xMm: number, yMm: number, enabled: boolean, hou
   return Object.freeze(candidates[0]?.point ?? grid);
 }
 
+export function snapRunEndpoint(
+  anchor: Readonly<{ xMm: number; yMm: number }>,
+  candidate: Readonly<{ xMm: number; yMm: number }>,
+  enabled: boolean,
+  angleIncrementDegrees = 45,
+): Readonly<{ xMm: number; yMm: number }> {
+  if (!enabled) return Object.freeze({ xMm: Math.round(candidate.xMm), yMm: Math.round(candidate.yMm) });
+  if (!Number.isFinite(angleIncrementDegrees) || angleIncrementDegrees <= 0 || angleIncrementDegrees > 180) throw new RangeError("Snap angle must be greater than 0 and no more than 180 degrees.");
+  const dx = candidate.xMm - anchor.xMm;
+  const dy = candidate.yMm - anchor.yMm;
+  const distance = Math.hypot(dx, dy);
+  if (distance === 0) return Object.freeze({ xMm: anchor.xMm, yMm: anchor.yMm });
+  const increment = angleIncrementDegrees * Math.PI / 180;
+  const angle = Math.round(Math.atan2(dy, dx) / increment) * increment;
+  return Object.freeze({
+    xMm: Math.round(anchor.xMm + Math.cos(angle) * distance),
+    yMm: Math.round(anchor.yMm + Math.sin(angle) * distance),
+  });
+}
+
 export function addPoint(design: FenceDesign, point: Point, segmentId?: string): FenceDesign {
   if (design.points.some(({ id }) => id === point.id)) throw new TypeError("Point ID already exists.");
   const previous = design.points.at(-1);

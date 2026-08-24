@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws one ordered connected path around an optional exact measured house footprint, reports deterministic run and total measurements, supports exact edits and point editing, snaps fence points to any house edge, distinguishes open endpoints and corners, records whole-span gate intent, supports bounded focal-point zoom and dedicated plan panning, maintains undo/redo, and saves/loads validated local JSON.
+Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws one ordered connected path around an optional exact measured house footprint, previews each prospective run with a live feet/inches label, reports deterministic run and total measurements, supports exact edits and point editing, snaps fence points to any house edge or 45-degree run bearing, distinguishes open endpoints and corners, records whole-span gate intent, supports bounded focal-point zoom and dedicated plan panning, maintains undo/redo, and saves/loads validated local JSON.
 
 ## Files and ownership
 
@@ -37,11 +37,11 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 17 deterministic tests passed.
+- 18 deterministic tests passed.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
-- Browser QA passed for house dimensions, midpoint house-edge snapping, snap on/off, draw, exact edit, gate intent, point drag, dedicated plan pan, zoom buttons, wheel/trackpad zoom, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
+- Browser QA passed for house dimensions, midpoint house-edge snapping, visible 45-degree snap on/off behavior, live prospective run measurements, draw, exact edit, gate intent, point drag, dedicated plan pan, zoom buttons, wheel/trackpad zoom, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
 - The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
 - Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 

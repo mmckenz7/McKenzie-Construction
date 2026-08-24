@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, movePoint,
-  normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition,
+  normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint,
   stableDesignJson, totalLengthMm,
 } from "../src/model";
 
@@ -63,6 +63,13 @@ describe("deterministic fence geometry", () => {
     expect(snapPlanPosition(6_100, 120, true, house)).toEqual({ xMm: 6_100, yMm: 0 });
     expect(snapPlanPosition(12_050, 4_570, true, house)).toEqual({ xMm: 12_192, yMm: 4_575 });
     expect(snapPlanPosition(6_100, 120, false, house)).toEqual({ xMm: 6_100, yMm: 120 });
+  });
+
+  it("locks prospective runs to deterministic 45-degree bearings only when snap is on", () => {
+    const anchor = { xMm: 1_000, yMm: 2_000 };
+    expect(snapRunEndpoint(anchor, { xMm: 4_000, yMm: 2_400 }, true)).toEqual({ xMm: 4_027, yMm: 2_000 });
+    expect(snapRunEndpoint(anchor, { xMm: 3_100, yMm: 4_000 }, true)).toEqual({ xMm: 3_051, yMm: 4_051 });
+    expect(snapRunEndpoint(anchor, { xMm: 4_000, yMm: 2_400 }, false)).toEqual({ xMm: 4_000, yMm: 2_400 });
   });
 });
 

@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
 import {
   EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, movePoint,
-  pointById, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition, totalLengthMm,
+  pointById, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, totalLengthMm,
   type FenceDesign,
 } from "./model";
 import { loadLocalDesign, saveLocalDesign } from "./storage";
@@ -54,6 +54,7 @@ export default function App() {
   const [houseWidthFeet, setHouseWidthFeet] = useState("");
   const [houseWidthInches, setHouseWidthInches] = useState("0");
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const [previewPoint, setPreviewPoint] = useState<Readonly<{ xMm: number; yMm: number }> | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const nextId = useRef(1);
@@ -77,12 +78,24 @@ export default function App() {
     const y = view.y + (clientY - box.top) / box.height * view.height;
     return snapPlanPosition(x, y, snapEnabled, design.house, GRID_MM);
   };
+  const nextPointAt = (clientX: number, clientY: number) => {
+    const candidate = toPlan(clientX, clientY);
+    const anchor = design.points.at(-1);
+    if (!anchor || !snapEnabled) return candidate;
+    const house = design.house;
+    const onHouseEdge = house && (
+      ((candidate.xMm === house.xMm || candidate.xMm === house.xMm + house.lengthMm) && candidate.yMm >= house.yMm && candidate.yMm <= house.yMm + house.widthMm)
+      || ((candidate.yMm === house.yMm || candidate.yMm === house.yMm + house.widthMm) && candidate.xMm >= house.xMm && candidate.xMm <= house.xMm + house.lengthMm)
+    );
+    return onHouseEdge ? candidate : snapRunEndpoint(anchor, candidate, true);
+  };
   const addAt = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (mode !== "draw" || event.target !== event.currentTarget) return;
-    const point = toPlan(event.clientX, event.clientY);
+    const point = nextPointAt(event.clientX, event.clientY);
     const id = nextId.current++;
     const next = addPoint(design, { id: `point-${id}`, ...point }, `segment-${id}`);
     commit(next, next.points.length === 1 ? "Start point placed. Add another point to create a measured span." : "Measured span added.");
+    setPreviewPoint(point);
   };
   const zoomAt = (scale: number, clientX?: number, clientY?: number) => {
     const box = svgRef.current?.getBoundingClientRect();
@@ -157,6 +170,11 @@ export default function App() {
     const location = toPlan(event.clientX, event.clientY);
     setHistory((current) => ({ ...current, present: movePoint(drag.original, drag.pointId, location.xMm, location.yMm) }));
   };
+  const moveCanvasPointer = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (mode === "pan") { moveNavigation(event); return; }
+    if (drag) { dragPoint(event); return; }
+    if (mode === "draw") setPreviewPoint(nextPointAt(event.clientX, event.clientY));
+  };
   const endDrag = () => {
     if (!drag) return;
     setHistory((current) => current.present.points.find(({ id }) => id === drag.pointId)?.xMm === drag.original.points.find(({ id }) => id === drag.pointId)?.xMm
@@ -220,15 +238,15 @@ export default function App() {
       <div className="zoom-controls" aria-label="Plan zoom"><button aria-label="Zoom out" onClick={() => zoomAt(1.25)}>−</button><span>{Math.round(DEFAULT_VIEW.width / view.width * 100)}%</span><button aria-label="Zoom in" onClick={() => zoomAt(0.8)}>＋</button></div>
       <button onClick={() => setView(fittedView(design))}>Fit plan</button>
       <button className={houseSelected ? "active-tool" : ""} onClick={selectHouse}>{design.house ? "⌂ House" : "＋ House"}</button>
-      <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setNotice(snapEnabled ? "Snap is off. Points now use nearest-millimeter placement." : "Snap is on at approximately 1-foot intervals."); }}>{snapEnabled ? "⌁ Snap on" : "⌁ Snap off"}</button>
+      <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setPreviewPoint(null); setNotice(snapEnabled ? "Snap is off. Runs now follow the pointer freely." : "Snap is on: points use the 1-foot grid and new runs lock to 45-degree angles."); }}>{snapEnabled ? "⌁ Snap on" : "⌁ Snap off"}</button>
       <span className="toolbar-spacer" />
       <button onClick={save}>Save local</button><button onClick={load}>Load local</button>
     </nav>
 
     <section className="workspace">
       <div className="canvas-shell">
-        <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line gate" /> Gate intent</span></div>
-        <svg ref={svgRef} className={`plan-canvas ${mode}${isNavigating ? " navigating" : ""}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={startNavigation} onPointerMove={(event) => mode === "pan" ? moveNavigation(event) : dragPoint(event)} onPointerUp={endNavigation} onPointerCancel={endNavigation} onWheel={handleWheel} aria-label="Fence drawing plan">
+        <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line preview" /> Live run</span><span><i className="key-line gate" /> Gate intent</span></div>
+        <svg ref={svgRef} className={`plan-canvas ${mode}${isNavigating ? " navigating" : ""}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={startNavigation} onPointerMove={moveCanvasPointer} onPointerLeave={() => { if (!drag && !isNavigating) setPreviewPoint(null); }} onPointerUp={endNavigation} onPointerCancel={endNavigation} onWheel={handleWheel} aria-label="Fence drawing plan">
           <defs><pattern id="grid" width={GRID_MM} height={GRID_MM} patternUnits="userSpaceOnUse"><path d={`M ${GRID_MM} 0 L 0 0 0 ${GRID_MM}`} fill="none" stroke="#d8ddd7" strokeWidth="18" /></pattern></defs>
           <rect x={view.x} y={view.y} width={view.width} height={view.height} fill="url(#grid)" pointerEvents="none" />
           {design.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode !== "pan") { event.stopPropagation(); selectHouse(); } }}>
@@ -246,6 +264,16 @@ export default function App() {
               <g transform={`translate(${midX} ${midY})`} className="dimension"><rect x="-640" y="-260" width="1280" height="520" rx="180" /><text textAnchor="middle" dominantBaseline="central">{segment.kind === "gate" ? "GATE · " : ""}{formatFeetInches(segmentLengthMm(design, segment))}</text></g>
             </g>;
           })}
+          {mode === "draw" && previewPoint && design.points.at(-1) && (() => {
+            const start = design.points.at(-1)!;
+            const length = Math.round(Math.hypot(previewPoint.xMm - start.xMm, previewPoint.yMm - start.yMm));
+            const midX = (start.xMm + previewPoint.xMm) / 2; const midY = (start.yMm + previewPoint.yMm) / 2;
+            return <g className="run-preview" pointerEvents="none" role="img" aria-label={`Live run ${formatFeetInches(length)}${snapEnabled ? ", snap on" : ", snap off"}`}>
+              <line x1={start.xMm} y1={start.yMm} x2={previewPoint.xMm} y2={previewPoint.yMm} />
+              <circle cx={previewPoint.xMm} cy={previewPoint.yMm} r="155" />
+              <g transform={`translate(${midX} ${midY})`} className="preview-dimension"><rect x="-780" y="-285" width="1560" height="570" rx="190" /><text textAnchor="middle" dominantBaseline="central">{snapEnabled ? "SNAP · " : ""}{formatFeetInches(length)}</text></g>
+            </g>;
+          })()}
           {design.points.map((point) => {
             const role = pointRole(design, point.id); const selected = selection?.type === "point" && selection.id === point.id;
             return <g key={point.id} className={`point ${role.replace(" ", "-")}${selected ? " selected" : ""}`} transform={`translate(${point.xMm} ${point.yMm})`} onPointerDown={(event) => startDrag(event, point.id)} role="button" tabIndex={0} aria-label={`${role} ${point.id}`}>
@@ -265,6 +293,6 @@ export default function App() {
         <div className="notice" role="status">{notice}</div>
       </aside>
     </section>
-    <footer className="app-footer"><span>{snapEnabled ? "Snap on · approximately 1 ft" : "Snap off · nearest millimeter"} · integer millimeter geometry</span><span>Local browser storage only · schema v{design.schemaVersion} · revision {design.revision}</span></footer>
+    <footer className="app-footer"><span>{snapEnabled ? "Snap on · 1 ft grid · house edges · 45° runs" : "Snap off · free placement"} · live feet/inches</span><span>Local browser storage only · schema v{design.schemaVersion} · revision {design.revision}</span></footer>
   </main>;
 }

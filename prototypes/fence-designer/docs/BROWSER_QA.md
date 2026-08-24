@@ -24,5 +24,7 @@ Validated workflow:
 16. Confirmed **Zoom In** changed the plan from 100% to 125% around its center and **Zoom Out** remained available beside a visible scale readout.
 17. Confirmed dragging in dedicated **Pan** mode shifted the plan view without changing its scale or moving a fence point.
 18. Confirmed mouse-wheel/trackpad input zoomed around the pointer location; deterministic tests cover the same focal-point math, zoom clamps, aspect ratio, and pan conversion used by two-finger pinch navigation.
+19. After placing a start point, confirmed a dashed prospective run followed the pointer and continuously displayed its current feet/inches before placement.
+20. At the same pointer position, confirmed **Snap on** locked the prospective run to a horizontal 45-degree increment while **Snap off** followed the free pointer bearing; the live accessible measurement changed from 28′ 10″ to 28′ 11″.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

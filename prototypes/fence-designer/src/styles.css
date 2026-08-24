@@ -36,6 +36,7 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .key-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #fbf8ee; border: 3px solid #d47b25; }
 .key-dot.corner { border-color: #173f31; }
 .key-line { width: 18px; border-top: 4px dashed #cc6e24; }
+.key-line.preview { border-color: #e4922d; }
 .segment { cursor: pointer; }
 .segment-hit { stroke: transparent; stroke-width: 720; }
 .segment-line { stroke: #173f31; stroke-width: 170; stroke-linecap: round; }
@@ -45,6 +46,10 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .dimension text { font-size: 310px; font-weight: 800; fill: #17352a; pointer-events: none; }
 .gate .dimension rect { fill: #fff5e8; stroke: #d78334; }
 .gate .dimension text { fill: #9d4b17; font-size: 270px; }
+.run-preview > line { stroke: #e4922d; stroke-width: 145; stroke-linecap: round; stroke-dasharray: 360 230; }
+.run-preview > circle { fill: #fff7ea; stroke: #e4922d; stroke-width: 90; }
+.preview-dimension rect { fill: #fff7ea; stroke: #e4922d; stroke-width: 32; }
+.preview-dimension text { fill: #884514; font-size: 285px; font-weight: 850; }
 .house-reference { cursor: pointer; }
 .plan-canvas.draw .house-reference { pointer-events: none; }
 .house-hit { fill: transparent; stroke: transparent; stroke-width: 850; }
