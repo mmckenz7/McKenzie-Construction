@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from "react";
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
 import {
   EMPTY_DESIGN, addPoint, deletePoint, feetAndInchesToMm, formatFeetInches, movePoint,
@@ -8,10 +8,17 @@ import {
   type FenceDesign,
 } from "./model";
 import { loadLocalDesign, saveLocalDesign } from "./storage";
+import { panView, zoomViewAt, type ViewBox } from "./view";
 
 type Selection = Readonly<{ type: "point" | "segment"; id: string } | { type: "house" }> | null;
-type ViewBox = Readonly<{ x: number; y: number; width: number; height: number }>;
 type Drag = Readonly<{ pointId: string; original: FenceDesign }> | null;
+type Mode = "draw" | "select" | "pan";
+type PlanPointer = Readonly<{ clientX: number; clientY: number }>;
+type NavigationGesture = Readonly<{
+  original: ViewBox;
+  startCenter: PlanPointer;
+  startDistance: number | null;
+}> | null;
 
 const DEFAULT_VIEW: ViewBox = Object.freeze({ x: -1_000, y: -1_000, width: 26_000, height: 16_000 });
 const GRID_MM = 305;
@@ -36,7 +43,7 @@ function nextNumericId(design: FenceDesign): number {
 export default function App() {
   const [history, setHistory] = useState<History<FenceDesign>>(() => createHistory(EMPTY_DESIGN));
   const [selection, setSelection] = useState<Selection>(null);
-  const [mode, setMode] = useState<"draw" | "select">("draw");
+  const [mode, setMode] = useState<Mode>("draw");
   const [view, setView] = useState<ViewBox>(DEFAULT_VIEW);
   const [drag, setDrag] = useState<Drag>(null);
   const [notice, setNotice] = useState("Choose Draw, then tap the plan to place your first point.");
@@ -47,8 +54,11 @@ export default function App() {
   const [houseWidthFeet, setHouseWidthFeet] = useState("");
   const [houseWidthInches, setHouseWidthInches] = useState("0");
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const [isNavigating, setIsNavigating] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const nextId = useRef(1);
+  const activePointers = useRef(new Map<number, PlanPointer>());
+  const navigationGesture = useRef<NavigationGesture>(null);
   const design = history.present;
 
   const selectedSegment = selection?.type === "segment" ? design.segments.find(({ id }) => id === selection.id) ?? null : null;
@@ -74,6 +84,60 @@ export default function App() {
     const next = addPoint(design, { id: `point-${id}`, ...point }, `segment-${id}`);
     commit(next, next.points.length === 1 ? "Start point placed. Add another point to create a measured span." : "Measured span added.");
   };
+  const zoomAt = (scale: number, clientX?: number, clientY?: number) => {
+    const box = svgRef.current?.getBoundingClientRect();
+    const focusX = box && clientX !== undefined ? (clientX - box.left) / box.width : 0.5;
+    const focusY = box && clientY !== undefined ? (clientY - box.top) / box.height : 0.5;
+    setView((current) => zoomViewAt(current, scale, focusX, focusY));
+  };
+  const handleWheel = (event: ReactWheelEvent<SVGSVGElement>) => {
+    event.preventDefault();
+    zoomAt(Math.exp(event.deltaY * 0.0015), event.clientX, event.clientY);
+  };
+  const pointerCenter = (pointers: PlanPointer[]) => ({
+    clientX: pointers.reduce((sum, pointer) => sum + pointer.clientX, 0) / pointers.length,
+    clientY: pointers.reduce((sum, pointer) => sum + pointer.clientY, 0) / pointers.length,
+  });
+  const pointerDistance = (pointers: PlanPointer[]) => Math.hypot(pointers[0].clientX - pointers[1].clientX, pointers[0].clientY - pointers[1].clientY);
+  const startNavigation = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (mode !== "pan") { addAt(event); return; }
+    event.preventDefault();
+    activePointers.current.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const pointers = [...activePointers.current.values()];
+    navigationGesture.current = {
+      original: view,
+      startCenter: pointerCenter(pointers),
+      startDistance: pointers.length >= 2 ? pointerDistance(pointers.slice(0, 2)) : null,
+    };
+    setIsNavigating(true);
+  };
+  const moveNavigation = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (mode !== "pan" || !activePointers.current.has(event.pointerId) || !navigationGesture.current) return;
+    activePointers.current.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+    const box = event.currentTarget.getBoundingClientRect();
+    const pointers = [...activePointers.current.values()];
+    const currentCenter = pointerCenter(pointers);
+    const gesture = navigationGesture.current;
+    if (pointers.length >= 2 && gesture.startDistance) {
+      const zoomed = zoomViewAt(
+        gesture.original,
+        gesture.startDistance / pointerDistance(pointers.slice(0, 2)),
+        (gesture.startCenter.clientX - box.left) / box.width,
+        (gesture.startCenter.clientY - box.top) / box.height,
+      );
+      setView(panView(zoomed, currentCenter.clientX - gesture.startCenter.clientX, currentCenter.clientY - gesture.startCenter.clientY, box.width, box.height));
+      return;
+    }
+    setView(panView(gesture.original, currentCenter.clientX - gesture.startCenter.clientX, currentCenter.clientY - gesture.startCenter.clientY, box.width, box.height));
+  };
+  const endNavigation = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (mode !== "pan") { endDrag(); return; }
+    activePointers.current.delete(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    navigationGesture.current = null;
+    setIsNavigating(false);
+  };
   const selectSegment = (id: string) => {
     const segment = design.segments.find((item) => item.id === id);
     if (!segment) return;
@@ -83,6 +147,7 @@ export default function App() {
     setSelection({ type: "segment", id }); setMode("select"); setNotice("Span selected. Enter an exact length or mark the whole span as a gate.");
   };
   const startDrag = (event: ReactPointerEvent, pointId: string) => {
+    if (mode === "pan") return;
     event.stopPropagation();
     setSelection({ type: "point", id: pointId }); setMode("select"); setDrag({ pointId, original: design });
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
@@ -149,9 +214,10 @@ export default function App() {
     </header>
 
     <nav className="toolbar" aria-label="Drawing controls">
-      <div className="segmented"><button className={mode === "draw" ? "active" : ""} onClick={() => { setMode("draw"); setSelection(null); setNotice("Tap empty plan space to continue the connected fence path."); }}>＋ Draw</button><button className={mode === "select" ? "active" : ""} onClick={() => setMode("select")}>↖ Edit</button></div>
+      <div className="segmented"><button className={mode === "draw" ? "active" : ""} onClick={() => { setMode("draw"); setSelection(null); setNotice("Tap empty plan space to continue the connected fence path."); }}>＋ Draw</button><button className={mode === "select" ? "active" : ""} onClick={() => setMode("select")}>↖ Edit</button><button className={mode === "pan" ? "active" : ""} onClick={() => { setMode("pan"); setSelection(null); setNotice("Drag the plan to move around. Pinch with two fingers to zoom."); }}>✋ Pan</button></div>
       <button disabled={history.past.length === 0} onClick={() => { setHistory(undo); setSelection(null); setNotice("Undid the last change."); }}>↶ Undo</button>
       <button disabled={history.future.length === 0} onClick={() => { setHistory(redo); setSelection(null); setNotice("Redid the change."); }}>↷ Redo</button>
+      <div className="zoom-controls" aria-label="Plan zoom"><button aria-label="Zoom out" onClick={() => zoomAt(1.25)}>−</button><span>{Math.round(DEFAULT_VIEW.width / view.width * 100)}%</span><button aria-label="Zoom in" onClick={() => zoomAt(0.8)}>＋</button></div>
       <button onClick={() => setView(fittedView(design))}>Fit plan</button>
       <button className={houseSelected ? "active-tool" : ""} onClick={selectHouse}>{design.house ? "⌂ House" : "＋ House"}</button>
       <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setNotice(snapEnabled ? "Snap is off. Points now use nearest-millimeter placement." : "Snap is on at approximately 1-foot intervals."); }}>{snapEnabled ? "⌁ Snap on" : "⌁ Snap off"}</button>
@@ -162,10 +228,10 @@ export default function App() {
     <section className="workspace">
       <div className="canvas-shell">
         <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line gate" /> Gate intent</span></div>
-        <svg ref={svgRef} className={`plan-canvas ${mode}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={addAt} onPointerMove={dragPoint} onPointerUp={endDrag} onPointerCancel={endDrag} aria-label="Fence drawing plan">
+        <svg ref={svgRef} className={`plan-canvas ${mode}${isNavigating ? " navigating" : ""}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={startNavigation} onPointerMove={(event) => mode === "pan" ? moveNavigation(event) : dragPoint(event)} onPointerUp={endNavigation} onPointerCancel={endNavigation} onWheel={handleWheel} aria-label="Fence drawing plan">
           <defs><pattern id="grid" width={GRID_MM} height={GRID_MM} patternUnits="userSpaceOnUse"><path d={`M ${GRID_MM} 0 L 0 0 0 ${GRID_MM}`} fill="none" stroke="#d8ddd7" strokeWidth="18" /></pattern></defs>
           <rect x={view.x} y={view.y} width={view.width} height={view.height} fill="url(#grid)" pointerEvents="none" />
-          {design.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { event.stopPropagation(); selectHouse(); }}>
+          {design.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode !== "pan") { event.stopPropagation(); selectHouse(); } }}>
             <rect className="house-hit" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <rect className="house-footprint" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <g transform={`translate(${design.house.xMm + design.house.lengthMm / 2} ${design.house.yMm + design.house.widthMm / 2})`} className="house-label"><rect x="-1050" y="-300" width="2100" height="600" rx="180" /><text textAnchor="middle" dominantBaseline="central">HOUSE · {formatFeetInches(design.house.lengthMm)} × {formatFeetInches(design.house.widthMm)}</text></g>
@@ -174,7 +240,7 @@ export default function App() {
             const start = pointById(design, segment.fromPointId); const end = pointById(design, segment.toPointId);
             const midX = (start.xMm + end.xMm) / 2; const midY = (start.yMm + end.yMm) / 2;
             const selected = selection?.type === "segment" && selection.id === segment.id;
-            return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { event.stopPropagation(); selectSegment(segment.id); }} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") selectSegment(segment.id); }}>
+            return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode !== "pan") { event.stopPropagation(); selectSegment(segment.id); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode !== "pan" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
               <line className="segment-hit" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <line className="segment-line" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <g transform={`translate(${midX} ${midY})`} className="dimension"><rect x="-640" y="-260" width="1280" height="520" rx="180" /><text textAnchor="middle" dominantBaseline="central">{segment.kind === "gate" ? "GATE · " : ""}{formatFeetInches(segmentLengthMm(design, segment))}</text></g>

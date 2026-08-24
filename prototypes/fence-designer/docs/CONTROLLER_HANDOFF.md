@@ -2,13 +2,14 @@
 
 ## Outcome
 
-Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws one ordered connected path around an optional exact measured house footprint, reports deterministic run and total measurements, supports exact edits and point editing, snaps fence points to any house edge, distinguishes open endpoints and corners, records whole-span gate intent, maintains undo/redo, and saves/loads validated local JSON.
+Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws one ordered connected path around an optional exact measured house footprint, reports deterministic run and total measurements, supports exact edits and point editing, snaps fence points to any house edge, distinguishes open endpoints and corners, records whole-span gate intent, supports bounded focal-point zoom and dedicated plan panning, maintains undo/redo, and saves/loads validated local JSON.
 
 ## Files and ownership
 
 - `src/model.ts`: prototype-owned integer-millimeter document, validation, geometry, classification, and feet/inches presentation.
 - `src/history.ts`: whole-document undo/redo snapshots.
 - `src/storage.ts`: explicit browser-local persistence.
+- `src/view.ts`: deterministic bounded focal-point zoom and viewport-to-plan pan conversion shared by buttons, wheel/trackpad, mouse drag, and touch pinch interactions.
 - `src/parent-build-tooling.d.ts`: type-only declarations that let the parent Next.js check this nested package without installing prototype tooling at the repository root.
 - `src/App.tsx` and `src/styles.css`: touch-friendly SVG editor and inspector.
 - `src/app/sales/fence-designer/page.tsx` (repository root): thin OS route adapter that renders the prototype inside the existing protected Sales layout.
@@ -36,11 +37,11 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 14 deterministic tests passed.
+- 17 deterministic tests passed.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
-- Browser QA passed for house dimensions, midpoint house-edge snapping, snap on/off, draw, exact edit, gate intent, drag, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
+- Browser QA passed for house dimensions, midpoint house-edge snapping, snap on/off, draw, exact edit, gate intent, point drag, dedicated plan pan, zoom buttons, wheel/trackpad zoom, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
 - The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
 - Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 
