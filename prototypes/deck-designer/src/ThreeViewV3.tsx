@@ -34,6 +34,18 @@ type PlatformView = Readonly<{ platform: ThreeViewPlatform; geometry: ThreeViewG
 type Props = { platform: ThreeViewPlatform; geometry: ThreeViewGeometry; contextPlatforms?: readonly PlatformView[]; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality };
 const EMPTY_CONTEXT_PLATFORMS: readonly PlatformView[] = Object.freeze([]);
 
+export function disposeSceneResources(root: THREE.Object3D): Readonly<{ geometries: number; materials: number }> {
+  const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>();
+  root.traverse((object: any) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    geometries.add(object.geometry);
+    (Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => materials.add(material));
+  });
+  geometries.forEach((geometry) => geometry.dispose());
+  materials.forEach((material) => material.dispose());
+  return Object.freeze({ geometries: geometries.size, materials: materials.size });
+}
+
 function member(group: THREE.Group, value: Readonly<{ start: { x: number; z: number }; end: { x: number; z: number } }>, y: number, height: number, depth: number, material: THREE.Material) {
   const dx = value.end.x - value.start.x, dz = value.end.z - value.start.z;
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(dx, dz), height, depth), material);
@@ -101,7 +113,13 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTE
     const observer = new ResizeObserver(resize); observer.observe(mount); resize();
     camera.position.set(centerX + span, platform.elevation + span, centerZ + span); controls.target.set(centerX, platform.elevation / 2, centerZ); controls.update();
     let frameId = 0; const animate = () => { controls.update(); renderer.render(scene, camera); frameId = requestAnimationFrame(animate); }; animate();
-    return () => { cancelAnimationFrame(frameId); observer.disconnect(); controls.dispose(); renderer.dispose(); scene.traverse((object: any) => { if (object instanceof THREE.Mesh) object.geometry.dispose(); }); [deck, frame, rail, fascia, skirting, house].forEach((value) => value.dispose()); if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement); };
+    return () => {
+      cancelAnimationFrame(frameId); observer.disconnect(); controls.dispose(); renderer.dispose();
+      disposeSceneResources(scene);
+      if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
+      if (cameraRef.current === camera) cameraRef.current = null;
+      if (controlsRef.current === controls) controlsRef.current = null;
+    };
   }, [platform, geometry, contextPlatforms, houseGeometry, gradeElevation, quality, showFraming, centerX, centerZ, span]);
 
   useEffect(() => {

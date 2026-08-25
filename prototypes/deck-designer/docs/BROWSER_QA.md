@@ -378,6 +378,11 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Reloaded the saved v5 one-level design and confirmed exactly one WebGL canvas was present.
 - Exercised Top and Perspective camera presets; both retained one canvas and updated the same visible deck/stair model without a loading fallback.
 - Reloaded after the check so the saved local design and default camera were handed back unchanged.
+## 2026-08-25 — complete 3D scene resource cleanup
+
+- Changed the saved one-level height from four feet to four-and-a-half feet and back, confirming one functioning canvas after both intentional scene rebuilds.
+- Turned framing off and on, confirming one canvas and the restored conceptual framing model after both rebuilds.
+- Reloaded to discard the temporary QA edits and restore the saved local design.
 ## 2026-08-24 — adjacent conceptual joist-to-cutout review
 
 - Added a centered rectangular cutout through the desktop controls and opened layout review.
