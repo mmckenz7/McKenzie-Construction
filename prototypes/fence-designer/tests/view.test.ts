@@ -56,4 +56,34 @@ describe("plan view navigation", () => {
     const placed = placeDimensionLabels([{ id: "a", ...shared, preferredSide: -1, fixedSide: true }, { id: "b", ...shared, preferredSide: -1, fixedSide: true }], 200, 40);
     expect(placed.map(({ side, offsetMm }) => ({ side, offsetMm }))).toEqual([{ side: -1, offsetMm: 200 }, { side: -1, offsetMm: 500 }]);
   });
+
+  it("keeps an automatic label inside the visible plan", () => {
+    const [placed] = placeDimensionLabels(
+      [{ id: "a", start: { xMm: 100, yMm: 100 }, end: { xMm: 900, yMm: 100 }, widthMm: 300, heightMm: 100 }],
+      200,
+      20,
+      { bounds: { x: 0, y: 0, width: 1_000, height: 1_000 }, boundsPaddingMm: 10 },
+    );
+    expect(placed).toEqual({ id: "a", side: -1, offsetMm: 200, position: { xMm: 500, yMm: 300 } });
+  });
+
+  it("prefers the label side that does not cover another fence run", () => {
+    const [placed] = placeDimensionLabels(
+      [{ id: "a", start: { xMm: 100, yMm: 500 }, end: { xMm: 900, yMm: 500 }, widthMm: 300, heightMm: 100 }],
+      200,
+      20,
+      { avoidSegments: [{ id: "b", start: { xMm: 300, yMm: 300 }, end: { xMm: 700, yMm: 300 } }] },
+    );
+    expect(placed).toEqual({ id: "a", side: -1, offsetMm: 200, position: { xMm: 500, yMm: 700 } });
+  });
+
+  it("clamps a fixed-side label inside the visible plan when its side has no open candidate", () => {
+    const [placed] = placeDimensionLabels(
+      [{ id: "a", start: { xMm: 100, yMm: 100 }, end: { xMm: 900, yMm: 100 }, widthMm: 300, heightMm: 100, preferredSide: 1, fixedSide: true }],
+      200,
+      20,
+      { bounds: { x: 0, y: 0, width: 1_000, height: 1_000 }, boundsPaddingMm: 10 },
+    );
+    expect(placed).toEqual({ id: "a", side: 1, offsetMm: 1_200, position: { xMm: 500, yMm: 60 } });
+  });
 });

@@ -61,5 +61,8 @@ Validated workflow:
 53. Zoomed to 211% and confirmed the completed dimension retained a compact, readable screen size and offset with zero browser console errors.
 54. Created three closely packed single-gate spans and confirmed their wide labels automatically distributed above, beside, and below the geometry without overlapping.
 55. Selected a crowded gate, used **Flip dimension side**, and confirmed its label stayed on the requested side while moving farther out to avoid its neighbors; geometry, totals, and revision remained unchanged.
+56. Drew a three-span shape against the top of the visible plan and confirmed automatic labels stayed on-canvas while choosing clear sides around the runs.
+57. Flipped a selected dimension, confirmed **Auto-position dimension** appeared, used it, and confirmed the manual override disappeared, the label returned to deterministic placement, and geometry, totals, and revision remained unchanged.
+58. Checked browser logs after edge-aware placement and the flip/reset flow: no application warnings or errors.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

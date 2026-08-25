@@ -2,14 +2,14 @@
 
 ## Outcome
 
-Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws independently editable perimeter and divider lines around an optional exact measured house footprint. Live drawing length stays in a dedicated canvas card; completed dimensions sit beside their runs with leaders, deterministic collision avoidance, optional manual side flipping, and a zoom-stable visual size. **Site walk** converts explicit tap-to-mark phone GPS fixes into a private local plan, supports a separate-line-next field action, reports phone accuracy, and lets the user immediately replace the latest GPS-shaped distance with an authoritative tape/wheel/laser length. Raw latitude/longitude never enters the design or storage. **Property** provides explicit Acres, KGIS, and Google reference launches plus desktop tab capture, direct clipboard-image paste, and file-upload fallback. Captured images are compressed locally, can be calibrated, positioned, faded, and locked, and persist only through the explicit browser-local save action. Reference context stays outside measured geometry. Existing Draw, closure, gate, navigation, history, and local-save workflows remain intact.
+Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws independently editable perimeter and divider lines around an optional exact measured house footprint. Live drawing length stays in a dedicated canvas card; completed dimensions sit beside their runs with leaders, deterministic collision and run-crossing avoidance, visible-plan containment, optional manual side flipping with automatic reset, and a zoom-stable visual size. **Site walk** converts explicit tap-to-mark phone GPS fixes into a private local plan, supports a separate-line-next field action, reports phone accuracy, and lets the user immediately replace the latest GPS-shaped distance with an authoritative tape/wheel/laser length. Raw latitude/longitude never enters the design or storage. **Property** provides explicit Acres, KGIS, and Google reference launches plus desktop tab capture, direct clipboard-image paste, and file-upload fallback. Captured images are compressed locally, can be calibrated, positioned, faded, and locked, and persist only through the explicit browser-local save action. Reference context stays outside measured geometry. Existing Draw, closure, gate, navigation, history, and local-save workflows remain intact.
 
 ## Files and ownership
 
 - `src/model.ts`: prototype-owned integer-millimeter document, validation, geometry, classification, and feet/inches presentation.
 - `src/history.ts`: whole-document undo/redo snapshots.
 - `src/storage.ts`: explicit browser-local design persistence plus separately validated compressed-reference persistence.
-- `src/view.ts`: deterministic bounded focal-point zoom and viewport-to-plan pan conversion shared by buttons, wheel/trackpad, mouse drag, and touch pinch interactions.
+- `src/view.ts`: deterministic bounded focal-point zoom, viewport-to-plan pan conversion, and edge/run-aware dimension-label placement.
 - `src/gps.ts`: deterministic local GPS projection, explicit high-accuracy browser request, error mapping, and accuracy presentation.
 - `src/kgis.ts`: validated official KGIS address-link builder.
 - `src/property-reference.ts`: validated official Acres, KGIS, and Google reference destinations with no provider fetch.
@@ -42,11 +42,11 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 59 deterministic tests passed.
+- 62 deterministic tests passed.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
-- Browser QA passed for automatic dimension collision avoidance, manual side flipping, the dedicated live measurement card, offset completed dimensions, zoom-stable labels, desktop tab-capture controls, direct clipboard-image paste, same-device reference save/load, file-upload fallback, 40-foot two-point calibration, independent layers, opacity/rotation/movement/locking, mobile layout, drawing over a locked reference, Site Walk panel behavior and permission failure handling, KGIS reference lookup, a four-run perimeter plus two interior dividers, midpoint connections, independent line editing and totals, free-angle defaults, full-chain closure, exact-length solving, optional angle assistance, native gates, Escape cancellation, contained zoom/pan, local save/load, and console cleanliness.
+- Browser QA passed for automatic dimension collision and unrelated-run avoidance, visible-plan containment, manual side flipping and automatic reset, the dedicated live measurement card, offset completed dimensions, zoom-stable labels, desktop tab-capture controls, direct clipboard-image paste, same-device reference save/load, file-upload fallback, 40-foot two-point calibration, independent layers, opacity/rotation/movement/locking, mobile layout, drawing over a locked reference, Site Walk panel behavior and permission failure handling, KGIS reference lookup, a four-run perimeter plus two interior dividers, midpoint connections, independent line editing and totals, free-angle defaults, full-chain closure, exact-length solving, optional angle assistance, native gates, Escape cancellation, contained zoom/pan, local save/load, and console cleanliness.
 - The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
 - Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 
