@@ -32,4 +32,20 @@ describe("v5 contextual warning locator", () => {
     const warning = deriveGeometryWarningsV5(design, platform.id).find((candidate) => candidate.id === "stair-route-deck-collision-stair-system-1")!;
     expect(deriveWarningSelectionV5(design.platforms[0], warning)).toEqual({ holeIndex: null, beamLineId: null, stairSystemId: "stair-system-1", edgeId: edge.id });
   });
+
+  it("selects the authoritative stair and side from a wall-crossing blocker while retaining wall traceability", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const edge = deriveGeometricPolygonEdges(platform.region.outer)[2];
+    const stairSystem = { id: "stair-system-1", locked: true, edgeId: edge.id, offset: 72, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [] };
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [stairSystem] } }] });
+    const warning: GeometryWarningV5 = Object.freeze({
+      id: "stair-route-house-collision-stair-system-1-house-wall-2",
+      severity: "collision",
+      geometryIds: Object.freeze(["stair-system-1", "house-wall-2"]),
+      message: "Stair crosses recorded wall.",
+    });
+    expect(warning.geometryIds).toContain("house-wall-2");
+    expect(deriveWarningSelectionV5(design.platforms[0], warning)).toEqual({ holeIndex: null, beamLineId: null, stairSystemId: "stair-system-1", edgeId: edge.id });
+  });
 });

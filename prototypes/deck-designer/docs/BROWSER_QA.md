@@ -491,3 +491,10 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Chose Keep current outline and confirmed the prior measurements, eight corners, stairs, and tracer Undo remained. Escape during a later field edit restored the focused transaction with no pending change.
 - Chose Apply size and reset outline and confirmed the trace became the requested four-corner rectangle, temporary stairs were removed, and tracer Undo returned disabled. Local photo state is not included in this reset path and remains owned by the dialog.
 - Desktop semantic QA found no blank dialog or runtime error. Focused pure tests cover invalid/partial dimensions, unchanged recovery, untouched auto-resize, and staging whenever custom geometry or temporary stairs exist.
+
+## 2026-08-25 — distinct house-wall stair blockers
+
+- Opened the active one-level v5 designer and confirmed the measured plan, interactive 3D model, local/JSON recovery controls, and exactly one WebGL canvas remained available.
+- Opened layout review on the clean saved design and confirmed geometry remained ready with no invented warning or blocker.
+- At 390 × 844, the full-screen review retained its Close and Lock layout & continue actions and the page retained exactly one canvas.
+- Browser logs contained no warnings or errors. Pure v3/v5 coverage proves two distinct crossed walls produce two ordered blockers, split panels from one authored wall deduplicate to one, exact boundary contact remains allowed, repeated projection is deterministic, and Show in plan resolves the authoritative stair and attached side while retaining the recorded wall ID in the warning.

@@ -142,6 +142,23 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     }));
   });
 
+  it("retains one blocking warning per distinct authored wall crossed by a stair route", () => {
+    const walls = [
+      { id: "house-wall-near", start: { x: 60, z: 180 }, end: { x: 132, z: 180 }, baseElevation: 0, height: 120, attachment: "unknown" as const, openings: [] },
+      { id: "house-wall-far", start: { x: 60, z: 200 }, end: { x: 132, z: 200 }, baseElevation: 0, height: 120, attachment: "unknown" as const, openings: [] },
+    ];
+    const base = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: walls } });
+    const platform = base.platforms[0];
+    const lowerEdge = deriveGeometricPolygonEdges(platform.region.outer).find((edge) => edge.outward.z > 0)!;
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{
+      id: "stair-system-1", locked: true, edgeId: lowerEdge.id, offset: 72, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [],
+    }] } }] });
+    expect(deriveGeometryWarningsV5(design, platform.id).filter((warning) => warning.id.startsWith("stair-route-house-collision-"))).toEqual([
+      expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-far", geometryIds: ["stair-system-1", "house-wall-far"] }),
+      expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-near", geometryIds: ["stair-system-1", "house-wall-near"] }),
+    ]);
+  });
+
   it("keeps stair overlap blocking while reporting distinct measured spacing between nearby routes", () => {
     const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
     const platform = base.platforms[0];

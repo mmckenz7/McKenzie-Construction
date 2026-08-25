@@ -162,13 +162,15 @@ export function deriveGeometryWarningsV3(design: DeckDesignV3, platformId: strin
       geometryIds: Object.freeze([route.systemId, `${platform.id}:outer`]),
       message: `Stair system ${routeIndex + 1} passes back through the deck footprint in plan. Move or reroute it before continuing.`,
     }));
-    const housePanel = house.houseWallPanels.find((panel) => footprints.some((part) => segmentCrossesConvexInterior(panel.start, panel.end, part.corners)));
-    if (housePanel) warnings.push(Object.freeze({
-      id: `stair-route-house-collision-${route.systemId}-${housePanel.wallId}`,
+    const crossedWallIds = new Set(house.houseWallPanels
+      .filter((panel) => footprints.some((part) => segmentCrossesConvexInterior(panel.start, panel.end, part.corners)))
+      .map((panel) => panel.wallId));
+    normalized.siteContext.houseWalls.filter((wall) => crossedWallIds.has(wall.id)).forEach((wall) => warnings.push(Object.freeze({
+      id: `stair-route-house-collision-${route.systemId}-${wall.id}`,
       severity: "collision" as const,
-      geometryIds: Object.freeze([route.systemId, housePanel.wallId]),
-      message: `Stair system ${routeIndex + 1} crosses the recorded house wall in plan. Move or reroute it before continuing.`,
-    }));
+      geometryIds: Object.freeze([route.systemId, wall.id]),
+      message: `Stair system ${routeIndex + 1} crosses a recorded house wall (${wall.id}) in plan. Move or reroute it before continuing.`,
+    })));
   });
   for (let firstIndex = 0; firstIndex < routes.length; firstIndex += 1) {
     for (let secondIndex = firstIndex + 1; secondIndex < routes.length; secondIndex += 1) {

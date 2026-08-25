@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveGeometryWarningsV3, positiveRegionOverlapArea } from "../src/geometryWarningsV3";
+import { deriveLayoutReviewV3 } from "../src/layoutReviewV3";
 import { DEFAULT_DESIGN } from "../src/model";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
 import { migrateDeckDesignToV3, normalizeDeckDesignV3 } from "../src/modelV3";
@@ -69,5 +70,51 @@ describe("deterministic single-level geometry warnings", () => {
     const stairSystem = { id: "stair-system-1", locked: true, edgeId: bottom.id, offset: 72, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [] };
     const design = normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [stairSystem] } }] });
     expect(deriveGeometryWarningsV3(design, platform.id)).toContainEqual(expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-2", severity: "collision" }));
+  });
+
+  it("reports every distinct recorded house wall crossed by one stair route", () => {
+    const crossedWalls = [
+      { id: "house-wall-near", start: { x: 60, z: 180 }, end: { x: 132, z: 180 }, baseElevation: 0, height: 120, attachment: "unknown" as const, openings: [] },
+      { id: "house-wall-far", start: { x: 60, z: 200 }, end: { x: 132, z: 200 }, baseElevation: 0, height: 120, attachment: "unknown" as const, openings: [] },
+    ];
+    const migrated = migrateDeckDesignToV3({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: [...DEFAULT_DESIGN.siteContext.houseWalls, ...crossedWalls] } });
+    const platform = migrated.platforms[0];
+    const bottom = deriveGeometricPolygonEdges(platform.region.outer)[2];
+    const stairSystem = { id: "stair-system-1", locked: true, edgeId: bottom.id, offset: 72, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [] };
+    const design = normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [stairSystem] } }] });
+    const warnings = deriveGeometryWarningsV3(design, platform.id).filter((warning) => warning.id.startsWith("stair-route-house-collision-"));
+    expect(warnings).toEqual([
+      expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-far", geometryIds: ["stair-system-1", "house-wall-far"] }),
+      expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-near", geometryIds: ["stair-system-1", "house-wall-near"] }),
+    ]);
+    expect(deriveGeometryWarningsV3(design, platform.id)).toEqual(deriveGeometryWarningsV3(design, platform.id));
+    const review = deriveLayoutReviewV3(design, platform.id);
+    expect(review.readyToContinue).toBe(false);
+    expect(review.blockers.filter((blocker) => blocker.includes("crosses a recorded house wall"))).toHaveLength(2);
+  });
+
+  it("deduplicates split panels from one authored wall and allows exact stair-boundary contact", () => {
+    const houseWalls = [
+      {
+        id: "house-wall-split", start: { x: 60, z: 180 }, end: { x: 132, z: 180 }, baseElevation: 0, height: 120, attachment: "unknown" as const,
+        openings: [{ id: "door-gap", kind: "door" as const, offset: 30, width: 12, sillHeight: 0, height: 80 }],
+      },
+      { id: "house-wall-contact", start: { x: 60, z: 144 }, end: { x: 132, z: 144 }, baseElevation: 0, height: 120, attachment: "unknown" as const, openings: [] },
+    ];
+    const migrated = migrateDeckDesignToV3({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls } });
+    const platform = migrated.platforms[0];
+    const bottom = deriveGeometricPolygonEdges(platform.region.outer)[2];
+    const stairSystem = { id: "stair-system-1", locked: true, edgeId: bottom.id, offset: 72, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [] };
+    const design = normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [stairSystem] } }] });
+    const warnings = deriveGeometryWarningsV3(design, platform.id).filter((warning) => warning.id.startsWith("stair-route-house-collision-"));
+    expect(warnings).toEqual([
+      expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-split", geometryIds: ["stair-system-1", "house-wall-split"] }),
+    ]);
+  });
+
+  it("fails closed when house context geometry is invalid", () => {
+    const migrated = migrateDeckDesignToV3(DEFAULT_DESIGN);
+    const invalid = { ...migrated, siteContext: { ...migrated.siteContext, houseWalls: [{ ...migrated.siteContext.houseWalls[0], end: migrated.siteContext.houseWalls[0].start }] } };
+    expect(() => deriveGeometryWarningsV3(invalid as typeof migrated, migrated.platforms[0].id)).toThrow();
   });
 });
