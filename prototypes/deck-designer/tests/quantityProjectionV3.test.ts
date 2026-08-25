@@ -54,6 +54,15 @@ describe("v3 accessory quantity projection", () => {
       .every((line) => line.quantityClass === "visualization")).toBe(true);
   });
 
+  it("keeps railing-post explanation independent from beam-support spacing", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV3({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, framing: { ...platform.construction.framing, maxPostSpacing: 48 } } }] });
+    const report = deriveDeckAccessoryProjectionV3(design, platform.id);
+    expect(report.quantities.find((line) => line.key === "support-post-count")?.explanation).toContain("48 in");
+    expect(report.quantities.find((line) => line.key === "railing-post-count")?.explanation).toContain("72 in");
+  });
+
   it("projects a turning landing from the same recorded geometry facts", () => {
     const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
     const platform = base.platforms[0];

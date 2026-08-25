@@ -1,4 +1,4 @@
-import { derivePlatformGeometryV3 } from "./geometryV3";
+import { CONCEPTUAL_RAIL_POST_SPACING_IN, derivePlatformGeometryV3 } from "./geometryV3";
 import { normalizeDeckDesignV3, type DeckDesignV3 } from "./modelV3";
 
 export type DeckProjectionQuantityV3 = Readonly<{
@@ -75,7 +75,7 @@ export function deriveDeckAccessoryProjectionV3(
       unit: "each" as const,
       assemblyIntent: "railing" as const,
       sourceGeometry: Object.freeze(geometry.railPosts.map((post) => `${platformId}:${post.id}`)),
-      explanation: `Conceptual unique railing endpoints and intermediate posts in bays not exceeding ${platform.construction.framing.maxPostSpacing} in`,
+      explanation: `Conceptual unique railing endpoints and intermediate posts in bays not exceeding ${CONCEPTUAL_RAIL_POST_SPACING_IN} in; independent from beam-support spacing`,
     }),
   ];
   if (platform.construction.stairSystems.length > 0) {
