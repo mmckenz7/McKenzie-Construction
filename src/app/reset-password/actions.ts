@@ -15,7 +15,7 @@ export async function updateRecoveredPassword(formData: FormData) {
     redirect("/reset-password?error=invalid-link");
   }
 
-  if (password.length < 12) {
+  if (password.length < 8) {
     redirect("/reset-password?error=too-short");
   }
 

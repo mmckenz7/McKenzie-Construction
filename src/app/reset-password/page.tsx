@@ -39,7 +39,7 @@ export default async function ResetPasswordPage({
   const canResetPassword = Boolean(hasRecoveryMarker && user);
   const errorMessage =
     params.error === "too-short"
-      ? "Use at least 12 characters for your new password."
+      ? "Use at least 8 characters for your new password."
       : params.error === "mismatch"
         ? "The passwords do not match."
         : params.error === "update-failed"
@@ -80,12 +80,12 @@ export default async function ResetPasswordPage({
                   name="password"
                   type="password"
                   autoComplete="new-password"
-                  minLength={12}
+                  minLength={8}
                   required
                   className="mt-2 min-h-12 w-full rounded-lg border border-slate-300 px-4 text-slate-950 outline-none transition focus:border-lime-600 focus:ring-2 focus:ring-lime-600/20"
                 />
                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                  Use at least 12 characters.
+                  Use at least 8 characters.
                 </p>
               </div>
 
@@ -98,7 +98,7 @@ export default async function ResetPasswordPage({
                   name="confirmation"
                   type="password"
                   autoComplete="new-password"
-                  minLength={12}
+                  minLength={8}
                   required
                   className="mt-2 min-h-12 w-full rounded-lg border border-slate-300 px-4 text-slate-950 outline-none transition focus:border-lime-600 focus:ring-2 focus:ring-lime-600/20"
                 />

@@ -105,6 +105,13 @@ test("password mutation requires both recovery state and an authenticated user",
   assert.doesNotMatch(updateAction, /console\.|localStorage|sessionStorage/);
 });
 
+test("recovered passwords require only eight characters", () => {
+  assert.match(updateAction, /password\.length < 8/);
+  assert.match(resetPage, /minLength=\{8\}/);
+  assert.match(resetPage, /Use at least 8 characters/);
+  assert.doesNotMatch(updateAction, /[A-Z].*required|symbol.*required|digit.*required/i);
+});
+
 test("invalid and expired links have a safe recovery path", () => {
   assert.match(resetPage, /This recovery link is invalid or has expired/);
   assert.match(resetPage, /href="\/forgot-password"/);
