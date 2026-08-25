@@ -98,8 +98,8 @@ export function readCurrentGps(provider: GpsProvider | null | undefined): Promis
 
 export function readMovedGps(provider: GpsProvider | null | undefined, previous: GpsFix, minimumMovementMeters = 0.75, timeoutMs = 20_000): Promise<GpsFix> {
   if (!provider) return Promise.reject(new Error("GPS is not available in this browser."));
-  const watchPosition = provider.watchPosition;
-  const clearWatch = provider.clearWatch;
+  const watchPosition = provider.watchPosition?.bind(provider);
+  const clearWatch = provider.clearWatch?.bind(provider);
   if (!watchPosition || !clearWatch) return readCurrentGps(provider).then((fix) => {
     if (gpsFixDistanceMeters(previous, fix) < minimumMovementMeters) throw new Error("The phone is still returning the previous GPS position. Wait for the GPS accuracy to update, then mark this point again.");
     return fix;
@@ -141,8 +141,9 @@ export function acquireBestGps(provider: GpsProvider | null | undefined, options
   }
 
   const isNewLocation = (fix: GpsFix) => !options.previousFix || gpsFixDistanceMeters(options.previousFix, fix) >= minimumMovementMeters;
-  const watchPosition = provider.watchPosition;
-  const clearWatch = provider.clearWatch;
+  // Safari requires Geolocation methods to retain their native receiver.
+  const watchPosition = provider.watchPosition?.bind(provider);
+  const clearWatch = provider.clearWatch?.bind(provider);
   if (!watchPosition || !clearWatch) return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (result: { fix: GpsFix } | { error: Error }) => {

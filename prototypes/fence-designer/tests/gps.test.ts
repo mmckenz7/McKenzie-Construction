@@ -86,6 +86,24 @@ describe("site walk GPS", () => {
     expect(clearedWatch).toBe(22);
   });
 
+  it("preserves Safari's required Geolocation receiver", async () => {
+    let clearedWithReceiver = false;
+    const provider: GpsProvider = {
+      getCurrentPosition: () => undefined,
+      watchPosition(success) {
+        if (this !== provider) throw new TypeError("watchPosition requires Geolocation receiver");
+        success({ coords: { latitude: 35.95, longitude: -83.92, accuracy: 4 } });
+        return 25;
+      },
+      clearWatch(id) {
+        if (this !== provider) throw new TypeError("clearWatch requires Geolocation receiver");
+        clearedWithReceiver = id === 25;
+      },
+    };
+    await expect(acquireBestGps(provider)).resolves.toEqual({ latitude: 35.95, longitude: -83.92, accuracyMeters: 4 });
+    expect(clearedWithReceiver).toBe(true);
+  });
+
   it("uses the best rough fix at timeout and rejects an unusable one", async () => {
     const roughProvider: GpsProvider = {
       getCurrentPosition: () => undefined,

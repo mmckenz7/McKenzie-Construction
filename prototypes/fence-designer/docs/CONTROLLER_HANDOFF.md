@@ -46,7 +46,7 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 105 deterministic tests passed, including fifteen Black Aluminum tests, five Treated Pine/shared-drawing tests, ten GPS tests, five local-reference transform tests, twenty-nine geometry/model tests, and thirteen renderer/address/layer/provenance contract tests.
+- 106 deterministic tests passed, including fifteen Black Aluminum tests, five Treated Pine/shared-drawing tests, eleven GPS tests, five local-reference transform tests, twenty-nine geometry/model tests, and thirteen renderer/address/layer/provenance contract tests.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
