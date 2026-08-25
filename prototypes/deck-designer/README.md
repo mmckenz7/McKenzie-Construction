@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL Vite prints. Use `npm run validate` for the complete deterministic, isolation, bundle-budget, and golden-fixture validation sequence.
+Open the local URL Vite prints. Use `npm run validate` for the complete deterministic, isolation, bundle-budget, repository-wide Preview type-check, and golden-fixture validation sequence.
 
 ## Current isolated prototype boundary
 
