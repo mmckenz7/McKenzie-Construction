@@ -100,15 +100,9 @@ function interruptedJoistIds(design: DeckDesignV5, platformId: string, holeIndex
   }).filter((id): id is string => id !== null));
 }
 
-function adjacentJoistClearance(design: DeckDesignV5, platformId: string, holeIndex: number): Readonly<{ ids: readonly string[]; clearance: number }> {
+function adjacentJoistClearance(design: DeckDesignV5, platformId: string, holeIndex: number, joists: readonly ProjectedMember[]): Readonly<{ ids: readonly string[]; clearance: number }> {
   const platform = design.platforms.find((candidate) => candidate.id === platformId)!;
   const interrupted = new Set(interruptedJoistIds(design, platformId, holeIndex));
-  const joists = derivePolygonMembers(platform.region, {
-    boardWidth: platform.construction.decking.boardWidth,
-    gap: platform.construction.decking.gap,
-    boardDirection: platform.construction.decking.direction,
-    joistSpacing: platform.construction.framing.joistSpacing,
-  }).joists;
   const byPath = new Map<string, ProjectedMember[]>();
   joists.forEach((member) => {
     const id = member.id.match(/^joist-\d+/)?.[0];
@@ -312,7 +306,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     }));
   });
   platform.region.holes.forEach((_, holeIndex) => {
-    const adjacent = adjacentJoistClearance(normalized, platformId, holeIndex);
+    const adjacent = adjacentJoistClearance(normalized, platformId, holeIndex, projectedJoists);
     if (!adjacent.ids.length) return;
     const measured = Math.round(adjacent.clearance * 10) / 10;
     warnings.push(Object.freeze({

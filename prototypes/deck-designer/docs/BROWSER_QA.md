@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 one-pass joist warning projection regression
+
+- The active one-level v5 review now projects transient joist paths once and reuses the same immutable result for recorded-wall and every cutout-adjacency check; exact per-cutout interrupted-path sampling is unchanged.
+- Desktop and 390 × 844 review checks retained one lazy 3D canvas, reachable **Close** and **Lock layout & continue** actions, no mobile horizontal overflow, and no browser warning/error logs.
+- Full validation retained 317/317 tests, golden designs, and bundle ceilings. No authored joists, warning semantics, geometry, quantities, storage, or shared contracts changed.
+
 ## 2026-08-25 one-pass beam warning projection regression
 
 - Loaded the active one-level v5 editor locally with exactly one lazy 3D canvas and the clean rectangle ready for review. Each authored beam line is now clipped and projected once per warning pass, then its same derived beam/support IDs are reused across cutout, recorded-wall, and short-fragment checks.
