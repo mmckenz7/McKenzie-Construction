@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_VIEW_WIDTH, MIN_VIEW_WIDTH, offsetDimensionPosition, panView, zoomViewAt, type ViewBox } from "../src/view";
+import { MAX_VIEW_WIDTH, MIN_VIEW_WIDTH, offsetDimensionPosition, panView, placeDimensionLabels, zoomViewAt, type ViewBox } from "../src/view";
 
 const view: ViewBox = { x: 0, y: 0, width: 10_000, height: 5_000 };
 
@@ -28,5 +28,32 @@ describe("plan view navigation", () => {
 
   it("leaves a zero-length label at its midpoint", () => {
     expect(offsetDimensionPosition({ xMm: 20, yMm: 30 }, { xMm: 20, yMm: 30 }, 200)).toEqual({ xMm: 20, yMm: 30 });
+  });
+
+  it("flips a colliding dimension to the opposite side of its run", () => {
+    const shared = { start: { xMm: 0, yMm: 0 }, end: { xMm: 1_000, yMm: 0 }, widthMm: 600, heightMm: 200 };
+    const placed = placeDimensionLabels([{ id: "a", ...shared }, { id: "b", ...shared }], 200, 40);
+    expect(placed.map(({ side, position }) => ({ side, position }))).toEqual([
+      { side: 1, position: { xMm: 500, yMm: -200 } },
+      { side: -1, position: { xMm: 500, yMm: 200 } },
+    ]);
+  });
+
+  it("steps a third crowded label farther away deterministically", () => {
+    const shared = { start: { xMm: 0, yMm: 0 }, end: { xMm: 1_000, yMm: 0 }, widthMm: 600, heightMm: 200 };
+    const placed = placeDimensionLabels([{ id: "a", ...shared }, { id: "b", ...shared }, { id: "c", ...shared }], 200, 40);
+    expect(placed[2]).toEqual({ id: "c", side: 1, offsetMm: 500, position: { xMm: 500, yMm: -500 } });
+  });
+
+  it("honors a manual preferred-side flip", () => {
+    const [placed] = placeDimensionLabels([{ id: "a", start: { xMm: 0, yMm: 0 }, end: { xMm: 1_000, yMm: 0 }, widthMm: 600, heightMm: 200, preferredSide: -1, fixedSide: true }], 200, 40);
+    expect(placed.side).toBe(-1);
+    expect(placed.position).toEqual({ xMm: 500, yMm: 200 });
+  });
+
+  it("moves a manually flipped label farther without changing its side", () => {
+    const shared = { start: { xMm: 0, yMm: 0 }, end: { xMm: 1_000, yMm: 0 }, widthMm: 600, heightMm: 200 };
+    const placed = placeDimensionLabels([{ id: "a", ...shared, preferredSide: -1, fixedSide: true }, { id: "b", ...shared, preferredSide: -1, fixedSide: true }], 200, 40);
+    expect(placed.map(({ side, offsetMm }) => ({ side, offsetMm }))).toEqual([{ side: -1, offsetMm: 200 }, { side: -1, offsetMm: 500 }]);
   });
 });

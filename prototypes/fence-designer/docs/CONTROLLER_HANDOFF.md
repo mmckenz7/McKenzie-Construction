@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws independently editable perimeter and divider lines around an optional exact measured house footprint. Live drawing length now stays in a dedicated canvas card; completed dimensions sit beside their runs with leaders and a zoom-stable visual size. **Site walk** converts explicit tap-to-mark phone GPS fixes into a private local plan, supports a separate-line-next field action, reports phone accuracy, and lets the user immediately replace the latest GPS-shaped distance with an authoritative tape/wheel/laser length. Raw latitude/longitude never enters the design or storage. **Property** provides explicit Acres, KGIS, and Google reference launches plus desktop tab capture, direct clipboard-image paste, and file-upload fallback. Captured images are compressed locally, can be calibrated, positioned, faded, and locked, and persist only through the explicit browser-local save action. Reference context stays outside measured geometry. Existing Draw, closure, gate, navigation, history, and local-save workflows remain intact.
+Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws independently editable perimeter and divider lines around an optional exact measured house footprint. Live drawing length stays in a dedicated canvas card; completed dimensions sit beside their runs with leaders, deterministic collision avoidance, optional manual side flipping, and a zoom-stable visual size. **Site walk** converts explicit tap-to-mark phone GPS fixes into a private local plan, supports a separate-line-next field action, reports phone accuracy, and lets the user immediately replace the latest GPS-shaped distance with an authoritative tape/wheel/laser length. Raw latitude/longitude never enters the design or storage. **Property** provides explicit Acres, KGIS, and Google reference launches plus desktop tab capture, direct clipboard-image paste, and file-upload fallback. Captured images are compressed locally, can be calibrated, positioned, faded, and locked, and persist only through the explicit browser-local save action. Reference context stays outside measured geometry. Existing Draw, closure, gate, navigation, history, and local-save workflows remain intact.
 
 ## Files and ownership
 
@@ -42,11 +42,11 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 55 deterministic tests passed.
+- 59 deterministic tests passed.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
-- Browser QA passed for the dedicated live measurement card, offset completed dimensions, zoom-stable labels, desktop tab-capture controls, direct clipboard-image paste, same-device reference save/load, file-upload fallback, 40-foot two-point calibration, independent layers, opacity/rotation/movement/locking, mobile layout, drawing over a locked reference, Site Walk panel behavior and permission failure handling, KGIS reference lookup, a four-run perimeter plus two interior dividers, midpoint connections, independent line editing and totals, free-angle defaults, full-chain closure, exact-length solving, optional angle assistance, native gates, Escape cancellation, contained zoom/pan, local save/load, and console cleanliness.
+- Browser QA passed for automatic dimension collision avoidance, manual side flipping, the dedicated live measurement card, offset completed dimensions, zoom-stable labels, desktop tab-capture controls, direct clipboard-image paste, same-device reference save/load, file-upload fallback, 40-foot two-point calibration, independent layers, opacity/rotation/movement/locking, mobile layout, drawing over a locked reference, Site Walk panel behavior and permission failure handling, KGIS reference lookup, a four-run perimeter plus two interior dividers, midpoint connections, independent line editing and totals, free-angle defaults, full-chain closure, exact-length solving, optional angle assistance, native gates, Escape cancellation, contained zoom/pan, local save/load, and console cleanliness.
 - The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
 - Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 
