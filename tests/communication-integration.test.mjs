@@ -87,6 +87,7 @@ test("the company inbox exposes audited statuses and click-to-call", () => {
 
 test("Mission Control replies are server validated, sandboxed, threaded, and audited", () => {
   assert.match(replyRoute, /canAccessWorkspace\(workspace\.access, "sales"\)/);
+  assert.match(replyRoute, /communicationWorkspaceMatchesSingletonCompany\(supabase, workspace\.access!\.company_id\)/);
   assert.match(replyRoute, /communication_sandbox_mode/);
   assert.match(replyRoute, /communication_test_recipients/);
   assert.match(replyRoute, /"In-Reply-To": inReplyTo/);

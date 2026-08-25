@@ -32,6 +32,7 @@ test("search and practical channel and department filters remain URL-addressable
   assert.match(inbox, /Search people, addresses, subjects, or messages/);
   assert.match(inbox, /searchTextByThread/);
   assert.match(inbox, /inboxHref/);
+  assert.match(inbox, /Search covers the 100 most recent conversations and 150 recent message records in this Preview/);
 });
 
 test("unassigned compose delivery activity is not hidden behind a lead requirement", () => {

@@ -4,6 +4,7 @@ import { safeAttachmentFilename } from "@/lib/communications/microsoft-attachmen
 import { prepareSecondaryEmailRecipients } from "@/lib/communications/email-recipients";
 import { outboundAttachmentError } from "@/lib/communications/outbound-attachment-core";
 import { deliverCommunication } from "@/lib/communications/provider";
+import { communicationWorkspaceMatchesSingletonCompany } from "@/lib/communications/workspace-company";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import { canAccessWorkspace, getWorkspaceAccess } from "@/lib/workspace-access";
 
@@ -119,6 +120,9 @@ export async function POST(request: Request) {
   }));
 
   const supabase = createAdminServerClient();
+  if (!await communicationWorkspaceMatchesSingletonCompany(supabase, workspace.access!.company_id)) {
+    return Response.json({ success: false, error: "The company workspace could not be verified." }, { status: 403 });
+  }
   const settingsResult = await supabase.from("company_settings").select("email_delivery_provider,communications_from_email,company_email,communication_sandbox_mode,communication_test_recipients").limit(1).maybeSingle();
   if (settingsResult.error || !settingsResult.data) {
     return Response.json({ success: false, error: "Communication settings could not be loaded." }, { status: 500 });
