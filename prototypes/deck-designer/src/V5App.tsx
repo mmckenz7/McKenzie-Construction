@@ -96,6 +96,8 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const apply = (next: DeckDesignV5, nextMessage: string) => { setPreview(null); dispatch({ type: "apply", design: next }); setMessage(nextMessage); };
   const changeHistory = (type: "undo" | "redo") => { setPreview(null); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); dispatch({ type }); setMessage(type === "undo" ? "Last change undone." : "Change restored."); };
   const replaceRegion = (outer: readonly Point[], commit: boolean, holes = platform.region.holes): boolean => {
+    const current = history.present.platforms.find((item) => item.id === platform.id)!;
+    if (outer === current.region.outer && holes === current.region.holes) { setMessage("No change."); return false; }
     try {
       const result = applyPolygonRegionReplacementV5(history.present, platform.id, { outer, holes });
       if (commit) apply(result.design, result.notices.join(" ")); else setPreview(result.design);

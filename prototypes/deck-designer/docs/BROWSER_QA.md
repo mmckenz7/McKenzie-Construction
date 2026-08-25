@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-25 exact dimension no-op history
+
+- Exact side-length edits now compare the snapped target with the current measured edge before region replacement; equivalent wrapped angles likewise compare their rounded endpoint. A semantically unchanged edit retains the exact polygon object and never reaches v5 revision/history mutation.
+- The active UI reports a no-op without presenting it as a completed geometry change.
+- Pure regressions cover horizontal and vertical side lengths, positive and negative wrapped angles, and the polygon's closing edge. Desktop and 390 × 844 browser checks confirmed that `20.1 ft` at a six-inch snap remains `20 ft`, leaves Undo disabled, and shows the no-op notice; `20.6 ft` becomes `20 ft 6 in`, creates one Undo step, and restores the prior outline.
+- Both viewports retained one 3D canvas, the phone layout had no horizontal overflow, and browser warning/error logs were empty. Full validation passed 344/344 tests, isolation, typecheck, build, golden fixtures, and the unchanged 83.5/121.7/245.0 KiB gzip ceilings. Geometry authority, edge remapping, JSON, quantities, storage, schema, catalogs, estimating, and shared adapters are unchanged.
+
 ## 2026-08-25 active-control selected states
 
 - Persistent single-select controls now expose the same current state visually and through `aria-pressed`: workflow stage, board direction, board pattern, authored beam, selected landing, direction after a landing, and camera preset. Disabled/unavailable stage choices omit pressed state; commands and movement handles remain ordinary actions.

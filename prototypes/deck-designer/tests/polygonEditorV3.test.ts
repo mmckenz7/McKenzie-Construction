@@ -38,6 +38,11 @@ describe("direct v3 polygon authoring", () => {
     expect(normalizePolygon(next)).toEqual(next);
   });
 
+  it("keeps the exact outline identity when a requested length snaps to the current length", () => {
+    expect(resizePolygonEdge(rectangle, 0, 193, 6)).toBe(rectangle);
+    expect(resizePolygonEdge(rectangle, 3, 145, 6)).toBe(rectangle);
+  });
+
   it("rejects a side length that would collapse the selected segment", () => {
     expect(() => resizePolygonEdge(rectangle, 0, 0, 6)).toThrow(/at least 6 inches/i);
   });
@@ -54,6 +59,12 @@ describe("direct v3 polygon authoring", () => {
     expect(setPolygonEdgeAngle(rectangle, 0, -90)[1]).toEqual({ x: 0, z: -192 });
     expect(setPolygonEdgeAngle(rectangle, 0, 270)).toEqual(setPolygonEdgeAngle(rectangle, 0, -90));
     expect(() => setPolygonEdgeAngle(rectangle, 0, Number.NaN)).toThrow(/finite number/i);
+  });
+
+  it("keeps the exact outline identity for equivalent wrapped edge angles", () => {
+    expect(setPolygonEdgeAngle(rectangle, 0, 360)).toBe(rectangle);
+    expect(setPolygonEdgeAngle(rectangle, 0, -360)).toBe(rectangle);
+    expect(setPolygonEdgeAngle(rectangle, rectangle.length - 1, 270)).toBe(rectangle);
   });
 
   it("anchors a bumpout to an existing corner when the click is near the edge endpoint", () => {

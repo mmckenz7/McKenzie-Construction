@@ -170,6 +170,7 @@ export function resizePolygonEdge(
   if (!edge) throw new RangeError("Select an existing outline segment before changing its length.");
   const length = snap(requestedLength, snapIncrement);
   if (!Number.isFinite(length) || length < snapIncrement) throw new RangeError(`Side length must be at least ${snapIncrement} inches.`);
+  if (Math.abs(length - edge.length) < .01) return outer;
   const direction = { x: (edge.end.x - edge.start.x) / edge.length, z: (edge.end.z - edge.start.z) / edge.length };
   const connectedEdgeIndex = (edgeIndex + 1) % edges.length;
   const connectedEdge = edges[connectedEdgeIndex];
@@ -193,10 +194,12 @@ export function setPolygonEdgeAngle(
     const rounded = Math.round(value * 100) / 100;
     return Object.is(rounded, -0) ? 0 : rounded;
   };
-  const next = [...outer];
-  next[(edgeIndex + 1) % next.length] = Object.freeze({
+  const nextEnd = Object.freeze({
     x: round(edge.start.x + Math.cos(radians) * edge.length),
     z: round(edge.start.z + Math.sin(radians) * edge.length),
   });
+  if (nextEnd.x === edge.end.x && nextEnd.z === edge.end.z) return outer;
+  const next = [...outer];
+  next[(edgeIndex + 1) % next.length] = nextEnd;
   return Object.freeze(next);
 }

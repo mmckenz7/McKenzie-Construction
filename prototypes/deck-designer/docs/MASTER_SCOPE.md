@@ -129,6 +129,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Local economy, balanced, and detailed 3D quality tiers
 - [x] Labelled/described interactive measured-plan semantics with exact selected-object state
 - [x] Exact accessible selected state for active workflow, board, beam, landing, turn, and camera controls
+- [x] Exact snapped side length and wrapped-angle no-op detection without false revision or Undo entries
 - [ ] Broader accessibility checks and tablet interaction
 
 ## Phase D — isolated workflow services (separate approval required)
