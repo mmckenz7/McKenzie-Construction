@@ -122,6 +122,7 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
   const activeDrag = useRef<string | null>(null);
   const frozenView = useRef<ViewBounds | null>(null);
   const undoStack = useRef<readonly TraceSnapshot[]>([]);
+  const exactEditStart = useRef<TraceSnapshot | null>(null);
   const touchPoints = useRef(new Map<number, Readonly<{ x: number; y: number }>>());
   const pinchStart = useRef<Readonly<{ distance: number; anchor: PolygonPoint; view: ViewBounds }> | null>(null);
   const [activePhoto, setActivePhoto] = useState(0);
@@ -184,6 +185,43 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     setUndoCount(undoStack.current.length);
   };
   const remember = (snapshotOuter = outer) => rememberSnapshot(traceSnapshot(snapshotOuter));
+  const beginExactEdit = () => { if (!exactEditStart.current) exactEditStart.current = traceSnapshot(); };
+  const finishExactEdit = () => {
+    const start = exactEditStart.current;
+    exactEditStart.current = null;
+    if (start && JSON.stringify(start) !== JSON.stringify(traceSnapshot())) rememberSnapshot(start);
+  };
+  const cancelExactEdit = () => {
+    const start = exactEditStart.current;
+    exactEditStart.current = null;
+    if (!start) return;
+    if (selection?.kind === "corner") {
+      const corner = start.outer[selection.index];
+      if (corner) { setCornerXInput(String(feet(corner.x))); setCornerZInput(String(feet(corner.z))); }
+    }
+    if (selection?.kind === "segment") {
+      const edge = deriveGeometricPolygonEdges(start.outer)[selection.index];
+      if (edge) setSegmentLengthInput(String(feet(edge.length)));
+    }
+    if (start.stairOffset !== null) {
+      const stairEdge = deriveGeometricPolygonEdges(start.outer).find((edge) => edge.id === start.stairEdgeId);
+      setStairWidthInput(String(feet(start.stairWidth)));
+      setStairStartInput(String(feet(start.stairOffset)));
+      if (stairEdge) setStairEndInput(String(feet(stairEdge.length - start.stairWidth - start.stairOffset)));
+    }
+    onChange(start.outer);
+    onStairWidthChange(start.stairWidth);
+    onStairPlacementChange(start.stairEdgeId, start.stairOffset);
+    onError("");
+  };
+  const exactFieldKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); }
+    if (event.key === "Escape") { event.preventDefault(); cancelExactEdit(); event.currentTarget.blur(); }
+  };
+  const finishExactFieldGroup = (relatedTarget: EventTarget | null, group: string) => {
+    if (relatedTarget instanceof HTMLElement && relatedTarget.dataset.traceExactGroup === group) return;
+    finishExactEdit();
+  };
   const undo = () => {
     const previous = undoStack.current[undoStack.current.length - 1];
     if (!previous) return;
@@ -425,8 +463,8 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
         })}
       </svg>
       {(selectedCorner || selectedEdge) && <div className="trace-dimension-editor">
-        {selectedCorner && selection?.kind === "corner" && <><div><strong>Corner {selection.index + 1}</strong><small>Measured from the original left house corner.</small></div><label><span>Along house (ft)</span><input type="number" step="0.5" value={cornerXInput} onFocus={() => remember(outer)} onChange={(event) => { const value = event.target.value; setCornerXInput(value); if (value !== "") setCornerFeet("x", Number(value)); }} onBlur={() => setCornerXInput(String(feet(selectedCorner.x)))} /></label><label><span>Away from house (ft)</span><input type="number" step="0.5" disabled={selectedHouseCorner} value={cornerZInput} onFocus={() => remember(outer)} onChange={(event) => { const value = event.target.value; setCornerZInput(value); if (value !== "") setCornerFeet("z", Number(value)); }} onBlur={() => setCornerZInput(String(feet(selectedCorner.z)))} /></label></>}
-        {selectedEdge && selection?.kind === "segment" && <><div><strong>Selected segment</strong><small>{stairEdgeId === selectedEdge.id ? "Drag the orange circle for rough placement; use width and end measurements for exact sizing." : "Only this highlighted side will change."}</small></div><label><span>Length (ft)</span><input type="number" step="0.5" min="0.5" value={segmentLengthInput} onFocus={() => remember(outer)} onChange={(event) => { const value = event.target.value; setSegmentLengthInput(value); if (value !== "") setSegmentLengthFeet(Number(value)); }} onBlur={() => setSegmentLengthInput(String(feet(selectedEdge.length)))} /></label><button className="trace-context-action" disabled={selection.index === houseEdgeIndex} onClick={() => addOffset(selection.index)}>{selection.index === houseEdgeIndex ? "House side stays straight" : "Add bumpout here"}</button><button className={`trace-context-action stair${stairEdgeId === selectedEdge.id ? " selected" : ""}`} disabled={selection.index === houseEdgeIndex || selectedEdge.length < 30} onClick={toggleStairsOnSelectedEdge}>{selection.index === houseEdgeIndex ? "No stairs on house side" : selectedEdge.length < 30 ? "Side too short for stairs" : stairEdgeId === selectedEdge.id ? "Stairs shown in orange ✓" : "Add stairs here"}</button>{stairEdgeId === selectedEdge.id && stairOffset !== null && stairEndLabels && <><label><span>Stair width (ft)</span><input type="number" step="0.5" min="2.5" max="8" value={stairWidthInput} onChange={(event) => { const value = event.target.value; setStairWidthInput(value); if (value !== "") setStairWidthFeet(Number(value)); }} onBlur={() => setStairWidthInput(String(feet(stairWidth)))} /></label><label><span>From {stairEndLabels[0]} end (ft)</span><input type="number" step="0.5" min="0" value={stairStartInput} onChange={(event) => { const value = event.target.value; setStairStartInput(value); if (value !== "") setStairClearanceFeet("start", Number(value)); }} onBlur={() => setStairStartInput(String(feet(stairOffset)))} /></label><label><span>From {stairEndLabels[1]} end (ft)</span><input type="number" step="0.5" min="0" value={stairEndInput} onChange={(event) => { const value = event.target.value; setStairEndInput(value); if (value !== "") setStairClearanceFeet("end", Number(value)); }} onBlur={() => setStairEndInput(String(feet(selectedEdge.length - stairWidth - stairOffset)))} /></label></>}</>}
+        {selectedCorner && selection?.kind === "corner" && <><div><strong>Corner {selection.index + 1}</strong><small>Measured from the original left house corner.</small></div><label><span>Along house (ft)</span><input type="number" step="0.5" data-trace-exact-group="corner" value={cornerXInput} onFocus={beginExactEdit} onKeyDown={exactFieldKeyDown} onChange={(event) => { const value = event.target.value; setCornerXInput(value); if (value !== "") setCornerFeet("x", Number(value)); }} onBlur={(event) => { setCornerXInput(String(feet(selectedCorner.x))); finishExactFieldGroup(event.relatedTarget, "corner"); }} /></label><label><span>Away from house (ft)</span><input type="number" step="0.5" data-trace-exact-group="corner" disabled={selectedHouseCorner} value={cornerZInput} onFocus={beginExactEdit} onKeyDown={exactFieldKeyDown} onChange={(event) => { const value = event.target.value; setCornerZInput(value); if (value !== "") setCornerFeet("z", Number(value)); }} onBlur={(event) => { setCornerZInput(String(feet(selectedCorner.z))); finishExactFieldGroup(event.relatedTarget, "corner"); }} /></label></>}
+        {selectedEdge && selection?.kind === "segment" && <><div><strong>Selected segment</strong><small>{stairEdgeId === selectedEdge.id ? "Drag the orange circle for rough placement; use width and end measurements for exact sizing." : "Only this highlighted side will change."}</small></div><label><span>Length (ft)</span><input type="number" step="0.5" min="0.5" data-trace-exact-group="segment" value={segmentLengthInput} onFocus={beginExactEdit} onKeyDown={exactFieldKeyDown} onChange={(event) => { const value = event.target.value; setSegmentLengthInput(value); if (value !== "") setSegmentLengthFeet(Number(value)); }} onBlur={(event) => { setSegmentLengthInput(String(feet(selectedEdge.length))); finishExactFieldGroup(event.relatedTarget, "segment"); }} /></label><button className="trace-context-action" disabled={selection.index === houseEdgeIndex} onClick={() => addOffset(selection.index)}>{selection.index === houseEdgeIndex ? "House side stays straight" : "Add bumpout here"}</button><button className={`trace-context-action stair${stairEdgeId === selectedEdge.id ? " selected" : ""}`} disabled={selection.index === houseEdgeIndex || selectedEdge.length < 30} onClick={toggleStairsOnSelectedEdge}>{selection.index === houseEdgeIndex ? "No stairs on house side" : selectedEdge.length < 30 ? "Side too short for stairs" : stairEdgeId === selectedEdge.id ? "Stairs shown in orange ✓" : "Add stairs here"}</button>{stairEdgeId === selectedEdge.id && stairOffset !== null && stairEndLabels && <><label><span>Stair width (ft)</span><input type="number" step="0.5" min="2.5" max="8" data-trace-exact-group="stairs" value={stairWidthInput} onFocus={beginExactEdit} onKeyDown={exactFieldKeyDown} onChange={(event) => { const value = event.target.value; setStairWidthInput(value); if (value !== "") setStairWidthFeet(Number(value)); }} onBlur={(event) => { setStairWidthInput(String(feet(stairWidth))); finishExactFieldGroup(event.relatedTarget, "stairs"); }} /></label><label><span>From {stairEndLabels[0]} end (ft)</span><input type="number" step="0.5" min="0" data-trace-exact-group="stairs" value={stairStartInput} onFocus={beginExactEdit} onKeyDown={exactFieldKeyDown} onChange={(event) => { const value = event.target.value; setStairStartInput(value); if (value !== "") setStairClearanceFeet("start", Number(value)); }} onBlur={(event) => { setStairStartInput(String(feet(stairOffset))); finishExactFieldGroup(event.relatedTarget, "stairs"); }} /></label><label><span>From {stairEndLabels[1]} end (ft)</span><input type="number" step="0.5" min="0" data-trace-exact-group="stairs" value={stairEndInput} onFocus={beginExactEdit} onKeyDown={exactFieldKeyDown} onChange={(event) => { const value = event.target.value; setStairEndInput(value); if (value !== "") setStairClearanceFeet("end", Number(value)); }} onBlur={(event) => { setStairEndInput(String(feet(selectedEdge.length - stairWidth - stairOffset))); finishExactFieldGroup(event.relatedTarget, "stairs"); }} /></label></>}</>}
       </div>}
       <p>Tap one side to highlight it and reveal Add bumpout here. <span className="trace-dot round" /> Round corners move freely. <span className="trace-dot square" /> White squares move both ends together.</p>
     </section>

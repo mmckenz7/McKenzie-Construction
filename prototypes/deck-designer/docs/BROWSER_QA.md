@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-25 transactional photo-trace exact fields
+
+- Exact corner, segment, stair-width, and synchronized stair-clearance entries capture one complete temporary outline-and-stair snapshot when their field group receives focus. Leaving the group records one temporary Undo only when the normalized valid facts actually changed.
+- Focus-only, formatting-only, invalid/rejected, cleared-then-restored, and unchanged entries create no Undo. Enter completes through the normal blur path, while Escape restores the captured temporary facts and draft display without adding Undo.
+- Moving focus among the related stair width and two end-clearance fields remains one factual transaction, so their synchronized placement change produces only one Undo. Confirming the outline remains the sole v5 revision, history, and JSON mutation boundary.
+- Desktop browser QA left a 20-foot segment unchanged with Undo disabled, changed it to 19 feet with exactly `Undo (1)`, and restored the rectangle through that one temporary entry. A stair-clearance change from 8/8 feet to 7.5/8.5 feet stayed uncommitted while focus moved between the two fields, then produced exactly one Undo on leaving the group. Escape restored a draft 6-foot clearance to 7.5/8.5 with no new entry; Enter changed stair width from 4 to 4.5 feet once; typing the equivalent `4.50` added nothing. The underlying authoritative design remained revision 8 throughout.
+
 ## 2026-08-25 transactional photo-trace touch drags
 
 - Temporary corner, segment, and stair drags now record pointer ID, pointer-down location, and starting facts. Large-target taps, sub-snap motion, return-to-origin, cancel, lost capture, non-owning pointers, and second-touch pinch takeover create no temporary Undo entry.

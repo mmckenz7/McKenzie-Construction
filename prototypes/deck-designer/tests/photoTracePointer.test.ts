@@ -59,4 +59,16 @@ describe("temporary photo trace pointer transactions", () => {
     expect((source.match(/cancelDrag/g) ?? []).length).toBeGreaterThan(3);
     expect((source.match(/cancelStairDrag/g) ?? []).length).toBeGreaterThan(3);
   });
+
+  it("treats focused exact fields as one temporary factual transaction", () => {
+    const source = PhotoOutlineTracer.toString();
+    expect(source).toContain("exactEditStart");
+    expect(source).toContain("beginExactEdit");
+    expect(source).toContain("finishExactEdit");
+    expect(source).toContain("cancelExactEdit");
+    expect(source).toMatch(/traceExactGroup\s*===\s*group/);
+    expect(source).toMatch(/event\.key\s*===\s*"Enter"/);
+    expect(source).toMatch(/event\.key\s*===\s*"Escape"/);
+    expect((source.match(/data-trace-exact-group/g) ?? []).length).toBe(6);
+  });
 });
