@@ -96,8 +96,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const apply = (next: DeckDesignV5, nextMessage: string) => { setPreview(null); dispatch({ type: "apply", design: next }); setMessage(nextMessage); };
   const changeHistory = (type: "undo" | "redo") => { setPreview(null); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); dispatch({ type }); setMessage(type === "undo" ? "Last change undone." : "Change restored."); };
   const replaceRegion = (outer: readonly Point[], commit: boolean, holes = platform.region.holes): boolean => {
-    const current = history.present.platforms.find((item) => item.id === platform.id)!;
-    if (outer === current.region.outer && holes === current.region.holes) { setMessage("No change."); return false; }
+    if (outer === platform.region.outer && holes === platform.region.holes) return false;
     try {
       const result = applyPolygonRegionReplacementV5(history.present, platform.id, { outer, holes });
       if (commit) apply(result.design, result.notices.join(" ")); else setPreview(result.design);
@@ -148,7 +147,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   };
   const updateSegmentLength = (edgeId: string, length: number) => {
     const edgeIndex = geometry.platformEdges.findIndex((edge) => edge.id === edgeId);
-    if (edgeIndex < 0) { setMessage("Select a side before changing its length."); return; }
+    if (edgeIndex < 0) { setMessage("Select a side first."); return; }
     try {
       const current = history.present.platforms.find((item) => item.id === platform.id)!;
       const nextOuter = resizePolygonEdge(current.region.outer, edgeIndex, length, snapIncrement);
@@ -162,7 +161,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   };
   const updateSegmentAngle = (edgeId: string, degrees: number) => {
     const edgeIndex = geometry.platformEdges.findIndex((edge) => edge.id === edgeId);
-    if (edgeIndex < 0) { setMessage("Select a side before changing its angle."); return; }
+    if (edgeIndex < 0) { setMessage("Select a side first."); return; }
     try {
       const current = history.present.platforms.find((item) => item.id === platform.id)!;
       const nextOuter = setPolygonEdgeAngle(current.region.outer, edgeIndex, degrees);

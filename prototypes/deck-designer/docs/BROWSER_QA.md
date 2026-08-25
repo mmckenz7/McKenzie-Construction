@@ -1,9 +1,17 @@
 # Browser QA record
 
+## 2026-08-25 picture-frame opening-border presentation
+
+- The measured plan now draws the existing authoritative outer `picture-frame-border-*` and opening `picture-frame-hole-*` members at their recorded full board width. A subtle generic grain cadence follows each member's exact direction, while field boards retain their lighter line treatment and terminate at the projection's existing inside-border clearance.
+- Projection regressions cover rectangles, concave/custom outlines, one and multiple cutouts, both board directions, reversed winding, and deterministic replay. Standard decking remains visually and semantically distinct and does not expose picture-frame member IDs.
+- Desktop QA confirmed full-width outer and opening courses, field-board termination, unchanged 3D opening treatment, and one canvas. At 390 × 844 the opening border remained legible, the page had no horizontal overflow, and browser warning/error logs were empty.
+- Full validation passed 348/348 tests, isolation, typecheck, build, and unchanged golden fixtures. Bundle ceilings remain unchanged and pass at 83.5 KiB initial / 121.7 KiB largest / 245.0 KiB total JavaScript gzip.
+- This is presentation-only and consumes existing derived member IDs and coordinates. It does not change cutout geometry, 3D geometry, quantities, fingerprints, JSON, history, schema, products, estimating, or shared adapters.
+
 ## 2026-08-25 exact dimension no-op history
 
 - Exact side-length edits now compare the snapped target with the current measured edge before region replacement; equivalent wrapped angles likewise compare their rounded endpoint. A semantically unchanged edit retains the exact polygon object and never reaches v5 revision/history mutation.
-- The active UI reports a no-op without presenting it as a completed geometry change.
+- The active UI retains the selected-side state without presenting a no-op as a completed geometry change.
 - Pure regressions cover horizontal and vertical side lengths, positive and negative wrapped angles, and the polygon's closing edge. Desktop and 390 × 844 browser checks confirmed that `20.1 ft` at a six-inch snap remains `20 ft`, leaves Undo disabled, and shows the no-op notice; `20.6 ft` becomes `20 ft 6 in`, creates one Undo step, and restores the prior outline.
 - Both viewports retained one 3D canvas, the phone layout had no horizontal overflow, and browser warning/error logs were empty. Full validation passed 344/344 tests, isolation, typecheck, build, golden fixtures, and the unchanged 83.5/121.7/245.0 KiB gzip ceilings. Geometry authority, edge remapping, JSON, quantities, storage, schema, catalogs, estimating, and shared adapters are unchanged.
 

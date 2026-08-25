@@ -65,6 +65,20 @@ describe("picture-frame board projection groundwork", () => {
       .every((board) => board.end.x <= 42.25 || board.start.x >= 101.75)).toBe(true);
   });
 
+  it("keeps multiple opening courses deterministic when region winding reverses", () => {
+    const region = {
+      ...rectangle,
+      holes: [
+        [{ x: 24, z: 48 }, { x: 60, z: 48 }, { x: 60, z: 84 }, { x: 24, z: 84 }],
+        [{ x: 120, z: 48 }, { x: 156, z: 48 }, { x: 156, z: 84 }, { x: 120, z: 84 }],
+      ],
+    };
+    const projection = derivePictureFrameBoards(region, options);
+    const replay = derivePictureFrameBoards({ outer: [...region.outer].reverse(), holes: region.holes.map((item) => [...item].reverse()) }, options);
+    expect(projection).toEqual(replay);
+    expect(projection.borderBoards).toHaveLength(12);
+  });
+
   it("fails closed for colliding cutout borders and collapsed field regions", () => {
     expect(() => derivePictureFrameBoards({
       ...rectangle,

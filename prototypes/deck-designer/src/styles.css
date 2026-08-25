@@ -404,7 +404,8 @@ button:hover { transform: translateY(-1px); }
 .plan-selected-edge { stroke: var(--lime); stroke-width: 7; opacity: .9; }
 .plan-edge-hit { fill: #ffffff; fill-opacity: .001; cursor: pointer; outline: none; }
 .plan-edge-hit:hover, .plan-edge-hit:focus { fill: #c8dd3c; fill-opacity: .42; }
-.plan-board { stroke: #987454; stroke-width: .55; }
+.v3-plan [id*="deck-board-"] { stroke: #987454; stroke-width: .55; }
+.v3-plan [id^="picture-frame-border-"], .v3-plan [id^="picture-frame-hole-"] { stroke: #a97b54; stroke-width: inherit; stroke-linecap: square; stroke-dasharray: 48 .8 18 .8; }
 .plan-joist { stroke: #365d4a; stroke-width: .75; stroke-dasharray: 3 2; opacity: .72; }
 .plan-beam { stroke: #244638; stroke-width: 2.1; opacity: .82; pointer-events: none; }
 .plan-beam.selected { stroke: #d0672f; stroke-width: 3.5; opacity: 1; pointer-events: stroke; cursor: pointer; }
