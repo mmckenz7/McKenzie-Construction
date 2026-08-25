@@ -3,6 +3,8 @@ import { DEFAULT_DESIGN } from "../src/model";
 import { deriveWarningSelectionV5 } from "../src/warningLocatorV5";
 import { migrateDeckDesignToV5, normalizeDeckDesignV5 } from "../src/modelV5";
 import type { GeometryWarningV5 } from "../src/geometryWarningsV5";
+import { deriveGeometryWarningsV5 } from "../src/geometryWarningsV5";
+import { deriveGeometricPolygonEdges } from "../src/polygon";
 
 describe("v5 contextual warning locator", () => {
   it("selects the exact cutout and beam from stable geometry IDs", () => {
@@ -19,5 +21,15 @@ describe("v5 contextual warning locator", () => {
     const platform = migrateDeckDesignToV5(DEFAULT_DESIGN).platforms[0];
     const warning: GeometryWarningV5 = Object.freeze({ id: "stale", severity: "clearance", geometryIds: Object.freeze(["beam-missing", "platform-1:hole-9"]), message: "Stale references." });
     expect(deriveWarningSelectionV5(platform, warning)).toEqual({ holeIndex: null, beamLineId: null, stairSystemId: null, edgeId: null });
+  });
+
+  it("selects the exact stair and attached side for a deck-overlap blocker", () => {
+    const base = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, platform: { ...DEFAULT_DESIGN.platform, kind: "l-shape", width: 240, projection: 180, cutoutWidth: 72, cutoutDepth: 60 } });
+    const platform = base.platforms[0];
+    const edge = deriveGeometricPolygonEdges(platform.region.outer).find((candidate) => candidate.start.z === 120 && candidate.end.z === 120)!;
+    const stairSystem = { id: "stair-system-1", locked: true, edgeId: edge.id, offset: 12, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [{ id: "stair-system-1-landing-1", locked: true, afterRiser: 0, width: 48, depth: 48, turn: "right" as const, connections: [] }] };
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [stairSystem] } }] });
+    const warning = deriveGeometryWarningsV5(design, platform.id).find((candidate) => candidate.id === "stair-route-deck-collision-stair-system-1")!;
+    expect(deriveWarningSelectionV5(design.platforms[0], warning)).toEqual({ holeIndex: null, beamLineId: null, stairSystemId: "stair-system-1", edgeId: edge.id });
   });
 });

@@ -1,9 +1,10 @@
-import { deriveGeometricPolygonEdges, polygonContainsPoint, type PolygonPoint } from "./polygon";
+import { deriveGeometricPolygonEdges, signedPolygonArea, type PolygonPoint } from "./polygon";
 import { normalizeDeckDesignV3, type DeckDesignV3 } from "./modelV3";
 import { deriveStairRouteGeometryV3 } from "./stairRouteGeometryV3";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { effectiveBeamInsetV3 } from "./framingEditorV3";
 import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
+import { triangulatePolygon } from "./polygonProjection";
 
 export type GeometryWarningV3 = Readonly<{
   id: string;
@@ -13,6 +14,10 @@ export type GeometryWarningV3 = Readonly<{
 }>;
 
 const EPSILON = .01;
+
+function orientation(a: PolygonPoint, b: PolygonPoint, c: PolygonPoint): number {
+  return (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
+}
 
 function axes(points: readonly PolygonPoint[]): readonly PolygonPoint[] {
   return points.map((point, index) => {
@@ -63,6 +68,44 @@ function segmentCrossesConvexInterior(start: PolygonPoint, end: PolygonPoint, po
   return Math.min(...along) < length - EPSILON && Math.max(...along) > EPSILON;
 }
 
+function lineIntersection(start: PolygonPoint, end: PolygonPoint, clipStart: PolygonPoint, clipEnd: PolygonPoint): PolygonPoint {
+  const dx = end.x - start.x, dz = end.z - start.z;
+  const clipDx = clipEnd.x - clipStart.x, clipDz = clipEnd.z - clipStart.z;
+  const denominator = dx * clipDz - dz * clipDx;
+  if (Math.abs(denominator) <= EPSILON) return end;
+  const ratio = ((clipStart.x - start.x) * clipDz - (clipStart.z - start.z) * clipDx) / denominator;
+  return Object.freeze({ x: start.x + ratio * dx, z: start.z + ratio * dz });
+}
+
+function convexIntersectionArea(subject: readonly PolygonPoint[], clip: readonly PolygonPoint[]): number {
+  let output = [...subject];
+  for (let index = 0; index < clip.length && output.length > 0; index += 1) {
+    const clipStart = clip[index], clipEnd = clip[(index + 1) % clip.length];
+    const input = output;
+    output = [];
+    input.forEach((point, pointIndex) => {
+      const previous = input[(pointIndex - 1 + input.length) % input.length];
+      const pointInside = orientation(clipStart, clipEnd, point) >= -EPSILON;
+      const previousInside = orientation(clipStart, clipEnd, previous) >= -EPSILON;
+      if (pointInside !== previousInside) output.push(lineIntersection(previous, point, clipStart, clipEnd));
+      if (pointInside) output.push(point);
+    });
+  }
+  return output.length >= 3 ? Math.abs(signedPolygonArea(output)) : 0;
+}
+
+export function positiveRegionOverlapArea(footprint: readonly PolygonPoint[], outer: readonly PolygonPoint[], holes: readonly (readonly PolygonPoint[])[]): number {
+  if (footprint.length < 3 || footprint.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.z))) {
+    throw new RangeError("A route footprint requires at least three finite points.");
+  }
+  const footprintArea = signedPolygonArea(footprint);
+  if (Math.abs(footprintArea) <= EPSILON) throw new RangeError("A route footprint must enclose positive area without intersecting itself.");
+  const normalizedFootprint = footprintArea > 0 ? footprint : [...footprint].reverse();
+  const outerArea = triangulatePolygon(outer).reduce((sum, triangle) => sum + convexIntersectionArea(normalizedFootprint, triangle.points), 0);
+  const holeArea = holes.flatMap((hole) => triangulatePolygon(hole)).reduce((sum, triangle) => sum + convexIntersectionArea(normalizedFootprint, triangle.points), 0);
+  return Math.max(0, outerArea - holeArea);
+}
+
 export function deriveGeometryWarningsV3(design: DeckDesignV3, platformId: string): readonly GeometryWarningV3[] {
   const normalized = normalizeDeckDesignV3(design);
   const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
@@ -94,7 +137,7 @@ export function deriveGeometryWarningsV3(design: DeckDesignV3, platformId: strin
   });
   routes.forEach((route, routeIndex) => {
     const footprints = [...route.treads.map((tread) => ({ id: tread.id, center: { x: tread.x, z: tread.z }, corners: tread.corners })), ...route.landings.map((landing) => ({ id: landing.id, center: landing.center, corners: landing.corners }))];
-    const entersDeck = footprints.some((part) => [part.center, ...part.corners, ...part.corners.map((point, index) => ({ x: (point.x + part.corners[(index + 1) % part.corners.length].x) / 2, z: (point.z + part.corners[(index + 1) % part.corners.length].z) / 2 }))].some((point) => polygonContainsPoint(platform.region.outer, point) && !platform.region.holes.some((hole) => polygonContainsPoint(hole, point))));
+    const entersDeck = footprints.some((part) => positiveRegionOverlapArea(part.corners, platform.region.outer, platform.region.holes) > EPSILON);
     if (entersDeck) warnings.push(Object.freeze({
       id: `stair-route-deck-collision-${route.systemId}`,
       severity: "collision" as const,

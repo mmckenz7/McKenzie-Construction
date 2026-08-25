@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { deriveGeometryWarningsV3 } from "../src/geometryWarningsV3";
+import { deriveGeometryWarningsV3, positiveRegionOverlapArea } from "../src/geometryWarningsV3";
 import { DEFAULT_DESIGN } from "../src/model";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
 import { migrateDeckDesignToV3, normalizeDeckDesignV3 } from "../src/modelV3";
 
 describe("deterministic single-level geometry warnings", () => {
+  it("measures narrow angled overlap while allowing boundary contact and cutout-only passage", () => {
+    const outer = [{ x: 0, z: 0 }, { x: 120, z: 0 }, { x: 120, z: 120 }, { x: 0, z: 120 }];
+    const narrowAngledCrossing = [{ x: -103, z: 23 }, { x: -97, z: 17 }, { x: 33, z: 137 }, { x: 27, z: 143 }];
+    const boundaryContact = [{ x: 120, z: 20 }, { x: 150, z: 20 }, { x: 150, z: 60 }, { x: 120, z: 60 }];
+    const hole = [{ x: 40, z: 40 }, { x: 80, z: 40 }, { x: 80, z: 80 }, { x: 40, z: 80 }];
+    const insideHole = [{ x: 50, z: 50 }, { x: 70, z: 50 }, { x: 70, z: 70 }, { x: 50, z: 70 }];
+    const measured = positiveRegionOverlapArea(narrowAngledCrossing, outer, []);
+    expect(measured).toBeGreaterThan(0);
+    expect(positiveRegionOverlapArea(narrowAngledCrossing, outer, [])).toBe(measured);
+    expect(positiveRegionOverlapArea(boundaryContact, outer, [])).toBe(0);
+    expect(positiveRegionOverlapArea(insideHole, outer, [hole])).toBe(0);
+    expect(() => positiveRegionOverlapArea([{ x: 0, z: 0 }, { x: 12, z: 12 }, { x: 0, z: 12 }, { x: 12, z: 0 }], outer, [])).toThrow(/intersect/i);
+  });
+
   it("reports no conflicts for the clean rectangle foundation", () => {
     expect(deriveGeometryWarningsV3(migrateDeckDesignToV3(DEFAULT_DESIGN), "platform-1")).toEqual([]);
   });

@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-25 exact stair-to-deck overlap
+
+- The existing returned-stair blocker now measures positive-area intersection against the normalized deck region instead of relying on footprint sample points. Focused coverage proves a narrow angled crossing is detected, boundary-only contact stays allowed, and a footprint contained entirely in a recorded cutout remains outside solid deck area.
+- Desktop QA applied the L-shape template, added a right-turn top landing on the inside horizontal side, and confirmed **Review deck layout** reported `1 collision · 0 clearance notes` with the existing move-or-reroute instruction. The railing handoff remained disabled.
+- At a 390-by-844 touch viewport, the same blocker and conceptual/not-for-construction review remained visible, the handoff stayed disabled, and the model retained one canvas after lazy loading.
+- Opening and closing review left revision 13 unchanged. Reload restored the previously saved revision 8 and its single 3D canvas, confirming the QA fixture was not silently persisted.
+- Validation passed 253 tests, isolation, production-equivalent type checking, golden fixtures, and bundle budgets at 95.0 KiB initial / 121.7 KiB largest / 251.0 KiB total gzip. No schema, quantities, catalog, estimating, API, migration, or shared-adapter behavior changed.
+
 ## 2026-08-24 beam/cutout review note
 
 - A centered 3-by-3-foot cutout and a beam 6 feet from the outside edge produced two deterministic beam spans totaling 17 feet.
