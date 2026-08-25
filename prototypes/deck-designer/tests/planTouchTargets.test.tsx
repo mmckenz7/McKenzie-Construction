@@ -6,6 +6,7 @@ import { deriveHouseContextGeometry } from "../src/houseContextGeometry";
 import { normalizeDeckDesignV3, migrateDeckDesignToV3, type StairSystemV3 } from "../src/modelV3";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
 import { PlanViewV3 } from "../src/PlanViewV3";
+import { canBeginPlanPointerGestureV3, ownsPlanPointerGestureV3, releasePlanPointerGestureV3 } from "../src/planPointerOwnerV3";
 import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
 
 const noop = () => {};
@@ -85,11 +86,31 @@ describe("active-plan touch target priority", () => {
     expect(markup(true)).not.toContain('class="stair-move-hit"');
   });
 
-  it("wires pointer cancel and lost-capture cleanup for large cutout and beam targets", () => {
+  it("keeps one pointer owner through interleaved touch transactions and permits reuse after cleanup", () => {
+    const handleFamilies = ["platform", "segment", "cutout-center", "cutout-corner", "corner", "stair", "beam"];
+    let owner: number | null = null;
+    expect(canBeginPlanPointerGestureV3(owner)).toBe(true);
+    owner = 17;
+    for (const family of handleFamilies) {
+      expect(canBeginPlanPointerGestureV3(owner), family).toBe(false);
+      expect(ownsPlanPointerGestureV3(owner, 99), family).toBe(false);
+      expect(releasePlanPointerGestureV3(owner, 99), family).toBe(17);
+    }
+    expect(ownsPlanPointerGestureV3(owner, 17)).toBe(true);
+    owner = releasePlanPointerGestureV3(owner, 17);
+    expect(owner).toBeNull();
+    expect(canBeginPlanPointerGestureV3(owner)).toBe(true);
+  });
+
+  it("wires ownership, cancel, lost-capture, and owner-before-release cleanup across every drag family", () => {
     const source = PlanViewV3.toString();
-    expect(source).toContain("onPointerCancel");
-    expect(source).toContain("onLostPointerCapture");
-    expect(source).toContain("cancelHoleDrag");
-    expect(source).toContain("cancelBeamDrag");
+    expect(source.match(/beginPointerGesture\(event\.pointerId\)/g)).toHaveLength(7);
+    expect(source.match(/onPointerCancel/g)).toHaveLength(7);
+    expect(source.match(/onLostPointerCapture/g)).toHaveLength(7);
+    expect(source.match(/completePointerGesture\(event\.pointerId\)/g)).toHaveLength(7);
+    expect(source).toContain("completePointerGesture(event.pointerId);\n");
+    expect(source).toContain("releasePointerCapture(event.pointerId)");
+    expect(source).toContain("if (!editingEnabled || stairDrag.current && (!stair || stair.locked)) cancelPointerGesture(pointerId)");
+    expect(source).toContain("clearPointerDrags();\n    onCancel()");
   });
 });

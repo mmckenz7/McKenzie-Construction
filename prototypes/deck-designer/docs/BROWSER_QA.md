@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-25 active-plan single-pointer transactions
+
+- Platform, segment, cutout-center, cutout-corner, deck-corner, unlocked-stair, and beam drags now share one active pointer owner. A second pointer cannot replace the recorded start facts or complete another pointer's gesture.
+- Owner pointer-up clears ownership before capture release and commits no more than once. Cancel, lost capture, editing disable/lock, and unmount clear preview and transaction state without a revision; pointer IDs can be reused after cleanup.
+- Focused regressions cover all seven handle families, non-owner interleaving, owner release, pointer-ID reuse, cancel/lost-capture wiring, locked-stair noninteractivity, no-op completion, and existing keyboard/touch target priority. The measured plan now shares the existing controls chunk; the unchanged budgets pass at 83.4 KiB initial / 121.7 KiB largest / 244.9 KiB total gzip.
+- Desktop and 390 × 844 responsive QA each retained one canvas. After the intentional outline unlock, a tap on the lower segment kept revision 2 and one ArrowDown move produced exactly revision 3. Phone layout retained all four segment targets, no horizontal overflow, and no warning/error logs. Unsaved QA edits were discarded, the temporary viewport override was reset, and the temporary tabs were closed.
+
 ## 2026-08-25 grouped stair-route accessibility
 
 - Each authored stair system now contributes one focusable, named plan control instead of repeating the same control for every derived tread. All tread polygons remain unchanged pointer/touch hit regions inside that system control; landings and movement handles remain separate siblings.
