@@ -101,6 +101,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Versioned v4 multi-beam document/migration foundation with stable beam-derived geometry IDs
 - [x] Activate add/select/move/remove multi-beam editing after v3/v4 projection, warning, quantity, history, storage, and desktop/mobile gates
 - [x] Exact cutout interruption warnings for every conceptual beam line and joist path, surfaced as non-structural field review
+- [x] Measured conceptual beam-to-cutout clearance notes below twelve inches, distinct from actual interruptions
 - [ ] Broader explainable framing clash/constraint warnings beyond recorded cutout interruptions
 - [ ] PBR material library, licensed asset pipeline, GLB metadata, LOD/compression
 - [x] Enforced initial-entry, largest-chunk, and total JavaScript performance budgets

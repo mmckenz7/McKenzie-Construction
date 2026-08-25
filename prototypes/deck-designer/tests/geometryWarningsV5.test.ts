@@ -40,4 +40,21 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 2 clearance notes" }));
     expect(review.fieldVerification).toContain("Cutout 1 interrupts 3 conceptual joist paths; header and trimmer framing is not designed and requires qualified review.");
   });
+
+  it("reports measured beam clearance near a cutout without calling it an interruption", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, region: { ...platform.region, holes: [[
+      { x: 72, z: 96 }, { x: 120, z: 96 }, { x: 120, z: 132 }, { x: 72, z: 132 },
+    ]] }, construction: { ...platform.construction, framing: { ...platform.construction.framing, beamLines: [
+      { ...platform.construction.framing.beamLines[0], offsetFromOutside: 54 },
+    ] } } }] });
+    const warnings = deriveGeometryWarningsV5(design, platform.id);
+    expect(warnings).toContainEqual(expect.objectContaining({
+      id: "beam-cutout-clearance-beam-line-1-1",
+      geometryIds: ["beam-line-1", "platform-1:hole-1"],
+      message: "Conceptual beam 1 is 6 inches from cutout 1; verify the intended framing clearance.",
+    }));
+    expect(warnings.some((warning) => warning.id.startsWith("beam-cutout-interruption"))).toBe(false);
+  });
 });

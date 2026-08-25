@@ -342,3 +342,9 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - The warning language explicitly states that header and trimmer framing is not designed and needs qualified review; it does not choose members, spans, connections, or structural solutions.
 - Existing unfinished stair geometry remained the only blocker. Framing interruption notes did not falsely prevent the conceptual workflow from continuing.
 - Reload removed the unsaved QA cutout/beam changes and restored the prior local v5 design. Browser logs contained only the Vite connection and React development notices, with no warnings or errors.
+## 2026-08-24 v5 beam-to-cutout clearance check
+
+- Added one unsaved three-foot rectangular cutout and placed Beam 1 six inches from its lower edge.
+- Layout review reported the exact six-inch plan clearance as a field-review note and kept it distinct from the beam-crosses-cutout interruption warning.
+- The same review separately reported the two conceptual joist paths interrupted by the cutout; the existing unfinished stair remained the only blocker.
+- Reload removed the unsaved cutout and beam movement. Browser logs contained no warnings or errors.
