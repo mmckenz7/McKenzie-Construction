@@ -142,6 +142,12 @@ export function setHouseReference(design: FenceDesign, lengthMm: number, widthMm
   return revise(design, { house: Object.freeze({ xMm: current?.xMm ?? 0, yMm: current?.yMm ?? 0, lengthMm, widthMm }) });
 }
 
+export function setHouseReferenceAt(design: FenceDesign, xMm: number, yMm: number, lengthMm: number, widthMm: number): FenceDesign {
+  if (![xMm, yMm, lengthMm, widthMm].every(Number.isSafeInteger)) throw new TypeError("House placement must use whole millimeters.");
+  if (lengthMm < 305 || lengthMm > 304_800 || widthMm < 305 || widthMm > 304_800) throw new RangeError("House length and width must each be from 1 through 1,000 feet.");
+  return revise(design, { house: Object.freeze({ xMm, yMm, lengthMm, widthMm }) });
+}
+
 export function removeHouseReference(design: FenceDesign): FenceDesign {
   return revise(design, { house: null });
 }
@@ -229,19 +235,75 @@ export function snapRunEndpoint(
   candidate: Readonly<{ xMm: number; yMm: number }>,
   enabled: boolean,
   angleIncrementDegrees = 45,
+  referenceBearingRadians = 0,
 ): Readonly<{ xMm: number; yMm: number }> {
   if (!enabled) return Object.freeze({ xMm: Math.round(candidate.xMm), yMm: Math.round(candidate.yMm) });
   if (!Number.isFinite(angleIncrementDegrees) || angleIncrementDegrees <= 0 || angleIncrementDegrees > 180) throw new RangeError("Snap angle must be greater than 0 and no more than 180 degrees.");
+  if (!Number.isFinite(referenceBearingRadians)) throw new RangeError("Reference bearing must be finite.");
   const dx = candidate.xMm - anchor.xMm;
   const dy = candidate.yMm - anchor.yMm;
   const distance = Math.hypot(dx, dy);
   if (distance === 0) return Object.freeze({ xMm: anchor.xMm, yMm: anchor.yMm });
   const increment = angleIncrementDegrees * Math.PI / 180;
-  const angle = Math.round(Math.atan2(dy, dx) / increment) * increment;
+  const angle = referenceBearingRadians + Math.round((Math.atan2(dy, dx) - referenceBearingRadians) / increment) * increment;
   return Object.freeze({
     xMm: Math.round(anchor.xMm + Math.cos(angle) * distance),
     yMm: Math.round(anchor.yMm + Math.sin(angle) * distance),
   });
+}
+
+export function insertGateOnSegment(
+  design: FenceDesign,
+  segmentId: string,
+  widthMm: number,
+  offsetFromStartMm: number,
+  gateType: GateType,
+  newStartPointId: string,
+  newEndPointId: string,
+  newGateSegmentId: string,
+  newRemainderSegmentId: string,
+): FenceDesign {
+  if (!Number.isSafeInteger(widthMm) || widthMm < 25 || widthMm > 304_800) throw new RangeError("Total gate width must be from 1 inch through 1,000 feet.");
+  if (!Number.isSafeInteger(offsetFromStartMm) || offsetFromStartMm < 0) throw new RangeError("Gate position must be on the selected fence run.");
+  if (gateType !== "single" && gateType !== "double") throw new TypeError("Choose a single or double gate.");
+  const segmentIndex = design.segments.findIndex(({ id }) => id === segmentId);
+  const segment = design.segments[segmentIndex];
+  if (!segment || segment.kind !== "fence") throw new TypeError("Select a fence run before adding a gate.");
+  const runLength = segmentLengthMm(design, segment);
+  if (widthMm > runLength) throw new RangeError(`Gate width must fit within the selected ${formatFeetInches(runLength)} run.`);
+  if (offsetFromStartMm + widthMm > runLength) throw new RangeError("Gate position and width must fit within the selected fence run.");
+  if (widthMm === runLength) return setSegmentKind(design, segment.id, "gate", gateType);
+
+  const requestedIds = [newStartPointId, newEndPointId, newGateSegmentId, newRemainderSegmentId];
+  if (new Set(requestedIds).size !== requestedIds.length
+    || requestedIds.some((id) => design.points.some((point) => point.id === id) || design.segments.some((item) => item.id === id))) {
+    throw new TypeError("Gate point and segment IDs must be unique.");
+  }
+  const start = pointById(design, segment.fromPointId); const end = pointById(design, segment.toPointId);
+  const rawLength = Math.hypot(end.xMm - start.xMm, end.yMm - start.yMm);
+  if (rawLength === 0) throw new RangeError("The selected fence run needs a measurable direction before adding a gate.");
+  const pointAt = (id: string, distanceMm: number): Point => Object.freeze({
+    id,
+    xMm: Math.round(start.xMm + (end.xMm - start.xMm) / rawLength * distanceMm),
+    yMm: Math.round(start.yMm + (end.yMm - start.yMm) / rawLength * distanceMm),
+  });
+  const gateStartsAtRunStart = offsetFromStartMm === 0;
+  const gateEndsAtRunEnd = offsetFromStartMm + widthMm === runLength;
+  const gateStart = gateStartsAtRunStart ? start : pointAt(newStartPointId, offsetFromStartMm);
+  const gateEnd = gateEndsAtRunEnd ? end : pointAt(newEndPointId, offsetFromStartMm + widthMm);
+  const addedPoints = [gateStartsAtRunStart ? null : gateStart, gateEndsAtRunEnd ? null : gateEnd].filter((point): point is Point => point !== null);
+  const endPointIndex = design.points.findIndex(({ id }) => id === segment.toPointId);
+  const points = [...design.points.slice(0, endPointIndex), ...addedPoints, ...design.points.slice(endPointIndex)];
+  const replacement: Segment[] = [];
+  if (!gateStartsAtRunStart) replacement.push(Object.freeze({ ...segment, toPointId: gateStart.id }));
+  replacement.push(Object.freeze({ id: newGateSegmentId, fromPointId: gateStart.id, toPointId: gateEnd.id, kind: "gate", gateType }));
+  if (!gateEndsAtRunEnd) replacement.push(Object.freeze({
+    id: gateStartsAtRunStart ? segment.id : newRemainderSegmentId,
+    fromPointId: gateEnd.id,
+    toPointId: segment.toPointId,
+    kind: "fence",
+  }));
+  return revise(design, { segments: [...design.segments.slice(0, segmentIndex), ...replacement, ...design.segments.slice(segmentIndex + 1)], points });
 }
 
 export function addPoint(design: FenceDesign, point: Point, segmentId?: string, fromPointId: string | null = design.points.at(-1)?.id ?? null): FenceDesign {

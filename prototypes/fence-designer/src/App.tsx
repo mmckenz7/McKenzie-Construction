@@ -2,23 +2,24 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
-import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform, type PlanPosition, type ReferenceBackground } from "./background";
+import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform, straightenBackgroundFromHouseCorners, type PlanPosition, type ReferenceBackground } from "./background";
 import {
-  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, insertGateAtPoint, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
-  pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm,
+  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, insertGateOnSegment, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
+  pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setHouseReferenceAt, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm,
   type FenceDesign, type GateType,
 } from "./model";
 import { formatGpsAccuracy, gpsOriginAt, projectGpsFix, readCurrentGps, type GpsOrigin } from "./gps";
 import { propertyReferenceLinks, type PropertyReferenceLinks } from "./property-reference";
 import { captureReferenceDisplay, rasterizeReferenceBlob, readReferenceImageFromClipboard, referenceImageErrorMessage, type RasterizedReferenceImage } from "./reference-image";
 import { loadLocalDesign, loadLocalReference, saveLocalDesign, saveLocalReference } from "./storage";
-import { calculateBlackAluminumTakeoff, formatBlackAluminumTakeoffText, takeoffPostReasonLabel, type TakeoffPostReason } from "./takeoff";
+import { calculateBlackAluminumTakeoff, calculateTreatedPinePrivacyTakeoff, formatBlackAluminumTakeoffText, formatTreatedPinePrivacyTakeoffText, takeoffPostReasonLabel, type TakeoffPostReason } from "./takeoff";
 import { panView, placeDimensionLabels, zoomViewAt, type ViewBox } from "./view";
 
 type Selection = Readonly<{ type: "point" | "segment"; id: string } | { type: "house" }> | null;
 type Drag = Readonly<{ pointId: string; original: FenceDesign }> | null;
-type Mode = "draw" | "select" | "pan" | "close" | "new-line" | "calibrate";
+type Mode = "draw" | "select" | "pan" | "close" | "new-line" | "calibrate" | "trace-house";
 type ReferenceProvider = keyof PropertyReferenceLinks;
+type TakeoffMaterial = "black-aluminum" | "treated-pine-privacy";
 type PlanPointer = Readonly<{ clientX: number; clientY: number }>;
 type NavigationGesture = Readonly<{
   original: ViewBox;
@@ -63,6 +64,8 @@ export default function App() {
   const [gateType, setGateTypeChoice] = useState<GateType>("single");
   const [gateFeet, setGateFeet] = useState("");
   const [gateInches, setGateInches] = useState("0");
+  const [gateOffsetFeet, setGateOffsetFeet] = useState("0");
+  const [gateOffsetInches, setGateOffsetInches] = useState("0");
   const [snapEnabled, setSnapEnabled] = useState(false);
   const [lengthLockEnabled, setLengthLockEnabled] = useState(true);
   const [previewPoint, setPreviewPoint] = useState<Readonly<{ xMm: number; yMm: number }> | null>(null);
@@ -79,10 +82,13 @@ export default function App() {
   const [propertyPanelOpen, setPropertyPanelOpen] = useState(false);
   const [takeoffPanelOpen, setTakeoffPanelOpen] = useState(false);
   const [takeoffViewEnabled, setTakeoffViewEnabled] = useState(false);
+  const [takeoffMaterial, setTakeoffMaterial] = useState<TakeoffMaterial>("black-aluminum");
+  const [takeoffConfirmedRevision, setTakeoffConfirmedRevision] = useState<number | null>(null);
   const [kgisAddress, setKgisAddress] = useState("");
   const [referenceBackground, setReferenceBackground] = useState<ReferenceBackground | null>(null);
   const [referenceBusy, setReferenceBusy] = useState<"capture" | "paste" | "upload" | null>(null);
   const [calibrationPoints, setCalibrationPoints] = useState<readonly PlanPosition[]>([]);
+  const [houseTracePoints, setHouseTracePoints] = useState<readonly PlanPosition[]>([]);
   const [calibrationFeet, setCalibrationFeet] = useState("");
   const [calibrationInches, setCalibrationInches] = useState("0");
   const [layers, setLayers] = useState({ reference: true, grid: true, house: true, dimensions: true });
@@ -95,23 +101,28 @@ export default function App() {
   const navigationGesture = useRef<NavigationGesture>(null);
   const navigationWasActive = useRef(false);
   const design = history.present;
+  const takeoffReady = design.segments.length > 0 && takeoffConfirmedRevision === design.revision;
 
   const selectedSegment = selection?.type === "segment" ? design.segments.find(({ id }) => id === selection.id) ?? null : null;
+  const selectedGatePreviousFence = selectedSegment?.kind === "gate" ? design.segments.find(({ toPointId, kind }) => toPointId === selectedSegment.fromPointId && kind === "fence") ?? null : null;
+  const selectedGateOffsetMm = selectedGatePreviousFence ? segmentLengthMm(design, selectedGatePreviousFence) : 0;
   const selectedPoint = selection?.type === "point" ? design.points.find(({ id }) => id === selection.id) ?? null : null;
   const selectedPointPath = selectedPoint ? fencePathForPoint(design, selectedPoint.id) : null;
   const houseSelected = selection?.type === "house";
   const totals = useMemo(() => ({ all: totalLengthMm(design), gate: design.segments.filter(({ kind }) => kind === "gate").reduce((sum, item) => sum + segmentLengthMm(design, item), 0) }), [design]);
   const blackAluminumTakeoff = useMemo(() => calculateBlackAluminumTakeoff(design), [design]);
+  const treatedPineTakeoff = useMemo(() => calculateTreatedPinePrivacyTakeoff(design), [design]);
+  const activeTakeoffLayout = takeoffMaterial === "black-aluminum" ? blackAluminumTakeoff.layout : treatedPineTakeoff.layout;
   const takeoffPanelRuns = useMemo(() => {
-    const runs = new Map<number, typeof blackAluminumTakeoff.layout.panels>();
-    blackAluminumTakeoff.layout.panels.forEach((panel) => runs.set(panel.runIndex, Object.freeze([...(runs.get(panel.runIndex) ?? []), panel])));
+    const runs = new Map<number, typeof activeTakeoffLayout.panels>();
+    activeTakeoffLayout.panels.forEach((panel) => runs.set(panel.runIndex, Object.freeze([...(runs.get(panel.runIndex) ?? []), panel])));
     return [...runs.entries()].sort(([first], [second]) => first - second);
-  }, [blackAluminumTakeoff]);
+  }, [activeTakeoffLayout]);
   const takeoffPostDecisions = useMemo(() => {
     const counts = new Map<TakeoffPostReason, number>();
-    blackAluminumTakeoff.layout.posts.forEach(({ reason }) => counts.set(reason, (counts.get(reason) ?? 0) + 1));
+    activeTakeoffLayout.posts.forEach(({ reason }) => counts.set(reason, (counts.get(reason) ?? 0) + 1));
     return [...counts.entries()];
-  }, [blackAluminumTakeoff]);
+  }, [activeTakeoffLayout]);
   const activePath = design.points.length ? fencePathForPoint(design, design.points.at(-1)!.id) : null;
   const liveRunLengthMm = mode === "draw" && previewPoint && design.points.at(-1)
     ? Math.round(Math.hypot(previewPoint.xMm - design.points.at(-1)!.xMm, previewPoint.yMm - design.points.at(-1)!.yMm))
@@ -147,7 +158,7 @@ export default function App() {
       event.preventDefault();
       if (drag) setHistory((current) => ({ ...current, present: drag.original }));
       gpsRequestId.current += 1;
-      setDrag(null); setMode("select"); setSelection(null); setGateEditorOpen(false); setPreviewPoint(null); setClosurePathPointId(null); setSiteWalkActive(false); setGpsBusy(false); setNextGpsStartsLine(false); setCalibrationPoints([]);
+      setDrag(null); setMode("select"); setSelection(null); setGateEditorOpen(false); setPreviewPoint(null); setClosurePathPointId(null); setSiteWalkActive(false); setGpsBusy(false); setNextGpsStartsLine(false); setCalibrationPoints([]); setHouseTracePoints([]);
       activePointers.current.clear(); navigationGesture.current = null; navigationWasActive.current = false; setIsNavigating(false);
       setNotice("Current tool canceled. Choose Draw, Edit, or Pan when ready.");
     };
@@ -176,9 +187,17 @@ export default function App() {
   };
   const nextPointAt = (clientX: number, clientY: number) => {
     const anchor = design.points.at(-1);
-    const placement = placementAt(clientX, clientY, anchor?.id);
-    if (!anchor || !snapEnabled || placement.connection) return placement.point;
-    return snapRunEndpoint(anchor, placement.point, true);
+    const raw = toPlanRaw(clientX, clientY);
+    const houseConnection = snapToHouseEdge(raw.xMm, raw.yMm, design.house);
+    if (houseConnection) return houseConnection;
+    const fenceConnection = snapToFenceRun(design, raw.xMm, raw.yMm, 460, anchor?.id);
+    if (fenceConnection) return { xMm: fenceConnection.xMm, yMm: fenceConnection.yMm };
+    const placement = { xMm: Math.round(raw.xMm), yMm: Math.round(raw.yMm) };
+    if (!anchor || !snapEnabled) return placement;
+    const activePoints = fencePathForPoint(design, anchor.id).points;
+    const previous = activePoints.length > 1 ? activePoints.at(-2) : null;
+    const referenceBearing = previous ? Math.atan2(anchor.yMm - previous.yMm, anchor.xMm - previous.xMm) : 0;
+    return snapRunEndpoint(anchor, placement, true, 45, referenceBearing);
   };
   const calibrateAt = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (!referenceBackground) { setMode("select"); setNotice("Upload a reference image before calibrating it."); return; }
@@ -194,7 +213,26 @@ export default function App() {
       setCalibrationPoints([]); setMode("select"); setNotice(`Reference image calibrated to ${formatFeetInches(knownDistanceMm)}. Fence measurements were not changed.`);
     } catch (error) { setCalibrationPoints([]); setMode("select"); setNotice(error instanceof Error ? error.message : "The reference image could not be calibrated."); }
   };
+  const traceHouseAt = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (!referenceBackground || referenceBackground.locked) { setHouseTracePoints([]); setMode("select"); setNotice("Unlock a captured reference image before tracing the house."); return; }
+    const points = [...houseTracePoints, toPlanRaw(event.clientX, event.clientY)];
+    if (points.length < 4) {
+      setHouseTracePoints(points);
+      setNotice(points.length === 1 ? "First corner marked. Mark the adjacent corner along the wall that should become horizontal." : `House corner ${points.length} marked. Continue around the footprint.`);
+      return;
+    }
+    try {
+      const result = straightenBackgroundFromHouseCorners(referenceBackground.transform, points);
+      const next = setHouseReferenceAt(design, result.house.xMm, result.house.yMm, result.house.lengthMm, result.house.widthMm);
+      setReferenceBackground({ ...referenceBackground, transform: result.transform });
+      commit(next, `House traced at ${formatFeetInches(result.house.lengthMm)} × ${formatFeetInches(result.house.widthMm)}. The reference and grid are now square to the first wall.`);
+      setHouseFeet(String(Math.floor(Math.round(result.house.lengthMm / 25.4) / 12))); setHouseInches(String(Math.round(result.house.lengthMm / 25.4) % 12));
+      setHouseWidthFeet(String(Math.floor(Math.round(result.house.widthMm / 25.4) / 12))); setHouseWidthInches(String(Math.round(result.house.widthMm / 25.4) % 12));
+      setHouseTracePoints([]); setMode("select"); setSelection({ type: "house" }); setView(fittedView(next));
+    } catch (error) { setHouseTracePoints([]); setMode("select"); setNotice(error instanceof Error ? error.message : "The house footprint could not be straightened."); }
+  };
   const addAt = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (mode === "trace-house") { traceHouseAt(event); return; }
     if (mode === "calibrate") { calibrateAt(event); return; }
     if (mode === "close") { closeAt(event); return; }
     if (mode === "new-line") {
@@ -289,16 +327,23 @@ export default function App() {
     }
     endDrag();
   };
-  const selectSegment = (id: string) => {
+  const selectSegment = (id: string, selectedAt?: Readonly<{ xMm: number; yMm: number }>) => {
     const segment = design.segments.find((item) => item.id === id);
     if (!segment) return;
+    const start = pointById(design, segment.fromPointId); const end = pointById(design, segment.toPointId);
+    const dx = end.xMm - start.xMm; const dy = end.yMm - start.yMm;
+    const squaredLength = dx ** 2 + dy ** 2;
+    const ratio = selectedAt && squaredLength > 0 ? ((selectedAt.xMm - start.xMm) * dx + (selectedAt.yMm - start.yMm) * dy) / squaredLength : 0.5;
+    const gateOffsetInchesFromStart = Math.round(segmentLengthMm(design, segment) * Math.max(0, Math.min(1, ratio)) / 25.4);
+    setGateOffsetFeet(String(Math.floor(gateOffsetInchesFromStart / 12)));
+    setGateOffsetInches(String(gateOffsetInchesFromStart % 12));
     const totalInches = Math.round(segmentLengthMm(design, segment) / 25.4);
     setFeet(String(Math.floor(totalInches / 12)));
     setInches(String(totalInches % 12));
     setGateEditorOpen(false); setSelection({ type: "segment", id }); setMode("select"); setNotice("Span selected. Enter an exact length or edit its gate intent.");
   };
   const startDrag = (event: ReactPointerEvent, pointId: string) => {
-    if (mode === "pan" || mode === "close" || mode === "draw" || mode === "new-line" || mode === "calibrate" || event.metaKey) return;
+    if (mode === "pan" || mode === "close" || mode === "draw" || mode === "new-line" || mode === "calibrate" || mode === "trace-house" || event.metaKey) return;
     event.stopPropagation();
     setGateEditorOpen(false); setSelection({ type: "point", id: pointId }); setMode("select"); setDrag({ pointId, original: design });
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
@@ -309,7 +354,12 @@ export default function App() {
     let location = placement.point;
     const path = fencePathForPoint(drag.original, drag.pointId);
     const pointIndex = path.points.findIndex(({ id }) => id === drag.pointId);
-    if (lengthLockEnabled && snapEnabled && !placement.connection && pointIndex > 0) location = snapRunEndpoint(path.points[pointIndex - 1], location, true);
+    if (lengthLockEnabled && snapEnabled && !placement.connection && pointIndex > 0) {
+      const anchor = path.points[pointIndex - 1];
+      const referenceStart = pointIndex > 1 ? path.points[pointIndex - 2] : null;
+      const referenceBearing = referenceStart ? Math.atan2(anchor.yMm - referenceStart.yMm, anchor.xMm - referenceStart.xMm) : 0;
+      location = snapRunEndpoint(anchor, location, true, 45, referenceBearing);
+    }
     const present = lengthLockEnabled
       ? movePointWithLockedFollowing(drag.original, drag.pointId, location.xMm, location.yMm)
       : movePoint(drag.original, drag.pointId, location.xMm, location.yMm);
@@ -338,15 +388,18 @@ export default function App() {
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid length."); }
   };
   const addGate = () => {
-    if (!selectedPoint) return;
+    if (!selectedSegment || selectedSegment.kind !== "fence") return;
     try {
       const width = feetAndInchesToMm(Number(gateFeet), Number(gateInches));
-      const id = nextId.current;
-      const next = insertGateAtPoint(design, selectedPoint.id, width, gateType, `point-${id}`, `segment-${id}`);
-      nextId.current += 1;
-      const gate = next.segments.find(({ id: segmentId }) => segmentId === `segment-${id}`)
-        ?? next.segments.find(({ fromPointId, kind }) => fromPointId === selectedPoint.id && kind === "gate");
-      commit(next, `${gateType === "double" ? "Double" : "Single"} gate added with a total opening of ${formatFeetInches(width)}.`);
+      const runLength = segmentLengthMm(design, selectedSegment);
+      const offsetFromStart = feetAndInchesToMm(Number(gateOffsetFeet), Number(gateOffsetInches));
+      if (offsetFromStart + width > runLength) throw new RangeError(`Fence before gate plus gate width must fit within the selected ${formatFeetInches(runLength)} run.`);
+      const id = nextId.current; const gateSegmentId = `segment-${id + 2}`;
+      const next = insertGateOnSegment(design, selectedSegment.id, width, offsetFromStart, gateType, `point-${id}`, `point-${id + 1}`, gateSegmentId, `segment-${id + 3}`);
+      nextId.current += 4;
+      const gate = next.segments.find(({ id: segmentId }) => segmentId === gateSegmentId)
+        ?? next.segments.find(({ kind, fromPointId, toPointId }) => kind === "gate" && (fromPointId === selectedSegment.fromPointId || toPointId === selectedSegment.toPointId));
+      commit(next, `${gateType === "double" ? "Double" : "Single"} gate placed inside the selected run with a total opening of ${formatFeetInches(width)}. The fence line stayed straight.`);
       const totalInches = Math.round(width / 25.4);
       setFeet(String(Math.floor(totalInches / 12))); setInches(String(totalInches % 12));
       setGateFeet(""); setGateInches("0"); setGateEditorOpen(false); setSelection(gate ? { type: "segment", id: gate.id } : null);
@@ -395,7 +448,12 @@ export default function App() {
       const fenceConnection = houseConnection ? null : snapToFenceRun(design, point.xMm, point.yMm, connectionToleranceMm, nextGpsStartsLine ? undefined : activeAnchor?.id);
       if (houseConnection) { point = houseConnection; connection = "house"; }
       else if (fenceConnection) { point = { xMm: fenceConnection.xMm, yMm: fenceConnection.yMm }; connection = "fence"; }
-      else if (activeAnchor && snapEnabled && !nextGpsStartsLine) point = snapRunEndpoint(activeAnchor, point, true);
+      else if (activeAnchor && snapEnabled && !nextGpsStartsLine) {
+        const activePoints = fencePathForPoint(design, activeAnchor.id).points;
+        const previous = activePoints.length > 1 ? activePoints.at(-2) : null;
+        const referenceBearing = previous ? Math.atan2(activeAnchor.yMm - previous.yMm, activeAnchor.xMm - previous.xMm) : 0;
+        point = snapRunEndpoint(activeAnchor, point, true, 45, referenceBearing);
+      }
       if (activeAnchor && !nextGpsStartsLine && point.xMm === activeAnchor.xMm && point.yMm === activeAnchor.yMm) throw new RangeError("This GPS fix is at the last point. Walk to the next corner and try again.");
       const id = nextId.current++;
       const pointId = `point-${id}`; const segmentId = `segment-${id}`;
@@ -423,7 +481,7 @@ export default function App() {
     if (siteWalkActive) {
       gpsRequestId.current += 1; setGpsBusy(false); setSiteWalkActive(false); setNextGpsStartsLine(false); setNotice("Site Walk finished. GPS coordinates were converted to local plan geometry only.");
     } else {
-      setSiteWalkActive(true); setMode("select"); setPreviewPoint(null); setSelection(null); setNotice(gpsOrigin ? "Site Walk ready. Walk to the next corner and mark it." : design.points.length ? "Stand at the last drawn point and set the GPS reference." : "Stand at the first fence point and mark the starting GPS position.");
+      setSiteWalkActive(true); setPropertyPanelOpen(false); setTakeoffPanelOpen(false); setMode("select"); setPreviewPoint(null); setSelection(null); setNotice(gpsOrigin ? "Site Walk ready. Walk to the next corner and mark it." : design.points.length ? "Stand at the last drawn point and set the GPS reference." : "Stand at the first fence point and mark the starting GPS position.");
     }
   };
   const openPropertyReference = (provider: ReferenceProvider) => {
@@ -470,6 +528,13 @@ export default function App() {
       setCalibrationPoints([]); setMode("calibrate"); setSelection(null); setPreviewPoint(null);
       setNotice(`Calibration ready for ${formatFeetInches(distance)}. Tap the first point on the known distance.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid calibration distance."); }
+  };
+  const startHouseTrace = () => {
+    if (!referenceBackground) { setNotice("Capture or upload a property image first."); return; }
+    if (referenceBackground.locked) { setNotice("Unlock the reference image before tracing the house."); return; }
+    if (design.points.length) { setNotice("Straighten the property image before drawing fence points so existing measurements are never moved out of alignment."); return; }
+    setHouseTracePoints([]); setCalibrationPoints([]); setMode("trace-house"); setSelection(null); setPreviewPoint(null);
+    setNotice("Tap one house corner, then the adjacent corner along the wall that should become horizontal. Continue around all four corners.");
   };
   const nudgeReference = (dxMm: number, dyMm: number) => {
     if (!referenceBackground || referenceBackground.locked) return;
@@ -523,12 +588,13 @@ export default function App() {
   const copyTakeoff = async () => {
     try {
       if (!navigator.clipboard?.writeText) throw new RangeError("This browser cannot copy the takeoff. Select and copy the audit details manually.");
-      await navigator.clipboard.writeText(formatBlackAluminumTakeoffText(blackAluminumTakeoff));
-      setNotice("Preliminary Black Aluminum takeoff copied. It contains measurements and counts only—no pricing or products.");
+      const isAluminum = takeoffMaterial === "black-aluminum";
+      await navigator.clipboard.writeText(isAluminum ? formatBlackAluminumTakeoffText(blackAluminumTakeoff) : formatTreatedPinePrivacyTakeoffText(treatedPineTakeoff));
+      setNotice(`Preliminary ${isAluminum ? "Black Aluminum" : "Treated Pine Privacy"} takeoff copied. It contains measurements and counts only—no pricing or products.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "The takeoff could not be copied."); }
   };
 
-  return <main className="fence-designer">
+  return <main className={`fence-designer${siteWalkActive ? " site-walk-active" : ""}`}>
     <header className="app-header">
       <div><p className="eyebrow">McKenzie OS · isolated prototype</p><h1>Fence Visual Measure</h1><p>Draw perimeter and divider lines, then review a preliminary material takeoff. No pricing is included.</p></div>
       <div className="total-card"><span>Total measured length</span><strong>{formatFeetInches(totals.all)}</strong><small>{design.segments.length} span{design.segments.length === 1 ? "" : "s"} · {fenceLineCount(design)} fence line{fenceLineCount(design) === 1 ? "" : "s"}{totals.gate ? ` · ${formatFeetInches(totals.gate)} gate intent` : ""}</small></div>
@@ -543,9 +609,10 @@ export default function App() {
       <button onClick={() => setView(fittedView(design))}>Fit plan</button>
       <button className={houseSelected ? "active-tool" : ""} onClick={selectHouse}>{design.house ? "⌂ House" : "＋ House"}</button>
       <button disabled={!design.house || !activePath || activePath.segments.length < 2} className={mode === "close" ? "active-tool" : ""} onClick={() => { setMode("close"); setSelection(null); setClosurePathPointId(design.points.at(-1)?.id ?? null); setPreviewPoint(null); setNotice("Tap the second connection on the house. Closure will keep this line's measured runs fixed and redistribute only its angles."); }}>⇥ Close to house</button>
-      <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setPreviewPoint(null); setNotice(snapEnabled ? "Free angle is on. Runs now follow the measured geometry without angle assumptions." : "45°/90° angle assist is on."); }}>{snapEnabled ? "⌁ 45°/90° assist" : "◌ Free angle"}</button>
+      <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setPreviewPoint(null); setNotice(snapEnabled ? "Free angle is on. Runs now follow the measured geometry without angle assumptions." : "45°/90° angle assist is on and uses the previous fence segment as its reference."); }}>{snapEnabled ? "⌁ Relative 45°/90°" : "◌ Free angle"}</button>
+      <button aria-pressed={layers.grid} className={layers.grid ? "active-tool" : ""} onClick={() => { setLayers((current) => ({ ...current, grid: !current.grid })); setNotice(layers.grid ? "Plan grid hidden." : "Plan grid shown."); }}>{layers.grid ? "▦ Grid on" : "▦ Grid off"}</button>
       <button aria-pressed={lengthLockEnabled} className={lengthLockEnabled ? "active-tool" : ""} onClick={() => { setLengthLockEnabled((current) => !current); setNotice(lengthLockEnabled ? "Length lock is off. Dragging a point can now change connected measurements." : "Length lock is on. Dragging adjusts the angle while preserving the incoming and following measurements."); }}>{lengthLockEnabled ? "🔒 Lengths" : "🔓 Lengths"}</button>
-      <button aria-pressed={siteWalkActive} className={siteWalkActive ? "active-tool" : ""} onClick={toggleSiteWalk}>📍 Site walk</button>
+      <button aria-pressed={siteWalkActive} className={`site-walk-toggle${siteWalkActive ? " active-tool" : ""}`} onClick={toggleSiteWalk}>{siteWalkActive ? "✓ Finish walk" : "📍 Site walk"}</button>
       <button aria-pressed={propertyPanelOpen} className={propertyPanelOpen ? "active-tool" : ""} onClick={() => setPropertyPanelOpen((current) => !current)}>⌖ Property</button>
       <button aria-pressed={takeoffPanelOpen} className={takeoffPanelOpen ? "active-tool" : ""} onClick={() => setTakeoffPanelOpen((current) => !current)}>▦ Materials</button>
       <span className="toolbar-spacer" />
@@ -554,7 +621,7 @@ export default function App() {
 
     {(siteWalkActive || propertyPanelOpen || takeoffPanelOpen) && <section className="field-panels" aria-label="Fence planning tools">
       {siteWalkActive && <div className="field-panel site-walk-panel">
-        <div className="field-panel-heading"><div><p className="eyebrow">Site walk</p><h2>Mark the point where you are standing</h2></div>{gpsAccuracyMeters !== null && <span className={`accuracy-chip${gpsAccuracyMeters <= 5 ? " good" : ""}`}>{formatGpsAccuracy(gpsAccuracyMeters)} GPS</span>}</div>
+        <div className="field-panel-heading"><div><p className="eyebrow">Site walk</p><h2>Mark the point where you are standing</h2></div>{gpsAccuracyMeters !== null && <span aria-live="polite" className={`accuracy-chip${gpsAccuracyMeters <= 5 ? " good" : ""}`}>{formatGpsAccuracy(gpsAccuracyMeters)} GPS</span>}</div>
         <p>{!gpsOrigin ? (design.points.length ? "Stand at the last drawn point first. This aligns GPS to the existing plan without adding a duplicate point." : "Stand at the first fence point. Your first mark creates the local plan origin.") : nextGpsStartsLine ? "Walk to the starting point for the separate fence line, then mark it." : "Walk to the next corner or connection, stand still, then mark it."}</p>
         <div className="field-actions">
           <button className="primary mark-location" disabled={gpsBusy} onClick={markGpsPoint}>{gpsBusy ? "Getting GPS…" : !gpsOrigin && design.points.length ? "Set GPS reference here" : nextGpsStartsLine ? "Mark separate-line start" : design.points.length ? "Mark next fence point" : "Mark starting point"}</button>
@@ -596,42 +663,47 @@ export default function App() {
               <div className="exact-grid"><label><span>Feet</span><input aria-label="Calibration feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={calibrationFeet} onChange={(event) => setCalibrationFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Calibration inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={calibrationInches} onChange={(event) => setCalibrationInches(event.target.value)} /></label></div>
               <button className={mode === "calibrate" ? "active-tool" : "primary"} disabled={referenceBackground.locked} onClick={startCalibration}>{mode === "calibrate" ? "Pick calibration points…" : "Pick two points"}</button>
             </div>
-            <div className="reference-actions"><button disabled={referenceBackground.locked} onClick={fitReference}>Fit image to view</button><button aria-pressed={referenceBackground.locked} className={referenceBackground.locked ? "active-tool" : ""} onClick={() => setReferenceBackground({ ...referenceBackground, locked: !referenceBackground.locked })}>{referenceBackground.locked ? "🔒 Image locked" : "🔓 Lock image"}</button><button className="danger" onClick={() => { setReferenceBackground(null); saveLocalReference(localStorage, null); setCalibrationPoints([]); if (mode === "calibrate") setMode("select"); setNotice("Local reference image removed. Fence measurements were not changed."); }}>Remove image</button></div>
+            <div className="house-trace-editor">
+              <div><strong>Straighten from the house</strong><span>After calibration, mark four house corners. The first wall becomes horizontal and creates the house footprint.</span></div>
+              <button className={mode === "trace-house" ? "active-tool" : "primary"} disabled={referenceBackground.locked || design.points.length > 0} onClick={() => { if (mode === "trace-house") { setHouseTracePoints([]); setMode("select"); setNotice("House tracing canceled."); } else startHouseTrace(); }}>{mode === "trace-house" ? `Cancel tracing · ${houseTracePoints.length}/4` : "Trace 4 house corners"}</button>
+              {design.points.length > 0 && <small>Available before fence points are drawn so straightening cannot misalign existing measurements.</small>}
+            </div>
+            <div className="reference-actions"><button disabled={referenceBackground.locked} onClick={fitReference}>Fit image to view</button><button aria-pressed={referenceBackground.locked} className={referenceBackground.locked ? "active-tool" : ""} onClick={() => setReferenceBackground({ ...referenceBackground, locked: !referenceBackground.locked })}>{referenceBackground.locked ? "🔒 Image locked" : "🔓 Lock image"}</button><button className="danger" onClick={() => { setReferenceBackground(null); saveLocalReference(localStorage, null); setCalibrationPoints([]); setHouseTracePoints([]); if (mode === "calibrate" || mode === "trace-house") setMode("select"); setNotice("Local reference image removed. Fence measurements were not changed."); }}>Remove image</button></div>
           </>}
         </div>
         <small>Reference imagery and GIS lines are not a boundary survey. Google stays a separate viewer. Captured images never leave this browser, are compressed for local use, and are saved with Save local so the design can be reopened on this same device. They are never included in fence totals.</small>
       </div>}
       {takeoffPanelOpen && <div className="field-panel takeoff-panel">
-        <div className="field-panel-heading"><div><p className="eyebrow">Material takeoff V0</p><h2>Black Aluminum</h2></div><div className="takeoff-heading-actions"><span className="reference-chip">No pricing</span><button disabled={design.segments.length === 0} onClick={() => void copyTakeoff()}>Copy takeoff</button><button aria-pressed={takeoffViewEnabled} className={takeoffViewEnabled ? "active-tool" : ""} onClick={() => { setTakeoffViewEnabled((current) => !current); setNotice(takeoffViewEnabled ? "Takeoff markers hidden." : "Takeoff markers show each panel and post decision on the plan."); }}>{takeoffViewEnabled ? "Hide plan takeoff" : "Show takeoff on plan"}</button></div></div>
-        <p>Calculated directly from the measured fence and gate runs using 8-foot panels.</p>
-        <div className="takeoff-summary">
-          <article><span>Fence footage</span><strong>{formatFeetInches(blackAluminumTakeoff.fenceLengthMm)}</strong></article>
-          <article><span>8′ panels</span><strong>{blackAluminumTakeoff.panelCount}</strong></article>
-          <article><span>Single gates</span><strong>{blackAluminumTakeoff.singleGates}</strong></article>
-          <article><span>Double gates</span><strong>{blackAluminumTakeoff.doubleGates}</strong></article>
-        </div>
-        <div className="takeoff-columns">
-          <section><h3>Posts</h3><dl><div><dt>End posts</dt><dd>{blackAluminumTakeoff.endPosts}</dd></div><div><dt>Corner posts</dt><dd>{blackAluminumTakeoff.cornerPosts}</dd></div><div><dt>Run posts</dt><dd>{blackAluminumTakeoff.linePosts}</dd></div></dl></section>
-          <section><h3>Gate hardware</h3><dl><div><dt>Hinges</dt><dd>{blackAluminumTakeoff.hinges}</dd></div><div><dt>Latches</dt><dd>{blackAluminumTakeoff.latches}</dd></div><div><dt>Center drop poles</dt><dd>{blackAluminumTakeoff.centerDropPoles}</dd></div></dl></section>
-          <section><h3>Gate openings</h3>{blackAluminumTakeoff.gateOpenings.length ? <dl>{blackAluminumTakeoff.gateOpenings.map((gate) => <div key={`${gate.gateType}-${gate.widthMm}`}><dt>{gate.gateType === "double" ? "Double" : "Single"} · {formatFeetInches(gate.widthMm)}</dt><dd>{gate.count}</dd></div>)}</dl> : <p className="takeoff-empty">No gates marked.</p>}</section>
-        </div>
+        <div className="field-panel-heading"><div><p className="eyebrow">Material takeoff V0</p><h2>{takeoffReady ? (takeoffMaterial === "black-aluminum" ? "Black Aluminum" : "Treated Pine Privacy") : "Confirm the measured layout"}</h2></div><div className="takeoff-heading-actions">{takeoffReady && <label className="takeoff-material"><span>Fence type</span><select aria-label="Fence material takeoff" value={takeoffMaterial} onChange={(event) => { setTakeoffMaterial(event.target.value as TakeoffMaterial); setTakeoffViewEnabled(false); setNotice("Material takeoff changed. The confirmed drawing and all line rules stayed exactly the same."); }}><option value="black-aluminum">Black aluminum</option><option value="treated-pine-privacy">Treated pine privacy</option></select></label>}<span className="reference-chip">No pricing</span>{takeoffReady && <><button onClick={() => void copyTakeoff()}>Copy takeoff</button><button aria-pressed={takeoffViewEnabled} className={takeoffViewEnabled ? "active-tool" : ""} onClick={() => { setTakeoffViewEnabled((current) => !current); setNotice(takeoffViewEnabled ? "Takeoff markers hidden." : "Takeoff markers show each eight-foot bay and post decision on the plan."); }}>{takeoffViewEnabled ? "Hide plan takeoff" : "Show takeoff on plan"}</button></>}</div></div>
+        {!takeoffReady ? <div className="takeoff-confirm"><strong>{design.segments.length ? (takeoffConfirmedRevision === null ? "Drawing comes first" : "The drawing changed") : "Draw the fence first"}</strong><span>{design.segments.length ? "Confirm the measured lines when the layout is ready. Fence type only changes the material calculation afterward." : "Use the same Draw, Edit, gate, closure, snap, and exact-length tools for every fence type."}</span><button className="primary" disabled={design.segments.length === 0} onClick={() => { setTakeoffConfirmedRevision(design.revision); setTakeoffViewEnabled(false); setNotice("Measured layout confirmed for takeoff. Choose a fence type; the drawing and line rules will not change."); }}>Confirm layout for takeoff</button></div> : <>
+        {takeoffMaterial === "black-aluminum" ? <>
+          <p>Calculated directly from the measured fence and gate runs using 8-foot panels.</p>
+          <div className="takeoff-summary"><article><span>Fence footage</span><strong>{formatFeetInches(blackAluminumTakeoff.fenceLengthMm)}</strong></article><article><span>8′ panels · fence + gates</span><strong>{blackAluminumTakeoff.panelCount}</strong><small>{blackAluminumTakeoff.fencePanelCount} fence · {blackAluminumTakeoff.gatePanelCount} gate fabrication</small></article><article><span>Single gates</span><strong>{blackAluminumTakeoff.singleGates}</strong></article><article><span>Double gates</span><strong>{blackAluminumTakeoff.doubleGates}</strong></article></div>
+          <div className="takeoff-columns"><section><h3>Posts</h3><dl><div><dt>End posts</dt><dd>{blackAluminumTakeoff.endPosts}</dd></div><div><dt>Corner posts</dt><dd>{blackAluminumTakeoff.cornerPosts}</dd></div><div><dt>Run posts</dt><dd>{blackAluminumTakeoff.linePosts}</dd></div></dl></section><section><h3>Gate hardware</h3><dl><div><dt>Hinges</dt><dd>{blackAluminumTakeoff.hinges}</dd></div><div><dt>Latches</dt><dd>{blackAluminumTakeoff.latches}</dd></div><div><dt>Center drop poles</dt><dd>{blackAluminumTakeoff.centerDropPoles}</dd></div></dl></section><section><h3>Gate openings</h3>{blackAluminumTakeoff.gateOpenings.length ? <dl>{blackAluminumTakeoff.gateOpenings.map((gate) => <div key={`${gate.gateType}-${gate.widthMm}`}><dt>{gate.gateType === "double" ? "Double" : "Single"} · {formatFeetInches(gate.widthMm)}</dt><dd>{gate.count}</dd></div>)}</dl> : <p className="takeoff-empty">No gates marked.</p>}</section></div>
+        </> : <>
+          <p>6-foot treated-pine privacy with touching 6-inch pickets, three rails per 8-foot maximum bay, and 10% waste on all lumber.</p>
+          <div className="takeoff-summary"><article><span>1×6×6 pickets</span><strong>{treatedPineTakeoff.picketsWithWaste}</strong><small>{treatedPineTakeoff.installedPickets} installed · {treatedPineTakeoff.picketWasteAllowance} waste</small></article><article><span>2×4×8 lumber</span><strong>{treatedPineTakeoff.twoByFoursWithWaste}</strong><small>{treatedPineTakeoff.fenceRailPieces} rails · {treatedPineTakeoff.gateFramePieces} gate frame · {treatedPineTakeoff.twoByFourWasteAllowance} waste</small></article><article><span>4×4 posts</span><strong>{treatedPineTakeoff.fourByFoursWithWaste}</strong><small>{treatedPineTakeoff.installedPosts} installed · {treatedPineTakeoff.postWasteAllowance} waste</small></article><article><span>50 lb concrete</span><strong>{treatedPineTakeoff.concreteBags}</strong><small>one bag per installed hole</small></article></div>
+          <div className="takeoff-columns"><section><h3>Installed material</h3><dl><div><dt>Fence pickets</dt><dd>{treatedPineTakeoff.fencePickets}</dd></div><div><dt>Gate pickets</dt><dd>{treatedPineTakeoff.gatePickets}</dd></div><div><dt>Picket screws</dt><dd>{treatedPineTakeoff.picketScrews}</dd></div><div><dt>Rail-to-post structural screws</dt><dd>{treatedPineTakeoff.railToPostStructuralScrews}</dd></div><div><dt>Gate-frame structural screws</dt><dd>{treatedPineTakeoff.gateFrameStructuralScrews}</dd></div></dl></section><section><h3>Gate hardware</h3><dl><div><dt>Hinges · 2 per leaf</dt><dd>{treatedPineTakeoff.hinges}</dd></div><div><dt>Latches</dt><dd>{treatedPineTakeoff.latches}</dd></div><div><dt>Double-gate drop rods</dt><dd>{treatedPineTakeoff.dropRods}</dd></div><div><dt>Mounting fasteners</dt><dd>Included</dd></div></dl></section><section><h3>Gate openings</h3>{treatedPineTakeoff.gateOpenings.length ? <dl>{treatedPineTakeoff.gateOpenings.map((gate) => <div key={`${gate.gateType}-${gate.widthMm}`}><dt>{gate.gateType === "double" ? "Double" : "Single"} · {formatFeetInches(gate.widthMm)}</dt><dd>{gate.count}</dd></div>)}</dl> : <p className="takeoff-empty">No gates marked.</p>}</section></div>
+        </>}
         <details className="takeoff-audit">
-          <summary>Review panel and post decisions</summary>
+          <summary>Review {takeoffMaterial === "black-aluminum" ? "panel" : "bay"} and post decisions</summary>
           <div className="takeoff-audit-grid">
-            <section><h3>Panel layout</h3>{takeoffPanelRuns.length ? <ol>{takeoffPanelRuns.map(([runIndex, panels]) => <li key={runIndex}><strong>Run {runIndex + 1}</strong><span>{panels.map((panel) => `${formatFeetInches(panel.lengthMm)}${panel.cut ? " cut" : " full"}`).join(" + ")}</span></li>)}</ol> : <p className="takeoff-empty">Draw a fence run to calculate panels.</p>}</section>
+            <section><h3>{takeoffMaterial === "black-aluminum" ? "Panel" : "Post bay"} layout</h3>{takeoffPanelRuns.length ? <ol>{takeoffPanelRuns.map(([runIndex, panels]) => <li key={runIndex}><strong>Run {runIndex + 1}</strong><span>{panels.map((panel) => `${formatFeetInches(panel.lengthMm)}${panel.cut ? " partial" : " full"}`).join(" + ")}</span></li>)}</ol> : <p className="takeoff-empty">Draw a fence run to calculate the layout.</p>}</section>
+            {takeoffMaterial === "black-aluminum" && <section><h3>Gate fabrication cut plan</h3>{blackAluminumTakeoff.gateFabricationPanels.length ? <ol>{blackAluminumTakeoff.gateFabricationPanels.map((panel, panelIndex) => <li key={panel.id}><strong>Gate panel {panelIndex + 1} · {formatFeetInches(panel.usedMm)} used</strong><span>{panel.pieces.map((piece) => `${piece.gateType === "double" ? `Double leaf ${piece.pieceIndex + 1}/${piece.pieceCount}` : "Single gate"} ${formatFeetInches(piece.widthMm)}`).join(" + ")} · {formatFeetInches(panel.wasteMm)} waste</span></li>)}</ol> : <p className="takeoff-empty">Add a gate to calculate fabrication cuts.</p>}</section>}
             <section><h3>Why each post is counted</h3>{takeoffPostDecisions.length ? <dl>{takeoffPostDecisions.map(([reason, count]) => <div key={reason}><dt>{takeoffPostReasonLabel(reason)}</dt><dd>{count}</dd></div>)}</dl> : <p className="takeoff-empty">No posts calculated.</p>}</section>
           </div>
-          <p>Run numbers match the R labels on the plan. “Cut” means the installed span is shorter than one 8-foot panel; leftover material is not reused elsewhere.</p>
+          <p>Run numbers match the R labels on the plan. Each layout interval is no longer than 8 feet. The selected fence type determines which materials are installed in that interval.</p>
         </details>
-        {blackAluminumTakeoff.warnings.map((warning) => <div className="takeoff-warning" role="status" key={warning}>{warning}</div>)}
-        <small>Rules used: panels round up separately for each uninterrupted straight fence run; cutoffs are not reused. A divider shares a run post when it meets a natural panel boundary measured from either end. Otherwise it receives another end post without changing the perimeter panel layout. Every non-corner side of a gate uses an end post. A corner post serves as the gate post when a gate begins directly at that corner. Double gates have no center post. This takeoff is derived only and is not saved into the measurement geometry.</small>
+        {(takeoffMaterial === "black-aluminum" ? blackAluminumTakeoff.warnings : treatedPineTakeoff.warnings).map((warning) => <div className="takeoff-warning" role="status" key={warning}>{warning}</div>)}
+        <small>{takeoffMaterial === "black-aluminum" ? "Panels round up separately for each uninterrupted straight fence run. Gate material and fence panels are optimized separately. Every non-corner gate side uses an end post; a true corner post may also serve as the gate post." : "Pickets are counted across each uninterrupted fence run and each gate leaf, then rounded up with 10% waste. Each fence bay uses three 2×4 rails. A single gate uses five 2×4 frame pieces; a double uses ten. All posts are treated 4×4s with one 50 lb concrete bag per installed hole. Picket screws are two per picket at each of three rails. Preliminary structural defaults use 12 screws per bay and 12 per gate leaf; hardware mounting fasteners are included with the hardware item."} This takeoff is derived only and is not saved into the measurement geometry.</small>
+        </>}
       </div>}
     </section>}
 
     <section className="workspace">
       <div className="canvas-shell">
-        <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot attached" /> Connected endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line preview" /> Live run</span><span><i className="key-line gate" /> Gate intent</span>{takeoffViewEnabled && <><span><i className="key-post end" /> End post</span><span><i className="key-post corner" /> Corner post</span><span><i className="key-post line" /> Run post</span><span><i className="key-panel cut" /> Cut panel</span></>}</div>
-        {takeoffViewEnabled && <div className="sr-only" role="status" aria-live="polite">Black Aluminum takeoff view. {blackAluminumTakeoff.layout.panels.length} panel spans, {blackAluminumTakeoff.endPosts} end posts, {blackAluminumTakeoff.cornerPosts} corner posts, and {blackAluminumTakeoff.linePosts} run posts shown.</div>}
+        <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot attached" /> Connected endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line preview" /> Live run</span><span><i className="key-line gate" /> Gate intent</span>{takeoffReady && takeoffViewEnabled && <><span><i className="key-post end" /> End post</span><span><i className="key-post corner" /> Corner post</span><span><i className="key-post line" /> Run post</span><span><i className="key-panel cut" /> Cut panel</span></>}</div>
+        {takeoffReady && takeoffViewEnabled && <div className="sr-only" role="status" aria-live="polite">{takeoffMaterial === "black-aluminum" ? "Black Aluminum" : "Treated Pine Privacy"} takeoff view. {activeTakeoffLayout.panels.length} material bays and {activeTakeoffLayout.posts.length} installed posts shown.</div>}
         {liveRunLengthMm !== null && liveRunLengthMm > 0 && <div className="live-measurement" role="status" aria-live="polite"><span>Current run</span><strong>{formatFeetInches(liveRunLengthMm)}</strong><small>{snapEnabled ? "45°/90° assist" : "Free angle"} · click to place</small></div>}
         <svg ref={svgRef} className={`plan-canvas ${mode}${isNavigating ? " navigating" : ""}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={startNavigation} onPointerMove={moveCanvasPointer} onPointerLeave={() => { if (!drag && !isNavigating) setPreviewPoint(null); }} onPointerUp={endNavigation} onPointerCancel={endNavigation} aria-label="Fence drawing plan">
           <defs><pattern id="grid" width={GRID_MM} height={GRID_MM} patternUnits="userSpaceOnUse"><path d={`M ${GRID_MM} 0 L 0 0 0 ${GRID_MM}`} fill="none" stroke="#d8ddd7" strokeWidth="18" /></pattern></defs>
@@ -641,7 +713,7 @@ export default function App() {
             return <image className="reference-image" href={referenceBackground.src} x={transform.xMm} y={transform.yMm} width={transform.widthMm} height={transform.heightMm} opacity={referenceBackground.opacity} preserveAspectRatio="none" transform={`rotate(${transform.rotationDegrees} ${centerX} ${centerY})`} pointerEvents="none" aria-label={`Local reference image ${referenceBackground.name}`} />;
           })()}
           {layers.grid && <rect x={view.x} y={view.y} width={view.width} height={view.height} fill="url(#grid)" pointerEvents="none" />}
-          {design.house && layers.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode === "close") { event.stopPropagation(); closeAt(event); } else if (mode !== "pan" && mode !== "new-line" && mode !== "calibrate" && !event.metaKey) { event.stopPropagation(); selectHouse(); } }}>
+          {design.house && layers.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode === "close") { event.stopPropagation(); closeAt(event); } else if (mode !== "pan" && mode !== "new-line" && mode !== "calibrate" && mode !== "trace-house" && !event.metaKey) { event.stopPropagation(); selectHouse(); } }}>
             <rect className="house-hit" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <rect className="house-footprint" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <g transform={`translate(${design.house.xMm + design.house.lengthMm / 2} ${design.house.yMm + design.house.widthMm / 2})`} className="house-label"><rect x="-1050" y="-300" width="2100" height="600" rx="180" /><text textAnchor="middle" dominantBaseline="central">HOUSE · {formatFeetInches(design.house.lengthMm)} × {formatFeetInches(design.house.widthMm)}</text></g>
@@ -654,14 +726,14 @@ export default function App() {
             const dimensionText = segment.kind === "gate" ? `${segment.gateType === "double" ? "DOUBLE" : "SINGLE"} GATE · ${label}` : label;
             const dimensionPosition = dimensionPositions.get(segment.id) ?? { xMm: midX, yMm: midY };
             const dimensionWidth = Math.max(1_520, dimensionText.length * 180) * dimensionScale;
-            return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode === "select" && !event.metaKey) { event.stopPropagation(); selectSegment(segment.id); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode === "select" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
+            return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode === "select" && !event.metaKey) { event.stopPropagation(); selectSegment(segment.id, toPlanRaw(event.clientX, event.clientY)); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode === "select" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
               <line className="segment-hit" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <line className="segment-line" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               {layers.dimensions && <g className="dimension"><line className="dimension-leader" x1={midX} y1={midY} x2={dimensionPosition.xMm} y2={dimensionPosition.yMm} style={{ strokeWidth: 26 * dimensionScale }} /><g transform={`translate(${dimensionPosition.xMm} ${dimensionPosition.yMm})`}><rect x={-dimensionWidth / 2} y={-260 * dimensionScale} width={dimensionWidth} height={520 * dimensionScale} rx={180 * dimensionScale} style={{ strokeWidth: 28 * dimensionScale }} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: (segment.kind === "gate" ? 270 : 310) * dimensionScale }}>{dimensionText}</text></g></g>}
             </g>;
           })}
-          {takeoffViewEnabled && <g className="takeoff-plan" pointerEvents="none" aria-label="Black Aluminum takeoff markers">
-            {blackAluminumTakeoff.layout.panels.map((panel) => {
+          {takeoffReady && takeoffViewEnabled && <g className="takeoff-plan" pointerEvents="none" aria-label={`${takeoffMaterial === "black-aluminum" ? "Black Aluminum" : "Treated Pine Privacy"} takeoff markers`}>
+            {activeTakeoffLayout.panels.map((panel) => {
               const midX = (panel.start.xMm + panel.end.xMm) / 2; const midY = (panel.start.yMm + panel.end.yMm) / 2;
               const dx = panel.end.xMm - panel.start.xMm; const dy = panel.end.yMm - panel.start.yMm; const magnitude = Math.max(1, Math.hypot(dx, dy));
               const side = panel.panelIndex % 2 === 0 ? 1 : -1; const offset = 390 * dimensionScale * side;
@@ -674,7 +746,7 @@ export default function App() {
                 <g className="takeoff-panel-label" transform={`translate(${labelX} ${labelY})`}><rect x={-labelWidth / 2} y={-210 * dimensionScale} width={labelWidth} height={420 * dimensionScale} rx={130 * dimensionScale} style={{ strokeWidth: 24 * dimensionScale }} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: 230 * dimensionScale }}>{label}</text></g>
               </g>;
             })}
-            {blackAluminumTakeoff.layout.posts.map((post) => {
+            {activeTakeoffLayout.posts.map((post) => {
               const postName = post.kind === "end" ? "End post" : post.kind === "corner" ? "Corner post" : "Run post"; const postReason = takeoffPostReasonLabel(post.reason);
               return <g key={post.id} className={`takeoff-post ${post.kind}`} transform={`translate(${post.xMm} ${post.yMm})`} role="img" aria-label={`${postName}, ${postReason}`}>
                 <title>{`${postName} · ${postReason}`}</title><circle r={285 * dimensionScale} style={{ strokeWidth: 66 * dimensionScale }} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: 245 * dimensionScale }}>{post.kind === "end" ? "E" : post.kind === "corner" ? "C" : "R"}</text>
@@ -686,26 +758,52 @@ export default function App() {
             const length = Math.round(Math.hypot(previewPoint.xMm - start.xMm, previewPoint.yMm - start.yMm));
             return <g className="run-preview" pointerEvents="none" role="img" aria-label={`Live run ${formatFeetInches(length)}${snapEnabled ? ", snap on" : ", snap off"}`}>
               <line x1={start.xMm} y1={start.yMm} x2={previewPoint.xMm} y2={previewPoint.yMm} />
-              <circle cx={previewPoint.xMm} cy={previewPoint.yMm} r="155" />
+              <circle cx={previewPoint.xMm} cy={previewPoint.yMm} r={155 * dimensionScale} />
             </g>;
           })()}
           {design.points.map((point) => {
             const role = pointRole(design, point.id); const selected = selection?.type === "point" && selection.id === point.id;
             return <g key={point.id} className={`point ${role.replace(" ", "-")}${selected ? " selected" : ""}`} transform={`translate(${point.xMm} ${point.yMm})`} onPointerDown={(event) => startDrag(event, point.id)} role="button" tabIndex={0} aria-label={`${role} ${point.id}`}>
-              <circle className="point-hit" r="460" /><circle className="point-dot" r="190" />
+              <circle className="point-hit" r={460 * dimensionScale} /><circle className="point-dot" r={190 * dimensionScale} style={{ strokeWidth: (selected ? 75 : 100) * dimensionScale }} />
             </g>;
           })}
           {mode === "calibrate" && calibrationPoints.map((point, index) => <g key={`${point.xMm}-${point.yMm}-${index}`} className="calibration-point" transform={`translate(${point.xMm} ${point.yMm})`} pointerEvents="none"><circle r="230" /><line x1="-380" y1="0" x2="380" y2="0" /><line x1="0" y1="-380" x2="0" y2="380" /><text y="-470" textAnchor="middle">{index + 1}</text></g>)}
+          {mode === "trace-house" && <g className="house-trace" pointerEvents="none">
+            {houseTracePoints.length > 1 && <polyline points={houseTracePoints.map(({ xMm, yMm }) => `${xMm},${yMm}`).join(" ")} />}
+            {houseTracePoints.map((point, index) => <g key={`${point.xMm}-${point.yMm}-${index}`} transform={`translate(${point.xMm} ${point.yMm})`}><circle r="250" /><text y="-470" textAnchor="middle">{index + 1}</text></g>)}
+          </g>}
         </svg>
         {design.points.length === 0 && !design.house && !referenceBackground && <div className="empty-state"><strong>Start with one property point</strong><span>Choose Draw, then tap anywhere on the grid.</span></div>}
       </div>
 
-      <aside className="inspector">
+      <aside className={`inspector${selection ? " has-selection" : ""}`}>
         <p className="eyebrow">Selection</p>
         {!selection && <div className="inspector-empty"><h2>No item selected</h2><p>Tap a span for exact length and gate intent. Tap or drag a point to edit the path.</p></div>}
         {houseSelected && <div><h2>House footprint</h2><p>{design.house ? "This measured footprint is visual context only and is excluded from fence totals." : "Add an optional measured house footprint before drawing the fence."}</p><h3 className="field-heading">House length</h3><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseFeet} onChange={(event) => setHouseFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseInches} onChange={(event) => setHouseInches(event.target.value)} /></label></div><h3 className="field-heading">House width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Width feet" inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseWidthFeet} onChange={(event) => setHouseWidthFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseWidthInches} onChange={(event) => setHouseWidthInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyHouseLength}>{design.house ? "Update house footprint" : "Add house footprint"}</button>{design.house && <button className="danger wide" onClick={() => { commit(removeHouseReference(design), "House footprint removed."); setSelection(null); }}>Remove house footprint</button>}<small>House-edge connections stay active in free-angle mode. The optional angle assist affects only non-house points. This footprint is not a survey or building record.</small></div>}
-        {selectedPoint && <div><h2>{pointRole(design, selectedPoint.id)}</h2><p className="coordinate">X {formatFeetInches(Math.abs(selectedPoint.xMm))} · Y {formatFeetInches(Math.abs(selectedPoint.yMm))}</p><p>{lengthLockEnabled ? "Drag to adjust this line's angle. Its incoming length stays fixed and only the following points on this line move." : "Drag this point freely; connected span lengths will change."}</p>{design.house && selectedPointPath && selectedPointPath.segments.length >= 2 && selectedPoint.id === selectedPointPath.points.at(-1)?.id && <button className="primary wide" onClick={() => { setMode("close"); setClosurePathPointId(selectedPoint.id); setSelection(null); setPreviewPoint(null); setNotice("Tap the second connection on the house. Closure will keep this line's measured runs fixed and redistribute only its angles."); }}>⇥ Close this line to house</button>}<button className="primary wide" onClick={() => { setGateEditorOpen((current) => !current); setNotice("Choose single or double, then enter the total gate opening width."); }}>{gateEditorOpen ? "Cancel add gate" : "＋ Add gate"}</button>{gateEditorOpen && <div className="gate-editor"><label><span>Gate style</span><select aria-label="Gate style" value={gateType} onChange={(event) => setGateTypeChoice(event.target.value as GateType)}><option value="single">Single gate</option><option value="double">Double gate</option></select></label><h3 className="field-heading">Total gate width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Gate width feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={gateFeet} onChange={(event) => setGateFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Gate width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateInches} onChange={(event) => setGateInches(event.target.value)} /></label></div><button className="primary wide" onClick={addGate}>Place gate from this point</button><small>The total width is the full opening. A double gate is recorded as two-leaf intent only.</small></div>}<button className="danger wide" onClick={removeSelection}>Delete point</button></div>}
-        {selectedSegment && <div><h2>{selectedSegment.kind === "gate" ? `${selectedSegment.gateType === "double" ? "Double" : "Single"} gate` : "Fence span"}</h2><div className="length-readout">{formatFeetInches(segmentLengthMm(design, selectedSegment))}</div>{selectedSegment.kind === "gate" && <label className="select-field"><span>Gate style</span><select value={selectedSegment.gateType ?? "single"} onChange={(event) => commit(setGateType(design, selectedSegment.id, event.target.value as GateType), "Gate style updated.")}><option value="single">Single gate</option><option value="double">Double gate</option></select></label>}<div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyExactLength}>Apply exact length</button><button className="wide" onClick={() => { setDimensionSideOverrides((current) => ({ ...current, [selectedSegment.id]: current[selectedSegment.id] === -1 ? 1 : -1 })); setNotice("Dimension label flipped to the other side of its run."); }}>↔ Flip dimension side</button>{dimensionSideOverrides[selectedSegment.id] !== undefined && <button className="wide" onClick={() => { setDimensionSideOverrides((current) => { const updated = { ...current }; delete updated[selectedSegment.id]; return updated; }); setNotice("Dimension label returned to automatic positioning."); }}>Auto-position dimension</button>}<button className="wide" onClick={() => commit(setSegmentKind(design, selectedSegment.id, selectedSegment.kind === "gate" ? "fence" : "gate"), selectedSegment.kind === "gate" ? "Span restored to fence intent." : "Whole span marked as a single gate.")}>{selectedSegment.kind === "gate" ? "Mark as fence" : "Mark whole span as single gate"}</button><small>Labels space themselves automatically, remain inside the visible plan, and avoid unrelated runs when space allows. Flip changes only this view, never the measured geometry. Gate intent supplies only the preliminary Black Aluminum opening and hardware counts; it does not choose products, labor, or pricing.</small></div>}
+        {selectedPoint && <div><h2>{pointRole(design, selectedPoint.id)}</h2><p className="coordinate">X {formatFeetInches(Math.abs(selectedPoint.xMm))} · Y {formatFeetInches(Math.abs(selectedPoint.yMm))}</p><p>{lengthLockEnabled ? "Drag to adjust this line's angle. Its incoming length stays fixed and only the following points on this line move." : "Drag this point freely; connected span lengths will change."}</p>{design.house && selectedPointPath && selectedPointPath.segments.length >= 2 && selectedPoint.id === selectedPointPath.points.at(-1)?.id && <button className="primary wide" onClick={() => { setMode("close"); setClosurePathPointId(selectedPoint.id); setSelection(null); setPreviewPoint(null); setNotice("Tap the second connection on the house. Closure will keep this line's measured runs fixed and redistribute only its angles."); }}>⇥ Close this line to house</button>}<button className="danger wide" onClick={removeSelection}>Delete point</button></div>}
+        {selectedSegment && <div>
+          <h2>{selectedSegment.kind === "gate" ? `${selectedSegment.gateType === "double" ? "Double" : "Single"} gate` : "Fence run"}</h2>
+          <div className="length-readout">{formatFeetInches(segmentLengthMm(design, selectedSegment))}</div>
+          {selectedSegment.kind === "gate" && <label className="select-field"><span>Gate style</span><select value={selectedSegment.gateType ?? "single"} onChange={(event) => commit(setGateType(design, selectedSegment.id, event.target.value as GateType), "Gate style updated.")}><option value="single">Single gate</option><option value="double">Double gate</option></select></label>}
+          <div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div>
+          <button className="primary wide" onClick={applyExactLength}>Apply exact length</button>
+          {selectedSegment.kind === "fence" && <>
+            <button className="primary wide" onClick={() => { setGateEditorOpen((current) => !current); setNotice("The gate will stay on this straight run. Choose its details and position."); }}>{gateEditorOpen ? "Cancel add gate" : "＋ Add gate to this run"}</button>
+            {gateEditorOpen && <div className="gate-editor">
+              <label><span>Gate style</span><select aria-label="Gate style" value={gateType} onChange={(event) => setGateTypeChoice(event.target.value as GateType)}><option value="single">Single gate</option><option value="double">Double gate</option></select></label>
+              <h3 className="field-heading">Total gate width</h3>
+              <div className="exact-grid"><label><span>Feet</span><input aria-label="Gate width feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={gateFeet} onChange={(event) => setGateFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Gate width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateInches} onChange={(event) => setGateInches(event.target.value)} /></label></div>
+              <h3 className="field-heading">Fence length before gate</h3>
+              <div className="exact-grid"><label><span>Feet</span><input aria-label="Fence length before gate feet" inputMode="numeric" type="number" min="0" max="1000" value={gateOffsetFeet} onChange={(event) => setGateOffsetFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Fence length before gate inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateOffsetInches} onChange={(event) => setGateOffsetInches(event.target.value)} /></label></div>
+              <button className="primary wide" onClick={addGate}>Place gate on this run</button>
+              <small>This is the exact distance from the selected run&apos;s starting post to the near side of the gate. Clicking the run supplies the starting value. The total width is the full opening.</small>
+            </div>}
+          </>}
+          <button className="wide" onClick={() => { setDimensionSideOverrides((current) => ({ ...current, [selectedSegment.id]: current[selectedSegment.id] === -1 ? 1 : -1 })); setNotice("Dimension label flipped to the other side of its run."); }}>↔ Flip dimension side</button>
+          {dimensionSideOverrides[selectedSegment.id] !== undefined && <button className="wide" onClick={() => { setDimensionSideOverrides((current) => { const updated = { ...current }; delete updated[selectedSegment.id]; return updated; }); setNotice("Dimension label returned to automatic positioning."); }}>Auto-position dimension</button>}
+          {selectedSegment.kind === "gate" && <><div className="gate-position-readout"><span>Fence from previous post</span><strong>{formatFeetInches(selectedGateOffsetMm)}</strong></div><button className="wide" onClick={() => commit(setSegmentKind(design, selectedSegment.id, "fence"), "Gate opening restored to fence intent.")}>Mark as fence</button></>}
+          <small>Labels space themselves automatically and avoid unrelated runs when space allows. Gate placement never changes the selected run&apos;s bearing or total measured length. Gate intent supplies only the preliminary Black Aluminum opening and hardware counts; it does not choose products, labor, or pricing.</small>
+        </div>}
         <div className="notice" role="status">{notice}</div>
       </aside>
     </section>

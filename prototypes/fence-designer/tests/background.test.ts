@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform } from "../src/background";
+import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform, straightenBackgroundFromHouseCorners } from "../src/background";
 
 describe("local reference image transform", () => {
   it("fits an image into the current plan while preserving its aspect ratio", () => {
@@ -27,5 +27,21 @@ describe("local reference image transform", () => {
     expect(moveBackgroundTransform(background, 305, -610)).toEqual({ ...background, xMm: 305, yMm: -610 });
     expect(rotateBackgroundTransform(background, 370).rotationDegrees).toBe(10);
     expect(rotateBackgroundTransform(background, -190).rotationDegrees).toBe(170);
+  });
+
+  it("straightens a traced house's first wall to the grid and returns its measured footprint", () => {
+    const result = straightenBackgroundFromHouseCorners(
+      { xMm: 0, yMm: 0, widthMm: 20_000, heightMm: 20_000, rotationDegrees: 0 },
+      [{ xMm: 5_000, yMm: 5_000 }, { xMm: 11_000, yMm: 8_000 }, { xMm: 9_000, yMm: 12_000 }, { xMm: 3_000, yMm: 9_000 }],
+    );
+    expect(result.transform.rotationDegrees).toBeCloseTo(-26.565, 3);
+    expect(result.house).toMatchObject({ lengthMm: 6_708, widthMm: 4_472 });
+    expect(Math.abs(result.corners[0].yMm - result.corners[1].yMm)).toBeLessThanOrEqual(1);
+  });
+
+  it("requires four usable house corners", () => {
+    const background = { xMm: 0, yMm: 0, widthMm: 10_000, heightMm: 10_000, rotationDegrees: 0 };
+    expect(() => straightenBackgroundFromHouseCorners(background, [])).toThrow(/four house corners/i);
+    expect(() => straightenBackgroundFromHouseCorners(background, [{ xMm: 0, yMm: 0 }, { xMm: 1, yMm: 0 }, { xMm: 1, yMm: 1 }, { xMm: 0, yMm: 1 }])).toThrow(/one foot/i);
   });
 });

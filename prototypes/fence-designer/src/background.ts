@@ -70,3 +70,24 @@ export function rotateBackgroundTransform(background: BackgroundTransform, rotat
   const normalized = ((rotationDegrees % 360) + 360) % 360;
   return Object.freeze({ ...background, rotationDegrees: normalized > 180 ? normalized - 360 : normalized });
 }
+
+export function straightenBackgroundFromHouseCorners(background: BackgroundTransform, corners: readonly PlanPosition[]) {
+  if (corners.length !== 4) throw new RangeError("Mark all four house corners before straightening the reference.");
+  const distance = (first: PlanPosition, second: PlanPosition) => Math.hypot(second.xMm - first.xMm, second.yMm - first.yMm);
+  const lengthMm = Math.round((distance(corners[0], corners[1]) + distance(corners[2], corners[3])) / 2);
+  const widthMm = Math.round((distance(corners[1], corners[2]) + distance(corners[3], corners[0])) / 2);
+  if (lengthMm < 305 || widthMm < 305) throw new RangeError("The traced house must be at least one foot in both directions.");
+  const deltaRadians = -Math.atan2(corners[1].yMm - corners[0].yMm, corners[1].xMm - corners[0].xMm);
+  const centerX = background.xMm + background.widthMm / 2;
+  const centerY = background.yMm + background.heightMm / 2;
+  const cosine = Math.cos(deltaRadians); const sine = Math.sin(deltaRadians);
+  const straightenedCorners = corners.map((point) => {
+    const dx = point.xMm - centerX; const dy = point.yMm - centerY;
+    return Object.freeze({ xMm: Math.round(centerX + dx * cosine - dy * sine), yMm: Math.round(centerY + dx * sine + dy * cosine) });
+  });
+  return Object.freeze({
+    transform: rotateBackgroundTransform(background, background.rotationDegrees + deltaRadians * 180 / Math.PI),
+    house: Object.freeze({ xMm: Math.min(...straightenedCorners.map(({ xMm }) => xMm)), yMm: Math.min(...straightenedCorners.map(({ yMm }) => yMm)), lengthMm, widthMm }),
+    corners: Object.freeze(straightenedCorners),
+  });
+}

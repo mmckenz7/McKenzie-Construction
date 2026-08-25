@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, insertGateAtPoint, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
+  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, insertGateAtPoint, insertGateOnSegment, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
   normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine,
   stableDesignJson, totalLengthMm,
 } from "../src/model";
@@ -204,6 +204,30 @@ describe("deterministic fence geometry", () => {
     expect(snapRunEndpoint(anchor, { xMm: 4_000, yMm: 2_400 }, true)).toEqual({ xMm: 4_027, yMm: 2_000 });
     expect(snapRunEndpoint(anchor, { xMm: 3_100, yMm: 4_000 }, true)).toEqual({ xMm: 3_051, yMm: 4_051 });
     expect(snapRunEndpoint(anchor, { xMm: 4_000, yMm: 2_400 }, false)).toEqual({ xMm: 4_000, yMm: 2_400 });
+    expect(snapRunEndpoint(anchor, { xMm: 4_000, yMm: 2_400 }, true)).not.toEqual(snapRunEndpoint(anchor, snapPlanPosition(4_000, 2_400, true, null), true));
+  });
+
+  it("uses the previous segment bearing as the origin for relative angle assistance", () => {
+    const referenceBearing = Math.PI / 6;
+    const anchor = { xMm: 1_000, yMm: 1_000 };
+    const snapped = snapRunEndpoint(anchor, { xMm: 4_000, yMm: 2_000 }, true, 45, referenceBearing);
+    const snappedBearing = Math.atan2(snapped.yMm - anchor.yMm, snapped.xMm - anchor.xMm);
+    expect(snappedBearing).toBeCloseTo(referenceBearing, 3);
+    expect(snapped.yMm).not.toBe(anchor.yMm);
+  });
+
+  it("places a gate anywhere inside one straight fence run without changing its total or bearing", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: feetAndInchesToMm(20, 0), yMm: 0 }, "segment-1");
+    const edited = insertGateOnSegment(design, "segment-1", feetAndInchesToMm(4, 0), feetAndInchesToMm(8, 0), "double", "point-3", "point-4", "segment-2", "segment-3");
+    expect(edited.segments).toEqual([
+      { id: "segment-1", fromPointId: "point-1", toPointId: "point-3", kind: "fence" },
+      { id: "segment-2", fromPointId: "point-3", toPointId: "point-4", kind: "gate", gateType: "double" },
+      { id: "segment-3", fromPointId: "point-4", toPointId: "point-2", kind: "fence" },
+    ]);
+    expect(edited.points.every(({ yMm }) => yMm === 0)).toBe(true);
+    expect(segmentLengthMm(edited, edited.segments[1])).toBe(feetAndInchesToMm(4, 0));
+    expect(totalLengthMm(edited)).toBe(totalLengthMm(design));
   });
 
   it("inserts a measured double gate from a selected point and preserves the original total", () => {
