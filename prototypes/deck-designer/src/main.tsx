@@ -27,9 +27,9 @@ import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
 import { createHouseOpening, createHouseWall } from "./siteContext";
 import "./styles.css";
-import { V4App } from "./V4App";
-import { migrateDeckDesignToV4, type DeckDesignV4 } from "./modelV4";
-import { loadDeckDesignV4, saveDeckDesignV4 } from "./storageV4";
+import { V5App } from "./V5App";
+import { migrateDeckDesignToV5, type DeckDesignV5 } from "./modelV5";
+import { loadDeckDesignV5, saveDeckDesignV5 } from "./storageV5";
 
 const STORAGE_KEY = "mckenzie-deck-designer:v2:current";
 const LEGACY_STORAGE_KEY = "mckenzie-deck-designer:v1:current";
@@ -683,23 +683,23 @@ function LegacyApp({ onOpenCornerEditor, onStartPhotos }: { onOpenCornerEditor: 
 }
 
 function App() {
-  const initial = useMemo(() => loadDeckDesignV4(localStorage), []);
-  const [v4Design, setV4Design] = useState<DeckDesignV4 | null>(initial.design);
-  const [v4Message, setV4Message] = useState(initial.message);
-  const [v4StartWithPhotos, setV4StartWithPhotos] = useState(false);
-  const openV4 = (legacy: DeckDesign, photos: boolean) => {
+  const initial = useMemo(() => loadDeckDesignV5(localStorage), []);
+  const [v5Design, setV5Design] = useState<DeckDesignV5 | null>(initial.design);
+  const [v5Message, setV5Message] = useState(initial.message);
+  const [v5StartWithPhotos, setV5StartWithPhotos] = useState(false);
+  const openV5 = (legacy: DeckDesign, photos: boolean) => {
     try {
-      const migrated = migrateDeckDesignToV4(legacy);
-      saveDeckDesignV4(localStorage, migrated);
-      setV4Message("Flexible outline ready. Side attachments remain protected until you choose Edit deck outline.");
-      setV4StartWithPhotos(photos);
-      setV4Design(migrated);
+      const migrated = migrateDeckDesignToV5(legacy);
+      saveDeckDesignV5(localStorage, migrated);
+      setV5Message("Flexible outline ready. Side attachments remain protected until you choose Edit deck outline.");
+      setV5StartWithPhotos(photos);
+      setV5Design(migrated);
     } catch (error) {
-      setV4Message(error instanceof Error ? error.message : "The corner editor could not be opened.");
+      setV5Message(error instanceof Error ? error.message : "The corner editor could not be opened.");
     }
   };
-  if (v4Design) return <V4App initialDesign={v4Design} initialMessage={v4Message} startWithPhotos={v4StartWithPhotos} />;
-  return <LegacyApp onOpenCornerEditor={(legacy) => openV4(legacy, false)} onStartPhotos={(legacy) => openV4(legacy, true)} />;
+  if (v5Design) return <V5App initialDesign={v5Design} initialMessage={v5Message} startWithPhotos={v5StartWithPhotos} />;
+  return <LegacyApp onOpenCornerEditor={(legacy) => openV5(legacy, false)} onStartPhotos={(legacy) => openV5(legacy, true)} />;
 }
 
 function DimensionField({ label, value, onCommit }: { label: string; value: number; onCommit: (value: string) => void }) {

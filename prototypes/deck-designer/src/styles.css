@@ -528,3 +528,5 @@ button:hover { transform: translateY(-1px); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+.plan-skirting { stroke: #8a5d3b; stroke-width: 7; opacity: .5; stroke-dasharray: 3 2; pointer-events: none; }
+.plan-fascia { stroke: #4f3423; stroke-width: 4; pointer-events: none; }

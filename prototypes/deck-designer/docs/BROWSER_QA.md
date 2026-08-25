@@ -326,3 +326,12 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - The same midway facts produced seven total treads, four stringer paths, four stair-railing paths, eight stair-rail endpoint posts, and a separate 16-square-foot landing. Returning the same design to At deck restored two stringers and four stair-rail posts while retaining seven treads.
 - Browser interaction produced no application warnings or errors. Existing responsive layout rules and touch-sized controls remain unchanged; the new location choices and exact split input use the same mobile control patterns already verified at 390 × 844.
 - The narrowly revised bundle ceilings are 93 KiB for the initial entry and 230 KiB for total JavaScript gzip; measured output is 92.3 KiB and 229.3 KiB respectively.
+## 2026-08-24 v5 exact-edge finishes check
+
+- The third Finishes stage remains unavailable until layout and railing review are complete, then exposes only fascia and skirting controls for the exact selected free side.
+- Selecting one 12-foot side produced 12 linear feet of conceptual fascia and 48 square feet of skirting at the recorded 4-foot grade-to-deck panel height.
+- Selecting a 20-foot side containing a 4-foot stair opening produced two exact spans totaling 16 feet; the same three combined spans appeared in both 2D and 3D.
+- Undo removed only the last finish intent and advanced the revision; redo restored it and advanced the revision again.
+- At 390 × 844, stage navigation, exact-side selection, finish actions, recorded height, and quantity summary remained visible and touch-sized without page-level clutter.
+- Reload restored the previously saved v5 design without retaining unsaved QA finish choices. Browser logs contained no warnings or errors.
+- Fascia and skirting remain separate conceptual facts and quantities. The prototype does not infer products, waste, labor, price, structural adequacy, ventilation, access, or code compliance.

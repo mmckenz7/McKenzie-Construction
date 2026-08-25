@@ -92,7 +92,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] One-course outer and cutout picture-frame borders with clipped field boards
 - [ ] Additional borders and decorative inlays
 - [x] Versioned v5 exact-edge fascia/skirting intent, stair-opening-aware geometry, generic quantities, and fail-closed region remapping foundation
-- [ ] Activate a separate uncluttered Finishes stage with fascia/skirting 2D/3D controls after v4/v5 equivalence gates
+- [x] Activate a separate uncluttered Finishes stage with fascia/skirting 2D/3D controls after v4/v5 equivalence gates
 - [ ] Post wraps, lighting, drainage, covers/pergolas
 - [x] Polygon-aware conceptual main beam and support-post locations with cutout splitting
 - [x] Exact and touch/keyboard-movable conceptual main-beam placement from the outside deck edge

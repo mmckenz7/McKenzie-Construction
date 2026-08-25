@@ -1,6 +1,6 @@
 # DeckDesign v5 edge-finish foundation
 
-Status: isolated model and projection foundation; not yet the active browser authority.
+Status: active isolated browser authority after v4/v5 equivalence and desktop/mobile gates.
 
 DeckDesign v5 adds a sparse `edgeFinishes[]` collection to every platform. Each entry references one exact geometric free-edge ID and records explicit `fasciaEnabled` and `skirtingEnabled` facts. Entries with neither finish are omitted. House-attached, duplicate, stale, or non-current edge references fail normalization.
 
@@ -10,4 +10,4 @@ The deterministic finish projection subtracts every stair opening on the selecte
 
 Polygon edits reuse the reviewed geometric edge-resolution plan. Preserved or uniquely remapped finish edges may update automatically. Split, ambiguous, or missing selected edges produce explicit `review_required` impacts for fascia and/or skirting and cannot silently move.
 
-Browser activation remains a later slice. It must preserve the current v4 local-storage fallback, pass v1–v5 migration/round-trip and v4/v5 equivalence gates, add undo/redo and local JSON coverage, render the same spans in 2D and 3D, and pass desktop/mobile touch QA before v5 becomes authoritative.
+Browser activation preserves the current v4 local-storage fallback and writes only the prototype-owned v5 key. V1–v5 migration/round-trip, v4/v5 rectangle and L-shape equivalence, undo/redo, stale-storage recovery, local JSON, exact 2D/3D span, quantity, and desktop/mobile touch gates passed before v5 became authoritative. Skirting height is shown as a recorded grade-to-deck panel height; sloped grade, openings, ventilation, access, product selection, waste, labor, price, and code compliance remain explicitly outside this conceptual projection.

@@ -8,9 +8,11 @@ import type { DeckPlatformV3 } from "./modelV3";
 import { RENDER_QUALITY_POLICIES, type RenderQuality } from "./renderQuality";
 import type { CameraPreset } from "./ThreeView";
 import type { HouseContextGeometry } from "./houseContextGeometry";
+import type { EdgeFinishGeometryV5 } from "./edgeFinishProjectionV5";
 
-type PlatformView = Readonly<{ platform: DeckPlatformV3; geometry: DeckPlatformGeometryV3 }>;
-type Props = { platform: DeckPlatformV3; geometry: DeckPlatformGeometryV3; contextPlatforms?: readonly PlatformView[]; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality };
+type FinishGeometry = Partial<EdgeFinishGeometryV5>;
+type PlatformView = Readonly<{ platform: DeckPlatformV3; geometry: DeckPlatformGeometryV3 & FinishGeometry }>;
+type Props = { platform: DeckPlatformV3; geometry: DeckPlatformGeometryV3 & FinishGeometry; contextPlatforms?: readonly PlatformView[]; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality };
 
 function member(group: THREE.Group, value: Readonly<{ start: { x: number; z: number }; end: { x: number; z: number } }>, y: number, height: number, depth: number, material: THREE.Material) {
   const dx = value.end.x - value.start.x, dz = value.end.z - value.start.z;
@@ -51,6 +53,8 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = [], houseGe
     const deck = new THREE.MeshStandardMaterial({ color: 0x8b6545, roughness: .68 });
     const frame = new THREE.MeshStandardMaterial({ color: 0xb48a5d, roughness: .86 });
     const rail = new THREE.MeshStandardMaterial({ color: 0x263a32, roughness: .55 });
+    const fascia = new THREE.MeshStandardMaterial({ color: 0x60422d, roughness: .75 });
+    const skirting = new THREE.MeshStandardMaterial({ color: 0x71523a, roughness: .9 });
     const house = new THREE.MeshStandardMaterial({ color: 0xd9d5ca, roughness: .92 });
     for (const panel of houseGeometry.houseWallPanels) member(model, panel, panel.baseElevation + panel.height / 2, panel.height, 8, house);
     for (const view of platformViews) {
@@ -61,6 +65,8 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = [], houseGe
         for (const beam of itemGeometry.beams) member(model, beam, itemPlatform.elevation - 13, 9.25, 4.5, frame);
         for (const post of itemGeometry.supportPosts) { const height = Math.max(1, post.top - gradeElevation); const mesh = new THREE.Mesh(new THREE.BoxGeometry(5.5, height, 5.5), frame); mesh.position.set(post.x, gradeElevation + height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
       }
+      for (const span of itemGeometry.fasciaSpans ?? []) member(model, span, itemPlatform.elevation - 4, 8, 1.5, fascia);
+      for (const panel of itemGeometry.skirtingPanels ?? []) member(model, panel, (panel.top + panel.bottom) / 2, Math.max(1, panel.top - panel.bottom), 1.5, skirting);
       for (const segment of itemGeometry.railSegments) { member(model, segment, itemPlatform.elevation + itemPlatform.construction.railing.height - 2, 3, 2.5, rail); member(model, segment, itemPlatform.elevation + 7, 2, 2, rail); }
       for (const segment of itemGeometry.landingRailSegments) { member(model, segment, segment.y + itemPlatform.construction.railing.height - 2, 3, 2.5, rail); member(model, segment, segment.y + 7, 2, 2, rail); }
       for (const post of [...itemGeometry.railPosts, ...itemGeometry.landingRailPosts]) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, itemPlatform.construction.railing.height, 4), rail); mesh.position.set(post.x, post.top - itemPlatform.construction.railing.height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
@@ -75,7 +81,7 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = [], houseGe
     const observer = new ResizeObserver(resize); observer.observe(mount); resize();
     camera.position.set(centerX + span, platform.elevation + span, centerZ + span); controls.target.set(centerX, platform.elevation / 2, centerZ); controls.update();
     let frameId = 0; const animate = () => { controls.update(); renderer.render(scene, camera); frameId = requestAnimationFrame(animate); }; animate();
-    return () => { cancelAnimationFrame(frameId); observer.disconnect(); controls.dispose(); renderer.dispose(); scene.traverse((object: any) => { if (object instanceof THREE.Mesh) object.geometry.dispose(); }); [deck, frame, rail, house].forEach((value) => value.dispose()); if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement); };
+    return () => { cancelAnimationFrame(frameId); observer.disconnect(); controls.dispose(); renderer.dispose(); scene.traverse((object: any) => { if (object instanceof THREE.Mesh) object.geometry.dispose(); }); [deck, frame, rail, fascia, skirting, house].forEach((value) => value.dispose()); if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement); };
   }, [platform, geometry, contextPlatforms, houseGeometry, gradeElevation, quality, showFraming, centerX, centerZ, span]);
 
   useEffect(() => {
@@ -86,5 +92,5 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = [], houseGe
     if (preset === "perspective") camera.position.set(centerX + span, platform.elevation + span, centerZ + span);
     camera.lookAt(center); controls.update();
   }, [preset, presetRequest, centerX, centerZ, maxZ, span, platform.elevation]);
-  return <div className="three-mount" ref={mountRef} aria-label="Interactive v3 polygon deck model" />;
+  return <div className="three-mount" ref={mountRef} aria-label="Interactive polygon deck model" />;
 }

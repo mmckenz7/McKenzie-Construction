@@ -59,3 +59,4 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/MASTER_SCOPE.md](docs
 Responsive browser evidence is recorded in [docs/BROWSER_QA.md](docs/BROWSER_QA.md).
 The custom-outline semantics and rejection behavior are recorded in [docs/CUSTOM_POLYGON_SPIKE.md](docs/CUSTOM_POLYGON_SPIKE.md).
 The isolated v3 browser/local-state activation was controller-approved and implemented under [`docs/V3_APPLICATION_ACTIVATION_CONTRACT.md`](docs/V3_APPLICATION_ACTIVATION_CONTRACT.md). The previous v2 local value remains an untouched fallback; no shared or remote persistence was introduced.
+The active isolated browser authority is now DeckDesign v5. Its separate Finishes stage records exact-edge fascia and skirting intent, preserves the v4 local value as an untouched fallback, and projects only generic conceptual geometry and quantities; see [`docs/V5_EDGE_FINISH_FOUNDATION.md`](docs/V5_EDGE_FINISH_FOUNDATION.md).

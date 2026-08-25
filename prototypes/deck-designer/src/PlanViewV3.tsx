@@ -7,13 +7,14 @@ import type { HouseContextGeometry } from "./houseContextGeometry";
 import { moveRectangularHole, resizeRectangularHole } from "./holeEditorV3";
 import { deriveCornerAlignmentGuides } from "./polygonEditorV3";
 import { beamInsetFromPointV3, effectiveBeamInsetV3 } from "./framingEditorV3";
+import type { EdgeFinishGeometryV5 } from "./edgeFinishProjectionV5";
 
 type Point = Readonly<{ x: number; z: number }>;
 type ContextPlatform = Readonly<{ id: string; elevation: number; footprint: readonly Point[] }>;
 type Props = {
   platform: DeckPlatformV3;
   activeStairSystem?: StairSystemV3 | null;
-  geometry: DeckPlatformGeometryV3;
+  geometry: DeckPlatformGeometryV3 & Partial<EdgeFinishGeometryV5>;
   houseGeometry: HouseContextGeometry;
   snapIncrement: number;
   editingEnabled?: boolean;
@@ -162,7 +163,7 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
     const next = mode === "move" ? moveRectangularHole(selectedHole, direction) : resizeRectangularHole(selectedHole, mode, { x: selectedHole[mode].x + direction.x, z: selectedHole[mode].z + direction.z });
     onHoleCommit?.(selectedHoleIndex, next);
   };
-  return <svg ref={ref} className="plan-svg v3-plan" viewBox={`0 0 ${maxX - minX + margin * 2} ${maxZ - minZ + margin * 2}`} role="img" aria-label={editingEnabled ? `Editable ${geometry.footprint.length}-corner deck outline` : `Railing selection plan with ${geometry.platformEdges.length} deck sides`}>
+  return <svg ref={ref} className="plan-svg v3-plan" viewBox={`0 0 ${maxX - minX + margin * 2} ${maxZ - minZ + margin * 2}`} role="img" aria-label={editingEnabled ? `Editable ${geometry.footprint.length}-corner deck outline` : `Side selection plan with ${geometry.platformEdges.length} deck sides`}>
     <defs><pattern id="v3-grid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#a9b4ad" strokeWidth=".4" /></pattern></defs>
     <rect width="100%" height="100%" fill="url(#v3-grid)" />
     {alignmentGuides && alignmentGuides.x !== null && <line x1={x(alignmentGuides.x)} y1="0" x2={x(alignmentGuides.x)} y2="100%" className="plan-alignment-guide" aria-hidden="true" />}
@@ -176,6 +177,8 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
     {geometry.joists.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-joist" />)}
     {geometry.beams.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className={`plan-beam${selectedBeam && member.id.startsWith(`${selectedBeam.id}-segment-`) ? " selected" : ""}`} onClick={() => { const line = beamLines?.find((candidate) => member.id.startsWith(`${candidate.id}-segment-`)); if (line) onSelectBeamLine?.(line.id); }} />)}
     {geometry.supportPosts.map((post) => <circle key={post.id} cx={x(post.x)} cy={y(post.z)} r="2.25" className="plan-support-post" />)}
+    {(geometry.skirtingPanels ?? []).map((panel) => <line key={panel.id} x1={x(panel.start.x)} y1={y(panel.start.z)} x2={x(panel.end.x)} y2={y(panel.end.z)} className="plan-skirting" />)}
+    {(geometry.fasciaSpans ?? []).map((span) => <line key={span.id} x1={x(span.start.x)} y1={y(span.start.z)} x2={x(span.end.x)} y2={y(span.end.z)} className="plan-fascia" />)}
     {geometry.railSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-rail" />)}
     {geometry.landings.map((landing) => <polygon key={landing.id} points={landing.corners.map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className={`plan-landing${activeStairSystem?.id === landing.systemId ? " selected-object" : ""}`} />)}
     {geometry.landingRailSegments.map((member) => <line key={member.id} x1={x(member.start.x)} y1={y(member.start.z)} x2={x(member.end.x)} y2={y(member.end.z)} className="plan-rail plan-landing-rail" />)}
