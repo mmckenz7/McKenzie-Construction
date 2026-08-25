@@ -277,6 +277,7 @@ export async function GET(
         const messagesResult = await supabase
           .from("communication_messages")
           .select("id,thread_id,channel,direction,subject,body,status,received_at,sent_at,created_at")
+          .eq("security_disposition", "normal")
           .in(
             "thread_id",
             threads.map((thread) => thread.id),

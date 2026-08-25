@@ -13,11 +13,11 @@ export async function POST(request: Request) {
   const supabase = createAdminServerClient();
   const existing = await supabase.from("communication_messages")
     .select("id,metadata").eq("provider", "twilio").eq("provider_message_id", callSid)
-    .eq("channel", "voice").maybeSingle();
+    .eq("channel", "voice").eq("security_disposition", "normal").maybeSingle();
   if (existing.error || !existing.data) return new Response(null, { status: 404 });
   const result = await supabase.from("communication_messages").update({
     status,
     metadata: { ...(existing.data.metadata ?? {}), provider_status: callStatus, call_duration_seconds: Number(form.get("CallDuration") ?? "0") || null },
-  }).eq("id", existing.data.id);
+  }).eq("id", existing.data.id).eq("security_disposition", "normal");
   return new Response(null, { status: result.error ? 500 : 204 });
 }

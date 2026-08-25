@@ -115,6 +115,7 @@ export async function PATCH(
       .from("communication_threads")
       .select("id,lead_id,customer_id")
       .eq("id", threadId)
+      .eq("security_disposition", "normal")
       .maybeSingle();
 
     if (threadResult.error || !threadResult.data) {
@@ -169,6 +170,7 @@ export async function PATCH(
       .from("communication_threads")
       .update({ lead_id: leadId, customer_id: customerId })
       .eq("id", threadId)
+      .eq("security_disposition", "normal")
       .is("lead_id", null)
       .is("customer_id", null)
       .select("id,lead_id,customer_id")
@@ -186,7 +188,8 @@ export async function PATCH(
       const messageUpdate = await supabase
         .from("communication_messages")
         .update({ lead_id: leadId })
-        .eq("thread_id", threadId);
+        .eq("thread_id", threadId)
+        .eq("security_disposition", "normal");
       if (messageUpdate.error) {
         warning = "The conversation is matched, but older message audit rows still need repair.";
       }
@@ -204,6 +207,7 @@ export async function PATCH(
     .from("communication_threads")
     .select("id,status,assigned_to_id,lead_id,customer_id")
     .eq("id", threadId)
+    .eq("security_disposition", "normal")
     .maybeSingle();
 
   if (threadResult.error || !threadResult.data) {
@@ -244,6 +248,7 @@ export async function PATCH(
       .from("communication_messages")
       .update({ is_read: true })
       .eq("thread_id", threadId)
+      .eq("security_disposition", "normal")
       .eq("direction", "inbound");
     if (messagesResult.error) {
       return Response.json(
@@ -257,6 +262,7 @@ export async function PATCH(
       .from("communication_messages")
       .select("id")
       .eq("thread_id", threadId)
+      .eq("security_disposition", "normal")
       .eq("direction", "inbound")
       .order("received_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
@@ -271,7 +277,8 @@ export async function PATCH(
     const messagesResult = await supabase
       .from("communication_messages")
       .update({ is_read: false })
-      .eq("id", latestInbound.data.id);
+      .eq("id", latestInbound.data.id)
+      .eq("security_disposition", "normal");
     if (messagesResult.error) {
       return Response.json(
         { success: false, error: "The conversation could not be marked as unread." },
@@ -285,6 +292,7 @@ export async function PATCH(
     .from("communication_threads")
     .update(threadUpdates)
     .eq("id", threadId)
+    .eq("security_disposition", "normal")
     .select("id,status,assigned_to_id,unread_count")
     .single();
 

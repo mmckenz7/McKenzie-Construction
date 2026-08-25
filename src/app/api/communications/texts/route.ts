@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   if (threadId) {
     const thread = await supabase.from("communication_threads")
       .select("id,provider,lead_id,customer_id,participant_addresses")
-      .eq("id", threadId).eq("provider", "twilio")
+      .eq("id", threadId).eq("provider", "twilio").eq("security_disposition", "normal")
       .or("lead_id.not.is.null,customer_id.not.is.null").maybeSingle();
     if (thread.error || !thread.data) {
       return Response.json({ success: false, error: "The text conversation could not be found." }, { status: 404 });
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   if (!threadId) {
     const providerThreadId = `sms:${recipient}`;
-    const created = await supabase.from("communication_threads").upsert({
+    const threadValues = {
       provider: "twilio",
       provider_thread_id: providerThreadId,
       subject: `Text conversation with ${displayName}`,
@@ -130,7 +130,22 @@ export async function POST(request: Request) {
       unread_count: 0,
       last_message_at: now,
       metadata: { channel: "sms", created_from: leadId ? "lead_record" : "customer_record" },
-    }, { onConflict: "provider,provider_thread_id" }).select("id").single();
+      security_disposition: "normal",
+    } as const;
+    const existing = await supabase.from("communication_threads")
+      .select("id")
+      .eq("provider", "twilio")
+      .eq("provider_thread_id", providerThreadId)
+      .eq("security_disposition", "normal")
+      .maybeSingle();
+    const created = existing.data
+      ? await supabase.from("communication_threads").update(threadValues)
+        .eq("id", existing.data.id)
+        .eq("security_disposition", "normal")
+        .select("id").single()
+      : existing.error
+        ? existing
+        : await supabase.from("communication_threads").insert(threadValues).select("id").single();
     if (created.error || !created.data) {
       return Response.json({ success: false, error: "The text conversation could not be created." }, { status: 500 });
     }
@@ -213,8 +228,9 @@ export async function POST(request: Request) {
       is_read: true,
       sent_at: now,
       metadata: { customer_id: customerId, sent_by_team_member_id: workspace.access?.user_id ?? null },
+      security_disposition: "normal",
     }, { onConflict: "provider,provider_message_id,direction", ignoreDuplicates: true }),
-    supabase.from("communication_threads").update({ status: "waiting", unread_count: 0, last_message_at: now }).eq("id", threadId),
+    supabase.from("communication_threads").update({ status: "waiting", unread_count: 0, last_message_at: now }).eq("id", threadId).eq("security_disposition", "normal"),
   ]);
   if (outboxUpdate.error || messageResult.error || threadUpdate.error) {
     return Response.json({ success: false, error: "Twilio accepted the text, but its CRM history needs repair." }, { status: 500 });

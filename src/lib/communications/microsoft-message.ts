@@ -150,6 +150,33 @@ export function departmentForAddresses(
 export function normalizeGraphInboxMessage(
   message: GraphInboxMessage,
 ) {
+  const envelope =
+    normalizeGraphInboxEnvelope(message);
+
+  if (!envelope) {
+    return null;
+  }
+
+  return {
+    ...envelope,
+    senderName:
+      message.from?.emailAddress?.name?.trim() || null,
+    subject: message.subject?.trim() || null,
+    body:
+      message.body?.content?.trim() ||
+      message.bodyPreview?.trim() ||
+      "(No message content)",
+    isRead: message.isRead === true,
+    hasAttachments:
+      message.hasAttachments === true,
+    department:
+      departmentForAddresses(envelope.recipients),
+  };
+}
+
+export function normalizeGraphInboxEnvelope(
+  message: GraphInboxMessage,
+) {
   const providerMessageId =
     message.id?.trim() ?? "";
   const providerConversationId =
@@ -179,20 +206,8 @@ export function normalizeGraphInboxMessage(
     internetMessageId:
       message.internetMessageId?.trim() || null,
     sender,
-    senderName:
-      message.from?.emailAddress?.name?.trim() || null,
     recipients,
-    subject: message.subject?.trim() || null,
-    body:
-      message.body?.content?.trim() ||
-      message.bodyPreview?.trim() ||
-      "(No message content)",
     receivedAt,
-    isRead: message.isRead === true,
-    hasAttachments:
-      message.hasAttachments === true,
-    department:
-      departmentForAddresses(recipients),
   };
 }
 

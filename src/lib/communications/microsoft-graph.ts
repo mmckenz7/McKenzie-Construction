@@ -5,11 +5,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   isTrustedGraphDeltaUrl,
   mergeMicrosoftThreadState,
+  normalizeGraphInboxEnvelope,
   normalizeGraphInboxMessage,
   normalizedEmailThreadSubject,
   type GraphInboxMessage,
   type MicrosoftThreadState,
 } from "@/lib/communications/microsoft-message";
+import {
+  classifySecretBearingAuthenticationMail,
+  quarantinedCommunicationRecords,
+  type SecretBearingAuthenticationMail,
+} from "@/lib/communications/security";
 
 type MicrosoftSettings = {
   microsoft_365_inbox_enabled: boolean;
@@ -164,6 +170,88 @@ async function findRelatedRecords(
   };
 }
 
+async function storeQuarantinedMessage(
+  supabase: SupabaseClient,
+  mailbox: Mailbox,
+  envelope: NonNullable<
+    ReturnType<typeof normalizeGraphInboxEnvelope>
+  >,
+  classification: SecretBearingAuthenticationMail,
+) {
+  const existingMessage = await supabase
+    .from("communication_messages")
+    .select("id")
+    .eq("provider", "microsoft_graph")
+    .eq("provider_message_id", envelope.providerMessageId)
+    .eq("direction", "inbound")
+    .maybeSingle();
+  if (existingMessage.error) {
+    throw new Error(
+      "The quarantined Microsoft message could not be checked.",
+    );
+  }
+  if (existingMessage.data) return false;
+
+  const redactedAt = new Date().toISOString();
+  const records = quarantinedCommunicationRecords(
+    {
+      provider: "microsoft_graph",
+      providerMessageId: envelope.providerMessageId,
+      providerConversationId:
+        envelope.providerConversationId,
+      internetMessageId: envelope.internetMessageId,
+      mailboxId: mailbox.id,
+      receivedAt: envelope.receivedAt,
+    },
+    classification,
+    redactedAt,
+  );
+  const existingThread = await supabase
+    .from("communication_threads")
+    .select("id")
+    .eq("provider", records.thread.provider)
+    .eq("provider_thread_id", records.thread.provider_thread_id)
+    .eq("security_disposition", "quarantined")
+    .maybeSingle();
+  if (existingThread.error) {
+    throw new Error(
+      "The quarantined Microsoft container could not be checked.",
+    );
+  }
+  const threadResult = existingThread.data
+    ? await supabase
+      .from("communication_threads")
+      .update(records.thread)
+      .eq("id", existingThread.data.id)
+      .eq("security_disposition", "quarantined")
+      .select("id")
+      .single()
+    : await supabase
+      .from("communication_threads")
+      .insert(records.thread)
+      .select("id")
+      .single();
+  if (threadResult.error || !threadResult.data) {
+    throw new Error(
+      "The quarantined Microsoft container could not be saved.",
+    );
+  }
+
+  const messageResult = await supabase
+    .from("communication_messages")
+    .insert({
+      ...records.message,
+      thread_id: threadResult.data.id,
+    });
+  if (messageResult.error?.code === "23505") return false;
+  if (messageResult.error) {
+    throw new Error(
+      "The quarantined Microsoft message could not be saved.",
+    );
+  }
+  return true;
+}
+
 async function storeMessage(
   supabase: SupabaseClient,
   mailbox: Mailbox,
@@ -173,10 +261,48 @@ async function storeMessage(
     return false;
   }
 
+  const envelope =
+    normalizeGraphInboxEnvelope(rawMessage);
+  if (!envelope) return false;
+
+  const classification =
+    classifySecretBearingAuthenticationMail({
+      body: rawMessage.body?.content,
+      bodyPreview: rawMessage.bodyPreview,
+      sender:
+        rawMessage.from?.emailAddress?.address,
+      subject: rawMessage.subject,
+    });
+  if (classification) {
+    return storeQuarantinedMessage(
+      supabase,
+      mailbox,
+      envelope,
+      classification,
+    );
+  }
+
   const message =
     normalizeGraphInboxMessage(rawMessage);
 
   if (!message) {
+    return false;
+  }
+
+  const existingMessageResult = await supabase
+    .from("communication_messages")
+    .select("id,security_disposition")
+    .eq("provider", "microsoft_graph")
+    .eq("provider_message_id", message.providerMessageId)
+    .eq("direction", "inbound")
+    .maybeSingle();
+  if (existingMessageResult.error) {
+    throw new Error("The Microsoft message could not be checked.");
+  }
+  if (
+    existingMessageResult.data &&
+    existingMessageResult.data.security_disposition !== "normal"
+  ) {
     return false;
   }
 
@@ -198,6 +324,7 @@ async function storeMessage(
       "id,subject,department,lead_id,customer_id,participant_addresses,last_message_at",
     )
     .eq("provider", "microsoft_graph")
+    .eq("security_disposition", "normal")
     .eq(
       "provider_thread_id",
       message.providerConversationId,
@@ -216,6 +343,7 @@ async function storeMessage(
       .from("communication_threads")
       .select("id,subject,department,lead_id,customer_id,participant_addresses,last_message_at")
       .eq("provider", "mission_control")
+      .eq("security_disposition", "normal")
       .neq("status", "archived")
       .order("last_message_at", { ascending: false })
       .limit(20);
@@ -237,7 +365,8 @@ async function storeMessage(
           provider: "microsoft_graph",
           provider_thread_id: message.providerConversationId,
         })
-        .eq("id", existingThreadData.id);
+        .eq("id", existingThreadData.id)
+        .eq("security_disposition", "normal");
       if (convertedThread.error) {
         throw new Error("The customer reply could not be joined to its Mission Control conversation.");
       }
@@ -268,29 +397,33 @@ async function storeMessage(
     },
   );
 
-  const threadResult = await supabase
-    .from("communication_threads")
-    .upsert(
-      {
-        provider: "microsoft_graph",
-        provider_thread_id:
-          message.providerConversationId,
-        subject: mergedThread.subject,
-        department: mergedThread.department,
-        lead_id: mergedThread.leadId,
-        customer_id: mergedThread.customerId,
-        participant_addresses:
-          mergedThread.participantAddresses,
-        last_message_at:
-          mergedThread.lastMessageAt,
-      },
-      {
-        onConflict:
-          "provider,provider_thread_id",
-      },
-    )
-    .select("id")
-    .single();
+  const threadValues = {
+    provider: "microsoft_graph",
+    provider_thread_id:
+      message.providerConversationId,
+    subject: mergedThread.subject,
+    department: mergedThread.department,
+    lead_id: mergedThread.leadId,
+    customer_id: mergedThread.customerId,
+    participant_addresses:
+      mergedThread.participantAddresses,
+    last_message_at:
+      mergedThread.lastMessageAt,
+    security_disposition: "normal",
+  } as const;
+  const threadResult = existingThreadData
+    ? await supabase
+      .from("communication_threads")
+      .update(threadValues)
+      .eq("id", existingThreadData.id)
+      .eq("security_disposition", "normal")
+      .select("id")
+      .single()
+    : await supabase
+      .from("communication_threads")
+      .insert(threadValues)
+      .select("id")
+      .single();
 
   if (threadResult.error || !threadResult.data) {
     throw new Error(
@@ -298,46 +431,48 @@ async function storeMessage(
     );
   }
 
-  const result = await supabase
-    .from("communication_messages")
-    .upsert(
-      {
-        channel: "email",
-        direction: "inbound",
-        sender: message.sender,
-        recipient:
-          message.recipients[0],
-        subject: message.subject,
-        body: message.body,
-        status: "received",
-        provider: "microsoft_graph",
-        provider_message_id:
-          message.providerMessageId,
-        lead_id: mergedThread.leadId,
-        received_at: message.receivedAt,
-        mailbox_id: mailbox.id,
-        thread_id: threadResult.data.id,
-        provider_conversation_id:
-          message.providerConversationId,
-        internet_message_id:
-          message.internetMessageId,
-        is_read: message.isRead,
-        has_attachments:
-          message.hasAttachments,
-        department: message.department,
-        metadata: {
-          sender_name: message.senderName,
-          recipient_addresses:
-            message.recipients,
-          microsoft_mailbox_address:
-            mailbox.address,
-        },
-      },
-      {
-        onConflict:
-          "provider,provider_message_id,direction",
-      },
-    );
+  const messageValues = {
+    channel: "email",
+    direction: "inbound",
+    sender: message.sender,
+    recipient:
+      message.recipients[0],
+    subject: message.subject,
+    body: message.body,
+    status: "received",
+    provider: "microsoft_graph",
+    provider_message_id:
+      message.providerMessageId,
+    lead_id: mergedThread.leadId,
+    received_at: message.receivedAt,
+    mailbox_id: mailbox.id,
+    thread_id: threadResult.data.id,
+    provider_conversation_id:
+      message.providerConversationId,
+    internet_message_id:
+      message.internetMessageId,
+    is_read: message.isRead,
+    has_attachments:
+      message.hasAttachments,
+    department: message.department,
+    metadata: {
+      sender_name: message.senderName,
+      recipient_addresses:
+        message.recipients,
+      microsoft_mailbox_address:
+        mailbox.address,
+    },
+    security_disposition: "normal",
+  } as const;
+  const result = existingMessageResult.data
+    ? await supabase
+      .from("communication_messages")
+      .update(messageValues)
+      .eq("id", existingMessageResult.data.id)
+      .eq("security_disposition", "normal")
+    : await supabase
+      .from("communication_messages")
+      .insert(messageValues);
 
   if (result.error) {
     throw new Error(
@@ -352,6 +487,7 @@ async function storeMessage(
         lead_id: mergedThread.leadId,
       })
       .eq("thread_id", threadResult.data.id)
+      .eq("security_disposition", "normal")
       .is("lead_id", null);
 
     if (relatedMessagesResult.error) {
@@ -370,7 +506,8 @@ async function refreshThreadUnreadCounts(
   const threads = await supabase
     .from("communication_threads")
     .select("id")
-    .eq("provider", "microsoft_graph");
+    .eq("provider", "microsoft_graph")
+    .eq("security_disposition", "normal");
 
   if (threads.error) {
     throw new Error(
@@ -386,6 +523,7 @@ async function refreshThreadUnreadCounts(
         head: true,
       })
       .eq("thread_id", thread.id)
+      .eq("security_disposition", "normal")
       .eq("direction", "inbound")
       .eq("is_read", false);
 
@@ -400,7 +538,8 @@ async function refreshThreadUnreadCounts(
       .update({
         unread_count: unread.count ?? 0,
       })
-      .eq("id", thread.id);
+      .eq("id", thread.id)
+      .eq("security_disposition", "normal");
   }
 }
 

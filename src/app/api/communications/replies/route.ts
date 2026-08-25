@@ -141,7 +141,7 @@ export async function POST(request: Request) {
   let inReplyTo: string | null = null;
 
   if (threadId) {
-    const threadResult = await supabase.from("communication_threads").select("id,subject,department,lead_id,customer_id").eq("id", threadId).neq("provider", "twilio").maybeSingle();
+    const threadResult = await supabase.from("communication_threads").select("id,subject,department,lead_id,customer_id").eq("id", threadId).eq("security_disposition", "normal").neq("provider", "twilio").maybeSingle();
     if (threadResult.error || !threadResult.data) {
       return Response.json({ success: false, error: "The email conversation could not be found." }, { status: 404 });
     }
@@ -152,7 +152,7 @@ export async function POST(request: Request) {
     department = threadResult.data.department;
     canonicalSubject = threadResult.data.subject?.trim() || subject;
   } else if (leadId || customerId) {
-    let existingThreadQuery = supabase.from("communication_threads").select("id,subject,department,lead_id,customer_id").neq("provider", "twilio").neq("status", "archived").order("last_message_at", { ascending: false }).limit(1);
+    let existingThreadQuery = supabase.from("communication_threads").select("id,subject,department,lead_id,customer_id").eq("security_disposition", "normal").neq("provider", "twilio").neq("status", "archived").order("last_message_at", { ascending: false }).limit(1);
     existingThreadQuery = leadId ? existingThreadQuery.eq("lead_id", leadId) : existingThreadQuery.eq("customer_id", customerId!);
     const existingThread = await existingThreadQuery.maybeSingle();
     if (!existingThread.error && existingThread.data) {
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
   }
 
   if (threadId) {
-    const inboundResult = await supabase.from("communication_messages").select("sender,internet_message_id").eq("thread_id", threadId).eq("direction", "inbound").order("received_at", { ascending: false }).limit(1).maybeSingle();
+    const inboundResult = await supabase.from("communication_messages").select("sender,internet_message_id").eq("thread_id", threadId).eq("security_disposition", "normal").eq("direction", "inbound").order("received_at", { ascending: false }).limit(1).maybeSingle();
     if (!inboundResult.error && inboundResult.data) {
       recipient = inboundResult.data.sender?.trim() ?? "";
       inReplyTo = safeMessageHeader(inboundResult.data.internet_message_id);
@@ -214,6 +214,7 @@ export async function POST(request: Request) {
       unread_count: 0,
       last_message_at: sentAt,
       metadata: { created_from: leadId ? "lead_record" : customerId ? "customer_record" : "company_inbox" },
+      security_disposition: "normal",
     }).select("id").single();
     if (createdThread.error || !createdThread.data) {
       return Response.json({ success: false, error: "The email conversation could not be created." }, { status: 500 });
@@ -323,11 +324,12 @@ export async function POST(request: Request) {
     department,
     sent_at: sentAt,
     metadata: { customer_id: customerId, sent_by_team_member_id: workspace.access?.user_id ?? null, attachments: attachmentMetadata, cc_recipients: ccRecipients, used_bcc: bccRecipients.length > 0 },
+    security_disposition: "normal",
   });
 
   await Promise.all([
-    supabase.from("communication_threads").update({ status: "waiting", unread_count: 0, last_message_at: sentAt }).eq("id", threadId),
-    supabase.from("communication_messages").update({ is_read: true }).eq("thread_id", threadId).eq("direction", "inbound"),
+    supabase.from("communication_threads").update({ status: "waiting", unread_count: 0, last_message_at: sentAt }).eq("id", threadId).eq("security_disposition", "normal"),
+    supabase.from("communication_messages").update({ is_read: true }).eq("thread_id", threadId).eq("security_disposition", "normal").eq("direction", "inbound"),
     leadId ? supabase.from("lead_activities").insert({
       lead_id: leadId,
       activity_type: "email_sent",

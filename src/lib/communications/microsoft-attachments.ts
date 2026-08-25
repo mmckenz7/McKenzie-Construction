@@ -28,6 +28,7 @@ export async function getMatchedMicrosoftMessageLocation(
     .select("id,provider,provider_message_id,mailbox_id,thread_id,has_attachments")
     .eq("id", messageId)
     .eq("provider", "microsoft_graph")
+    .eq("security_disposition", "normal")
     .eq("has_attachments", true)
     .maybeSingle();
   if (messageResult.error || !messageResult.data?.mailbox_id || !messageResult.data.thread_id) {
@@ -39,6 +40,7 @@ export async function getMatchedMicrosoftMessageLocation(
       .from("communication_threads")
       .select("id")
       .eq("id", messageResult.data.thread_id)
+      .eq("security_disposition", "normal")
       .or("lead_id.not.is.null,customer_id.not.is.null")
       .maybeSingle(),
     supabase

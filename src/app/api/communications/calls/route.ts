@@ -79,6 +79,7 @@ export async function POST(request: Request) {
     department: "sales",
     is_read: true,
     metadata: { customer_id: customerId, team_member_phone: teamMemberPhone, initiated_by: workspace.access?.user_id ?? null, provider_status: call.status, request_id: randomUUID() },
+    security_disposition: "normal",
   });
   if (message.error) return Response.json({ success: false, error: "The call started, but its CRM history needs repair." }, { status: 500 });
   if (leadId) await supabase.from("lead_activities").insert({

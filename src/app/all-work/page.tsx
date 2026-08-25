@@ -44,6 +44,7 @@ export default async function MissionControlPage() {
       supabase
         .from("communication_threads")
         .select("id,subject,department,lead_id,unread_count,last_message_at")
+        .eq("security_disposition", "normal")
         .neq("status", "archived")
         .order("unread_count", { ascending: false })
         .order("last_message_at", { ascending: false })

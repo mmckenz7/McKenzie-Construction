@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     supabase.from("communication_outbox")
       .select("id,metadata").eq("provider", "resend").eq("provider_message_id", event.emailId).maybeSingle(),
     supabase.from("communication_messages")
-      .select("id,metadata").eq("provider", "resend").eq("provider_message_id", event.emailId).eq("direction", "outbound").maybeSingle(),
+      .select("id,metadata").eq("provider", "resend").eq("provider_message_id", event.emailId).eq("direction", "outbound").eq("security_disposition", "normal").maybeSingle(),
   ]);
 
   if (outboxResult.error || messageResult.error) {
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
     updates.push(supabase.from("communication_messages").update({
       status: communicationStatusForResendEvent(event.type),
       metadata: { ...(messageResult.data.metadata ?? {}), ...eventMetadata },
-    }).eq("id", messageResult.data.id));
+    }).eq("id", messageResult.data.id).eq("security_disposition", "normal"));
   }
 
   const updateResults = await Promise.all(updates);

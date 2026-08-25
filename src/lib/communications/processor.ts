@@ -178,6 +178,7 @@ export async function processCommunicationOutbox(
       lead_id: candidate.lead_id,
       outbox_id: candidate.id,
       sent_at: sentAt,
+      security_disposition: "normal",
     }, { onConflict: "provider,provider_message_id,direction", ignoreDuplicates: true });
 
     if (candidate.source_type === "email_draft" && candidate.lead_id) {

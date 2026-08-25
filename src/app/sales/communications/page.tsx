@@ -134,6 +134,7 @@ export default async function CommunicationsPage({
   let threadQuery = supabase
     .from("communication_threads")
     .select("id,provider,subject,department,status,lead_id,customer_id,assigned_to_id,participant_addresses,unread_count,last_message_at")
+    .eq("security_disposition", "normal")
     .order("unread_count", { ascending: false })
     .order("last_message_at", { ascending: false })
     .limit(100);
@@ -157,6 +158,7 @@ export default async function CommunicationsPage({
     supabase
       .from("communication_messages")
       .select("id,channel,thread_id,direction,sender,recipient,subject,body,status,department,lead_id,is_read,has_attachments,received_at,sent_at,created_at")
+      .eq("security_disposition", "normal")
       .order("created_at", { ascending: false })
       .limit(150),
     supabase

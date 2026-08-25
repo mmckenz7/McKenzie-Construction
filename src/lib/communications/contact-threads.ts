@@ -63,6 +63,7 @@ export async function loadContactCommunicationThreads(
     const result = await supabase
       .from("communication_threads")
       .select(threadSelection)
+      .eq("security_disposition", "normal")
       .eq(filter.column, filter.value)
       .neq("status", "archived")
       .order("last_message_at", {
@@ -84,6 +85,7 @@ export async function loadContactCommunicationThreads(
     const result = await supabase
       .from("communication_threads")
       .select(threadSelection)
+      .eq("security_disposition", "normal")
       .contains("participant_addresses", [address])
       .neq("status", "archived")
       .order("last_message_at", {

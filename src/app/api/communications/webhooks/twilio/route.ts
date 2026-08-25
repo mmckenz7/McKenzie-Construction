@@ -28,7 +28,7 @@ async function textThread(from: string, to: string, leadId: string | null, custo
   const customerPhone = e164UsPhone(from) ?? from;
   const companyPhone = e164UsPhone(to) ?? to;
   const providerThreadId = `sms:${customerPhone}`;
-  const result = await supabase.from("communication_threads").upsert({
+  const values = {
     provider: "twilio",
     provider_thread_id: providerThreadId,
     subject: "Text conversation",
@@ -40,7 +40,21 @@ async function textThread(from: string, to: string, leadId: string | null, custo
     unread_count: 1,
     last_message_at: receivedAt,
     metadata: { channel: "sms" },
-  }, { onConflict: "provider,provider_thread_id" }).select("id").single();
+    security_disposition: "normal",
+  } as const;
+  const existing = await supabase.from("communication_threads")
+    .select("id")
+    .eq("provider", "twilio")
+    .eq("provider_thread_id", providerThreadId)
+    .eq("security_disposition", "normal")
+    .maybeSingle();
+  if (existing.error) return null;
+  const result = existing.data
+    ? await supabase.from("communication_threads").update(values)
+      .eq("id", existing.data.id)
+      .eq("security_disposition", "normal")
+      .select("id").single()
+    : await supabase.from("communication_threads").insert(values).select("id").single();
   return result.data?.id ?? null;
 }
 
@@ -70,6 +84,7 @@ export async function POST(request: Request) {
       lead_id: leadId, thread_id: threadId, department: "sales", is_read: false,
       opt_out_type: optOutType, received_at: receivedAt,
       metadata: { num_media: String(form.get("NumMedia") ?? "0"), customer_id: customerId },
+      security_disposition: "normal",
     }, { onConflict: "provider,provider_message_id,direction", ignoreDuplicates: true }).select("id").maybeSingle();
     if (message.error) return xml(500);
     if (!message.data) return xml();
@@ -98,14 +113,14 @@ export async function POST(request: Request) {
       status: "open",
       unread_count: 1,
       last_message_at: receivedAt,
-    }).eq("id", threadId);
+    }).eq("id", threadId).eq("security_disposition", "normal");
     return xml();
   }
 
   if (messageStatus) {
     const status = ["delivered", "sent", "undelivered", "failed"].includes(messageStatus) ? messageStatus : "sent";
     await Promise.all([
-      supabase.from("communication_messages").update({ status, metadata: { error_code: form.get("ErrorCode") ?? null } }).eq("provider", "twilio").eq("provider_message_id", providerMessageId).eq("direction", "outbound"),
+      supabase.from("communication_messages").update({ status, metadata: { error_code: form.get("ErrorCode") ?? null } }).eq("provider", "twilio").eq("provider_message_id", providerMessageId).eq("direction", "outbound").eq("security_disposition", "normal"),
       supabase.from("communication_outbox").update({
         metadata: { delivery_status: messageStatus, error_code: form.get("ErrorCode") ?? null },
         ...(status === "failed" || status === "undelivered" ? { last_error_code: String(form.get("ErrorCode") ?? "delivery_failed"), last_error_message: "Twilio reported that the message was not delivered." } : {}),

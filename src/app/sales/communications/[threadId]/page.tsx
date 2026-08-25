@@ -42,12 +42,12 @@ function sentAttachments(value: unknown): SentAttachment[] {
 export default async function CommunicationThreadPage({ params }: ThreadPageProps) {
   const { threadId } = await params;
   const supabase = createAdminServerClient();
-  const threadResult = await supabase.from("communication_threads").select("id,provider,subject,department,status,lead_id,customer_id,assigned_to_id,participant_addresses,unread_count,last_message_at").eq("id", threadId).maybeSingle();
+  const threadResult = await supabase.from("communication_threads").select("id,provider,subject,department,status,lead_id,customer_id,assigned_to_id,participant_addresses,unread_count,last_message_at").eq("id", threadId).eq("security_disposition", "normal").maybeSingle();
 
   if (threadResult.error || !threadResult.data) notFound();
 
   const [messagesResult, leadResult, customerResult, teamResult, mailboxResult, matchLeadsResult, matchCustomersResult, suppliersResult] = await Promise.all([
-    supabase.from("communication_messages").select("id,direction,sender,recipient,subject,body,status,provider,metadata,is_read,has_attachments,received_at,sent_at,created_at").eq("thread_id", threadId).order("created_at", { ascending: false }),
+    supabase.from("communication_messages").select("id,direction,sender,recipient,subject,body,status,provider,metadata,is_read,has_attachments,received_at,sent_at,created_at").eq("thread_id", threadId).eq("security_disposition", "normal").order("created_at", { ascending: false }),
     threadResult.data.lead_id
       ? supabase.from("leads").select("id,name,email,phone,project_type").eq("id", threadResult.data.lead_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
