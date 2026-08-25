@@ -2,6 +2,7 @@ import { deriveGeometryWarningsV4, type GeometryWarningV4 } from "./geometryWarn
 import { deriveConceptualBeamProjection } from "./beamProjection";
 import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
+import { derivePolygonMembers, type ProjectedMember } from "./polygonProjection";
 import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
 
 export type GeometryWarningV5 = GeometryWarningV4;
@@ -51,6 +52,29 @@ function interruptedJoistIds(design: DeckDesignV5, platformId: string, holeIndex
       : horizontalRegionIntervalsAt(holeRegion, sample);
     return crossings.length ? `joist-${index + 1}` : null;
   }).filter((id): id is string => id !== null));
+}
+
+function adjacentJoistClearance(design: DeckDesignV5, platformId: string, holeIndex: number): Readonly<{ ids: readonly string[]; clearance: number }> {
+  const platform = design.platforms.find((candidate) => candidate.id === platformId)!;
+  const interrupted = new Set(interruptedJoistIds(design, platformId, holeIndex));
+  const joists = derivePolygonMembers(platform.region, {
+    boardWidth: platform.construction.decking.boardWidth,
+    gap: platform.construction.decking.gap,
+    boardDirection: platform.construction.decking.direction,
+    joistSpacing: platform.construction.framing.joistSpacing,
+  }).joists;
+  const byPath = new Map<string, ProjectedMember[]>();
+  joists.forEach((member) => {
+    const id = member.id.match(/^joist-\d+/)?.[0];
+    if (!id) return;
+    byPath.set(id, [...(byPath.get(id) ?? []), member]);
+  });
+  const hole = platform.region.holes[holeIndex];
+  const close = [...byPath.entries()].filter(([id, members]) => !interrupted.has(id) && beamToHoleDistance(members, hole) < 12 - EPSILON);
+  return Object.freeze({
+    ids: Object.freeze(close.map(([id]) => id)),
+    clearance: close.length ? Math.min(...close.map(([, members]) => beamToHoleDistance(members, hole))) : Number.POSITIVE_INFINITY,
+  });
 }
 
 export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: string): readonly GeometryWarningV5[] {
@@ -121,6 +145,17 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
       severity: "clearance",
       geometryIds: Object.freeze([`${platform.id}:hole-${holeIndex + 1}`, ...joistIds]),
       message: `Cutout ${holeIndex + 1} interrupts ${joistIds.length} conceptual joist path${joistIds.length === 1 ? "" : "s"}; header and trimmer framing is not designed and requires qualified review.`,
+    }));
+  });
+  platform.region.holes.forEach((_, holeIndex) => {
+    const adjacent = adjacentJoistClearance(normalized, platformId, holeIndex);
+    if (!adjacent.ids.length) return;
+    const measured = Math.round(adjacent.clearance * 10) / 10;
+    warnings.push(Object.freeze({
+      id: `joist-cutout-clearance-${holeIndex + 1}`,
+      severity: "clearance",
+      geometryIds: Object.freeze([`${platform.id}:hole-${holeIndex + 1}`, ...adjacent.ids]),
+      message: `Cutout ${holeIndex + 1} is ${measured} inches from ${adjacent.ids.length} adjacent conceptual joist path${adjacent.ids.length === 1 ? "" : "s"}; verify the intended framing clearance.`,
     }));
   });
   return Object.freeze(warnings.sort((left, right) => left.id.localeCompare(right.id)));

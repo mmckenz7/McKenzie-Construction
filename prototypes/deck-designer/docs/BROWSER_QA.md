@@ -367,3 +367,9 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Confirmed layout review reports the measured non-blocking proximity note and displays the explicit prototype-only twelve-inch threshold disclaimer.
 - Confirmed **Show in plan** closes the review, selects the first exact referenced beam, and leaves the authoritative design unchanged.
 - Reloaded to restore the saved local design; browser console reported no warnings or errors.
+## 2026-08-24 — adjacent conceptual joist-to-cutout review
+
+- Added a centered rectangular cutout through the desktop controls and opened layout review.
+- Confirmed interrupted joists and adjacent uninterrupted joists remain separate notes; the adjacent note reported two paths at a six-inch nearest clearance.
+- Confirmed the prototype-only twelve-inch disclaimer remains visible and **Show in plan** resolves the exact cutout without authoring joist objects.
+- Reloaded to restore the saved local design; browser console reported no warnings or errors.

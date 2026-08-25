@@ -28,6 +28,11 @@ describe("DeckDesign v5 explainable framing warnings", () => {
       geometryIds: ["platform-1:hole-1", "joist-6", "joist-7", "joist-8"],
       message: "Cutout 1 interrupts 3 conceptual joist paths; header and trimmer framing is not designed and requires qualified review.",
     }));
+    expect(warnings).toContainEqual(expect.objectContaining({
+      id: "joist-cutout-clearance-1",
+      geometryIds: ["platform-1:hole-1", "joist-5", "joist-9"],
+      message: "Cutout 1 is 8 inches from 2 adjacent conceptual joist paths; verify the intended framing clearance.",
+    }));
   });
 
   it("surfaces framing interruptions as field verification without claiming a design", () => {
@@ -38,7 +43,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     ]] } }] });
     const review = deriveLayoutReviewV5(design, platform.id);
     expect(review.readyToContinue).toBe(true);
-    expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 2 clearance notes" }));
+    expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 3 clearance notes" }));
     expect(review.fieldVerification).toContain("Cutout 1 interrupts 3 conceptual joist paths; header and trimmer framing is not designed and requires qualified review.");
   });
 
