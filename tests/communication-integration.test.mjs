@@ -91,7 +91,7 @@ test("Mission Control replies are server validated, sandboxed, threaded, and aud
   assert.match(replyRoute, /communication_test_recipients/);
   assert.match(replyRoute, /"In-Reply-To": inReplyTo/);
   assert.match(replyRoute, /References: inReplyTo/);
-  assert.match(replyRoute, /source_type: "inbox_reply"/);
+  assert.match(replyRoute, /source_type: replyingToExistingThread \? "inbox_reply" : "inbox_compose"/);
   assert.match(replyRoute, /thread_id: threadId/);
   assert.match(replyRoute, /lead_activities/);
   assert.match(provider, /headers: message\.headers/);

@@ -278,7 +278,7 @@ export default async function CommunicationsPage({
   return <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6"><div className="mx-auto max-w-7xl">
     <div className="flex flex-wrap items-end justify-between gap-5">
       <div><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-slate-500">Mission Control</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Company Inbox</h1><p className="mt-2 max-w-2xl text-sm text-slate-600">Email and text conversations from across the company in one place. Lead, customer, and project cards show filtered views of this history.</p></div>
-      <Link href="/admin/settings/communications" className="min-h-10 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400">Integration settings</Link>
+      <div className="flex flex-wrap gap-2"><Link href="/communications/new" className="min-h-10 rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">New email</Link><Link href="/admin/settings/communications" className="min-h-10 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400">Integration settings</Link></div>
     </div>
 
     <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

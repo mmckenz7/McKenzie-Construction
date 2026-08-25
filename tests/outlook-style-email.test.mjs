@@ -40,3 +40,20 @@ test("sandbox checking covers To, Cc, and Bcc", () => {
   assert.match(route, /\[recipient, \.\.\.ccRecipients, \.\.\.bccRecipients\]/);
   assert.match(route, /blockedRecipient/);
 });
+
+test("the company inbox can compose an unassigned email without inventing CRM ownership", () => {
+  const inbox = readFileSync("src/app/sales/communications/page.tsx", "utf8");
+  const composePage = readFileSync("src/app/communications/new/page.tsx", "utf8");
+  const composer = readFileSync("src/components/communication-reply-composer.tsx", "utf8");
+  const route = readFileSync("src/app/api/communications/replies/route.ts", "utf8");
+
+  assert.match(inbox, /href="\/communications\/new"/);
+  assert.match(composePage, /editableRecipient/);
+  assert.match(composePage, /without creating or assigning a lead, customer, or project/);
+  assert.match(composer, /form\.set\("recipient", effectiveRecipient\)/);
+  assert.match(composer, /Send email/);
+  assert.match(route, /created_from: leadId \? "lead_record" : customerId \? "customer_record" : "company_inbox"/);
+  assert.match(route, /const outboundSubject = replyingToExistingThread \? replySubject\(canonicalSubject\) : subject/);
+  assert.match(route, /"company-inbox-compose"/);
+  assert.doesNotMatch(composePage, /leadId=|customerId=|projectId=/);
+});

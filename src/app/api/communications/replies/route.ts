@@ -13,6 +13,7 @@ type ReplyRequest = {
   customerId?: unknown;
   subject?: unknown;
   body?: unknown;
+  recipient?: unknown;
   ccRecipients?: unknown;
   bccRecipients?: unknown;
 };
@@ -57,6 +58,7 @@ async function parseReplyRequest(request: Request): Promise<ParsedReply> {
       customerId: form.get("customerId"),
       subject: form.get("subject"),
       body: form.get("body"),
+      recipient: form.get("recipient"),
       ccRecipients: form.get("ccRecipients"),
       bccRecipients: form.get("bccRecipients"),
       attachments: form.getAll("attachments").filter((value): value is File => value instanceof File),
@@ -69,10 +71,10 @@ async function parseReplyRequest(request: Request): Promise<ParsedReply> {
 export async function POST(request: Request) {
   const workspace = await getWorkspaceAccess();
   if (!workspace.user) {
-    return Response.json({ success: false, error: "Sign in to send a reply." }, { status: 401 });
+    return Response.json({ success: false, error: "Sign in to send email." }, { status: 401 });
   }
   if (!canAccessWorkspace(workspace.access, "sales")) {
-    return Response.json({ success: false, error: "Sales access is required to send a reply." }, { status: 403 });
+    return Response.json({ success: false, error: "Sales access is required to send email." }, { status: 403 });
   }
 
   let payload: ParsedReply;
@@ -82,18 +84,19 @@ export async function POST(request: Request) {
     if (error instanceof RangeError) {
       return Response.json({ success: false, error: error.message }, { status: 413 });
     }
-    return Response.json({ success: false, error: "Enter a valid reply." }, { status: 400 });
+    return Response.json({ success: false, error: "Enter a valid email." }, { status: 400 });
   }
 
   const requestedThreadId = text(payload.threadId);
   const requestedLeadId = text(payload.leadId);
   const requestedCustomerId = text(payload.customerId);
+  const requestedRecipient = text(payload.recipient);
   const subject = text(payload.subject);
   const body = text(payload.body);
   const attachmentError = outboundAttachmentError(payload.attachments);
 
-  if (!requestedThreadId && !requestedLeadId && !requestedCustomerId) {
-    return Response.json({ success: false, error: "Choose an email conversation or customer before sending." }, { status: 400 });
+  if (!requestedThreadId && !requestedLeadId && !requestedCustomerId && !requestedRecipient) {
+    return Response.json({ success: false, error: "Choose a conversation or enter a recipient before sending." }, { status: 400 });
   }
   if (!subject || subject.length > 300) {
     return Response.json({ success: false, error: "Enter a subject no longer than 300 characters." }, { status: 400 });
@@ -142,7 +145,7 @@ export async function POST(request: Request) {
     customerId = threadResult.data.customer_id ?? customerId;
     department = threadResult.data.department;
     canonicalSubject = threadResult.data.subject?.trim() || subject;
-  } else {
+  } else if (leadId || customerId) {
     let existingThreadQuery = supabase.from("communication_threads").select("id,subject,department,lead_id,customer_id").neq("provider", "twilio").neq("status", "archived").order("last_message_at", { ascending: false }).limit(1);
     existingThreadQuery = leadId ? existingThreadQuery.eq("lead_id", leadId) : existingThreadQuery.eq("customer_id", customerId!);
     const existingThread = await existingThreadQuery.maybeSingle();
@@ -172,6 +175,7 @@ export async function POST(request: Request) {
     recipient = customerResult.data?.email?.trim() ?? "";
     leadId = leadId ?? customerResult.data?.source_lead_id ?? null;
   }
+  if (!recipient && !threadId && !leadId && !customerId) recipient = requestedRecipient;
   if (!validEmail(recipient)) {
     return Response.json({ success: false, error: "This conversation does not have a valid email recipient." }, { status: 400 });
   }
@@ -189,6 +193,7 @@ export async function POST(request: Request) {
   }
 
   const sentAt = new Date().toISOString();
+  const replyingToExistingThread = Boolean(threadId);
   if (!threadId) {
     const providerThreadId = randomUUID();
     const createdThread = await supabase.from("communication_threads").insert({
@@ -202,25 +207,27 @@ export async function POST(request: Request) {
       participant_addresses: [sender, recipient],
       unread_count: 0,
       last_message_at: sentAt,
-      metadata: { created_from: leadId ? "lead_record" : "customer_record" },
+      metadata: { created_from: leadId ? "lead_record" : customerId ? "customer_record" : "company_inbox" },
     }).select("id").single();
     if (createdThread.error || !createdThread.data) {
-      return Response.json({ success: false, error: "The customer conversation could not be created." }, { status: 500 });
+      return Response.json({ success: false, error: "The email conversation could not be created." }, { status: 500 });
     }
     threadId = createdThread.data.id;
   }
 
-  const outboxIdempotencyKey = `mission-control-reply:${randomUUID()}`;
+  const outboundSubject = replyingToExistingThread ? replySubject(canonicalSubject) : subject;
+
+  const outboxIdempotencyKey = `${replyingToExistingThread ? "mission-control-reply" : "company-inbox-compose"}:${randomUUID()}`;
   const outboxResult = await supabase.from("communication_outbox").insert({
     channel: "email",
     recipient,
     sender,
     cc_recipients: ccRecipients,
-    subject: replySubject(canonicalSubject),
+    subject: outboundSubject,
     body,
     status: "processing",
     provider: "resend",
-    source_type: "inbox_reply",
+    source_type: replyingToExistingThread ? "inbox_reply" : "inbox_compose",
     source_id: threadId,
     lead_id: leadId,
     idempotency_key: outboxIdempotencyKey,
@@ -237,7 +244,7 @@ export async function POST(request: Request) {
     },
   }).select("id").single();
   if (outboxResult.error || !outboxResult.data) {
-    return Response.json({ success: false, error: "The reply could not be added to the delivery outbox." }, { status: 500 });
+    return Response.json({ success: false, error: "The email could not be added to the delivery outbox." }, { status: 500 });
   }
 
   let delivery;
@@ -250,7 +257,7 @@ export async function POST(request: Request) {
       replyTo: settingsResult.data.company_email?.trim() || null,
       ccRecipients,
       bccRecipients,
-      subject: replySubject(canonicalSubject),
+      subject: outboundSubject,
       body,
       idempotencyKey: outboxIdempotencyKey,
       provider: "resend",
@@ -267,8 +274,8 @@ export async function POST(request: Request) {
       last_error_message: message,
     }).eq("id", outboxResult.data.id);
     const retryMessage = attachments.length || bccRecipients.length
-      ? "The reply was not sent. For privacy, Mission Control does not retain attachment contents or Bcc addresses for automatic retries; please try again."
-      : "The reply was queued for retry.";
+      ? "The email was not sent. For privacy, Mission Control does not retain attachment contents or Bcc addresses for automatic retries; please try again."
+      : "The email was queued for retry.";
     return Response.json({ success: false, error: `${retryMessage} ${message}` }, { status: 502 });
   }
 
@@ -296,7 +303,7 @@ export async function POST(request: Request) {
     direction: "outbound",
     sender,
     recipient,
-    subject: replySubject(canonicalSubject),
+    subject: outboundSubject,
     body,
     status: "sent",
     provider: "resend",
@@ -320,8 +327,8 @@ export async function POST(request: Request) {
       activity_type: "email_sent",
       channel: "email",
       direction: "outbound",
-      summary: "Email reply sent from Mission Control",
-      details: replySubject(canonicalSubject),
+      summary: replyingToExistingThread ? "Email reply sent from Mission Control" : "Email sent from Mission Control",
+      details: outboundSubject,
       external_id: delivery.providerMessageId,
       occurred_at: sentAt,
       metadata: { communication_thread_id: threadId, communication_outbox_id: outboxResult.data.id },
@@ -329,7 +336,7 @@ export async function POST(request: Request) {
   ]);
 
   if (finalOutbox.error || messageResult.error) {
-    return Response.json({ success: true, warning: "The provider sent the reply, but part of its local audit record needs review." });
+    return Response.json({ success: true, warning: "The provider sent the email, but part of its local audit record needs review." });
   }
   return Response.json({ success: true, threadId, sentAt });
 }
