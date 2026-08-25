@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 exact-field cancel and no-op regression
+
+- The shared exact-number field now treats Escape as a true cancellation: it restores the latest recorded value, suppresses the resulting blur commit, and moves focus out. Active text composition is not intercepted. Enter still completes through the existing single blur/commit path.
+- Desktop checks covered deck height, conceptual beam position, cutout width, selected deck-side length, stair width, and landing width. Every Escape restored the recorded display and left the revision unchanged. Enter changed joist spacing from 16 to 18 exactly once; entering the already-recorded 18 again added no revision.
+- At 390 × 844, canceling a stair-width draft restored 4 feet, moved focus out, retained no horizontal overflow, and produced no browser warning/error logs. Geometry commands, validation, history semantics, quantities, and saved facts are unchanged.
+
 ## 2026-08-25 photo-start modal keyboard regression
 
 - Opening **Start with photos** or **Review photos** moves focus to the labelled Close action. The dialog exposes its title and local-photo authority statement through `aria-labelledby` and `aria-describedby`.
