@@ -1,6 +1,6 @@
 import { deriveDeckDesignProjectionV3 } from "./designProjectionV3";
 import { normalizeDeckDesignV3, type DeckDesignV3 } from "./modelV3";
-import { deriveGeometryWarningsV3 } from "./geometryWarningsV3";
+import { deriveGeometryWarningsV3, type GeometryWarningV3 } from "./geometryWarningsV3";
 
 export type LayoutReviewStatusV3 = "confirmed" | "field_verify" | "finish_required";
 
@@ -24,6 +24,11 @@ const squareFeet = (squareInches: number): string => `${(Math.round(squareInches
 
 export function deriveLayoutReviewV3(design: DeckDesignV3, platformId: string): LayoutReviewV3 {
   const normalized = normalizeDeckDesignV3(design);
+  return deriveLayoutReviewFromWarningsV3(normalized, platformId, deriveGeometryWarningsV3(normalized, platformId));
+}
+
+export function deriveLayoutReviewFromWarningsV3(design: DeckDesignV3, platformId: string, geometryWarnings: readonly GeometryWarningV3[]): LayoutReviewV3 {
+  const normalized = normalizeDeckDesignV3(design);
   const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
   if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
   const projected = deriveDeckDesignProjectionV3(normalized).platforms.find((candidate) => candidate.platformId === platformId)!;
@@ -32,7 +37,6 @@ export function deriveLayoutReviewV3(design: DeckDesignV3, platformId: string): 
   const unfinishedSystems = platform.construction.stairSystems.filter((system) => !system.locked);
   const unfinishedLandings = platform.construction.stairSystems.flatMap((system) => system.landings.filter((landing) => !landing.locked));
   const unfinishedConnections = platform.construction.stairSystems.flatMap((system) => system.landings.flatMap((landing) => landing.connections.filter((connection) => !connection.locked)));
-  const geometryWarnings = deriveGeometryWarningsV3(normalized, platformId);
   const collisions = geometryWarnings.filter((warning) => warning.severity === "collision");
   const clearances = geometryWarnings.filter((warning) => warning.severity === "clearance");
   const hasUnfinishedStairs = unfinishedSystems.length + unfinishedLandings.length + unfinishedConnections.length > 0;
@@ -54,7 +58,7 @@ export function deriveLayoutReviewV3(design: DeckDesignV3, platformId: string): 
     Object.freeze({ id: "house", label: "House connection", value: !house ? "Not recorded" : house.attachment === "unknown" ? "Side recorded · attachment needs field review" : `${house.attachment} intent recorded`, status: (!house || house.attachment === "unknown" ? "field_verify" : "confirmed") as LayoutReviewStatusV3 }),
     Object.freeze({ id: "stairs", label: "Stairs and landings", value: stairCount ? `${stairCount} stair system${stairCount === 1 ? "" : "s"} · ${landingCount} landing${landingCount === 1 ? "" : "s"}` : "No stairs added", status: hasUnfinishedStairs ? "finish_required" as const : "confirmed" as const }),
     Object.freeze({ id: "cutouts", label: "Cutouts", value: `${measurements.holeCount} recorded`, status: "confirmed" as const }),
-    Object.freeze({ id: "geometry", label: "Geometry conflicts", value: geometryWarnings.length ? `${collisions.length} collision${collisions.length === 1 ? "" : "s"} · ${clearances.length} clearance note${clearances.length === 1 ? "" : "s"}` : "None detected", status: collisions.length ? "finish_required" as const : clearances.length ? "field_verify" as const : "confirmed" as const }),
+    Object.freeze({ id: "geometry", label: "Geometry and framing", value: geometryWarnings.length ? `${collisions.length} collision${collisions.length === 1 ? "" : "s"} · ${clearances.length} clearance note${clearances.length === 1 ? "" : "s"}` : "None detected", status: collisions.length ? "finish_required" as const : clearances.length ? "field_verify" as const : "confirmed" as const }),
   ]);
   return Object.freeze({ platformId, readyToContinue: blockers.length === 0, items, blockers: Object.freeze(blockers), fieldVerification: Object.freeze(fieldVerification) });
 }

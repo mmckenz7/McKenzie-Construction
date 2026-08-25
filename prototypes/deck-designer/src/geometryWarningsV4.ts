@@ -12,7 +12,7 @@ export function deriveGeometryWarningsV4(design: DeckDesignV4, platformId: strin
     .filter((warning) => !warning.id.startsWith("beam-cutout-interruption-"));
   const horizontal = platform.construction.decking.direction === "left_right";
   const outside = Math.max(...platform.region.outer.map((point) => horizontal ? point.z : point.x));
-  platform.construction.framing.beamLines.forEach((line) => {
+  platform.construction.framing.beamLines.forEach((line, lineIndex) => {
     const coordinate = outside - line.offsetFromOutside;
     platform.region.holes.forEach((hole, holeIndex) => {
       const holeRegion = { outer: hole, holes: [] };
@@ -21,7 +21,7 @@ export function deriveGeometryWarningsV4(design: DeckDesignV4, platformId: strin
         id: `beam-cutout-interruption-${line.id}-${holeIndex + 1}`,
         severity: "clearance",
         geometryIds: Object.freeze([line.id, `${platform.id}:hole-${holeIndex + 1}`]),
-        message: `Conceptual beam ${line.id} crosses cutout ${holeIndex + 1} and is split into separate spans; verify the intended framing route.`,
+        message: `Conceptual beam ${lineIndex + 1} crosses cutout ${holeIndex + 1} and is split into separate spans; verify the intended framing route.`,
       }));
     });
   });

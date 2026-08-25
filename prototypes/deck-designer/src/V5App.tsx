@@ -16,7 +16,7 @@ import type { ConfirmedPhotoFacts, PhotoIntakeReview } from "./photoIntake";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { V3NumberField } from "./V3NumberField";
-import { deriveLayoutReviewV3 } from "./layoutReviewV3";
+import { deriveLayoutReviewV5 } from "./layoutReviewV5";
 import { addBeamLineV5, removeBeamLineV5, updateBeamLineV5 } from "./framingEditorV5";
 import { setEdgeFinishIntentV5 } from "./finishEditorV5";
 
@@ -54,7 +54,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const geometry = useMemo(() => derivePlatformGeometryV5(design, platform.id), [design, platform.id]);
   const houseGeometry = useMemo(() => deriveHouseContextGeometry(design.siteContext), [design.siteContext]);
   const projection = useMemo(() => deriveDeckDesignProjectionV5(design), [design]);
-  const layoutReview = useMemo(() => deriveLayoutReviewV3(compatibilityDesign, platform.id), [compatibilityDesign, platform.id]);
+  const layoutReview = useMemo(() => deriveLayoutReviewV5(design, platform.id), [design, platform.id]);
   const [message, setMessage] = useState(initialMessage);
   const [snapIncrement, setSnapIncrement] = useState(6);
   const [keepCornersSquare, setKeepCornersSquare] = useState(true);

@@ -1,0 +1,43 @@
+import { describe, expect, it } from "vitest";
+import { DEFAULT_DESIGN } from "../src/model";
+import { deriveGeometryWarningsV5 } from "../src/geometryWarningsV5";
+import { deriveLayoutReviewV5 } from "../src/layoutReviewV5";
+import { migrateDeckDesignToV5, normalizeDeckDesignV5 } from "../src/modelV5";
+
+describe("DeckDesign v5 explainable framing warnings", () => {
+  it("keeps the clean rectangle free of framing conflicts", () => {
+    const design = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    expect(deriveGeometryWarningsV5(design, "platform-1")).toEqual([]);
+  });
+
+  it("identifies exact interrupted beam and joist paths for a cutout", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, region: { ...platform.region, holes: [[
+      { x: 72, z: 96 }, { x: 120, z: 96 }, { x: 120, z: 132 }, { x: 72, z: 132 },
+    ]] } }] });
+    const warnings = deriveGeometryWarningsV5(design, platform.id);
+    expect(deriveGeometryWarningsV5(design, platform.id)).toEqual(warnings);
+    expect(warnings).toContainEqual(expect.objectContaining({
+      id: "beam-cutout-interruption-beam-line-1-1",
+      geometryIds: ["beam-line-1", "platform-1:hole-1"],
+    }));
+    expect(warnings).toContainEqual(expect.objectContaining({
+      id: "joist-cutout-interruption-1",
+      geometryIds: ["platform-1:hole-1", "joist-6", "joist-7", "joist-8"],
+      message: "Cutout 1 interrupts 3 conceptual joist paths; header and trimmer framing is not designed and requires qualified review.",
+    }));
+  });
+
+  it("surfaces framing interruptions as field verification without claiming a design", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, region: { ...platform.region, holes: [[
+      { x: 72, z: 96 }, { x: 120, z: 96 }, { x: 120, z: 132 }, { x: 72, z: 132 },
+    ]] } }] });
+    const review = deriveLayoutReviewV5(design, platform.id);
+    expect(review.readyToContinue).toBe(true);
+    expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 2 clearance notes" }));
+    expect(review.fieldVerification).toContain("Cutout 1 interrupts 3 conceptual joist paths; header and trimmer framing is not designed and requires qualified review.");
+  });
+});

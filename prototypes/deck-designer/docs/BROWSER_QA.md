@@ -335,3 +335,10 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - At 390 × 844, stage navigation, exact-side selection, finish actions, recorded height, and quantity summary remained visible and touch-sized without page-level clutter.
 - Reload restored the previously saved v5 design without retaining unsaved QA finish choices. Browser logs contained no warnings or errors.
 - Fascia and skirting remain separate conceptual facts and quantities. The prototype does not infer products, waste, labor, price, structural adequacy, ventilation, access, or code compliance.
+## 2026-08-24 v5 cutout/framing review check
+
+- Added one unsaved three-foot rectangular cutout and opened the layout review. The Geometry and framing item showed one field-review note identifying two interrupted conceptual joist paths.
+- Moved Beam 1 through the same cutout. The review deterministically increased to two notes and separately named the beam interruption and joist interruption.
+- The warning language explicitly states that header and trimmer framing is not designed and needs qualified review; it does not choose members, spans, connections, or structural solutions.
+- Existing unfinished stair geometry remained the only blocker. Framing interruption notes did not falsely prevent the conceptual workflow from continuing.
+- Reload removed the unsaved QA cutout/beam changes and restored the prior local v5 design. Browser logs contained only the Vite connection and React development notices, with no warnings or errors.
