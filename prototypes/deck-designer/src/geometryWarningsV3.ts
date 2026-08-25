@@ -2,6 +2,8 @@ import { deriveGeometricPolygonEdges, polygonContainsPoint, type PolygonPoint } 
 import { normalizeDeckDesignV3, type DeckDesignV3 } from "./modelV3";
 import { deriveStairRouteGeometryV3 } from "./stairRouteGeometryV3";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
+import { effectiveBeamInsetV3 } from "./framingEditorV3";
+import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
 
 export type GeometryWarningV3 = Readonly<{
   id: string;
@@ -77,6 +79,19 @@ export function deriveGeometryWarningsV3(design: DeckDesignV3, platformId: strin
   }));
   const house = deriveHouseContextGeometry(normalized.siteContext);
   const warnings: GeometryWarningV3[] = [];
+  const horizontalBeam = platform.construction.decking.direction === "left_right";
+  const axisMaximum = Math.max(...platform.region.outer.map((point) => horizontalBeam ? point.z : point.x));
+  const beamCoordinate = axisMaximum - effectiveBeamInsetV3(platform);
+  platform.region.holes.forEach((hole, holeIndex) => {
+    const holeRegion = { outer: hole, holes: [] };
+    const crossingIntervals = horizontalBeam ? horizontalRegionIntervalsAt(holeRegion, beamCoordinate) : verticalRegionIntervalsAt(holeRegion, beamCoordinate);
+    if (crossingIntervals.length > 0) warnings.push(Object.freeze({
+      id: `beam-cutout-interruption-${holeIndex + 1}`,
+      severity: "clearance" as const,
+      geometryIds: Object.freeze([`beam`, `${platform.id}:hole-${holeIndex + 1}`]),
+      message: `Conceptual beam crosses cutout ${holeIndex + 1} and is split into separate spans; verify the intended framing route.`,
+    }));
+  });
   routes.forEach((route, routeIndex) => {
     const footprints = [...route.treads.map((tread) => ({ id: tread.id, center: { x: tread.x, z: tread.z }, corners: tread.corners })), ...route.landings.map((landing) => ({ id: landing.id, center: landing.center, corners: landing.corners }))];
     const entersDeck = footprints.some((part) => [part.center, ...part.corners, ...part.corners.map((point, index) => ({ x: (point.x + part.corners[(index + 1) % part.corners.length].x) / 2, z: (point.z + part.corners[(index + 1) % part.corners.length].z) / 2 }))].some((point) => polygonContainsPoint(platform.region.outer, point) && !platform.region.holes.some((hole) => polygonContainsPoint(hole, point))));

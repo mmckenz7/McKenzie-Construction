@@ -30,6 +30,15 @@ describe("deterministic single-level geometry warnings", () => {
     expect(deriveGeometryWarningsV3(design, platform.id)).toEqual([expect.objectContaining({ id: "cutout-edge-clearance-1", severity: "clearance", message: expect.stringContaining("6 inches") })]);
   });
 
+  it("reports when a recorded cutout interrupts the conceptual beam route", () => {
+    const migrated = migrateDeckDesignToV3(DEFAULT_DESIGN);
+    const platform = migrated.platforms[0];
+    const design = normalizeDeckDesignV3({ ...migrated, platforms: [{ ...platform, region: { ...platform.region, holes: [[{ x: 72, z: 96 }, { x: 120, z: 96 }, { x: 120, z: 132 }, { x: 72, z: 132 }]] } }] });
+    const warnings = deriveGeometryWarningsV3(design, platform.id);
+    expect(warnings).toContainEqual(expect.objectContaining({ id: "beam-cutout-interruption-1", severity: "clearance", geometryIds: ["beam", "platform-1:hole-1"] }));
+    expect(deriveGeometryWarningsV3(design, platform.id)).toEqual(warnings);
+  });
+
   it("blocks a turned stair route that comes back through an L-shaped deck", () => {
     const migrated = migrateDeckDesignToV3({ ...DEFAULT_DESIGN, platform: { ...DEFAULT_DESIGN.platform, kind: "l-shape", width: 240, projection: 180, cutoutWidth: 72, cutoutDepth: 60 } });
     const platform = migrated.platforms[0];

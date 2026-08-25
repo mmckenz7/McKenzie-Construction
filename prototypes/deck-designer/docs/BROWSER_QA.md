@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-24 beam/cutout review note
+
+- A centered 3-by-3-foot cutout and a beam 6 feet from the outside edge produced two deterministic beam spans totaling 17 feet.
+- **Review deck layout** reported one non-blocking clearance note: the conceptual beam crosses cutout 1, is split into separate spans, and needs framing-route verification.
+- The warning is derived from the recorded polygon, cutout, direction, and beam inset. It does not invent a structural solution or prevent further outline correction.
+
 ## 2026-08-24 conceptual support spacing
 
 - The layout sidebar exposes **Max conceptual post spacing (feet)** as a separate recorded framing fact with an explicit visualization-only warning.
