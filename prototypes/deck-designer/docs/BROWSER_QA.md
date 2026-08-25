@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-25 conceptual joist/recorded-wall review regression
+
+- Loaded the active one-level v5 editor locally at the default desktop viewport; the measured plan, shared 3D renderer, conceptual framing controls, and clean layout review rendered normally with exactly one canvas.
+- Opened **Review deck layout** and confirmed the clean edge-aligned house context remained ready for railings with no false geometry warning.
+- Repeated the open review at 390 × 844. **Close** and **Lock layout & continue** remained available and the page retained exactly one 3D canvas.
+- Browser warning/error logs were empty. Pure v5 tests cover both board/joist directions, strict elevation overlap, exact endpoint/boundary/vertical-contact exclusion, opening-only passage, clipped-segment/path deduplication, deterministic wall ordering/replay, v5 normalization, and non-blocking classification.
+
 ## 2026-08-25 conceptual beam/recorded-wall review regression
 
 - Loaded the active one-level v5 editor locally at the default desktop viewport; the measured plan, shared 3D renderer, conceptual beam controls, and clean layout review all rendered normally with one canvas.

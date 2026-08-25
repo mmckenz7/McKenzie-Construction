@@ -21,6 +21,14 @@ export type ProjectedMember = Readonly<{
   end: PolygonPoint;
 }>;
 
+export const CONCEPTUAL_JOIST_CENTER_OFFSET = 5;
+export const CONCEPTUAL_JOIST_HEIGHT = 7.25;
+
+export function conceptualJoistVerticalRange(platformElevation: number): Readonly<{ base: number; top: number }> {
+  const center = platformElevation - CONCEPTUAL_JOIST_CENTER_OFFSET;
+  return Object.freeze({ base: center - CONCEPTUAL_JOIST_HEIGHT / 2, top: center + CONCEPTUAL_JOIST_HEIGHT / 2 });
+}
+
 export type PolygonMemberProjection = Readonly<{
   surfaceBoards: readonly ProjectedMember[];
   joists: readonly ProjectedMember[];

@@ -22,6 +22,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     [
       "beam-cutout-interruption-beam-line-1-1",
       "joist-cutout-interruption-1",
+      "joist-house-plan-review-platform-1-house-wall-2",
       "beam-house-plan-review-beam-line-1-house-wall-2",
       "platform-house-plan-review-platform-1-house-wall-2",
       "stair-route-collision-stair-system-1-stair-system-2",
@@ -169,7 +170,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     expect(usesPrototypeReviewThresholdV5(warning)).toBe(false);
     const review = deriveLayoutReviewV5(design, "platform-1");
     expect(review.readyToContinue).toBe(true);
-    expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 1 clearance note" }));
+    expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 2 clearance notes" }));
   });
 
   it("reports an exact beam-route and wall-context crossing without blocking layout", () => {
@@ -185,7 +186,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     expect(usesPrototypeReviewThresholdV5(warning)).toBe(false);
     const review = deriveLayoutReviewV5(design, "platform-1");
     expect(review.readyToContinue).toBe(true);
-    expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 1 clearance note" }));
+    expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 2 clearance notes" }));
   });
 
   it("excludes vertical separation, exact vertical contact, endpoint contact, and opening-only passage", () => {
@@ -217,6 +218,61 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     expect(warnings).toEqual([
       expect.objectContaining({ id: "beam-house-plan-review-beam-line-1-house-wall-a", geometryIds: ["beam-line-1", "beam-line-1-segment-1", "house-wall-a"] }),
       expect.objectContaining({ id: "beam-house-plan-review-beam-line-1-house-wall-z", geometryIds: ["beam-line-1", "beam-line-1-segment-1", "beam-line-1-segment-2", "house-wall-z"] }),
+    ]);
+    expect(deriveGeometryWarningsV5(design, platform.id)).toEqual(deriveGeometryWarningsV5(design, platform.id));
+  });
+
+  it("reports exact transient joist paths crossing recorded wall context in both joist directions", () => {
+    const horizontalWall = { id: "house-wall-horizontal", start: { x: -12, z: 72 }, end: { x: 204, z: 72 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] };
+    const leftRightBoards = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: [horizontalWall] } });
+    const horizontalWarning = deriveGeometryWarningsV5(leftRightBoards, "platform-1").find((warning) => warning.id === "joist-house-plan-review-platform-1-house-wall-horizontal")!;
+    expect(horizontalWarning.severity).toBe("clearance");
+    expect(horizontalWarning.geometryIds).toEqual(["platform-1", ...Array.from({ length: 13 }, (_, index) => `joist-${index + 1}`), "house-wall-horizontal"]);
+    expect(horizontalWarning.message).toContain("13 conceptual joist paths");
+    expect(usesPrototypeReviewThresholdV5(horizontalWarning)).toBe(false);
+    expect(deriveLayoutReviewV5(leftRightBoards, "platform-1").readyToContinue).toBe(true);
+
+    const platform = leftRightBoards.platforms[0];
+    const verticalWall = { id: "house-wall-vertical", start: { x: 96, z: -12 }, end: { x: 96, z: 156 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] };
+    const houseYardBoards = normalizeDeckDesignV5({
+      ...leftRightBoards,
+      siteContext: { ...leftRightBoards.siteContext, houseWalls: [verticalWall] },
+      platforms: [{ ...platform, construction: { ...platform.construction, decking: { ...platform.construction.decking, direction: "house_yard" as const } } }],
+    });
+    const verticalWarning = deriveGeometryWarningsV5(houseYardBoards, platform.id).find((warning) => warning.id === "joist-house-plan-review-platform-1-house-wall-vertical")!;
+    expect(verticalWarning.geometryIds[0]).toBe("platform-1");
+    expect(verticalWarning.geometryIds.at(-1)).toBe("house-wall-vertical");
+    expect(verticalWarning.geometryIds.length).toBeGreaterThan(3);
+  });
+
+  it("excludes joist/wall vertical separation, exact contact, endpoint contact, and opening-only passage", () => {
+    const walls = [
+      { id: "house-wall-above-joists", start: { x: 48, z: 24 }, end: { x: 48, z: 120 }, baseElevation: 46.63, height: 48, attachment: "unknown" as const, openings: [] },
+      { id: "house-wall-below-joists", start: { x: 72, z: 24 }, end: { x: 72, z: 120 }, baseElevation: -48, height: 87.37, attachment: "unknown" as const, openings: [] },
+      { id: "house-wall-joist-endpoint", start: { x: 36, z: 144 }, end: { x: 156, z: 144 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] },
+      {
+        id: "house-wall-joist-opening", start: { x: 84, z: 72 }, end: { x: 108, z: 72 }, baseElevation: 0, height: 48, attachment: "unknown" as const,
+        openings: [{ id: "opening-across-wall", kind: "door" as const, offset: 0, width: 24, sillHeight: 0, height: 48 }],
+      },
+    ];
+    const design = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: walls } });
+    expect(deriveGeometryWarningsV5(design, "platform-1").filter((warning) => warning.id.startsWith("joist-house-plan-review-"))).toEqual([]);
+  });
+
+  it("deduplicates split joist segments per path and preserves authored-wall warning order and replay", () => {
+    const walls = [
+      { id: "house-wall-z-joist", start: { x: 96, z: 12 }, end: { x: 96, z: 132 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] },
+      { id: "house-wall-a-joist", start: { x: 32, z: 48 }, end: { x: 64, z: 48 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] },
+    ];
+    const base = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: walls } });
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, region: { ...platform.region, holes: [[
+      { x: 84, z: 60 }, { x: 108, z: 60 }, { x: 108, z: 84 }, { x: 84, z: 84 },
+    ]] } }] });
+    const warnings = deriveGeometryWarningsV5(design, platform.id).filter((warning) => warning.id.startsWith("joist-house-plan-review-"));
+    expect(warnings).toEqual([
+      expect.objectContaining({ id: "joist-house-plan-review-platform-1-house-wall-a-joist", geometryIds: ["platform-1", "joist-4", "house-wall-a-joist"] }),
+      expect.objectContaining({ id: "joist-house-plan-review-platform-1-house-wall-z-joist", geometryIds: ["platform-1", "joist-7", "house-wall-z-joist"] }),
     ]);
     expect(deriveGeometryWarningsV5(design, platform.id)).toEqual(deriveGeometryWarningsV5(design, platform.id));
   });

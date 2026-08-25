@@ -3,7 +3,7 @@ import { conceptualBeamVerticalRange, deriveConceptualBeamProjection } from "./b
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
-import { derivePolygonMembers, type ProjectedMember } from "./polygonProjection";
+import { conceptualJoistVerticalRange, derivePolygonMembers, type ProjectedMember } from "./polygonProjection";
 import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
 import { deriveStairRouteGeometryV3 } from "./stairRouteGeometryV3";
 
@@ -159,6 +159,30 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     });
   });
   const house = deriveHouseContextGeometry(normalized.siteContext);
+  const projectedJoists = derivePolygonMembers(platform.region, {
+    boardWidth: platform.construction.decking.boardWidth,
+    gap: platform.construction.decking.gap,
+    boardDirection: platform.construction.decking.direction,
+    joistSpacing: platform.construction.framing.joistSpacing,
+  }).joists;
+  const joistVerticalRange = conceptualJoistVerticalRange(platform.elevation);
+  normalized.siteContext.houseWalls.forEach((wall) => {
+    const panels = house.houseWallPanels.filter((panel) => panel.wallId === wall.id &&
+      panel.baseElevation < joistVerticalRange.top - EPSILON &&
+      panel.baseElevation + panel.height > joistVerticalRange.base + EPSILON);
+    const crossedPathIds = [...new Set(projectedJoists
+      .filter((joist) => panels.some((panel) => segmentsCrossBeyondEndpointContact(joist.start, joist.end, panel.start, panel.end)))
+      .map((joist) => joist.id.match(/^joist-\d+/)?.[0])
+      .filter((id): id is string => Boolean(id)))]
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+    if (!crossedPathIds.length) return;
+    warnings.push(Object.freeze({
+      id: `joist-house-plan-review-${platform.id}-${wall.id}`,
+      severity: "clearance",
+      geometryIds: Object.freeze([platform.id, ...crossedPathIds, wall.id]),
+      message: `${crossedPathIds.length} conceptual joist ${crossedPathIds.length === 1 ? "path passes" : "paths pass"} through recorded house-wall context (${wall.id}) where their displayed vertical ranges overlap; field-verify the intended framing and wall layout.`,
+    }));
+  });
   const beamVerticalRange = conceptualBeamVerticalRange(platform.elevation);
   platform.construction.framing.beamLines.forEach((line) => {
     const beams = deriveConceptualBeamProjection({
