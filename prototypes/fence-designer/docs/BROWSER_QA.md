@@ -67,6 +67,19 @@ Validated workflow:
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.
 
-## Pending takeoff visual QA
+## Takeoff visual QA — 2026-08-25
 
-The Black Aluminum Materials panel has deterministic calculation and TypeScript coverage. A local browser visual-QA attempt on August 25, 2026 could not navigate back to the restarted local preview because the browser security policy blocked the local URL from its error page. No visual pass is claimed for the new panel. Required next checks are desktop and mobile layout, live recalculation after fence/gate edits, gate-opening grouping, natural-run-post versus added-end-post presentation, and console cleanliness.
+59. Built a two-span, one-corner layout and confirmed the Black Aluminum panel showed 46′ 4″ of fence, seven panels, two end posts, one corner post, and five run posts.
+60. Enabled **Show takeoff on plan** and confirmed seven labeled panel spans plus eight post markers matched the panel and post totals. Full and cut panels and end/corner/run posts used distinct labels, colors, and legend entries.
+61. Confirmed the screen-reader status announced the same panel/post counts and individual SVG markers exposed descriptive image labels.
+62. Converted the 28′ 2″ span to a single gate and confirmed the takeoff recalculated live to 18′ 2″ of fence, three panels, one single gate, two hinges, one latch, and no center drop pole. The grouped 28′ 2″ gate opening appeared without a reload.
+63. Hid and restored the plan takeoff and confirmed the overlay was removed/restored while the `FenceDesign` revision remained 4 in both states.
+64. Tested the open Materials panel and takeoff overlay at 390 × 844. Summary cards and three takeoff sections stacked to one column, the plan remained 359 px wide, all buttons remained at least 44 px high, the legend wrapped, and the document had no horizontal overflow.
+65. Checked browser console warnings and errors after desktop rendering, live gate recalculation, takeoff toggling, and mobile resizing: none.
+66. Expanded **Review panel and post decisions** and confirmed two straight runs were listed as `8′ 0″ full + 8′ 0″ full + 8′ 0″ full + 4′ 2″ cut` and `8′ 0″ full + 8′ 0″ full + 2′ 2″ cut`, matching the `R1` and `R2` plan markers.
+67. Confirmed the post audit grouped two open ends, one corner, and five standard panel boundaries, while each plan post exposed its type and calculation reason to assistive technology.
+68. Added one divider at a feasible natural boundary and confirmed **Run post shared with divider** appeared. Added a second divider at a non-natural boundary and confirmed **Added end post at divider** appeared without changing the perimeter panel arrangement.
+69. Tested the expanded audit at 390 × 844. The two decision sections stacked to one column inside a 313 px card, the disclosure control stayed 44 px high, the plan remained available below it, the document had no horizontal overflow, and browser console warnings/errors remained empty.
+70. Confirmed **Copy takeoff** is disabled for an empty layout, becomes enabled after measured spans exist, invokes the browser clipboard, and presents a success notice that reiterates the no-products/no-pricing boundary.
+71. The browser harness's inspection clipboard is isolated from the page clipboard and returned no page-written payload, so no browser-level payload-read claim is made. An exact deterministic unit test verifies the full copied report string, including totals, panel layout, post decisions, gate/hardware sections, and the preliminary boundary.
+72. Tested **Copy takeoff** at 390 × 844. It rendered as a 196 × 44 px control in the stacked Materials heading, the document remained horizontally contained, and browser console warnings/errors remained empty.

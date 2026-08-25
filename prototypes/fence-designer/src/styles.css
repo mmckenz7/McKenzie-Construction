@@ -79,6 +79,25 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .takeoff-columns dd { margin: 0; color: #173f31; font-weight: 850; }
 .takeoff-empty { margin: 0; color: #78827d; font-size: .82rem; }
 .takeoff-warning { margin-top: 12px; padding: 10px 12px; border-left: 4px solid #d7822d; border-radius: 8px; background: #fff4e7; color: #7c4a18; font-size: .82rem; }
+.takeoff-heading-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.takeoff-audit { margin-top: 14px; border: 1px solid #cbd6ce; border-radius: 10px; background: #f8faf7; }
+.takeoff-audit summary { min-height: 44px; display: flex; align-items: center; padding: 10px 14px; color: #234a3a; font-weight: 850; cursor: pointer; }
+.takeoff-audit summary::before { content: "＋"; width: 24px; color: #9a5b1e; }
+.takeoff-audit[open] summary::before { content: "−"; }
+.takeoff-audit-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 14px; padding: 0 14px 12px; }
+.takeoff-audit-grid section { padding: 12px 14px; border: 1px solid #d9e0da; border-radius: 9px; background: #fff; }
+.takeoff-audit-grid h3 { margin: 0 0 9px; color: #344a3e; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+.takeoff-audit-grid ol { display: grid; gap: 8px; margin: 0; padding-left: 22px; }
+.takeoff-audit-grid li { padding-left: 3px; }
+.takeoff-audit-grid li strong, .takeoff-audit-grid li span { display: block; }
+.takeoff-audit-grid li strong { color: #173f31; font-size: .8rem; }
+.takeoff-audit-grid li span { margin-top: 2px; color: #5f6e66; font-size: .78rem; line-height: 1.35; }
+.takeoff-audit-grid dl { display: grid; gap: 7px; margin: 0; }
+.takeoff-audit-grid dl > div { display: flex; justify-content: space-between; gap: 12px; }
+.takeoff-audit-grid dt { color: #58685f; font-size: .8rem; }
+.takeoff-audit-grid dd { margin: 0; color: #173f31; font-weight: 850; }
+.takeoff-audit > p { margin: 0; padding: 0 14px 14px; color: #6a7770; font-size: .76rem; line-height: 1.4; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 310px; }
 .canvas-shell { min-height: 560px; position: relative; overflow: hidden; background: #f7f7f2; }
 .plan-canvas { display: block; width: 100%; height: 100%; min-height: 560px; touch-action: none; overscroll-behavior: contain; user-select: none; }
@@ -98,6 +117,11 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .key-dot.attached { border-color: #39725b; background: #dceee5; }
 .key-line { width: 18px; border-top: 4px dashed #cc6e24; }
 .key-line.preview { border-color: #e4922d; }
+.key-post { display: inline-grid; place-items: center; width: 15px; height: 15px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 2px #2a6350; background: #e9f4ee; }
+.key-post.end { box-shadow: 0 0 0 2px #a9581b; background: #fff0dc; }
+.key-post.corner { box-shadow: 0 0 0 2px #344b6b; background: #e9eef7; }
+.key-panel { width: 18px; border-top: 4px solid #27936d; }
+.key-panel.cut { border-color: #d47721; border-top-style: dashed; }
 .segment { cursor: pointer; }
 .segment-hit { stroke: transparent; stroke-width: 720; }
 .segment-line { stroke: #173f31; stroke-width: 170; stroke-linecap: round; }
@@ -109,6 +133,18 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .dimension-leader { stroke: #87958d; stroke-dasharray: 80 55; pointer-events: none; }
 .gate .dimension rect { fill: #fff5e8; stroke: #d78334; }
 .gate .dimension text { fill: #9d4b17; }
+.takeoff-panel > line { stroke: #2d9872; stroke-linecap: butt; stroke-dasharray: 220 90; }
+.takeoff-panel.cut > line { stroke: #d47721; stroke-dasharray: 150 95; }
+.takeoff-panel-label rect { fill: rgb(238 249 243 / .96); stroke: #2d9872; }
+.takeoff-panel-label text { fill: #17553f; font-weight: 900; }
+.takeoff-panel.cut .takeoff-panel-label rect { fill: rgb(255 244 230 / .97); stroke: #d47721; }
+.takeoff-panel.cut .takeoff-panel-label text { fill: #91470f; }
+.takeoff-post circle { fill: #e9f4ee; stroke: #2a6350; }
+.takeoff-post text { fill: #174a38; font-weight: 950; }
+.takeoff-post.end circle { fill: #fff0dc; stroke: #a9581b; }
+.takeoff-post.end text { fill: #8c4612; }
+.takeoff-post.corner circle { fill: #e9eef7; stroke: #344b6b; }
+.takeoff-post.corner text { fill: #263e60; }
 .run-preview > line { stroke: #e4922d; stroke-width: 145; stroke-linecap: round; stroke-dasharray: 360 230; }
 .run-preview > circle { fill: #fff7ea; stroke: #e4922d; stroke-width: 90; }
 .reference-image { filter: saturate(.85) contrast(.96); }
@@ -160,7 +196,8 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
   .field-panels { padding: 9px; }
   .field-panel { padding: 13px; }
   .field-panel-heading { align-items: flex-start; }
-  .field-actions, .property-lookup, .walk-length-editor, .reference-adjustments, .reference-capture-actions, .calibration-editor, .takeoff-summary, .takeoff-columns { display: grid; grid-template-columns: 1fr; }
+  .takeoff-heading-actions { align-items: stretch; flex-direction: column; width: 100%; }
+  .field-actions, .property-lookup, .walk-length-editor, .reference-adjustments, .reference-capture-actions, .calibration-editor, .takeoff-summary, .takeoff-columns, .takeoff-audit-grid { display: grid; grid-template-columns: 1fr; }
   .field-actions button, .property-lookup button, .walk-length-editor button, .reference-actions button { width: 100%; }
   .reference-links { display: grid; grid-template-columns: 1fr; }
   .reference-upload { align-items: stretch; flex-direction: column; }

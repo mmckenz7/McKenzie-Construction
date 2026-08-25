@@ -12,7 +12,7 @@ import { formatGpsAccuracy, gpsOriginAt, projectGpsFix, readCurrentGps, type Gps
 import { propertyReferenceLinks, type PropertyReferenceLinks } from "./property-reference";
 import { captureReferenceDisplay, rasterizeReferenceBlob, readReferenceImageFromClipboard, referenceImageErrorMessage, type RasterizedReferenceImage } from "./reference-image";
 import { loadLocalDesign, loadLocalReference, saveLocalDesign, saveLocalReference } from "./storage";
-import { calculateBlackAluminumTakeoff } from "./takeoff";
+import { calculateBlackAluminumTakeoff, formatBlackAluminumTakeoffText, takeoffPostReasonLabel, type TakeoffPostReason } from "./takeoff";
 import { panView, placeDimensionLabels, zoomViewAt, type ViewBox } from "./view";
 
 type Selection = Readonly<{ type: "point" | "segment"; id: string } | { type: "house" }> | null;
@@ -78,6 +78,7 @@ export default function App() {
   const [walkInches, setWalkInches] = useState("0");
   const [propertyPanelOpen, setPropertyPanelOpen] = useState(false);
   const [takeoffPanelOpen, setTakeoffPanelOpen] = useState(false);
+  const [takeoffViewEnabled, setTakeoffViewEnabled] = useState(false);
   const [kgisAddress, setKgisAddress] = useState("");
   const [referenceBackground, setReferenceBackground] = useState<ReferenceBackground | null>(null);
   const [referenceBusy, setReferenceBusy] = useState<"capture" | "paste" | "upload" | null>(null);
@@ -101,6 +102,16 @@ export default function App() {
   const houseSelected = selection?.type === "house";
   const totals = useMemo(() => ({ all: totalLengthMm(design), gate: design.segments.filter(({ kind }) => kind === "gate").reduce((sum, item) => sum + segmentLengthMm(design, item), 0) }), [design]);
   const blackAluminumTakeoff = useMemo(() => calculateBlackAluminumTakeoff(design), [design]);
+  const takeoffPanelRuns = useMemo(() => {
+    const runs = new Map<number, typeof blackAluminumTakeoff.layout.panels>();
+    blackAluminumTakeoff.layout.panels.forEach((panel) => runs.set(panel.runIndex, Object.freeze([...(runs.get(panel.runIndex) ?? []), panel])));
+    return [...runs.entries()].sort(([first], [second]) => first - second);
+  }, [blackAluminumTakeoff]);
+  const takeoffPostDecisions = useMemo(() => {
+    const counts = new Map<TakeoffPostReason, number>();
+    blackAluminumTakeoff.layout.posts.forEach(({ reason }) => counts.set(reason, (counts.get(reason) ?? 0) + 1));
+    return [...counts.entries()];
+  }, [blackAluminumTakeoff]);
   const activePath = design.points.length ? fencePathForPoint(design, design.points.at(-1)!.id) : null;
   const liveRunLengthMm = mode === "draw" && previewPoint && design.points.at(-1)
     ? Math.round(Math.hypot(previewPoint.xMm - design.points.at(-1)!.xMm, previewPoint.yMm - design.points.at(-1)!.yMm))
@@ -509,6 +520,13 @@ export default function App() {
       setHistory(createHistory(loaded)); setReferenceBackground(loadedReference); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setNotice(loadedReference ? "Saved fence layout and reference image loaded. Start Site Walk at the last point to align a new GPS session." : "Saved local layout loaded. Start Site Walk at the last point to align a new GPS session.");
     } catch (error) { setNotice(error instanceof Error ? `Saved layout was not opened: ${error.message}` : "Saved layout was not opened."); }
   };
+  const copyTakeoff = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new RangeError("This browser cannot copy the takeoff. Select and copy the audit details manually.");
+      await navigator.clipboard.writeText(formatBlackAluminumTakeoffText(blackAluminumTakeoff));
+      setNotice("Preliminary Black Aluminum takeoff copied. It contains measurements and counts only—no pricing or products.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "The takeoff could not be copied."); }
+  };
 
   return <main className="fence-designer">
     <header className="app-header">
@@ -584,7 +602,7 @@ export default function App() {
         <small>Reference imagery and GIS lines are not a boundary survey. Google stays a separate viewer. Captured images never leave this browser, are compressed for local use, and are saved with Save local so the design can be reopened on this same device. They are never included in fence totals.</small>
       </div>}
       {takeoffPanelOpen && <div className="field-panel takeoff-panel">
-        <div className="field-panel-heading"><div><p className="eyebrow">Material takeoff V0</p><h2>Black Aluminum</h2></div><span className="reference-chip">No pricing</span></div>
+        <div className="field-panel-heading"><div><p className="eyebrow">Material takeoff V0</p><h2>Black Aluminum</h2></div><div className="takeoff-heading-actions"><span className="reference-chip">No pricing</span><button disabled={design.segments.length === 0} onClick={() => void copyTakeoff()}>Copy takeoff</button><button aria-pressed={takeoffViewEnabled} className={takeoffViewEnabled ? "active-tool" : ""} onClick={() => { setTakeoffViewEnabled((current) => !current); setNotice(takeoffViewEnabled ? "Takeoff markers hidden." : "Takeoff markers show each panel and post decision on the plan."); }}>{takeoffViewEnabled ? "Hide plan takeoff" : "Show takeoff on plan"}</button></div></div>
         <p>Calculated directly from the measured fence and gate runs using 8-foot panels.</p>
         <div className="takeoff-summary">
           <article><span>Fence footage</span><strong>{formatFeetInches(blackAluminumTakeoff.fenceLengthMm)}</strong></article>
@@ -597,6 +615,14 @@ export default function App() {
           <section><h3>Gate hardware</h3><dl><div><dt>Hinges</dt><dd>{blackAluminumTakeoff.hinges}</dd></div><div><dt>Latches</dt><dd>{blackAluminumTakeoff.latches}</dd></div><div><dt>Center drop poles</dt><dd>{blackAluminumTakeoff.centerDropPoles}</dd></div></dl></section>
           <section><h3>Gate openings</h3>{blackAluminumTakeoff.gateOpenings.length ? <dl>{blackAluminumTakeoff.gateOpenings.map((gate) => <div key={`${gate.gateType}-${gate.widthMm}`}><dt>{gate.gateType === "double" ? "Double" : "Single"} · {formatFeetInches(gate.widthMm)}</dt><dd>{gate.count}</dd></div>)}</dl> : <p className="takeoff-empty">No gates marked.</p>}</section>
         </div>
+        <details className="takeoff-audit">
+          <summary>Review panel and post decisions</summary>
+          <div className="takeoff-audit-grid">
+            <section><h3>Panel layout</h3>{takeoffPanelRuns.length ? <ol>{takeoffPanelRuns.map(([runIndex, panels]) => <li key={runIndex}><strong>Run {runIndex + 1}</strong><span>{panels.map((panel) => `${formatFeetInches(panel.lengthMm)}${panel.cut ? " cut" : " full"}`).join(" + ")}</span></li>)}</ol> : <p className="takeoff-empty">Draw a fence run to calculate panels.</p>}</section>
+            <section><h3>Why each post is counted</h3>{takeoffPostDecisions.length ? <dl>{takeoffPostDecisions.map(([reason, count]) => <div key={reason}><dt>{takeoffPostReasonLabel(reason)}</dt><dd>{count}</dd></div>)}</dl> : <p className="takeoff-empty">No posts calculated.</p>}</section>
+          </div>
+          <p>Run numbers match the R labels on the plan. “Cut” means the installed span is shorter than one 8-foot panel; leftover material is not reused elsewhere.</p>
+        </details>
         {blackAluminumTakeoff.warnings.map((warning) => <div className="takeoff-warning" role="status" key={warning}>{warning}</div>)}
         <small>Rules used: panels round up separately for each uninterrupted straight fence run; cutoffs are not reused. A divider shares a run post when it meets a natural panel boundary measured from either end. Otherwise it receives another end post without changing the perimeter panel layout. Every non-corner side of a gate uses an end post. A corner post serves as the gate post when a gate begins directly at that corner. Double gates have no center post. This takeoff is derived only and is not saved into the measurement geometry.</small>
       </div>}
@@ -604,7 +630,8 @@ export default function App() {
 
     <section className="workspace">
       <div className="canvas-shell">
-        <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot attached" /> Connected endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line preview" /> Live run</span><span><i className="key-line gate" /> Gate intent</span></div>
+        <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot attached" /> Connected endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line preview" /> Live run</span><span><i className="key-line gate" /> Gate intent</span>{takeoffViewEnabled && <><span><i className="key-post end" /> End post</span><span><i className="key-post corner" /> Corner post</span><span><i className="key-post line" /> Run post</span><span><i className="key-panel cut" /> Cut panel</span></>}</div>
+        {takeoffViewEnabled && <div className="sr-only" role="status" aria-live="polite">Black Aluminum takeoff view. {blackAluminumTakeoff.layout.panels.length} panel spans, {blackAluminumTakeoff.endPosts} end posts, {blackAluminumTakeoff.cornerPosts} corner posts, and {blackAluminumTakeoff.linePosts} run posts shown.</div>}
         {liveRunLengthMm !== null && liveRunLengthMm > 0 && <div className="live-measurement" role="status" aria-live="polite"><span>Current run</span><strong>{formatFeetInches(liveRunLengthMm)}</strong><small>{snapEnabled ? "45°/90° assist" : "Free angle"} · click to place</small></div>}
         <svg ref={svgRef} className={`plan-canvas ${mode}${isNavigating ? " navigating" : ""}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={startNavigation} onPointerMove={moveCanvasPointer} onPointerLeave={() => { if (!drag && !isNavigating) setPreviewPoint(null); }} onPointerUp={endNavigation} onPointerCancel={endNavigation} aria-label="Fence drawing plan">
           <defs><pattern id="grid" width={GRID_MM} height={GRID_MM} patternUnits="userSpaceOnUse"><path d={`M ${GRID_MM} 0 L 0 0 0 ${GRID_MM}`} fill="none" stroke="#d8ddd7" strokeWidth="18" /></pattern></defs>
@@ -633,6 +660,27 @@ export default function App() {
               {layers.dimensions && <g className="dimension"><line className="dimension-leader" x1={midX} y1={midY} x2={dimensionPosition.xMm} y2={dimensionPosition.yMm} style={{ strokeWidth: 26 * dimensionScale }} /><g transform={`translate(${dimensionPosition.xMm} ${dimensionPosition.yMm})`}><rect x={-dimensionWidth / 2} y={-260 * dimensionScale} width={dimensionWidth} height={520 * dimensionScale} rx={180 * dimensionScale} style={{ strokeWidth: 28 * dimensionScale }} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: (segment.kind === "gate" ? 270 : 310) * dimensionScale }}>{dimensionText}</text></g></g>}
             </g>;
           })}
+          {takeoffViewEnabled && <g className="takeoff-plan" pointerEvents="none" aria-label="Black Aluminum takeoff markers">
+            {blackAluminumTakeoff.layout.panels.map((panel) => {
+              const midX = (panel.start.xMm + panel.end.xMm) / 2; const midY = (panel.start.yMm + panel.end.yMm) / 2;
+              const dx = panel.end.xMm - panel.start.xMm; const dy = panel.end.yMm - panel.start.yMm; const magnitude = Math.max(1, Math.hypot(dx, dy));
+              const side = panel.panelIndex % 2 === 0 ? 1 : -1; const offset = 390 * dimensionScale * side;
+              const labelX = midX - dy / magnitude * offset; const labelY = midY + dx / magnitude * offset;
+              const label = `R${panel.runIndex + 1}·${panel.cut ? "CUT" : `P${panel.panelIndex + 1}`} · ${formatFeetInches(panel.lengthMm)}`;
+              const labelWidth = Math.max(1_250, label.length * 165) * dimensionScale;
+              return <g key={panel.id} className={`takeoff-panel${panel.cut ? " cut" : ""}`} role="img" aria-label={`${panel.cut ? "Cut" : "Full"} panel ${panel.panelIndex + 1}, ${formatFeetInches(panel.lengthMm)}`}>
+                <title>{`${panel.cut ? "Cut panel" : `Panel ${panel.panelIndex + 1}`} · ${formatFeetInches(panel.lengthMm)}`}</title>
+                <line x1={panel.start.xMm} y1={panel.start.yMm} x2={panel.end.xMm} y2={panel.end.yMm} style={{ strokeWidth: 74 * dimensionScale }} />
+                <g className="takeoff-panel-label" transform={`translate(${labelX} ${labelY})`}><rect x={-labelWidth / 2} y={-210 * dimensionScale} width={labelWidth} height={420 * dimensionScale} rx={130 * dimensionScale} style={{ strokeWidth: 24 * dimensionScale }} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: 230 * dimensionScale }}>{label}</text></g>
+              </g>;
+            })}
+            {blackAluminumTakeoff.layout.posts.map((post) => {
+              const postName = post.kind === "end" ? "End post" : post.kind === "corner" ? "Corner post" : "Run post"; const postReason = takeoffPostReasonLabel(post.reason);
+              return <g key={post.id} className={`takeoff-post ${post.kind}`} transform={`translate(${post.xMm} ${post.yMm})`} role="img" aria-label={`${postName}, ${postReason}`}>
+                <title>{`${postName} · ${postReason}`}</title><circle r={285 * dimensionScale} style={{ strokeWidth: 66 * dimensionScale }} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: 245 * dimensionScale }}>{post.kind === "end" ? "E" : post.kind === "corner" ? "C" : "R"}</text>
+              </g>;
+            })}
+          </g>}
           {mode === "draw" && previewPoint && design.points.at(-1) && (() => {
             const start = design.points.at(-1)!;
             const length = Math.round(Math.hypot(previewPoint.xMm - start.xMm, previewPoint.yMm - start.yMm));
