@@ -36,7 +36,7 @@ const EMPTY_CONTEXT_PLATFORMS: readonly PlatformView[] = Object.freeze([]);
 
 export function disposeSceneResources(root: THREE.Object3D): Readonly<{ geometries: number; materials: number }> {
   const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>();
-  root.traverse((object) => {
+  root.traverse((object: THREE.Object3D) => {
     if (!(object instanceof THREE.Mesh)) return;
     const mesh = object as THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
     geometries.add(mesh.geometry);
