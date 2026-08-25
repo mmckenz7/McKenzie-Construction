@@ -4,7 +4,7 @@ import { deriveStairRouteGeometryV3 } from "./stairRouteGeometryV3";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { effectiveBeamInsetV3 } from "./framingEditorV3";
 import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
-import { triangulatePolygon } from "./polygonProjection";
+import { triangulatePolygon, type PolygonTriangle } from "./polygonProjection";
 
 export type GeometryWarningV3 = Readonly<{
   id: string;
@@ -94,16 +94,32 @@ function convexIntersectionArea(subject: readonly PolygonPoint[], clip: readonly
   return output.length >= 3 ? Math.abs(signedPolygonArea(output)) : 0;
 }
 
-export function positiveRegionOverlapArea(footprint: readonly PolygonPoint[], outer: readonly PolygonPoint[], holes: readonly (readonly PolygonPoint[])[]): number {
+function normalizedPositiveFootprint(footprint: readonly PolygonPoint[]): readonly PolygonPoint[] {
   if (footprint.length < 3 || footprint.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.z))) {
     throw new RangeError("A route footprint requires at least three finite points.");
   }
   const footprintArea = signedPolygonArea(footprint);
   if (Math.abs(footprintArea) <= EPSILON) throw new RangeError("A route footprint must enclose positive area without intersecting itself.");
-  const normalizedFootprint = footprintArea > 0 ? footprint : [...footprint].reverse();
-  const outerArea = triangulatePolygon(outer).reduce((sum, triangle) => sum + convexIntersectionArea(normalizedFootprint, triangle.points), 0);
-  const holeArea = holes.flatMap((hole) => triangulatePolygon(hole)).reduce((sum, triangle) => sum + convexIntersectionArea(normalizedFootprint, triangle.points), 0);
+  return footprintArea > 0 ? footprint : [...footprint].reverse();
+}
+
+function positiveTriangulatedRegionOverlapArea(
+  footprint: readonly PolygonPoint[],
+  outerTriangles: readonly PolygonTriangle[],
+  holeTriangles: readonly PolygonTriangle[],
+): number {
+  const normalizedFootprint = normalizedPositiveFootprint(footprint);
+  const outerArea = outerTriangles.reduce((sum, triangle) => sum + convexIntersectionArea(normalizedFootprint, triangle.points), 0);
+  const holeArea = holeTriangles.reduce((sum, triangle) => sum + convexIntersectionArea(normalizedFootprint, triangle.points), 0);
   return Math.max(0, outerArea - holeArea);
+}
+
+export function positiveRegionOverlapArea(footprint: readonly PolygonPoint[], outer: readonly PolygonPoint[], holes: readonly (readonly PolygonPoint[])[]): number {
+  return positiveTriangulatedRegionOverlapArea(
+    footprint,
+    triangulatePolygon(outer),
+    holes.flatMap((hole) => triangulatePolygon(hole)),
+  );
 }
 
 export function deriveGeometryWarningsV3(design: DeckDesignV3, platformId: string): readonly GeometryWarningV3[] {
@@ -122,6 +138,8 @@ export function deriveGeometryWarningsV3(design: DeckDesignV3, platformId: strin
   }));
   const house = deriveHouseContextGeometry(normalized.siteContext);
   const warnings: GeometryWarningV3[] = [];
+  const platformOuterTriangles = routes.length > 0 ? triangulatePolygon(platform.region.outer) : [];
+  const platformHoleTriangles = routes.length > 0 ? platform.region.holes.flatMap((hole) => triangulatePolygon(hole)) : [];
   const horizontalBeam = platform.construction.decking.direction === "left_right";
   const axisMaximum = Math.max(...platform.region.outer.map((point) => horizontalBeam ? point.z : point.x));
   const beamCoordinate = axisMaximum - effectiveBeamInsetV3(platform);
@@ -137,7 +155,7 @@ export function deriveGeometryWarningsV3(design: DeckDesignV3, platformId: strin
   });
   routes.forEach((route, routeIndex) => {
     const footprints = [...route.treads.map((tread) => ({ id: tread.id, center: { x: tread.x, z: tread.z }, corners: tread.corners })), ...route.landings.map((landing) => ({ id: landing.id, center: landing.center, corners: landing.corners }))];
-    const entersDeck = footprints.some((part) => positiveRegionOverlapArea(part.corners, platform.region.outer, platform.region.holes) > EPSILON);
+    const entersDeck = footprints.some((part) => positiveTriangulatedRegionOverlapArea(part.corners, platformOuterTriangles, platformHoleTriangles) > EPSILON);
     if (entersDeck) warnings.push(Object.freeze({
       id: `stair-route-deck-collision-${route.systemId}`,
       severity: "collision" as const,
