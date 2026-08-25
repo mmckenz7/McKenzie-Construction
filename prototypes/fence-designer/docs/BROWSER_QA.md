@@ -42,5 +42,8 @@ Validated workflow:
 34. Started the first divider 5′ back from the perimeter corner and confirmed its exact projected coordinate attached partway along the existing run rather than jumping to the last corner.
 35. Ended both dividers on the opposite perimeter run, confirmed all four divider endpoints displayed as connected, and confirmed the combined total increased from 183′ 10″ to 249′ 8″ without altering a perimeter span.
 36. Confirmed six spans, three fence lines, deterministic independent-line geometry, and zero browser console errors.
+37. Opened **Site walk** in the browser, visually reviewed the panel, and verified the responsive mobile rules stack its mark, separate-line, correction, and finish controls into full-width touch targets.
+38. Confirmed Site Walk does not request location when the panel opens, requests a fresh position only from the explicit mark action, and presents a useful browser permission/availability failure without changing the design.
+39. Confirmed **KGIS** opens a separate reference panel, validates an address locally, and builds an official KGIS aerial/address link without importing GIS geometry into the plan or totals.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

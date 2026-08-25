@@ -2,7 +2,7 @@
 
 ## Scope
 
-This isolated browser prototype turns explicitly drawn perimeter and divider fence lines into deterministic plan-view measurements. It supports an optional exact-length-and-width house footprint, multiple independent ordered lines, midpoint connections to existing runs, locked-length movement or free point movement, point deletion, exact segment-length edits, measured single/double gate openings, undo/redo, angle assistance on/off, and local browser save/load. It does not create estimates, quantities, products, labor, prices, customers, or cloud records.
+This isolated browser prototype turns explicitly drawn or field-marked perimeter and divider fence lines into deterministic plan-view measurements. It supports an optional exact-length-and-width house footprint, multiple independent ordered lines, midpoint connections to existing runs, tap-to-mark Site Walk GPS shape capture, immediate exact field-length correction, locked-length movement or free point movement, point deletion, measured single/double gate openings, undo/redo, angle assistance on/off, and local browser save/load. It does not create estimates, quantities, products, labor, prices, customers, or cloud records.
 
 Everything under `prototypes/fence-designer/` is prototype-owned. Source cannot import outside this directory, access Supabase, read environment variables, or use browser network primitives. No migration or shared domain model is introduced.
 
@@ -31,6 +31,18 @@ Length lock is also UI editing state. When enabled, dragging a line's first poin
 **Separate line** adds an isolated start point and makes that new line the active Draw continuation. Draw otherwise continues from the most recently added endpoint. A start or end placed within tolerance of another run projects to the nearest point on that segment, allowing a divider to connect any measured distance back from a corner without splitting, shortening, or moving the perimeter. Coincident endpoints remain separate graph points so every line can be edited independently; totals sum every segment exactly once. If both endpoints of a multi-run divider are connected, exact-length edits re-solve only that divider and keep both connections plus all other run lengths fixed.
 
 Interaction state is cancelable with Escape. A non-passive canvas wheel handler prevents plan zoom from scrolling the surrounding OS page. Dedicated Pan mode remains available, while Command-drag temporarily pans from any tool and two simultaneous touch pointers pan/pinch without placing a drawing point.
+
+## Site Walk boundary
+
+Site Walk requests browser geolocation only after a user taps a mark button. Each request asks for a fresh high-accuracy fix with a 20-second timeout. The first fix defines an in-memory latitude/longitude origin mapped to a local integer-millimeter plan point. Later fixes use a deterministic local tangent-plane projection: longitude produces east/west X and latitude produces north/south Y. The absolute origin and raw fixes remain transient UI state and are excluded from the schema, JSON, local storage, and notices.
+
+The phone-reported accuracy radius is displayed. GPS supplies approximate shape only. A last-run editor puts the tape, wheel, or laser value into the exact-length solver so field measurement overrides GPS distance. Optional angle assistance may rotate an unconnected GPS run to 45°/90°. House and existing-run connections take priority within a capped tolerance derived from reported accuracy. **Separate line next** starts a disconnected Site Walk path; later endpoints can attach geometrically to existing runs.
+
+## KGIS boundary
+
+The official KGIS viewer supports address parameters and publishes Knox County parcel, address, building-footprint, and aerial context. This slice builds only an encoded link to `https://www.kgis.org/kgismaps/Map.htm` and opens it after an explicit user action. McKenzie OS sends no background request and imports no KGIS geometry or attributes. Parcel and building lines are labeled reference-only and cannot affect the measured house, fence geometry, or totals.
+
+Direct geometry import is intentionally deferred. The documented ArcGIS service returned HTTP 401 during an external compatibility check, so adding a client fetch, credential workaround, or unreviewed server proxy would break this prototype's isolation and access boundary. A future adapter needs KGIS-approved access, licensing/attribution review, server-side reliability controls, and explicit conversion from Tennessee State Plane (WKID 2915). Parcel lines must remain non-survey context and building dimensions must be field-confirmed.
 
 **Close to house** requires the path's first point to be anchored to a house edge and at least two measured runs. The user taps the intended second house connection, which is projected to the nearest footprint edge. A deterministic forward/backward reaching solver keeps the first and last connections fixed, preserves the measured length of every fence and gate run within two millimeters of integer-coordinate rounding, and distributes correction across every available interior angle. Reachability is checked before solving; impossible geometry is reported without changing the design. After closure, changing any exact run length re-solves the whole anchored chain while preserving both house connections and every other measured run.
 

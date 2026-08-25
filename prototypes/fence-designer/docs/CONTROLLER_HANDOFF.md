@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws independently editable perimeter and divider lines around an optional exact measured house footprint. Draw continues from the last point by default, while **Separate line** starts a secondary fence anywhere and snaps its endpoints partway along existing runs without forcing a corner connection. Free angles remain the default; house and fence-run connections stay authoritative. **Close to house** redistributes correction across odd-angle corners while preserving measured fence/gate runs. The combined total includes every line exactly once. The prototype also supports locked-length line-local dragging or free point editing, optional 45°/90° assistance, exact-width single/double gates, contained wheel zoom plus dedicated/two-finger/Command-drag panning, undo/redo, and validated local JSON.
+Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws independently editable perimeter and divider lines around an optional exact measured house footprint. **Site walk** now converts explicit tap-to-mark phone GPS fixes into a private local plan, supports a separate-line-next field action, reports phone accuracy, and lets the user immediately replace the latest GPS distance with an authoritative tape/wheel/laser length. Raw latitude/longitude never enters the design or storage. **KGIS** now provides a safe official address-to-aerial/property reference launch while keeping building and parcel context outside measured geometry. Existing Draw, closure, gate, navigation, history, and local-save workflows remain intact.
 
 ## Files and ownership
 
@@ -10,6 +10,8 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 - `src/history.ts`: whole-document undo/redo snapshots.
 - `src/storage.ts`: explicit browser-local persistence.
 - `src/view.ts`: deterministic bounded focal-point zoom and viewport-to-plan pan conversion shared by buttons, wheel/trackpad, mouse drag, and touch pinch interactions.
+- `src/gps.ts`: deterministic local GPS projection, explicit high-accuracy browser request, error mapping, and accuracy presentation.
+- `src/kgis.ts`: validated official KGIS address-link builder.
 - `src/parent-build-tooling.d.ts`: type-only declarations that let the parent Next.js check this nested package without installing prototype tooling at the repository root.
 - `src/App.tsx` and `src/styles.css`: touch-friendly SVG editor and inspector.
 - `src/app/sales/fence-designer/page.tsx` (repository root): thin OS route adapter that renders the prototype inside the existing protected Sales layout.
@@ -37,11 +39,11 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 35 deterministic tests passed.
+- 41 deterministic tests passed.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
-- Browser QA passed for a four-run perimeter plus two interior dividers, midpoint existing-run connections, independent line editing and totals, free-angle defaults with house/fence anchoring, multi-angle full-chain closure, exact-length solving between fixed connections, optional 45°/90° assistance, native single/double gates, Escape cancellation, contained wheel zoom, dedicated/two-finger/Command-drag pan, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
+- Browser QA passed for Site Walk panel behavior and permission failure handling, KGIS reference lookup, a four-run perimeter plus two interior dividers, midpoint connections, independent line editing and totals, free-angle defaults, full-chain closure, exact-length solving, optional angle assistance, native gates, Escape cancellation, contained zoom/pan, local save/load, mobile layout, and console cleanliness.
 - The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
 - Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 
@@ -49,6 +51,8 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 - The house is a user-measured rectangular context footprint, not a building record. Non-rectangular footprints remain a later extension.
 - Local-plan geometry is not a survey, legal boundary, aerial measurement, or field verification.
+- Consumer phone GPS can drift by several feet or more, especially near buildings, trees, or poor sky view. The UI displays the phone's accuracy estimate and never promotes GPS-derived run length over an entered field measurement.
+- KGIS publishes useful parcel, address, building-footprint, and aerial context, but its raw ArcGIS endpoint returned HTTP 401 outside the KGIS viewer during compatibility testing. This slice links only to the official viewer. Automatic geometry import requires KGIS-approved access plus a reviewed server adapter; do not add credentials or a client-side bypass.
 - On an unanchored open line, exact segment editing moves the end point along the existing bearing, so a following connected span changes visibly. When both line endpoints connect to the house or another fence run, only that line is re-solved instead.
 - Mid-run divider connections are geometric anchors, not graph branches: the perimeter and divider retain separate coincident endpoint records so either line can be edited without silently changing the other's measured topology.
 - House-connected exact edits preserve the house endpoint and solve the nearest angle when locked geometry can reach it. When it cannot, the editor requires an unlock or another corner adjustment rather than silently changing measurements.
@@ -59,8 +63,8 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Owner decisions needed later
 
-No decision blocks the local MVP. The address/aerial/lot-line slice requires an approved imagery/geocoder provider and parcel provider, licensed credentials, and an explicit rule that parcel geometry is context rather than survey truth. Product lists and pricing should remain a later, separate work package.
+No decision blocks Site Walk or the official KGIS reference launch. Automatic KGIS parcel/building overlay remains blocked on KGIS-approved programmatic access, licensing/attribution review, and a reviewed server-side integration boundary. Product lists and pricing remain a later, separate work package.
 
 ## Recommended next action
 
-Have the owner use one real farm/HOA layout to validate the naming and placement flow for perimeter versus divider lines, including a cross-fence attached a measured distance back from a corner. For the next provider-backed slice, evaluate Mapbox Standard Satellite/Search for address and imagery plus Regrid Parcel API/Tileserver for lot context, behind reviewed server-side credential handling. Keep parcel lines visibly labeled as non-survey context and require measured confirmation before they influence fence dimensions.
+Walk one real property with Site Walk, recording the phone-reported accuracy and the difference between every GPS distance and field measurement. In parallel, contact KGIS for approved service access and terms covering address, parcel polygon, building footprint, and imagery use. Only after that answer should the Controller choose direct KGIS integration or a reviewed Mapbox/Regrid fallback. Any imported parcel/building layer must remain reference-only until measured confirmation.

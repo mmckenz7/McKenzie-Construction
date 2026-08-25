@@ -7,6 +7,8 @@ import {
   pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm,
   type FenceDesign, type GateType,
 } from "./model";
+import { formatGpsAccuracy, gpsOriginAt, projectGpsFix, readCurrentGps, type GpsOrigin } from "./gps";
+import { kgisAddressMapUrl } from "./kgis";
 import { loadLocalDesign, saveLocalDesign } from "./storage";
 import { panView, zoomViewAt, type ViewBox } from "./view";
 
@@ -62,8 +64,19 @@ export default function App() {
   const [previewPoint, setPreviewPoint] = useState<Readonly<{ xMm: number; yMm: number }> | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
   const [closurePathPointId, setClosurePathPointId] = useState<string | null>(null);
+  const [siteWalkActive, setSiteWalkActive] = useState(false);
+  const [gpsOrigin, setGpsOrigin] = useState<GpsOrigin | null>(null);
+  const [gpsAccuracyMeters, setGpsAccuracyMeters] = useState<number | null>(null);
+  const [gpsBusy, setGpsBusy] = useState(false);
+  const [nextGpsStartsLine, setNextGpsStartsLine] = useState(false);
+  const [lastWalkSegmentId, setLastWalkSegmentId] = useState<string | null>(null);
+  const [walkFeet, setWalkFeet] = useState("");
+  const [walkInches, setWalkInches] = useState("0");
+  const [propertyPanelOpen, setPropertyPanelOpen] = useState(false);
+  const [kgisAddress, setKgisAddress] = useState("");
   const svgRef = useRef<SVGSVGElement>(null);
   const nextId = useRef(1);
+  const gpsRequestId = useRef(0);
   const activePointers = useRef(new Map<number, PlanPointer>());
   const navigationGesture = useRef<NavigationGesture>(null);
   const navigationWasActive = useRef(false);
@@ -94,7 +107,8 @@ export default function App() {
       if (event.key !== "Escape") return;
       event.preventDefault();
       if (drag) setHistory((current) => ({ ...current, present: drag.original }));
-      setDrag(null); setMode("select"); setSelection(null); setGateEditorOpen(false); setPreviewPoint(null); setClosurePathPointId(null);
+      gpsRequestId.current += 1;
+      setDrag(null); setMode("select"); setSelection(null); setGateEditorOpen(false); setPreviewPoint(null); setClosurePathPointId(null); setSiteWalkActive(false); setGpsBusy(false); setNextGpsStartsLine(false);
       activePointers.current.clear(); navigationGesture.current = null; navigationWasActive.current = false; setIsNavigating(false);
       setNotice("Current tool canceled. Choose Draw, Edit, or Pan when ready.");
     };
@@ -263,17 +277,10 @@ export default function App() {
   const applyExactLength = () => {
     if (!selectedSegment) return;
     try {
-      const length = feetAndInchesToMm(Number(feet), Number(inches));
-      const end = pointById(design, selectedSegment.toPointId);
-      const selectedPath = fencePathForPoint(design, selectedSegment.fromPointId);
-      const endOnFixedConnection = isPointAttached(design, end.id);
-      const anchoredAtBothEnds = selectedPath.points.length >= 2 && isPointAttached(design, selectedPath.points[0].id) && isPointAttached(design, selectedPath.points.at(-1)!.id);
-      const next = anchoredAtBothEnds
-        ? solvePathBetweenFixedEndsMm(design, selectedPath.points.at(-1)!, { segmentId: selectedSegment.id, lengthMm: length })
-        : endOnFixedConnection ? setSegmentLengthKeepingEndMm(design, selectedSegment.id, length, lengthLockEnabled) : setSegmentLengthMm(design, selectedSegment.id, length);
-      commit(next, anchoredAtBothEnds
-        ? `Span set to ${formatFeetInches(length)}. Both line connections and the other measured runs stayed fixed while the angles adjusted.`
-        : endOnFixedConnection ? `Span set to ${formatFeetInches(length)} while its connection stayed fixed.` : `Span set to ${formatFeetInches(length)}.`);
+      const result = editSegmentToExactLength(selectedSegment.id, feet, inches);
+      commit(result.next, result.anchoredAtBothEnds
+        ? `Span set to ${formatFeetInches(result.length)}. Both line connections and the other measured runs stayed fixed while the angles adjusted.`
+        : result.endOnFixedConnection ? `Span set to ${formatFeetInches(result.length)} while its connection stayed fixed.` : `Span set to ${formatFeetInches(result.length)}.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid length."); }
   };
   const addGate = () => {
@@ -290,6 +297,86 @@ export default function App() {
       setFeet(String(Math.floor(totalInches / 12))); setInches(String(totalInches % 12));
       setGateFeet(""); setGateInches("0"); setGateEditorOpen(false); setSelection(gate ? { type: "segment", id: gate.id } : null);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid total gate width."); }
+  };
+  const editSegmentToExactLength = (segmentId: string, exactFeet: string, exactInches: string) => {
+    const segment = design.segments.find(({ id }) => id === segmentId);
+    if (!segment) throw new TypeError("That measured run no longer exists.");
+    const length = feetAndInchesToMm(Number(exactFeet), Number(exactInches));
+    const end = pointById(design, segment.toPointId);
+    const path = fencePathForPoint(design, segment.fromPointId);
+    const endOnFixedConnection = isPointAttached(design, end.id);
+    const anchoredAtBothEnds = path.points.length >= 2 && isPointAttached(design, path.points[0].id) && isPointAttached(design, path.points.at(-1)!.id);
+    const next = anchoredAtBothEnds
+      ? solvePathBetweenFixedEndsMm(design, path.points.at(-1)!, { segmentId, lengthMm: length })
+      : endOnFixedConnection ? setSegmentLengthKeepingEndMm(design, segmentId, length, lengthLockEnabled) : setSegmentLengthMm(design, segmentId, length);
+    return { next, length, anchoredAtBothEnds, endOnFixedConnection };
+  };
+  const markGpsPoint = async () => {
+    const requestId = ++gpsRequestId.current;
+    setGpsBusy(true); setNotice("Getting a fresh high-accuracy GPS position…");
+    try {
+      const fix = await readCurrentGps(navigator.geolocation);
+      if (requestId !== gpsRequestId.current) return;
+      setGpsAccuracyMeters(fix.accuracyMeters);
+      if (!gpsOrigin) {
+        const existingAnchor = design.points.at(-1);
+        const anchor = existingAnchor ?? { xMm: 2_000, yMm: 2_000 };
+        const origin = gpsOriginAt(fix, anchor.xMm, anchor.yMm);
+        setGpsOrigin(origin);
+        if (existingAnchor) {
+          setNotice(`GPS aligned to the last fence point with ${formatGpsAccuracy(fix.accuracyMeters)} reported accuracy. Walk to the next corner and mark it.`);
+          return;
+        }
+        const id = nextId.current++;
+        const next = startFenceLine(design, { id: `point-${id}`, xMm: anchor.xMm, yMm: anchor.yMm });
+        commit(next, `Starting GPS point marked with ${formatGpsAccuracy(fix.accuracyMeters)} reported accuracy.`);
+        setSelection({ type: "point", id: `point-${id}` }); setView(fittedView(next));
+        return;
+      }
+      let point = projectGpsFix(gpsOrigin, fix);
+      let connection: "house" | "fence" | null = null;
+      const connectionToleranceMm = Math.max(460, Math.min(3_000, Math.round(fix.accuracyMeters * 1_000)));
+      const houseConnection = snapToHouseEdge(point.xMm, point.yMm, design.house, connectionToleranceMm);
+      const activeAnchor = design.points.at(-1);
+      const fenceConnection = houseConnection ? null : snapToFenceRun(design, point.xMm, point.yMm, connectionToleranceMm, nextGpsStartsLine ? undefined : activeAnchor?.id);
+      if (houseConnection) { point = houseConnection; connection = "house"; }
+      else if (fenceConnection) { point = { xMm: fenceConnection.xMm, yMm: fenceConnection.yMm }; connection = "fence"; }
+      else if (activeAnchor && snapEnabled && !nextGpsStartsLine) point = snapRunEndpoint(activeAnchor, point, true);
+      if (activeAnchor && !nextGpsStartsLine && point.xMm === activeAnchor.xMm && point.yMm === activeAnchor.yMm) throw new RangeError("This GPS fix is at the last point. Walk to the next corner and try again.");
+      const id = nextId.current++;
+      const pointId = `point-${id}`; const segmentId = `segment-${id}`;
+      const next = nextGpsStartsLine ? startFenceLine(design, { id: pointId, ...point }) : addPoint(design, { id: pointId, ...point }, segmentId);
+      commit(next, `${nextGpsStartsLine ? "Separate GPS fence line started" : "GPS point marked"}${connection ? ` and attached to the ${connection === "house" ? "house" : "nearest fence run"}` : ""}. Reported phone accuracy: ${formatGpsAccuracy(fix.accuracyMeters)}.`);
+      setNextGpsStartsLine(false); setSelection({ type: "point", id: pointId }); setView(fittedView(next));
+      const addedSegment = next.segments.find(({ id: candidateId }) => candidateId === segmentId);
+      if (addedSegment) {
+        const totalInches = Math.round(segmentLengthMm(next, addedSegment) / 25.4);
+        setLastWalkSegmentId(segmentId); setWalkFeet(String(Math.floor(totalInches / 12))); setWalkInches(String(totalInches % 12));
+      } else setLastWalkSegmentId(null);
+    } catch (error) {
+      if (requestId === gpsRequestId.current) setNotice(error instanceof Error ? error.message : "The GPS point could not be marked.");
+    } finally { if (requestId === gpsRequestId.current) setGpsBusy(false); }
+  };
+  const applyWalkLength = () => {
+    if (!lastWalkSegmentId) return;
+    try {
+      const result = editSegmentToExactLength(lastWalkSegmentId, walkFeet, walkInches);
+      commit(result.next, `Last GPS run corrected to the field measurement ${formatFeetInches(result.length)}. The entered measurement is now authoritative.`);
+      setView(fittedView(result.next));
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid field measurement."); }
+  };
+  const toggleSiteWalk = () => {
+    if (siteWalkActive) {
+      gpsRequestId.current += 1; setGpsBusy(false); setSiteWalkActive(false); setNextGpsStartsLine(false); setNotice("Site Walk finished. GPS coordinates were converted to local plan geometry only.");
+    } else {
+      setSiteWalkActive(true); setMode("select"); setPreviewPoint(null); setSelection(null); setNotice(gpsOrigin ? "Site Walk ready. Walk to the next corner and mark it." : design.points.length ? "Stand at the last drawn point and set the GPS reference." : "Stand at the first fence point and mark the starting GPS position.");
+    }
+  };
+  const openKgis = () => {
+    try {
+      window.open(kgisAddressMapUrl(kgisAddress), "_blank", "noopener,noreferrer");
+      setNotice("Opened the official KGIS aerial/property map. Treat its building and parcel lines as reference only, then confirm fence measurements on site.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid Knox County address."); }
   };
   const selectHouse = () => {
     if (design.house) {
@@ -322,7 +409,8 @@ export default function App() {
     try {
       const loaded = loadLocalDesign(localStorage);
       if (!loaded) { setNotice("No saved layout exists in this browser yet."); return; }
-      setHistory(createHistory(loaded)); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setNotice("Saved local layout loaded.");
+      gpsRequestId.current += 1; setGpsOrigin(null); setGpsAccuracyMeters(null); setLastWalkSegmentId(null); setSiteWalkActive(false); setGpsBusy(false);
+      setHistory(createHistory(loaded)); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setNotice("Saved local layout loaded. Start Site Walk at the last point to align a new GPS session.");
     } catch (error) { setNotice(error instanceof Error ? `Saved layout was not opened: ${error.message}` : "Saved layout was not opened."); }
   };
 
@@ -343,9 +431,35 @@ export default function App() {
       <button disabled={!design.house || !activePath || activePath.segments.length < 2} className={mode === "close" ? "active-tool" : ""} onClick={() => { setMode("close"); setSelection(null); setClosurePathPointId(design.points.at(-1)?.id ?? null); setPreviewPoint(null); setNotice("Tap the second connection on the house. Closure will keep this line's measured runs fixed and redistribute only its angles."); }}>⇥ Close to house</button>
       <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setPreviewPoint(null); setNotice(snapEnabled ? "Free angle is on. Runs now follow the measured geometry without angle assumptions." : "45°/90° angle assist is on."); }}>{snapEnabled ? "⌁ 45°/90° assist" : "◌ Free angle"}</button>
       <button aria-pressed={lengthLockEnabled} className={lengthLockEnabled ? "active-tool" : ""} onClick={() => { setLengthLockEnabled((current) => !current); setNotice(lengthLockEnabled ? "Length lock is off. Dragging a point can now change connected measurements." : "Length lock is on. Dragging adjusts the angle while preserving the incoming and following measurements."); }}>{lengthLockEnabled ? "🔒 Lengths" : "🔓 Lengths"}</button>
+      <button aria-pressed={siteWalkActive} className={siteWalkActive ? "active-tool" : ""} onClick={toggleSiteWalk}>📍 Site walk</button>
+      <button aria-pressed={propertyPanelOpen} className={propertyPanelOpen ? "active-tool" : ""} onClick={() => setPropertyPanelOpen((current) => !current)}>⌖ KGIS</button>
       <span className="toolbar-spacer" />
       <button onClick={save}>Save local</button><button onClick={load}>Load local</button>
     </nav>
+
+    {(siteWalkActive || propertyPanelOpen) && <section className="field-panels" aria-label="Field measurement tools">
+      {siteWalkActive && <div className="field-panel site-walk-panel">
+        <div className="field-panel-heading"><div><p className="eyebrow">Site walk</p><h2>Mark the point where you are standing</h2></div>{gpsAccuracyMeters !== null && <span className={`accuracy-chip${gpsAccuracyMeters <= 5 ? " good" : ""}`}>{formatGpsAccuracy(gpsAccuracyMeters)} GPS</span>}</div>
+        <p>{!gpsOrigin ? (design.points.length ? "Stand at the last drawn point first. This aligns GPS to the existing plan without adding a duplicate point." : "Stand at the first fence point. Your first mark creates the local plan origin.") : nextGpsStartsLine ? "Walk to the starting point for the separate fence line, then mark it." : "Walk to the next corner or connection, stand still, then mark it."}</p>
+        <div className="field-actions">
+          <button className="primary mark-location" disabled={gpsBusy} onClick={markGpsPoint}>{gpsBusy ? "Getting GPS…" : !gpsOrigin && design.points.length ? "Set GPS reference here" : nextGpsStartsLine ? "Mark separate-line start" : design.points.length ? "Mark next fence point" : "Mark starting point"}</button>
+          <button disabled={gpsBusy || !gpsOrigin} className={nextGpsStartsLine ? "active-tool" : ""} onClick={() => { setNextGpsStartsLine((current) => !current); setNotice(nextGpsStartsLine ? "Separate-line start canceled." : "The next GPS mark will start a separate fence line instead of continuing the last one."); }}>{nextGpsStartsLine ? "Cancel separate line" : "＋ Separate line next"}</button>
+          <button onClick={toggleSiteWalk}>Finish site walk</button>
+        </div>
+        {lastWalkSegmentId && design.segments.some(({ id }) => id === lastWalkSegmentId) && <div className="walk-length-editor">
+          <div><strong>Correct the last GPS run</strong><span>Enter the tape, wheel, or laser measurement.</span></div>
+          <div className="exact-grid"><label><span>Feet</span><input aria-label="Site walk exact feet" inputMode="numeric" type="number" min="0" max="1000" value={walkFeet} onChange={(event) => setWalkFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Site walk exact inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={walkInches} onChange={(event) => setWalkInches(event.target.value)} /></label></div>
+          <button className="primary" onClick={applyWalkLength}>Use exact length</button>
+        </div>}
+        <small>Phone GPS establishes approximate shape only. Accuracy is the phone’s reported radius, not a guarantee. Exact entered lengths remain authoritative; no latitude or longitude is saved in the design.</small>
+      </div>}
+      {propertyPanelOpen && <div className="field-panel property-panel">
+        <div className="field-panel-heading"><div><p className="eyebrow">Knox County reference</p><h2>Open the property in KGIS</h2></div><span className="reference-chip">Reference only</span></div>
+        <p>Enter the street address without city, state, or ZIP. KGIS opens its current aerial, building, and parcel context in a separate tab.</p>
+        <div className="property-lookup"><label><span>Property address</span><input value={kgisAddress} onChange={(event) => setKgisAddress(event.target.value)} placeholder="Street number and street" autoComplete="street-address" /></label><button className="primary" onClick={openKgis}>Open KGIS map ↗</button></div>
+        <small>KGIS parcel and building lines are government GIS reference data, not a boundary survey or a measured house size. They are not imported into fence totals. Confirm the house and fence dimensions in the field.</small>
+      </div>}
+    </section>}
 
     <section className="workspace">
       <div className="canvas-shell">
@@ -397,6 +511,6 @@ export default function App() {
         <div className="notice" role="status">{notice}</div>
       </aside>
     </section>
-    <footer className="app-footer"><span>Draw continues last point · Separate line starts anywhere · Esc finishes</span><span>{fenceLineCount(design)} line{fenceLineCount(design) === 1 ? "" : "s"} · exact combined total · local only · revision {design.revision}</span></footer>
+    <footer className="app-footer"><span>Site Walk: GPS shape + exact field lengths · KGIS: reference only</span><span>{fenceLineCount(design)} line{fenceLineCount(design) === 1 ? "" : "s"} · exact combined total · local only · revision {design.revision}</span></footer>
   </main>;
 }
