@@ -128,8 +128,11 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const moveSegment = (edgeIndex: number, distance: number, commit: boolean) => {
     try {
       const current = history.present.platforms.find((item) => item.id === platform.id)!;
-      replaceRegion(movePolygonSegment(current.region.outer, edgeIndex, distance, snapIncrement, commit), commit);
-      if (commit) setMessage("Segment moved with its corners.");
+      const outer = movePolygonSegment(current.region.outer, edgeIndex, distance, snapIncrement, commit);
+      if (replaceRegion(outer, commit) && commit) {
+        setSelectedEdgeId(deriveGeometricPolygonEdges(outer)[edgeIndex]?.id ?? null);
+        setMessage("Selected side moved with its corners.");
+      }
     } catch (error) {
       setPreview(null);
       setMessage(error instanceof Error ? error.message : "Segment move rejected.");

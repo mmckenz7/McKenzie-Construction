@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-25 active-plan segment selection continuity
+
+- The active v5 plan's white segment handle now identifies its six-inch snap and arrow-key behavior in its accessible name. A handled arrow selects the exact side before committing the normal safe region replacement.
+- After unlocking the saved rectangle, one ArrowDown move shifted the lower 20-foot side six inches and both attached sides changed from 12 to 12.5 feet. The remapped lower side stayed selected after its geometric edge ID changed.
+- The contextual tray remained open on the exact new 20-foot side with its length, direction, Add bumpout, and Add stairs controls. The normal v5 command advanced revision 9 to 10, and 2D, 3D, area, perimeter, decking, joist, beam, and support projections updated together.
+- Full validation passed 271 tests in 44 files, isolation, production-equivalent type checking, build, golden fixtures, and bundle budgets at 86.5 KiB initial / 121.7 KiB largest / 240.1 KiB total gzip. The QA change remained unsaved and its tab was closed.
+
 ## 2026-08-25 keyboard photo-trace outline shaping
 
 - The photo-reference tracer's round corner handles and white segment handles now accept arrow keys as well as pointer/touch drag. Accessible names state the movement behavior and fixed six-inch trace snap, and focused handles receive the same high-contrast treatment as the temporary stair handle.
