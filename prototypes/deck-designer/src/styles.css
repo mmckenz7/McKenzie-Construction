@@ -420,6 +420,9 @@ button:hover { transform: translateY(-1px); }
 .plan-stair.selected-object, .plan-landing.selected-object { stroke: var(--lime); stroke-width: 2.4; vector-effect: non-scaling-stroke; }
 .plan-object-hit { fill: #fff; fill-opacity: .001; stroke: transparent; cursor: pointer; outline: none; }
 .plan-object-hit:hover, .plan-object-hit:focus { fill: #c8dd3c; fill-opacity: .2; stroke: #b55f32; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.plan-stair-system-hit { cursor: pointer; outline: none; }
+.plan-stair-system-hit:hover .plan-object-hit, .plan-stair-system-hit:focus .plan-object-hit { fill: #c8dd3c; fill-opacity: .2; stroke: #b55f32; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.plan-stair-system-hit:focus-visible .plan-object-hit { fill: #f3ff8d; stroke: #0c543c; stroke-width: 2.5; }
 .plan-house-label, .dimension-text { fill: #53635b; font-size: 7px; font-weight: 700; letter-spacing: .05em; }
 .cutout-label { fill: #66736c; font-size: 5.5px; font-weight: 700; letter-spacing: .04em; }
 .dimension-line { stroke: #6b756f; stroke-width: .8; marker-start: url(#arrow); marker-end: url(#arrow); }

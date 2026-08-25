@@ -26,6 +26,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Visible corner-alignment guides with deterministic attached-side snap priority
 - [x] Optional keep-square corner constraint that moves both attached sides together
 - [x] Direct measured-plan selection for exact stair systems, landings, and cutouts
+- [x] One accessible stair-system control per authored route while retaining every tread as a touch target
 - [x] Direct touch/keyboard selection for a recorded plan door and its measured house-connection controls
 
 - [x] Parametric L-shape cutout with deterministic 2D/3D/quantity projections

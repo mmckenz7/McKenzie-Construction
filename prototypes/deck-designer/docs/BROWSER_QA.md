@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-25 grouped stair-route accessibility
+
+- Each authored stair system now contributes one focusable, named plan control instead of repeating the same control for every derived tread. All tread polygons remain unchanged pointer/touch hit regions inside that system control; landings and movement handles remain separate siblings.
+- Static regressions cover one and two authored systems, exact pressed state, one accessible name per system, retention of every derived tread polygon, route/system order, and design/geometry immutability. Live checks cover pointer bubbling from the first and last tread, Enter/Space selection, and full-route focus styling.
+- Desktop QA produced one **Edit stair system 1** control containing all seven visible tread polygons. Enter, Space, first-tread click, and last-tread click retained the exact selected system and revision 3; keyboard focus highlighted the complete route. At 390 × 844, the same one-control/seven-tread structure remained intact with one 3D canvas and no revision change. The QA state was not saved and the temporary tab was closed.
+- Full validation passed 339/339 tests, isolation, typecheck, build, and unchanged golden fixtures. Bundle budgets remain unchanged and pass at 88.9 KiB initial / 121.7 KiB largest / 244.9 KiB total JavaScript gzip.
+
 ## 2026-08-25 interactive measured-plan semantics
 
 - The active measured SVG plan is now exposed as one named, described interactive group instead of an image that can flatten its focusable descendants. Exact edge, cutout, stair-system, and landing controls expose their existing selection state; movement-only handles do not claim toggle state.
