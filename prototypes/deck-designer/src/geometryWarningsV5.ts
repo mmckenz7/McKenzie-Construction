@@ -124,6 +124,17 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
       platformElevation: platform.elevation,
       beamLines: [line],
     }).beams;
+    beams.forEach((beam) => {
+      const length = Math.hypot(beam.end.x - beam.start.x, beam.end.z - beam.start.z);
+      if (length >= 12 - EPSILON) return;
+      const measured = Math.round(length * 10) / 10;
+      warnings.push(Object.freeze({
+        id: `beam-short-segment-${beam.id}`,
+        severity: "clearance",
+        geometryIds: Object.freeze([line.id, beam.id]),
+        message: `Conceptual beam ${lineIndex + 1} has a ${measured}-inch projected segment; verify that the recorded beam route is intended.`,
+      }));
+    });
     platform.region.holes.forEach((hole, holeIndex) => {
       if (warnings.some((warning) => warning.id === `beam-cutout-interruption-${line.id}-${holeIndex + 1}`)) return;
       const clearance = beamToHoleDistance(beams, hole);

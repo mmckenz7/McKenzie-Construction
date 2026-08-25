@@ -106,6 +106,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Measured stair-opening edge-remainder notes below twelve inches while allowing exact corner alignment
 - [x] Measured conceptual beam-line proximity notes with exact source traceability
 - [x] Projection-only adjacent joist-to-cutout clearance notes with exact derived path traceability
+- [x] Measured short conceptual beam-fragment notes with authored-line and derived-segment traceability
 - [ ] Broader explainable framing clash/constraint warnings beyond recorded cutout interruptions
 - [ ] PBR material library, licensed asset pipeline, GLB metadata, LOD/compression
 - [x] Enforced initial-entry, largest-chunk, and total JavaScript performance budgets

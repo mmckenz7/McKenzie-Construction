@@ -373,3 +373,9 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Confirmed interrupted joists and adjacent uninterrupted joists remain separate notes; the adjacent note reported two paths at a six-inch nearest clearance.
 - Confirmed the prototype-only twelve-inch disclaimer remains visible and **Show in plan** resolves the exact cutout without authoring joist objects.
 - Reloaded to restore the saved local design; browser console reported no warnings or errors.
+## 2026-08-24 — short conceptual beam-fragment review
+
+- Entered an exact 14.5-by-3-foot cutout six inches from the deck side and moved the conceptual beam to cross it.
+- Confirmed layout review distinguishes the beam interruption from the resulting measured six-inch projected beam fragment.
+- Confirmed the prototype-only twelve-inch disclaimer remains visible and **Show in plan** selects the authored beam line at its unchanged two-foot offset.
+- Reloaded to restore the saved local design; browser console reported no warnings or errors.

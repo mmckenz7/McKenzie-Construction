@@ -92,4 +92,17 @@ describe("DeckDesign v5 explainable framing warnings", () => {
       message: "Conceptual beams 1 and 2 are 6 inches apart in plan; verify that both recorded beam routes are intended.",
     }));
   });
+
+  it("reports an exact short projected beam segment without prescribing a framing solution", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, region: { ...platform.region, holes: [[
+      { x: 6, z: 96 }, { x: 180, z: 96 }, { x: 180, z: 132 }, { x: 6, z: 132 },
+    ]] } }] });
+    expect(deriveGeometryWarningsV5(design, platform.id)).toContainEqual(expect.objectContaining({
+      id: "beam-short-segment-beam-line-1-segment-1",
+      geometryIds: ["beam-line-1", "beam-line-1-segment-1"],
+      message: "Conceptual beam 1 has a 6-inch projected segment; verify that the recorded beam route is intended.",
+    }));
+  });
 });
