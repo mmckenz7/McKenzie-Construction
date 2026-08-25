@@ -36,6 +36,7 @@ export type DeckPlatformGeometryV3 = Readonly<{
 }>;
 
 const point = (x: number, z: number): PolygonPoint => Object.freeze({ x, z });
+const CONCEPTUAL_RAIL_POST_SPACING = 72;
 
 function evenlySpacedPositions(length: number, maximumSpacing: number): readonly number[] {
   const bays = Math.max(1, Math.ceil(length / maximumSpacing));
@@ -118,7 +119,7 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
   const railPostMap = new Map<string, Post>();
   for (const segment of railSegments) {
     const length = Math.hypot(segment.end.x - segment.start.x, segment.end.z - segment.start.z);
-    for (const distance of evenlySpacedPositions(length, platform.construction.framing.maxPostSpacing)) {
+    for (const distance of evenlySpacedPositions(length, CONCEPTUAL_RAIL_POST_SPACING)) {
       const ratio = length === 0 ? 0 : distance / length;
       const x = segment.start.x + (segment.end.x - segment.start.x) * ratio;
       const z = segment.start.z + (segment.end.z - segment.start.z) * ratio;

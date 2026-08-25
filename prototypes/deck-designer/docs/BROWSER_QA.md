@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-24 conceptual support spacing
+
+- The layout sidebar exposes **Max conceptual post spacing (feet)** as a separate recorded framing fact with an explicit visualization-only warning.
+- Changing the 20-foot beam from a 6-foot maximum to a 4-foot maximum redistributed the beam supports from five to six evenly spaced locations and updated `support-post-count` to six.
+- The same interaction left `railing-post-count` unchanged at seven, confirming that beam-support spacing no longer leaks into the separate railing geometry category.
+- Exact entry, normal v3 revision history, and Undo remain available on desktop and touch layouts; no structural sizing, code, footing, product, or price conclusion is introduced.
+- Full validation passed 210 tests. Isolation, build, golden fixtures, and bundle budgets passed at 87.3 KiB initial, 119.9 KiB largest, and 243.6 KiB total gzip.
+
 ## 2026-08-24 movable conceptual beam
 
 - The layout sidebar now exposes **Beam from outside edge (feet)** beside joist spacing, while the measured plan exposes a touch-sized white beam handle.

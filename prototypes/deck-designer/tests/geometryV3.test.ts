@@ -72,6 +72,18 @@ describe("v3 free-edge geometry equivalence", () => {
     expect(derivePlatformGeometryV3(moved, platform.id).beams[0]).toMatchObject({ start: { x: 126 }, end: { x: 126 } });
   });
 
+  it("redistributes support locations from the recorded maximum spacing", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const originalRailPosts = derivePlatformGeometryV3(base, platform.id).railPosts;
+    const closer = normalizeDeckDesignV3({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, framing: { ...platform.construction.framing, maxPostSpacing: 48 } } }] });
+    const geometry = derivePlatformGeometryV3(closer, platform.id);
+    expect(geometry.supportPosts).toHaveLength(5);
+    expect(geometry.supportPosts.map((post) => post.x)).toEqual([0, 48, 96, 144, 192]);
+    expect(geometry.railPosts).toEqual(originalRailPosts);
+    expect(derivePlatformGeometryV3(closer, platform.id)).toEqual(geometry);
+  });
+
   it("uses the authoritative picture-frame pattern for outer and cutout borders", () => {
     const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
     const platform = base.platforms[0];
