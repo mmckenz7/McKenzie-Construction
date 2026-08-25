@@ -116,6 +116,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Provenance-safe conceptual beam-to-recorded-wall review with strict 3D applicability, opening gaps, and exact authored/derived traceability
 - [x] Provenance-safe conceptual joist-to-recorded-wall review with shared display heights, opening gaps, and transient path traceability
 - [x] Exact displayed beam-support footprint review against recorded cutout voids with transient post traceability
+- [x] Exact displayed beam-support footprint review against recorded house-wall panels with shared display height and transient post traceability
 - [x] Distinct stair-route overlap blockers and measured nearby-route field-review notes
 - [x] Exact positive-area stair-route intersection against the normalized deck region, preserving boundary and cutout-void semantics
 - [ ] Broader explainable framing clash/constraint warnings beyond recorded cutout interruptions

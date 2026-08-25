@@ -4,8 +4,14 @@ import { deriveGeometryWarningsV5, usesPrototypeReviewThresholdV5, type Geometry
 import { deriveLayoutReviewV5 } from "../src/layoutReviewV5";
 import { migrateDeckDesignToV5, normalizeDeckDesignV5 } from "../src/modelV5";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
+import { conceptualSupportPostTop } from "../src/beamProjection";
 
 describe("DeckDesign v5 explainable framing warnings", () => {
+  it("shares the renderer's exact displayed support-post vertical range", () => {
+    expect(conceptualSupportPostTop(40, 0)).toBe(40);
+    expect(conceptualSupportPostTop(0, 0)).toBe(1);
+  });
+
   it("identifies every prototype-threshold note without classifying collisions or interruptions", () => {
     const warning = (id: string): GeometryWarningV5 => ({ id, severity: "clearance", geometryIds: [], message: id });
     [
@@ -22,6 +28,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     [
       "beam-cutout-interruption-beam-line-1-1",
       "beam-support-cutout-review-beam-line-1-1",
+      "beam-support-house-review-beam-line-1-house-wall-2",
       "joist-cutout-interruption-1",
       "joist-house-plan-review-platform-1-house-wall-2",
       "beam-house-plan-review-beam-line-1-house-wall-2",
@@ -114,7 +121,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
       severity: "clearance",
       geometryIds: ["beam-line-1", "platform-1:hole-1", "beam-line-1-segment-1-support-2", "beam-line-1-segment-2-support-1"],
     }));
-    expect(warning.message).toContain("Reviewed structural post placement may change");
+    expect(warning.message).toContain("structural post placement may change");
     expect(deriveLayoutReviewV5(design, platform.id).readyToContinue).toBe(true);
     expect(deriveGeometryWarningsV5(design, platform.id)).toEqual(deriveGeometryWarningsV5(design, platform.id));
   });
@@ -128,6 +135,59 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     for (const design of [withHoleAt(122.75), withHoleAt(123)]) {
       expect(deriveGeometryWarningsV5(design, platform.id).some((item) => item.id.startsWith("beam-support-cutout-review-"))).toBe(false);
     }
+  });
+
+  it("reports an exact displayed support-post footprint passing through recorded wall context without blocking", () => {
+    const wall = { id: "house-wall-post", start: { x: 0, z: 100 }, end: { x: 0, z: 140 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] };
+    const design = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: [wall] } });
+    const warnings = deriveGeometryWarningsV5(design, "platform-1");
+    const warning = warnings.find((candidate) => candidate.id === "beam-support-house-review-beam-line-1-house-wall-post")!;
+    expect(warning).toEqual({
+      id: "beam-support-house-review-beam-line-1-house-wall-post",
+      severity: "clearance",
+      geometryIds: ["beam-line-1", "beam-line-1-segment-1-support-1", "house-wall-post"],
+      message: "Support-post footprints crossing wall: 1. Field review required; structural post placement may change.",
+    });
+    expect(warnings.some((candidate) => candidate.id === "beam-house-plan-review-beam-line-1-house-wall-post")).toBe(false);
+    expect(usesPrototypeReviewThresholdV5(warning)).toBe(false);
+    expect(deriveLayoutReviewV5(design, "platform-1").readyToContinue).toBe(true);
+    expect(deriveGeometryWarningsV5(design, "platform-1")).toEqual(warnings);
+  });
+
+  it("allows support-post wall boundary/contact, opening-only passage, and vertical separation", () => {
+    const walls = [
+      { id: "house-wall-post-boundary", start: { x: 2.75, z: 100 }, end: { x: 2.75, z: 140 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] },
+      { id: "house-wall-post-point", start: { x: -30, z: 122.75 }, end: { x: -2.75, z: 122.75 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] },
+      { id: "house-wall-post-separated", start: { x: 3, z: 100 }, end: { x: 3, z: 140 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] },
+      { id: "house-wall-post-above", start: { x: 0, z: 100 }, end: { x: 0, z: 140 }, baseElevation: 40, height: 48, attachment: "unknown" as const, openings: [] },
+      {
+        id: "house-wall-post-opening", start: { x: 0, z: 100 }, end: { x: 0, z: 140 }, baseElevation: 0, height: 48, attachment: "unknown" as const,
+        openings: [{ id: "opening-at-post", kind: "door" as const, offset: 0, width: 40, sillHeight: 0, height: 48 }],
+      },
+    ];
+    const design = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: walls } });
+    expect(deriveGeometryWarningsV5(design, "platform-1").filter((warning) => warning.id.startsWith("beam-support-house-review-"))).toEqual([]);
+  });
+
+  it("deduplicates split wall panels and sorts exact displayed support-post IDs deterministically", () => {
+    const splitWall = {
+      id: "house-wall-z-post", start: { x: 0, z: 100 }, end: { x: 0, z: 140 }, baseElevation: 0, height: 48, attachment: "unknown" as const,
+      openings: [{ id: "opening-splitting-post", kind: "window" as const, offset: 14, width: 12, sillHeight: 12, height: 12 }],
+    };
+    const allPostsWall = { id: "house-wall-a-post", start: { x: -12, z: 120 }, end: { x: 204, z: 120 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] };
+    const design = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: [splitWall, allPostsWall] } });
+    const warnings = deriveGeometryWarningsV5(design, "platform-1").filter((warning) => warning.id.startsWith("beam-support-house-review-"));
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        id: "beam-support-house-review-beam-line-1-house-wall-a-post",
+        geometryIds: ["beam-line-1", "beam-line-1-segment-1-support-1", "beam-line-1-segment-1-support-2", "beam-line-1-segment-1-support-3", "beam-line-1-segment-1-support-4", "house-wall-a-post"],
+      }),
+      expect.objectContaining({
+        id: "beam-support-house-review-beam-line-1-house-wall-z-post",
+        geometryIds: ["beam-line-1", "beam-line-1-segment-1-support-1", "house-wall-z-post"],
+      }),
+    ]);
+    expect(deriveGeometryWarningsV5(design, "platform-1")).toEqual(deriveGeometryWarningsV5(design, "platform-1"));
   });
 
   it("reports a small nonzero stair-edge remainder but accepts exact corner alignment", () => {

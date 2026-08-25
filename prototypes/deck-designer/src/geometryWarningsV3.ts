@@ -59,7 +59,7 @@ function pointInsideConvex(points: readonly PolygonPoint[], point: PolygonPoint)
   });
 }
 
-function segmentCrossesConvexInterior(start: PolygonPoint, end: PolygonPoint, polygon: readonly PolygonPoint[]): boolean {
+export function segmentCrossesConvexInterior(start: PolygonPoint, end: PolygonPoint, polygon: readonly PolygonPoint[]): boolean {
   if (pointInsideConvex(polygon, start) || pointInsideConvex(polygon, end)) return true;
   const dx = end.x - start.x, dz = end.z - start.z, length = Math.hypot(dx, dz);
   const signed = polygon.map((point) => ((point.x - start.x) * -dz + (point.z - start.z) * dx) / length);

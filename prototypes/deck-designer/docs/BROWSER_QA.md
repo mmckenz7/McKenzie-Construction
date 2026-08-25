@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-25 displayed support-post/house-wall review regression
+
+- The one-level v5 review now compares actual displayed support-post positions and their shared 5.5-inch square footprints with recorded house-wall panels after openings, using the renderer's exact displayed post base/top range.
+- Pure tests cover positive interior passage, tangent/point/boundary contact, vertical separation and exact contact, opening-only passage, multi-panel deduplication, numeric post-ID ordering, deterministic replay, non-blocking stage continuity, and authored-beam-only locator behavior.
+- Desktop and 390 × 844 review checks retained one lazy canvas, an enabled **Lock layout & continue** action, no false support/wall note on the clean default, no mobile horizontal overflow, and no browser warning/error logs. Full validation passed 328/328 tests, isolation, typecheck, build, golden fixtures, and the existing 245 KiB total JavaScript ceiling.
+- This review does not move geometry or infer structural placement, code, products, footing, or adequacy; reviewed structural post placement may change.
+
 ## 2026-08-25 exact-field cancel and no-op regression
 
 - The shared exact-number field now treats Escape as a true cancellation: it restores the latest recorded value, suppresses the resulting blur commit, and moves focus out. Active text composition is not intercepted. Enter still completes through the existing single blur/commit path.

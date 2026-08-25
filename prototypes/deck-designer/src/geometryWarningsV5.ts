@@ -1,6 +1,6 @@
 import { deriveGeometryWarningsV4, type GeometryWarningV4 } from "./geometryWarningsV4";
-import { CONCEPTUAL_SUPPORT_POST_SIZE, conceptualBeamVerticalRange, deriveConceptualBeamProjection } from "./beamProjection";
-import { positiveRegionOverlapArea } from "./geometryWarningsV3";
+import { CONCEPTUAL_SUPPORT_POST_SIZE, conceptualBeamVerticalRange, conceptualSupportPostTop, deriveConceptualBeamProjection, type ConceptualSupportPost } from "./beamProjection";
+import { positiveRegionOverlapArea, segmentCrossesConvexInterior } from "./geometryWarningsV3";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
@@ -11,6 +11,7 @@ import { deriveStairRouteGeometryV3 } from "./stairRouteGeometryV3";
 export type GeometryWarningV5 = GeometryWarningV4;
 
 const EPSILON = .01;
+const compareGeometryIds = (left: string, right: string): number => left.localeCompare(right, undefined, { numeric: true });
 const PROTOTYPE_REVIEW_THRESHOLD_PREFIXES = Object.freeze([
   "beam-cutout-clearance-",
   "beam-line-clearance-",
@@ -81,6 +82,14 @@ function segmentToPolygonDistance(start: PolygonPoint, end: PolygonPoint, polygo
 
 function polygonDistance(first: readonly PolygonPoint[], second: readonly PolygonPoint[]): number {
   return Math.min(...first.map((point, index) => segmentToPolygonDistance(point, first[(index + 1) % first.length], second)));
+}
+
+function supportPostFootprint(post: ConceptualSupportPost): readonly PolygonPoint[] {
+  const half = CONCEPTUAL_SUPPORT_POST_SIZE / 2;
+  return [
+    { x: post.x - half, z: post.z - half }, { x: post.x + half, z: post.z - half },
+    { x: post.x + half, z: post.z + half }, { x: post.x - half, z: post.z + half },
+  ];
 }
 
 function interruptedJoistIds(design: DeckDesignV5, platformId: string, holeIndex: number): readonly string[] {
@@ -170,7 +179,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
       .filter((joist) => panels.some((panel) => segmentsCrossBeyondEndpointContact(joist.start, joist.end, panel.start, panel.end)))
       .map((joist) => joist.id.match(/^joist-\d+/)?.[0])
       .filter((id): id is string => Boolean(id)))]
-      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+      .sort(compareGeometryIds);
     if (!crossedPathIds.length) return;
     warnings.push(Object.freeze({
       id: `joist-house-plan-review-${platform.id}-${wall.id}`,
@@ -182,31 +191,38 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
   platform.construction.framing.beamLines.forEach((line) => {
     const posts = beamProjectionByLineId.get(line.id)!.supportPosts;
     platform.region.holes.forEach((hole, holeIndex) => {
-      const half = CONCEPTUAL_SUPPORT_POST_SIZE / 2;
-      const overlappingPostIds = posts.filter((post) => positiveRegionOverlapArea([
-        { x: post.x - half, z: post.z - half }, { x: post.x + half, z: post.z - half },
-        { x: post.x + half, z: post.z + half }, { x: post.x - half, z: post.z + half },
-      ], hole, []) > EPSILON).map((post) => post.id).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+      const overlappingPostIds = posts.filter((post) => positiveRegionOverlapArea(supportPostFootprint(post), hole, []) > EPSILON).map((post) => post.id).sort(compareGeometryIds);
       if (!overlappingPostIds.length) return;
       warnings.push(Object.freeze({
         id: `beam-support-cutout-review-${line.id}-${holeIndex + 1}`,
         severity: "clearance",
         geometryIds: Object.freeze([line.id, `${platform.id}:hole-${holeIndex + 1}`, ...overlappingPostIds]),
-        message: `The current conceptual display places ${overlappingPostIds.length} support-post footprint${overlappingPostIds.length === 1 ? "" : "s"} inside recorded cutout ${holeIndex + 1}; field-review the beam and support intent. Reviewed structural post placement may change.`,
+        message: `Support-post footprints in cutout ${holeIndex + 1}: ${overlappingPostIds.length}. Field review required; structural post placement may change.`,
       }));
     });
   });
   const beamVerticalRange = conceptualBeamVerticalRange(platform.elevation);
   platform.construction.framing.beamLines.forEach((line) => {
-    const beams = beamProjectionByLineId.get(line.id)!.beams;
+    const projection = beamProjectionByLineId.get(line.id)!;
     normalized.siteContext.houseWalls.forEach((wall) => {
       const panels = house.houseWallPanels.filter((panel) => panel.wallId === wall.id &&
         panel.baseElevation < beamVerticalRange.top - EPSILON &&
         panel.baseElevation + panel.height > beamVerticalRange.base + EPSILON);
-      const crossedSegmentIds = beams
+      const postTop = conceptualSupportPostTop(projection.supportPosts[0].top, normalized.siteContext.gradeElevation);
+      const overlappingPostIds = projection.supportPosts.filter((post) => house.houseWallPanels.some((panel) => panel.wallId === wall.id &&
+        panel.baseElevation < postTop - EPSILON && panel.baseElevation + panel.height > normalized.siteContext.gradeElevation + EPSILON &&
+        segmentCrossesConvexInterior(panel.start, panel.end, supportPostFootprint(post))))
+        .map((post) => post.id).sort(compareGeometryIds);
+      if (overlappingPostIds.length) warnings.push(Object.freeze({
+        id: `beam-support-house-review-${line.id}-${wall.id}`,
+        severity: "clearance",
+        geometryIds: Object.freeze([line.id, ...overlappingPostIds, wall.id]),
+        message: `Support-post footprints crossing wall: ${overlappingPostIds.length}. Field review required; structural post placement may change.`,
+      }));
+      const crossedSegmentIds = projection.beams
         .filter((beam) => panels.some((panel) => segmentsCrossBeyondEndpointContact(beam.start, beam.end, panel.start, panel.end)))
         .map((beam) => beam.id)
-        .sort((left, right) => left.localeCompare(right));
+        .sort(compareGeometryIds);
       if (!crossedSegmentIds.length) return;
       warnings.push(Object.freeze({
         id: `beam-house-plan-review-${line.id}-${wall.id}`,

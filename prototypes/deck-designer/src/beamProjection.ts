@@ -18,6 +18,8 @@ export const CONCEPTUAL_BEAM_CENTER_OFFSET = 13;
 export const CONCEPTUAL_BEAM_HEIGHT = 9.25;
 export const CONCEPTUAL_SUPPORT_POST_SIZE = 5.5;
 
+export const conceptualSupportPostTop = (postTop: number, gradeElevation: number): number => Math.max(postTop, gradeElevation + 1);
+
 export function conceptualBeamVerticalRange(platformElevation: number): Readonly<{ base: number; top: number }> {
   const center = platformElevation - CONCEPTUAL_BEAM_CENTER_OFFSET;
   return Object.freeze({ base: center - CONCEPTUAL_BEAM_HEIGHT / 2, top: center + CONCEPTUAL_BEAM_HEIGHT / 2 });
