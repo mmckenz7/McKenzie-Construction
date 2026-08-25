@@ -75,6 +75,7 @@ export default function App() {
   const [gpsOrigin, setGpsOrigin] = useState<GpsOrigin | null>(null);
   const [gpsAccuracyMeters, setGpsAccuracyMeters] = useState<number | null>(null);
   const [gpsBusy, setGpsBusy] = useState(false);
+  const [gpsSecondsRemaining, setGpsSecondsRemaining] = useState<number | null>(null);
   const [nextGpsStartsLine, setNextGpsStartsLine] = useState(false);
   const [lastWalkSegmentId, setLastWalkSegmentId] = useState<string | null>(null);
   const [walkFeet, setWalkFeet] = useState("");
@@ -99,12 +100,15 @@ export default function App() {
   const nextId = useRef(1);
   const gpsRequestId = useRef(0);
   const lastGpsFix = useRef<GpsFix | null>(null);
+  const gpsAbortController = useRef<AbortController | null>(null);
   const activePointers = useRef(new Map<number, PlanPointer>());
   const navigationGesture = useRef<NavigationGesture>(null);
   const navigationWasActive = useRef(false);
   const design = history.present;
   const takeoffReady = design.segments.length > 0 && takeoffConfirmedRevision === design.revision;
   const walkNeedsExactLength = siteWalkActive && snapEnabled && lastWalkSegmentId !== null && !walkLengthConfirmed;
+
+  useEffect(() => () => gpsAbortController.current?.abort(), []);
 
   const selectedSegment = selection?.type === "segment" ? design.segments.find(({ id }) => id === selection.id) ?? null : null;
   const selectedGatePreviousFence = selectedSegment?.kind === "gate" ? design.segments.find(({ toPointId, kind }) => toPointId === selectedSegment.fromPointId && kind === "fence") ?? null : null;
@@ -421,13 +425,23 @@ export default function App() {
       : endOnFixedConnection ? setSegmentLengthKeepingEndMm(design, segmentId, length, lengthLockEnabled) : setSegmentLengthMm(design, segmentId, length);
     return { next, length, anchoredAtBothEnds, endOnFixedConnection };
   };
+  const cancelGpsLock = (message = "GPS lock canceled. Tap again when you are ready.") => {
+    gpsRequestId.current += 1;
+    gpsAbortController.current?.abort(); gpsAbortController.current = null;
+    setGpsBusy(false); setGpsSecondsRemaining(null); setNotice(message);
+  };
   const markGpsPoint = async () => {
     const requestId = ++gpsRequestId.current;
-    setGpsBusy(true); setNotice("Acquiring the best available GPS lock for up to 20 seconds…");
+    const controller = new AbortController();
+    gpsAbortController.current?.abort(); gpsAbortController.current = controller;
+    setGpsBusy(true); setGpsSecondsRemaining(20); setNotice("Acquiring the best available GPS lock for up to 20 seconds… Tap Cancel GPS lock if Safari does not respond.");
+    const countdown = window.setInterval(() => setGpsSecondsRemaining((remaining) => remaining === null ? null : Math.max(0, remaining - 1)), 1_000);
+    const hardStop = window.setTimeout(() => controller.abort(), 22_000);
     try {
       const previousGpsFix = lastGpsFix.current;
       const fix = await acquireBestGps(navigator.geolocation, {
         previousFix: previousGpsFix,
+        signal: controller.signal,
         onSample: (bestFix) => {
           if (requestId !== gpsRequestId.current) return;
           setGpsAccuracyMeters(bestFix.accuracyMeters);
@@ -481,7 +495,11 @@ export default function App() {
       } else { setLastWalkSegmentId(null); setWalkLengthConfirmed(true); }
     } catch (error) {
       if (requestId === gpsRequestId.current) setNotice(error instanceof Error ? error.message : "The GPS point could not be marked.");
-    } finally { if (requestId === gpsRequestId.current) setGpsBusy(false); }
+    } finally {
+      window.clearInterval(countdown); window.clearTimeout(hardStop);
+      if (gpsAbortController.current === controller) gpsAbortController.current = null;
+      if (requestId === gpsRequestId.current) { setGpsBusy(false); setGpsSecondsRemaining(null); }
+    }
   };
   const applyWalkLength = () => {
     if (!lastWalkSegmentId) return;
@@ -493,7 +511,7 @@ export default function App() {
   };
   const toggleSiteWalk = () => {
     if (siteWalkActive) {
-      gpsRequestId.current += 1; setGpsBusy(false); setSiteWalkActive(false); setNextGpsStartsLine(false); setNotice("Site Walk finished. GPS coordinates were converted to local plan geometry only.");
+      cancelGpsLock("Site Walk finished. GPS coordinates were converted to local plan geometry only."); setSiteWalkActive(false); setNextGpsStartsLine(false);
     } else {
       setSiteWalkActive(true); setPropertyPanelOpen(false); setTakeoffPanelOpen(false); setMode("select"); setPreviewPoint(null); setSelection(null); setNotice(gpsOrigin ? "Site Walk ready. Walk to the next corner and mark it." : design.points.length ? "Stand at the last drawn point and set the GPS reference." : "Stand at the first fence point and mark the starting GPS position.");
     }
@@ -595,7 +613,7 @@ export default function App() {
       const loaded = loadLocalDesign(localStorage);
       if (!loaded) { setNotice("No saved layout exists in this browser yet."); return; }
       const loadedReference = loadLocalReference(localStorage);
-      gpsRequestId.current += 1; lastGpsFix.current = null; setGpsOrigin(null); setGpsAccuracyMeters(null); setLastWalkSegmentId(null); setWalkLengthConfirmed(true); setSiteWalkActive(false); setGpsBusy(false);
+      cancelGpsLock(); lastGpsFix.current = null; setGpsOrigin(null); setGpsAccuracyMeters(null); setLastWalkSegmentId(null); setWalkLengthConfirmed(true); setSiteWalkActive(false);
       setHistory(createHistory(loaded)); setReferenceBackground(loadedReference); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setNotice(loadedReference ? "Saved fence layout and reference image loaded. Start Site Walk at the last point to align a new GPS session." : "Saved local layout loaded. Start Site Walk at the last point to align a new GPS session.");
     } catch (error) { setNotice(error instanceof Error ? `Saved layout was not opened: ${error.message}` : "Saved layout was not opened."); }
   };
@@ -638,7 +656,7 @@ export default function App() {
         <div className="field-panel-heading"><div><p className="eyebrow">Site walk</p><h2>Mark the point where you are standing</h2></div>{gpsAccuracyMeters !== null && <span aria-live="polite" className={`accuracy-chip${gpsAccuracyMeters <= 5 ? " good" : ""}`}>{formatGpsAccuracy(gpsAccuracyMeters)} GPS</span>}</div>
         <p>{!gpsOrigin ? (design.points.length ? "Stand at the last drawn point first. This aligns GPS to the existing plan without adding a duplicate point." : "Stand at the first fence point. Your first mark creates the local plan origin.") : nextGpsStartsLine ? "Walk to the starting point for the separate fence line, then mark it." : "Walk to the next corner or connection, stand still, then mark it."}</p>
         <div className="field-actions">
-          <button className="primary mark-location" disabled={gpsBusy || walkNeedsExactLength} onClick={markGpsPoint}>{gpsBusy ? "Locking GPS…" : walkNeedsExactLength ? "Enter exact length below" : !gpsOrigin && design.points.length ? "Set GPS reference here" : nextGpsStartsLine ? "Mark separate-line start" : design.points.length ? "Mark next fence point" : "Mark starting point"}</button>
+          <button className="primary mark-location" disabled={walkNeedsExactLength} onClick={() => gpsBusy ? cancelGpsLock() : void markGpsPoint()}>{gpsBusy ? `Cancel GPS lock${gpsSecondsRemaining !== null ? ` · ${gpsSecondsRemaining}s` : ""}` : walkNeedsExactLength ? "Enter exact length below" : !gpsOrigin && design.points.length ? "Set GPS reference here" : nextGpsStartsLine ? "Mark separate-line start" : design.points.length ? "Mark next fence point" : "Mark starting point"}</button>
           <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setNotice(snapEnabled ? "Site Walk is using free GPS angles." : "90° corners are on. GPS chooses the rough direction; each new leg aligns straight or square to the previous leg and requires an exact length."); }}>{snapEnabled ? "□ 90° corners on" : "◌ Free GPS angles"}</button>
           <button disabled={gpsBusy || !gpsOrigin || walkNeedsExactLength} className={nextGpsStartsLine ? "active-tool" : ""} onClick={() => { setNextGpsStartsLine((current) => !current); setNotice(nextGpsStartsLine ? "Separate-line start canceled." : "The next GPS mark will start a separate fence line instead of continuing the last one."); }}>{nextGpsStartsLine ? "Cancel separate line" : "＋ Separate line next"}</button>
           <button className="finish-site-walk" onClick={toggleSiteWalk}>End site walk</button>

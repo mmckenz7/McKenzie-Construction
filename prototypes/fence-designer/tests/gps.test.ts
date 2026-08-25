@@ -101,4 +101,18 @@ describe("site walk GPS", () => {
     };
     await expect(acquireBestGps(poorProvider, { timeoutMs: 1 })).rejects.toThrow(/GPS did not become usable.*±112 ft/i);
   });
+
+  it("cancels and clears a Safari position watch without accepting a point", async () => {
+    const controller = new AbortController();
+    let clearedWatch: number | null = null;
+    const provider: GpsProvider = {
+      getCurrentPosition: () => undefined,
+      watchPosition: () => 31,
+      clearWatch: (id) => { clearedWatch = id; },
+    };
+    const pending = acquireBestGps(provider, { signal: controller.signal, timeoutMs: 100 });
+    controller.abort();
+    await expect(pending).rejects.toThrow(/GPS lock canceled/i);
+    expect(clearedWatch).toBe(31);
+  });
 });

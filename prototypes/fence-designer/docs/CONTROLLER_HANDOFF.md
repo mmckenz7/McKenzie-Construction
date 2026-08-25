@@ -46,7 +46,7 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 104 deterministic tests passed, including fifteen Black Aluminum tests, five Treated Pine/shared-drawing tests, nine GPS tests, five local-reference transform tests, twenty-nine geometry/model tests, and thirteen renderer/address/layer/provenance contract tests.
+- 105 deterministic tests passed, including fifteen Black Aluminum tests, five Treated Pine/shared-drawing tests, ten GPS tests, five local-reference transform tests, twenty-nine geometry/model tests, and thirteen renderer/address/layer/provenance contract tests.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
@@ -58,7 +58,7 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 - The house is a user-measured rectangular context footprint, not a building record. Non-rectangular footprints remain a later extension.
 - Local-plan geometry is not a survey, legal boundary, aerial measurement, or field verification.
-- Consumer phone GPS can drift by several feet or more, especially near buildings, trees, or poor sky view. Site Walk now samples for up to 20 seconds, accepts an early lock at 5 meters or better, and rejects fixes worse than 15 meters, but the 15-meter ceiling is only a gross preliminary-shape boundary and remains unsuitable for short residential runs. The UI displays the phone's accuracy estimate and never promotes GPS-derived run length over an entered field measurement.
+- Consumer phone GPS can drift by several feet or more, especially near buildings, trees, or poor sky view. Site Walk now samples for up to 20 seconds, accepts an early lock at 5 meters or better, and rejects fixes worse than 15 meters, but the 15-meter ceiling is only a gross preliminary-shape boundary and remains unsuitable for short residential runs. Safari acquisition can be canceled from the live countdown control and is aborted on workflow exit so the UI cannot intentionally strand the operator behind a disabled mark action. The UI displays the phone's accuracy estimate and never promotes GPS-derived run length over an entered field measurement.
 - KGIS publishes useful parcel, address, building-footprint, and aerial context, but its raw ArcGIS endpoint returned HTTP 401 outside the KGIS viewer during compatibility testing. This slice links only to the official viewer. Automatic geometry import requires KGIS-approved access plus a reviewed server adapter; do not add credentials or a client-side bypass.
 - On an unanchored open line, exact segment editing moves the end point along the existing bearing, so a following connected span changes visibly. When both line endpoints connect to the house or another fence run, only that line is re-solved instead.
 - Mid-run divider connections are geometric anchors, not graph branches: the perimeter and divider retain separate coincident endpoint records so either line can be edited without silently changing the other's measured topology.

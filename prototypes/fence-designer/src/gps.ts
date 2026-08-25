@@ -34,6 +34,7 @@ export type GpsAcquisitionOptions = Readonly<{
   minimumMovementMeters?: number;
   timeoutMs?: number;
   onSample?: (bestFix: GpsFix) => void;
+  signal?: AbortSignal;
 }>;
 
 const finite = (value: number, label: string): number => {
@@ -130,6 +131,7 @@ export function readMovedGps(provider: GpsProvider | null | undefined, previous:
 
 export function acquireBestGps(provider: GpsProvider | null | undefined, options: GpsAcquisitionOptions = {}): Promise<GpsFix> {
   if (!provider) return Promise.reject(new Error("GPS is not available in this browser."));
+  if (options.signal?.aborted) return Promise.reject(new Error("GPS lock canceled. Tap again to retry."));
   const targetAccuracyMeters = options.targetAccuracyMeters ?? 5;
   const maximumAccuracyMeters = options.maximumAccuracyMeters ?? 15;
   const minimumMovementMeters = options.minimumMovementMeters ?? 0.75;
@@ -141,11 +143,22 @@ export function acquireBestGps(provider: GpsProvider | null | undefined, options
   const isNewLocation = (fix: GpsFix) => !options.previousFix || gpsFixDistanceMeters(options.previousFix, fix) >= minimumMovementMeters;
   const watchPosition = provider.watchPosition;
   const clearWatch = provider.clearWatch;
-  if (!watchPosition || !clearWatch) return readCurrentGps(provider).then((fix) => {
-    if (!isNewLocation(fix)) throw new Error("The phone is still returning the previous GPS position. Wait for the GPS accuracy to update, then mark this point again.");
-    options.onSample?.(fix);
-    if (fix.accuracyMeters > maximumAccuracyMeters) throw new Error(`GPS did not become usable. Best reported accuracy was ${formatGpsAccuracy(fix.accuracyMeters)}. Move to open sky, confirm Precise Location is enabled, and try again.`);
-    return fix;
+  if (!watchPosition || !clearWatch) return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (result: { fix: GpsFix } | { error: Error }) => {
+      if (settled) return;
+      settled = true;
+      options.signal?.removeEventListener("abort", onAbort);
+      if ("fix" in result) resolve(result.fix); else reject(result.error);
+    };
+    const onAbort = () => finish({ error: new Error("GPS lock canceled. Tap again to retry.") });
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    readCurrentGps(provider).then((fix) => {
+      if (!isNewLocation(fix)) throw new Error("The phone is still returning the previous GPS position. Wait for the GPS accuracy to update, then mark this point again.");
+      options.onSample?.(fix);
+      if (fix.accuracyMeters > maximumAccuracyMeters) throw new Error(`GPS did not become usable. Best reported accuracy was ${formatGpsAccuracy(fix.accuracyMeters)}. Move to open sky, confirm Precise Location is enabled, and try again.`);
+      finish({ fix });
+    }).catch((error: unknown) => finish({ error: error instanceof Error ? error : new Error("The phone returned an invalid GPS position.") }));
   });
 
   return new Promise((resolve, reject) => {
@@ -156,6 +169,7 @@ export function acquireBestGps(provider: GpsProvider | null | undefined, options
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener("abort", onAbort);
       if (watchState.id !== undefined) clearWatch(watchState.id);
       if ("fix" in result) resolve(result.fix); else reject(result.error);
     };
@@ -166,6 +180,8 @@ export function acquireBestGps(provider: GpsProvider | null | undefined, options
         ? "The phone kept returning the previous GPS position. Stay at the new point with open sky, then try again."
         : "The phone did not return a fresh GPS position. Move to open sky and try again.") });
     }, timeoutMs);
+    const onAbort = () => finish({ error: new Error("GPS lock canceled. Tap again to retry.") });
+    options.signal?.addEventListener("abort", onAbort, { once: true });
     watchState.id = watchPosition(
       (position) => {
         try {
