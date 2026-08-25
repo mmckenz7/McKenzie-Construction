@@ -1,4 +1,4 @@
-import { deriveGeometricPolygonEdges, signedPolygonArea, type PolygonPoint } from "./polygon";
+import { deriveGeometricPolygonEdges, polygonContainsPoint, signedPolygonArea, type PolygonPoint } from "./polygon";
 import { normalizeDeckDesignV3, type DeckDesignV3 } from "./modelV3";
 import { deriveStairRouteGeometryV3 } from "./stairRouteGeometryV3";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
@@ -66,6 +66,59 @@ function segmentCrossesConvexInterior(start: PolygonPoint, end: PolygonPoint, po
   if (!(Math.min(...signed) < -EPSILON && Math.max(...signed) > EPSILON)) return false;
   const along = polygon.map((point) => ((point.x - start.x) * dx + (point.z - start.z) * dz) / length);
   return Math.min(...along) < length - EPSILON && Math.max(...along) > EPSILON;
+}
+
+function segmentIntersectionParameters(start: PolygonPoint, end: PolygonPoint, ring: readonly PolygonPoint[]): readonly number[] {
+  const dx = end.x - start.x, dz = end.z - start.z;
+  const lengthSquared = dx * dx + dz * dz;
+  const parameters: number[] = [];
+  ring.forEach((edgeStart, edgeIndex) => {
+    const edgeEnd = ring[(edgeIndex + 1) % ring.length];
+    const edgeDx = edgeEnd.x - edgeStart.x, edgeDz = edgeEnd.z - edgeStart.z;
+    const relativeX = edgeStart.x - start.x, relativeZ = edgeStart.z - start.z;
+    const denominator = dx * edgeDz - dz * edgeDx;
+    if (Math.abs(denominator) > EPSILON) {
+      const alongSegment = (relativeX * edgeDz - relativeZ * edgeDx) / denominator;
+      const alongEdge = (relativeX * dz - relativeZ * dx) / denominator;
+      if (alongSegment >= -EPSILON && alongSegment <= 1 + EPSILON && alongEdge >= -EPSILON && alongEdge <= 1 + EPSILON) {
+        parameters.push(Math.max(0, Math.min(1, alongSegment)));
+      }
+      return;
+    }
+    if (Math.abs(relativeX * dz - relativeZ * dx) > EPSILON || lengthSquared <= EPSILON) return;
+    parameters.push(
+      Math.max(0, Math.min(1, (relativeX * dx + relativeZ * dz) / lengthSquared)),
+      Math.max(0, Math.min(1, ((edgeEnd.x - start.x) * dx + (edgeEnd.z - start.z) * dz) / lengthSquared)),
+    );
+  });
+  return parameters;
+}
+
+function pointOnRingBoundary(point: PolygonPoint, ring: readonly PolygonPoint[]): boolean {
+  return ring.some((start, index) => pointSegmentDistance(point, start, ring[(index + 1) % ring.length]) <= EPSILON);
+}
+
+function segmentRegionInteriorLength(
+  start: PolygonPoint,
+  end: PolygonPoint,
+  outer: readonly PolygonPoint[],
+  holes: readonly (readonly PolygonPoint[])[],
+): number {
+  const length = Math.hypot(end.x - start.x, end.z - start.z);
+  if (length <= EPSILON) return 0;
+  const parameters = [0, 1, ...segmentIntersectionParameters(start, end, outer), ...holes.flatMap((hole) => segmentIntersectionParameters(start, end, hole))]
+    .sort((left, right) => left - right)
+    .filter((value, index, values) => index === 0 || value - values[index - 1] > EPSILON / length);
+  return parameters.slice(0, -1).reduce((total, parameter, index) => {
+    const next = parameters[index + 1];
+    if ((next - parameter) * length <= EPSILON) return total;
+    const midpoint = (parameter + next) / 2;
+    const point = { x: start.x + (end.x - start.x) * midpoint, z: start.z + (end.z - start.z) * midpoint };
+    if (pointOnRingBoundary(point, outer) || holes.some((hole) => pointOnRingBoundary(point, hole))) return total;
+    return polygonContainsPoint(outer, point) && !holes.some((hole) => polygonContainsPoint(hole, point))
+      ? total + (next - parameter) * length
+      : total;
+  }, 0);
 }
 
 function lineIntersection(start: PolygonPoint, end: PolygonPoint, clipStart: PolygonPoint, clipEnd: PolygonPoint): PolygonPoint {
@@ -151,6 +204,21 @@ export function deriveGeometryWarningsV3(design: DeckDesignV3, platformId: strin
       severity: "clearance" as const,
       geometryIds: Object.freeze([`beam`, `${platform.id}:hole-${holeIndex + 1}`]),
       message: `Conceptual beam crosses cutout ${holeIndex + 1} and is split into separate spans; verify the intended framing route.`,
+    }));
+  });
+  normalized.siteContext.houseWalls.forEach((wall) => {
+    const crossingLength = house.houseWallPanels
+      .filter((panel) => panel.wallId === wall.id &&
+        panel.baseElevation < platform.elevation - EPSILON &&
+        panel.baseElevation + panel.height > platform.elevation + EPSILON)
+      .reduce((total, panel) => total + segmentRegionInteriorLength(panel.start, panel.end, platform.region.outer, platform.region.holes), 0);
+    if (crossingLength <= EPSILON) return;
+    const measured = Math.round(crossingLength * 10) / 10;
+    warnings.push(Object.freeze({
+      id: `platform-house-plan-review-${platform.id}-${wall.id}`,
+      severity: "clearance" as const,
+      geometryIds: Object.freeze([platform.id, wall.id]),
+      message: `Recorded plan context for house wall (${wall.id}) passes ${measured} inches through the deck surface projection where its recorded vertical span includes that elevation; field-verify the wall elevation and intended layout.`,
     }));
   });
   routes.forEach((route, routeIndex) => {

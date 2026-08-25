@@ -498,3 +498,10 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Opened layout review on the clean saved design and confirmed geometry remained ready with no invented warning or blocker.
 - At 390 × 844, the full-screen review retained its Close and Lock layout & continue actions and the page retained exactly one canvas.
 - Browser logs contained no warnings or errors. Pure v3/v5 coverage proves two distinct crossed walls produce two ordered blockers, split panels from one authored wall deduplicate to one, exact boundary contact remains allowed, repeated projection is deterministic, and Show in plan resolves the authoritative stair and attached side while retaining the recorded wall ID in the warning.
+
+## 2026-08-25 — provenance-safe wall/platform plan review
+
+- Opened the active one-level v5 designer after the warning projection change and confirmed the measured plan, interactive model, local/JSON recovery controls, and exactly one WebGL canvas remained available.
+- Opened layout review on the clean saved design and confirmed its normal edge-aligned house context produced no invented wall/platform warning.
+- At 390 × 844, the full-screen review retained visible Close and Lock layout & continue actions and the page retained exactly one canvas.
+- Browser logs contained no warnings or errors. Pure v3/v5 tests verify the exact measured non-blocking review result for rectangle and L-shape crossings, strict vertical-span applicability, exact boundary exclusion, door/opening and cutout-void subtraction, split-panel deduplication, deterministic replay/order, and no prototype-threshold classification.

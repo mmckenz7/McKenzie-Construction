@@ -22,6 +22,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     [
       "beam-cutout-interruption-beam-line-1-1",
       "joist-cutout-interruption-1",
+      "platform-house-plan-review-platform-1-house-wall-2",
       "stair-route-collision-stair-system-1-stair-system-2",
     ].forEach((id) => expect(usesPrototypeReviewThresholdV5(warning(id))).toBe(false));
   });
@@ -157,6 +158,17 @@ describe("DeckDesign v5 explainable framing warnings", () => {
       expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-far", geometryIds: ["stair-system-1", "house-wall-far"] }),
       expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-near", geometryIds: ["stair-system-1", "house-wall-near"] }),
     ]);
+  });
+
+  it("retains provenance-safe wall/platform plan review without blocking layout", () => {
+    const wall = { id: "house-wall-crossing", start: { x: -12, z: 72 }, end: { x: 204, z: 72 }, baseElevation: 0, height: 120, attachment: "unknown" as const, openings: [] };
+    const design = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: [wall] } });
+    const warning = deriveGeometryWarningsV5(design, "platform-1").find((candidate) => candidate.id === "platform-house-plan-review-platform-1-house-wall-crossing")!;
+    expect(warning).toEqual(expect.objectContaining({ severity: "clearance", geometryIds: ["platform-1", "house-wall-crossing"], message: expect.stringContaining("192 inches") }));
+    expect(usesPrototypeReviewThresholdV5(warning)).toBe(false);
+    const review = deriveLayoutReviewV5(design, "platform-1");
+    expect(review.readyToContinue).toBe(true);
+    expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 1 clearance note" }));
   });
 
   it("keeps stair overlap blocking while reporting distinct measured spacing between nearby routes", () => {
