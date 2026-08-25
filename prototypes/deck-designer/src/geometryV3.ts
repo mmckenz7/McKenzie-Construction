@@ -4,6 +4,7 @@ import { derivePictureFrameBoards } from "./pictureFrameProjection";
 import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
 import { normalizeDeckDesignV3, type DeckDesignV3 } from "./modelV3";
 import { deriveStairRouteGeometryV3, type StairLandingGeometryV3, type StairRailPostV3, type StairTreadV3 } from "./stairRouteGeometryV3";
+import { effectiveBeamInsetV3 } from "./framingEditorV3";
 
 type Point3 = Readonly<{ x: number; y: number; z: number }>;
 type Post = Readonly<{ id: string; x: number; z: number; top: number }>;
@@ -65,8 +66,7 @@ export function derivePlatformGeometryV3(design: DeckDesignV3, platformId: strin
   const minZ = Math.min(...platform.region.outer.map((item) => item.z));
   const maxZ = Math.max(...platform.region.outer.map((item) => item.z));
   const horizontalBeam = platform.construction.decking.direction === "left_right";
-  const beamAxisSpan = horizontalBeam ? maxZ - minZ : maxX - minX;
-  const effectiveBeamInset = Math.min(platform.construction.framing.beamInset, beamAxisSpan / 2);
+  const effectiveBeamInset = effectiveBeamInsetV3(platform);
   const beamCoordinate = horizontalBeam ? maxZ - effectiveBeamInset : maxX - effectiveBeamInset;
   const beamIntervals = horizontalBeam
     ? horizontalRegionIntervalsAt(platform.region, beamCoordinate)

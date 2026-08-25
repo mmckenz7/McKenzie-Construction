@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-24 movable conceptual beam
+
+- The layout sidebar now exposes **Beam from outside edge (feet)** beside joist spacing, while the measured plan exposes a touch-sized white beam handle.
+- Desktop interaction changed the recorded inset from 2 feet to 3 feet; the 2D handle and 3D framing updated together, revision advanced from 6 to 7, and the status described the exact outside-edge distance.
+- Keyboard movement advanced the beam another 6-inch snap step to 3.5 feet. Undo restored 3 feet and the prior authoritative fingerprint.
+- The control remains conceptual framing intent only. It does not choose a beam size, span, footing, connection, or structural assembly.
+- Full validation passed 209 tests, including horizontal/rotated beam movement, bounds, deterministic replay, rectangle/L-shape equivalence, and quantity projection. Isolation, build, golden fixtures, and bundle budgets passed at 87.2 KiB initial, 119.9 KiB largest, and 243.5 KiB total gzip.
+
 ## 2026-08-24 polygon-aware beam and support posts
 
 - The v3 plan and model now render a conceptual main beam and support-post locations from the same existing framing facts used by deterministic quantities.

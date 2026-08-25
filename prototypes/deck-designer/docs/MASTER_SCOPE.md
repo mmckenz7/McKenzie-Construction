@@ -93,6 +93,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [ ] Additional borders and decorative inlays
 - [ ] Fascia, skirting, post wraps, lighting, drainage, covers/pergolas
 - [x] Polygon-aware conceptual main beam and support-post locations with cutout splitting
+- [x] Exact and touch/keyboard-movable conceptual main-beam placement from the outside deck edge
 - [ ] Multi-beam framing intent and broader explainable framing clash/constraint warnings
 - [ ] PBR material library, licensed asset pipeline, GLB metadata, LOD/compression
 - [x] Enforced initial-entry, largest-chunk, and total JavaScript performance budgets

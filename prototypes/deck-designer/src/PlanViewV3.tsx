@@ -6,6 +6,7 @@ import { formatFeetInches } from "./PlanView";
 import type { HouseContextGeometry } from "./houseContextGeometry";
 import { moveRectangularHole, resizeRectangularHole } from "./holeEditorV3";
 import { deriveCornerAlignmentGuides } from "./polygonEditorV3";
+import { beamInsetFromPointV3, effectiveBeamInsetV3 } from "./framingEditorV3";
 
 type Point = Readonly<{ x: number; z: number }>;
 type ContextPlatform = Readonly<{ id: string; elevation: number; footprint: readonly Point[] }>;
@@ -37,6 +38,8 @@ type Props = {
   onStairCommit: (offset: number) => void;
   onSegmentPreview: (edgeIndex: number, distance: number) => void;
   onSegmentCommit: (edgeIndex: number, distance: number) => void;
+  onBeamPreview?: (inset: number) => void;
+  onBeamCommit?: (inset: number) => void;
 };
 
 const snap = (value: number, increment: number) => Math.round(value / increment) * increment;
@@ -57,11 +60,12 @@ export function planEdgeDimensionLabel(edge: Readonly<{ start: Point; end: Point
   });
 }
 
-export function PlanViewV3({ platform, activeStairSystem = null, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, selectedHoleIndex = null, contextPlatforms = [], platformMoveEnabled = false, onSelectEdge, onSelectStairSystem, onSelectLanding, onSelectHouseOpening, onSelectHole, onSelectContextPlatform, onPlatformPreview, onPlatformCommit, onHolePreview, onHoleCommit, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit }: Props) {
+export function PlanViewV3({ platform, activeStairSystem = null, geometry, houseGeometry, snapIncrement, editingEnabled = true, selectedEdgeId, selectedHoleIndex = null, contextPlatforms = [], platformMoveEnabled = false, onSelectEdge, onSelectStairSystem, onSelectLanding, onSelectHouseOpening, onSelectHole, onSelectContextPlatform, onPlatformPreview, onPlatformCommit, onHolePreview, onHoleCommit, onCornerPreview, onCornerCommit, onCancel, onStairPreview, onStairCommit, onSegmentPreview, onSegmentCommit, onBeamPreview, onBeamCommit }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const segmentDrag = useRef<Readonly<{ index: number; midpoint: Point; outward: Point }> | null>(null);
   const holeDrag = useRef<Readonly<{ index: number; mode: "move" | number; start: Point; hole: readonly Point[] }> | null>(null);
   const platformDrag = useRef<Readonly<{ start: Point }> | null>(null);
+  const beamDrag = useRef(false);
   const [active, setActive] = useState<string | null>(null);
   const activeCornerIndex = active?.startsWith("corner-") ? Number(active.slice("corner-".length)) : null;
   const alignmentGuides = activeCornerIndex === null ? null : deriveCornerAlignmentGuides(platform.region.outer, activeCornerIndex);
@@ -127,6 +131,18 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
     if (!drag || !pointer) return null;
     return { x: Math.round((pointer.x - drag.start.x) / snapIncrement) * snapIncrement, z: Math.round((pointer.z - drag.start.z) / snapIncrement) * snapIncrement };
   };
+  const beamHandleMember = geometry.beams.reduce<(typeof geometry.beams)[number] | null>((longest, member) => {
+    const length = Math.hypot(member.end.x - member.start.x, member.end.z - member.start.z);
+    const longestLength = longest ? Math.hypot(longest.end.x - longest.start.x, longest.end.z - longest.start.z) : -1;
+    return length > longestLength ? member : longest;
+  }, null);
+  const beamHandle = beamHandleMember ? { x: (beamHandleMember.start.x + beamHandleMember.end.x) / 2, z: (beamHandleMember.start.z + beamHandleMember.end.z) / 2 } : null;
+  const beamPointer = (event: PointerEvent<SVGCircleElement>, commit: boolean) => {
+    const pointer = localPoint(event);
+    if (!pointer) return;
+    const inset = beamInsetFromPointV3(platform, pointer, snapIncrement);
+    commit ? onBeamCommit?.(inset) : onBeamPreview?.(inset);
+  };
   const nudgeHole = (mode: "move" | number, event: KeyboardEvent<SVGElement>) => {
     if (!selectedHole || selectedHoleIndex === null) return;
     const directions: Record<string, Point> = { ArrowLeft: { x: -snapIncrement, z: 0 }, ArrowRight: { x: snapIncrement, z: 0 }, ArrowUp: { x: 0, z: -snapIncrement }, ArrowDown: { x: 0, z: snapIncrement } };
@@ -187,6 +203,7 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
     </>}
     {editingEnabled && platform.region.outer.map((point, index) => <circle key={index} cx={x(point.x)} cy={y(point.z)} r={active === `corner-${index}` ? 7 : 5.5} className="dimension-handle corner-handle" role="button" tabIndex={0} aria-label={`Editable corner at ${point.x} inches left/right and ${point.z} inches away; drag or use arrow keys`} onKeyDown={(event) => nudgeCorner(index, event)} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive(`corner-${index}`); }} onPointerMove={(event) => { if (active === `corner-${index}` && event.currentTarget.hasPointerCapture(event.pointerId)) { const point = localPoint(event); if (point) onCornerPreview(index, point); } }} onPointerUp={(event) => { if (active !== `corner-${index}`) return; const point = localPoint(event); if (point) onCornerCommit(index, point); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />)}
     {editingEnabled && stair && !stair.locked && stairCenter && <circle cx={x(stairCenter.x)} cy={y(stairCenter.z)} r={active === "stairs" ? 8 : 6.5} className="stair-move-handle" role="button" tabIndex={0} aria-label={`Move ${stair.id} along selected geometric edge`} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive("stairs"); }} onPointerMove={(event) => { if (active === "stairs" && event.currentTarget.hasPointerCapture(event.pointerId)) stairPointer(event, false); }} onPointerUp={(event) => { if (active !== "stairs") return; stairPointer(event, true); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />}
+    {editingEnabled && beamHandle && <><circle cx={x(beamHandle.x)} cy={y(beamHandle.z)} r="15" className="beam-move-hit" role="button" tabIndex={0} aria-label={`Move conceptual beam, currently ${formatFeetInches(effectiveBeamInsetV3(platform))} from the outside edge`} onKeyDown={(event) => { const increaseKeys = platform.construction.decking.direction === "left_right" ? ["ArrowUp"] : ["ArrowLeft"]; const decreaseKeys = platform.construction.decking.direction === "left_right" ? ["ArrowDown"] : ["ArrowRight"]; if (!increaseKeys.includes(event.key) && !decreaseKeys.includes(event.key)) return; event.preventDefault(); const direction = increaseKeys.includes(event.key) ? 1 : -1; onBeamCommit?.(effectiveBeamInsetV3(platform) + direction * snapIncrement); }} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); beamDrag.current = true; setActive("beam-move"); }} onPointerMove={(event) => { if (!beamDrag.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return; beamPointer(event, false); }} onPointerUp={(event) => { if (!beamDrag.current) return; beamPointer(event, true); event.currentTarget.releasePointerCapture(event.pointerId); beamDrag.current = false; setActive(null); }} onPointerCancel={() => { beamDrag.current = false; setActive(null); onCancel(); }} /><rect x={x(beamHandle.x) - 5} y={y(beamHandle.z) - 5} width="10" height="10" rx="2" className={`beam-move-handle${active === "beam-move" ? " active" : ""}`} aria-hidden="true" pointerEvents="none" /></>}
     {editingEnabled && houseGeometry.houseOpenings.filter((opening) => opening.kind === "door").map((opening) => <polygon key={`select-${opening.wallId}-${opening.id}`} points={openingHitCorners(opening.start, opening.end).map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-house-opening-hit" role="button" tabIndex={0} aria-label={`Edit recorded door ${opening.id.replaceAll("-", " ")}`} onClick={() => onSelectHouseOpening?.(opening.id)} onKeyDown={(event) => { if (event.key !== "Enter" && event.key !== " ") return; event.preventDefault(); onSelectHouseOpening?.(opening.id); }} />)}
   </svg>;
 }

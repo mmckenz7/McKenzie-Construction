@@ -19,7 +19,7 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Exact left/right or house/yard board direction recorded in v3 and shared by 2D, 3D, conceptual joists, and quantities
 - Standard or one-course picture-frame board pattern recorded in v3 and shared by 2D, 3D, JSON, fingerprinting, and conceptual quantities
 - Exact selected-side direction entry for angled outlines, with attached corners and neighboring sides updating through the same safe polygon command
-- Polygon-aware conceptual beam and support-post projection that rotates with framing direction and splits around recorded cutouts
+- Polygon-aware conceptual beam and support-post projection with exact outside-edge distance, direct plan dragging, direction rotation, and recorded-cutout splitting
 - Simple decking, joists, beam, posts, and railings
 - Multiple independently locked conceptual stair systems on free edges, each with its own explicit railing opening
 - Deterministic conceptual stair side-stringer paths in 2D, 3D, and quantities

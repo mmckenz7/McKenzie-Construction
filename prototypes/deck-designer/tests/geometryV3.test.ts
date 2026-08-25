@@ -9,6 +9,7 @@ import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
 import lShapeLandingFixture from "./fixtures/l-shape-landing.json";
 import multiWallContextFixture from "./fixtures/multi-wall-context.json";
 import { addPlatformLevelV3 } from "../src/platformCommandsV3";
+import { beamInsetBoundsV3, beamInsetFromPointV3, clampBeamInsetV3, effectiveBeamInsetV3 } from "../src/framingEditorV3";
 
 const fixtures = [rectangleFoundationFixture, lShapeLandingFixture, multiWallContextFixture];
 const totalLength = (members: readonly Readonly<{ start: { x: number; z: number }; end: { x: number; z: number } }>[]) =>
@@ -47,6 +48,28 @@ describe("v3 free-edge geometry equivalence", () => {
       { id: "beam-2", start: { x: 120, z: 120 }, end: { x: 192, z: 120 } },
     ]);
     expect(split.supportPosts).toHaveLength(4);
+  });
+
+  it("moves the conceptual beam deterministically from the outside edge", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    expect(beamInsetBoundsV3(platform)).toEqual({ minimum: 6, maximum: 72 });
+    expect(beamInsetFromPointV3(platform, { x: 96, z: 102 }, 6)).toBe(42);
+    expect(clampBeamInsetV3(platform, 200)).toBe(72);
+    const moved = normalizeDeckDesignV3({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, framing: { ...platform.construction.framing, beamInset: 42 } } }] });
+    expect(effectiveBeamInsetV3(moved.platforms[0])).toBe(42);
+    expect(derivePlatformGeometryV3(moved, platform.id).beams[0]).toMatchObject({ start: { z: 102 }, end: { z: 102 } });
+    expect(derivePlatformGeometryV3(moved, platform.id)).toEqual(derivePlatformGeometryV3(moved, platform.id));
+  });
+
+  it("moves a rotated conceptual beam along the perpendicular axis", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const platform = base.platforms[0];
+    const rotated = normalizeDeckDesignV3({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, decking: { ...platform.construction.decking, direction: "house_yard" } } }] });
+    expect(beamInsetBoundsV3(rotated.platforms[0])).toEqual({ minimum: 6, maximum: 96 });
+    expect(beamInsetFromPointV3(rotated.platforms[0], { x: 126, z: 72 }, 6)).toBe(66);
+    const moved = normalizeDeckDesignV3({ ...rotated, platforms: [{ ...rotated.platforms[0], construction: { ...rotated.platforms[0].construction, framing: { ...rotated.platforms[0].construction.framing, beamInset: 66 } } }] });
+    expect(derivePlatformGeometryV3(moved, platform.id).beams[0]).toMatchObject({ start: { x: 126 }, end: { x: 126 } });
   });
 
   it("uses the authoritative picture-frame pattern for outer and cutout borders", () => {
