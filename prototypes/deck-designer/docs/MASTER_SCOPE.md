@@ -137,6 +137,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 
 - [x] Local-only multi-angle photo intake with non-standard coverage guidance, skip/manual fallback, and confirmed-fact review
 - [x] Local photo-reference outline tracing with a straight calibrated house line, endpoint alignment/merge, pointer/touch/keyboard corner, segment, and stair placement, and explicit polygon confirmation
+- [x] Transactional photo-trace drags with delta-based placement, owning-pointer cleanup, pinch takeover, and no false temporary Undo entries
 - [ ] Perspective-calibrated photo backdrop alignment
 - [ ] Multi-photo or LiDAR-assisted outline proposal with per-edge confidence and required human confirmation
 - [ ] Offline/high-quality rendering and richer environments

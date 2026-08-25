@@ -3,12 +3,15 @@ import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 import { normalizePolygonRegion } from "./polygonRegion";
 import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment } from "./polygonEditorV3";
 import { centeredStairOffset, derivePhotoTraceStairPreview, validateStairWidth } from "./photoTraceStairs";
-import { stairOffsetFromPoint } from "./editor";
 import { stairKeyboardMove } from "./stairKeyboard";
 import { photoTraceCornerKeyboardMove, photoTraceSegmentKeyboardMove } from "./photoTraceKeyboard";
+import { photoTraceCornerFromPointer, photoTraceSegmentFromPointer, photoTraceStairOffsetFromPointer, samePhotoTrace } from "./photoTracePointer";
 
 type ReferencePhoto = Readonly<{ name: string; url: string }>;
 type TraceSelection = Readonly<{ kind: "corner" | "segment"; index: number }> | null;
+type TraceSnapshot = Readonly<{ outer: readonly PolygonPoint[]; stairEdgeId: string | null; stairOffset: number | null; stairWidth: number }>;
+type OutlinePointerDrag = Readonly<{ pointerId: number; kind: "corner" | "segment"; index: number; pointerDown: PolygonPoint; start: TraceSnapshot; lastOuter: readonly PolygonPoint[]; houseCorner: boolean }>;
+type StairPointerDrag = Readonly<{ pointerId: number; pointerDown: PolygonPoint; start: TraceSnapshot; lastOffset: number }>;
 type ViewBounds = Readonly<{ minX: number; minZ: number; margin: number; width: number; height: number }>;
 type Props = Readonly<{
   width: number;
@@ -114,12 +117,11 @@ export function resizeTraceSegmentToFeet(outer: readonly PolygonPoint[], index: 
 
 export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdgeId, stairOffset, stairWidth, surfaceElevation, gradeElevation, onChange, onStairPlacementChange, onStairWidthChange, onError }: Props) {
   const svg = useRef<SVGSVGElement>(null);
-  const dragStart = useRef<readonly PolygonPoint[] | null>(null);
-  const segmentDrag = useRef<Readonly<{ index: number; midpoint: PolygonPoint; outward: PolygonPoint }> | null>(null);
-  const stairDragActive = useRef(false);
+  const outlineDrag = useRef<OutlinePointerDrag | null>(null);
+  const stairDrag = useRef<StairPointerDrag | null>(null);
   const activeDrag = useRef<string | null>(null);
   const frozenView = useRef<ViewBounds | null>(null);
-  const undoStack = useRef<readonly (readonly PolygonPoint[])[]>([]);
+  const undoStack = useRef<readonly TraceSnapshot[]>([]);
   const touchPoints = useRef(new Map<number, Readonly<{ x: number; y: number }>>());
   const pinchStart = useRef<Readonly<{ distance: number; anchor: PolygonPoint; view: ViewBounds }> | null>(null);
   const [activePhoto, setActivePhoto] = useState(0);
@@ -169,20 +171,28 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     const height = Math.min(computedView.height * 2, Math.max(computedView.height / 4, current.height / factor));
     setManualView(Object.freeze({ minX: centerX - width / 2, minZ: centerZ - height / 2, margin: 0, width, height }));
   };
-  const remember = (snapshot = outer) => {
-    const frozen = Object.freeze(snapshot.map((point) => Object.freeze({ ...point })));
+  const traceSnapshot = (snapshotOuter = outer, snapshotStairEdgeId = stairEdgeId, snapshotStairOffset = stairOffset, snapshotStairWidth = stairWidth): TraceSnapshot => Object.freeze({
+    outer: Object.freeze(snapshotOuter.map((point) => Object.freeze({ ...point }))),
+    stairEdgeId: snapshotStairEdgeId,
+    stairOffset: snapshotStairOffset,
+    stairWidth: snapshotStairWidth,
+  });
+  const rememberSnapshot = (frozen: TraceSnapshot) => {
     const previous = undoStack.current[undoStack.current.length - 1];
     if (previous && JSON.stringify(previous) === JSON.stringify(frozen)) return;
     undoStack.current = Object.freeze([...undoStack.current.slice(-39), frozen]);
     setUndoCount(undoStack.current.length);
   };
+  const remember = (snapshotOuter = outer) => rememberSnapshot(traceSnapshot(snapshotOuter));
   const undo = () => {
     const previous = undoStack.current[undoStack.current.length - 1];
     if (!previous) return;
     undoStack.current = Object.freeze(undoStack.current.slice(0, -1));
     setUndoCount(undoStack.current.length);
     setSelection(null);
-    onChange(previous);
+    onChange(previous.outer);
+    onStairWidthChange(previous.stairWidth);
+    onStairPlacementChange(previous.stairEdgeId, previous.stairOffset);
     onError("");
   };
   const accept = (candidate: readonly PolygonPoint[]): boolean => {
@@ -198,8 +208,9 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
       setSelection(null);
     } catch (error) { onError(error instanceof Error ? error.message : "An offset cannot be added there."); }
   };
-  const endDrag = () => { dragStart.current = null; segmentDrag.current = null; activeDrag.current = null; frozenView.current = null; setActive(null); };
-  const cancelDrag = () => { if (dragStart.current) onChange(dragStart.current); endDrag(); };
+  const endDrag = () => { outlineDrag.current = null; activeDrag.current = null; frozenView.current = null; setActive(null); };
+  const cancelDrag = () => { const drag = outlineDrag.current; if (drag && !samePhotoTrace(drag.lastOuter, drag.start.outer)) onChange(drag.start.outer); endDrag(); };
+  const cancelStairDrag = () => { const drag = stairDrag.current; if (drag && drag.lastOffset !== drag.start.stairOffset && drag.start.stairEdgeId) onStairPlacementChange(drag.start.stairEdgeId, drag.start.stairOffset); stairDrag.current = null; setActive(null); };
   const selectedCorner = selection?.kind === "corner" ? outer[selection.index] : undefined;
   const selectedEdge = selection?.kind === "segment" ? edges[selection.index] : undefined;
   const selectedHouseCorner = selection?.kind === "corner" && fixedHouseCorners.has(selection.index);
@@ -262,11 +273,47 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     if (horizontal) return selectedEdge.start.x <= selectedEdge.end.x ? ["left", "right"] as const : ["right", "left"] as const;
     return selectedEdge.start.z <= selectedEdge.end.z ? ["top", "bottom"] as const : ["bottom", "top"] as const;
   })() : null;
-  const moveStairFromPointer = (clientX: number, clientY: number) => {
+  const previewOutlineDrag = (pointerId: number, clientX: number, clientY: number): boolean => {
+    const drag = outlineDrag.current;
+    if (!drag || drag.pointerId !== pointerId) return false;
+    const pointer = pointFromClient(clientX, clientY);
+    if (!pointer) return false;
+    try {
+      const candidate = validatePhotoTrace(drag.kind === "corner"
+        ? photoTraceCornerFromPointer(drag.start.outer, drag.index, drag.pointerDown, pointer, snapIncrement, drag.houseCorner)
+        : photoTraceSegmentFromPointer(drag.start.outer, drag.index, drag.pointerDown, pointer, snapIncrement));
+      if (!samePhotoTrace(candidate, drag.lastOuter)) onChange(candidate);
+      outlineDrag.current = Object.freeze({ ...drag, lastOuter: candidate });
+      onError("");
+      return true;
+    } catch (error) { onError(error instanceof Error ? error.message : "That outline is not valid."); return false; }
+  };
+  const finishOutlineDrag = (pointerId: number, clientX: number, clientY: number) => {
+    const drag = outlineDrag.current;
+    if (!drag || drag.pointerId !== pointerId) return;
+    previewOutlineDrag(pointerId, clientX, clientY);
+    const finished = outlineDrag.current ?? drag;
+    if (!samePhotoTrace(finished.lastOuter, finished.start.outer)) rememberSnapshot(finished.start);
+    endDrag();
+  };
+  const previewStairDrag = (pointerId: number, clientX: number, clientY: number): boolean => {
+    const drag = stairDrag.current;
     const point = pointFromClient(clientX, clientY);
-    const edge = stairEdgeId ? edges.find((candidate) => candidate.id === stairEdgeId) : null;
-    if (!point || !edge) return;
-    onStairPlacementChange(edge.id, stairOffsetFromPoint(edge, stairWidth, point, snapIncrement));
+    const edge = drag?.start.stairEdgeId ? edges.find((candidate) => candidate.id === drag.start.stairEdgeId) : null;
+    if (!drag || drag.pointerId !== pointerId || !point || !edge || drag.start.stairOffset === null) return false;
+    const offset = photoTraceStairOffsetFromPointer(edge, drag.start.stairOffset, drag.start.stairWidth, drag.pointerDown, point, snapIncrement);
+    if (offset !== drag.lastOffset) onStairPlacementChange(edge.id, offset);
+    stairDrag.current = Object.freeze({ ...drag, lastOffset: offset });
+    return true;
+  };
+  const finishStairDrag = (pointerId: number, clientX: number, clientY: number) => {
+    const drag = stairDrag.current;
+    if (!drag || drag.pointerId !== pointerId) return;
+    previewStairDrag(pointerId, clientX, clientY);
+    const finished = stairDrag.current ?? drag;
+    if (finished.lastOffset !== finished.start.stairOffset) rememberSnapshot(finished.start);
+    stairDrag.current = null;
+    setActive(null);
   };
   const nudgeStair = (edge: (typeof edges)[number], currentOffset: number, event: KeyboardEvent<SVGCircleElement>) => {
     const move = stairKeyboardMove({ locked: false, offset: currentOffset, width: stairWidth }, edge, event.key, snapIncrement);
@@ -308,7 +355,8 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     touchPoints.current.set(event.pointerId, Object.freeze({ x: event.clientX, y: event.clientY }));
     if (touchPoints.current.size !== 2) return;
     event.preventDefault(); event.stopPropagation();
-    if (dragStart.current) cancelDrag();
+    if (outlineDrag.current) cancelDrag();
+    if (stairDrag.current) cancelStairDrag();
     const points = [...touchPoints.current.values()];
     const midpoint = Object.freeze({ x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 });
     const matrix = svg.current?.getScreenCTM();
@@ -324,7 +372,6 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     });
   };
   const onPlanPointerMoveCapture = (event: PointerEvent<SVGSVGElement>) => {
-    if (stairDragActive.current) moveStairFromPointer(event.clientX, event.clientY);
     if (event.pointerType !== "touch" || !touchPoints.current.has(event.pointerId)) return;
     touchPoints.current.set(event.pointerId, Object.freeze({ x: event.clientX, y: event.clientY }));
     if (!pinchStart.current || touchPoints.current.size < 2 || !svg.current) return;
@@ -341,11 +388,6 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     setManualView(Object.freeze({ minX: pinchStart.current.anchor.x - normalizedX * width, minZ: pinchStart.current.anchor.z - normalizedY * height, margin: 0, width, height }));
   };
   const onPlanPointerEndCapture = (event: PointerEvent<SVGSVGElement>) => {
-    if (stairDragActive.current) {
-      moveStairFromPointer(event.clientX, event.clientY);
-      stairDragActive.current = false;
-      setActive(null);
-    }
     touchPoints.current.delete(event.pointerId);
     if (touchPoints.current.size < 2) pinchStart.current = null;
   };
@@ -366,7 +408,7 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
         <polygon points={outer.map((point) => `${x(point.x)},${y(point.z)}`).join(" ")} className="trace-platform" />
         {stairPreview?.treads.map((tread, index) => <polygon key={`trace-stair-${index}`} points={tread.map((point) => `${x(point.x)},${y(point.z)}`).join(" ")} className="trace-stair-preview" />)}
         {stairPreview && (() => { const last = stairPreview.treads[stairPreview.treads.length - 1]; const center = last.reduce((sum, point) => ({ x: sum.x + point.x / last.length, z: sum.z + point.z / last.length }), { x: 0, z: 0 }); return <text x={x(center.x)} y={y(center.z)} className="trace-stair-label">STAIRS</text>; })()}
-        {stairPreview && (() => { const edge = edges.find((candidate) => candidate.id === stairPreview.edgeId)!; const alongX = (edge.end.x - edge.start.x) / edge.length; const alongZ = (edge.end.z - edge.start.z) / edge.length; const center = { x: edge.start.x + alongX * (stairPreview.offset + stairPreview.width / 2), z: edge.start.z + alongZ * (stairPreview.offset + stairPreview.width / 2) }; const dragProps = { onPointerDown: (event: PointerEvent<SVGCircleElement>) => { stairDragActive.current = true; event.currentTarget.setPointerCapture(event.pointerId); setActive("stairs"); moveStairFromPointer(event.clientX, event.clientY); }, onPointerMove: (event: PointerEvent<SVGCircleElement>) => { if (stairDragActive.current) moveStairFromPointer(event.clientX, event.clientY); }, onPointerUp: (event: PointerEvent<SVGCircleElement>) => { if (stairDragActive.current) moveStairFromPointer(event.clientX, event.clientY); stairDragActive.current = false; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }, onPointerCancel: () => { stairDragActive.current = false; setActive(null); } }; return <><circle cx={x(center.x)} cy={y(center.z)} r="28" className="trace-stair-touch-target" role="button" tabIndex={0} aria-label={`Move temporary stairs, currently ${formatLength(stairPreview.offset)} from the start of the selected segment; drag or use arrow keys; snaps to ${formatLength(snapIncrement)}`} onKeyDown={(event) => nudgeStair(edge, stairPreview.offset, event)} {...dragProps} /><circle cx={x(center.x)} cy={y(center.z)} r="10" className={`trace-stair-handle${active === "stairs" ? " active" : ""}`} aria-hidden="true" /></>; })()}
+        {stairPreview && (() => { const edge = edges.find((candidate) => candidate.id === stairPreview.edgeId)!; const alongX = (edge.end.x - edge.start.x) / edge.length; const alongZ = (edge.end.z - edge.start.z) / edge.length; const center = { x: edge.start.x + alongX * (stairPreview.offset + stairPreview.width / 2), z: edge.start.z + alongZ * (stairPreview.offset + stairPreview.width / 2) }; const dragProps = { onPointerDown: (event: PointerEvent<SVGCircleElement>) => { const pointerDown = pointFromClient(event.clientX, event.clientY); if (!pointerDown) return; event.currentTarget.setPointerCapture(event.pointerId); stairDrag.current = Object.freeze({ pointerId: event.pointerId, pointerDown, start: traceSnapshot(), lastOffset: stairPreview.offset }); setActive("stairs"); }, onPointerMove: (event: PointerEvent<SVGCircleElement>) => { if (stairDrag.current?.pointerId === event.pointerId && event.currentTarget.hasPointerCapture(event.pointerId)) previewStairDrag(event.pointerId, event.clientX, event.clientY); }, onPointerUp: (event: PointerEvent<SVGCircleElement>) => { if (stairDrag.current?.pointerId !== event.pointerId) return; finishStairDrag(event.pointerId, event.clientX, event.clientY); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }, onPointerCancel: (event: PointerEvent<SVGCircleElement>) => { if (stairDrag.current?.pointerId === event.pointerId) cancelStairDrag(); }, onLostPointerCapture: (event: PointerEvent<SVGCircleElement>) => { if (stairDrag.current?.pointerId === event.pointerId) cancelStairDrag(); } }; return <><circle cx={x(center.x)} cy={y(center.z)} r="28" className="trace-stair-touch-target" role="button" tabIndex={0} aria-label={`Move temporary stairs, currently ${formatLength(stairPreview.offset)} from the start of the selected segment; drag or use arrow keys; snaps to ${formatLength(snapIncrement)}`} onKeyDown={(event) => nudgeStair(edge, stairPreview.offset, event)} {...dragProps} /><circle cx={x(center.x)} cy={y(center.z)} r="10" className={`trace-stair-handle${active === "stairs" ? " active" : ""}`} aria-hidden="true" /></>; })()}
         {edges.map((edge, index) => {
           const midpoint = Object.freeze({ x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 });
           const labelX = midpoint.x + edge.outward.x * 24;
@@ -374,12 +416,12 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
           const rawAngle = Math.atan2(edge.end.z - edge.start.z, edge.end.x - edge.start.x) * 180 / Math.PI;
           const labelAngle = rawAngle > 90 ? rawAngle - 180 : rawAngle < -90 ? rawAngle + 180 : rawAngle;
           return <g key={`trace-edge-${index}`}><line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className={`${index === houseEdgeIndex ? "trace-house-edge" : "trace-edge"}${selection?.kind === "segment" && selection.index === index ? " highlighted" : ""}`} />{stairEdgeId === edge.id && <line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className="trace-stair-selection" />}<line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className="trace-edge-hit" role="button" tabIndex={0} aria-label={`Select ${segmentDescription(edge)}`} onClick={() => setSelection({ kind: "segment", index })} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelection({ kind: "segment", index }); } }} /><rect x={x(labelX) - 36} y={y(labelZ) - 10} width="72" height="20" rx="5" className="trace-dimension-hit" role="button" tabIndex={0} aria-label={`Edit length of ${segmentDescription(edge)}`} onClick={(event) => { event.stopPropagation(); setSelection({ kind: "segment", index }); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelection({ kind: "segment", index }); } }} transform={`rotate(${labelAngle} ${x(labelX)} ${y(labelZ)})`} /><text x={x(labelX)} y={y(labelZ)} transform={`rotate(${labelAngle} ${x(labelX)} ${y(labelZ)})`} className="trace-dimension-label">{formatLength(edge.length)}</text>{index !== houseEdgeIndex && (() => {
-          return <rect x={x(midpoint.x) - 9} y={y(midpoint.z) - 9} width="18" height="18" rx="4" className={`trace-segment-handle${selection?.kind === "segment" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`Move ${segmentDescription(edge)} perpendicular to itself; drag or use arrow keys; snaps to ${formatLength(snapIncrement)}`} onKeyDown={(event) => nudgeTraceSegment(index, event)} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); remember(outer); frozenView.current = computedView; dragStart.current = outer; segmentDrag.current = { index, midpoint, outward: edge.outward }; activeDrag.current = `segment-${index}`; setSelection({ kind: "segment", index }); setActive(`segment-${index}`); }} onPointerMove={(event) => { if (activeDrag.current !== `segment-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const point = pointFromClient(event.clientX, event.clientY); const origin = segmentDrag.current; if (!point || !origin) return; try { accept(movePolygonSegment(dragStart.current ?? outer, index, (point.x - origin.midpoint.x) * origin.outward.x + (point.z - origin.midpoint.z) * origin.outward.z, snapIncrement, false)); } catch { /* reject preview */ } }} onPointerUp={(event) => { event.currentTarget.releasePointerCapture(event.pointerId); endDrag(); }} onPointerCancel={cancelDrag} />;
+          return <rect x={x(midpoint.x) - 9} y={y(midpoint.z) - 9} width="18" height="18" rx="4" className={`trace-segment-handle${selection?.kind === "segment" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`Move ${segmentDescription(edge)} perpendicular to itself; drag or use arrow keys; snaps to ${formatLength(snapIncrement)}`} onKeyDown={(event) => nudgeTraceSegment(index, event)} onPointerDown={(event) => { const pointerDown = pointFromClient(event.clientX, event.clientY); if (!pointerDown) return; event.currentTarget.setPointerCapture(event.pointerId); frozenView.current = computedView; outlineDrag.current = Object.freeze({ pointerId: event.pointerId, kind: "segment", index, pointerDown, start: traceSnapshot(), lastOuter: outer, houseCorner: false }); activeDrag.current = `segment-${index}`; setSelection({ kind: "segment", index }); setActive(`segment-${index}`); }} onPointerMove={(event) => { if (activeDrag.current !== `segment-${index}` || outlineDrag.current?.pointerId !== event.pointerId || !event.currentTarget.hasPointerCapture(event.pointerId)) return; previewOutlineDrag(event.pointerId, event.clientX, event.clientY); }} onPointerUp={(event) => { if (outlineDrag.current?.pointerId !== event.pointerId) return; finishOutlineDrag(event.pointerId, event.clientX, event.clientY); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={(event) => { if (outlineDrag.current?.pointerId === event.pointerId) cancelDrag(); }} onLostPointerCapture={(event) => { if (outlineDrag.current?.pointerId === event.pointerId) cancelDrag(); }} />;
         })()}</g>;
         })}
         {outer.map((point, index) => {
           const houseCorner = fixedHouseCorners.has(index);
-          return <circle key={index} cx={x(point.x)} cy={y(point.z)} r="10" className={`trace-corner${houseCorner ? " house" : ""}${selection?.kind === "corner" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`${houseCorner ? "Move house-line" : "Move"} corner ${index + 1}; drag or use arrow keys; snaps to ${formatLength(snapIncrement)}`} onKeyDown={(event) => nudgeTraceCorner(index, houseCorner, event)} onPointerDown={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.setPointerCapture(event.pointerId); remember(outer); frozenView.current = computedView; dragStart.current = outer; activeDrag.current = `corner-${index}`; setSelection({ kind: "corner", index }); setActive(`corner-${index}`); }} onPointerMove={(event: PointerEvent<SVGCircleElement>) => { if (activeDrag.current !== `corner-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const next = pointFromClient(event.clientX, event.clientY); if (!next) return; const constrained = houseCorner ? Object.freeze({ x: next.x, z: 0 }) : next; try { accept(movePolygonCorner(dragStart.current ?? outer, index, constrained, false, snapIncrement)); } catch { /* reject preview */ } }} onPointerUp={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.releasePointerCapture(event.pointerId); endDrag(); }} onPointerCancel={cancelDrag} />;
+          return <circle key={index} cx={x(point.x)} cy={y(point.z)} r="10" className={`trace-corner${houseCorner ? " house" : ""}${selection?.kind === "corner" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`${houseCorner ? "Move house-line" : "Move"} corner ${index + 1}; drag or use arrow keys; snaps to ${formatLength(snapIncrement)}`} onKeyDown={(event) => nudgeTraceCorner(index, houseCorner, event)} onPointerDown={(event: PointerEvent<SVGCircleElement>) => { const pointerDown = pointFromClient(event.clientX, event.clientY); if (!pointerDown) return; event.currentTarget.setPointerCapture(event.pointerId); frozenView.current = computedView; outlineDrag.current = Object.freeze({ pointerId: event.pointerId, kind: "corner", index, pointerDown, start: traceSnapshot(), lastOuter: outer, houseCorner }); activeDrag.current = `corner-${index}`; setSelection({ kind: "corner", index }); setActive(`corner-${index}`); }} onPointerMove={(event: PointerEvent<SVGCircleElement>) => { if (activeDrag.current !== `corner-${index}` || outlineDrag.current?.pointerId !== event.pointerId || !event.currentTarget.hasPointerCapture(event.pointerId)) return; previewOutlineDrag(event.pointerId, event.clientX, event.clientY); }} onPointerUp={(event: PointerEvent<SVGCircleElement>) => { if (outlineDrag.current?.pointerId !== event.pointerId) return; finishOutlineDrag(event.pointerId, event.clientX, event.clientY); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={(event) => { if (outlineDrag.current?.pointerId === event.pointerId) cancelDrag(); }} onLostPointerCapture={(event) => { if (outlineDrag.current?.pointerId === event.pointerId) cancelDrag(); }} />;
         })}
       </svg>
       {(selectedCorner || selectedEdge) && <div className="trace-dimension-editor">

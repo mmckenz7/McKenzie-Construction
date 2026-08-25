@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 transactional photo-trace touch drags
+
+- Temporary corner, segment, and stair drags now record pointer ID, pointer-down location, and starting facts. Large-target taps, sub-snap motion, return-to-origin, cancel, lost capture, non-owning pointers, and second-touch pinch takeover create no temporary Undo entry.
+- Pure tests cover free/house corners, horizontal/vertical segments, both stair edge directions, bounds, off-center starts, real movement, and exact no-ops. Source regression checks the owning-pointer, cancel/lost-capture, pinch-takeover, and one-snapshot completion wiring; existing intake tests retain confirmation as the sole authoritative v5/history/JSON boundary.
+- Desktop browser QA opened a zero-photo non-standard trace. Tapping the lower segment and free corner kept Undo disabled; one deliberate segment arrow move created exactly `Undo (1)`, which restored the rectangle and disabled Undo again. Adding centered temporary stairs showed 8-foot clearances at both ends; tapping the 56-pixel stair target preserved both values and kept Undo disabled.
+
 ## 2026-08-25 cutout and beam no-op pointer safety
 
 - Audit reproduced false history changes from the older large targets: a beam tap advanced revision 8 to 9, then cutout center and corner taps advanced 9 to 10 to 11 without intentional movement.
