@@ -1,11 +1,31 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_DESIGN } from "../src/model";
-import { deriveGeometryWarningsV5 } from "../src/geometryWarningsV5";
+import { deriveGeometryWarningsV5, usesPrototypeReviewThresholdV5, type GeometryWarningV5 } from "../src/geometryWarningsV5";
 import { deriveLayoutReviewV5 } from "../src/layoutReviewV5";
 import { migrateDeckDesignToV5, normalizeDeckDesignV5 } from "../src/modelV5";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
 
 describe("DeckDesign v5 explainable framing warnings", () => {
+  it("identifies every prototype-threshold note without classifying collisions or interruptions", () => {
+    const warning = (id: string): GeometryWarningV5 => ({ id, severity: "clearance", geometryIds: [], message: id });
+    [
+      "beam-cutout-clearance-beam-line-1-1",
+      "beam-line-clearance-beam-line-1-beam-line-2",
+      "beam-short-segment-beam-line-1-segment-1",
+      "cutout-clearance-1-2",
+      "cutout-edge-clearance-1",
+      "joist-cutout-clearance-1",
+      "stair-edge-remainder-stair-system-1-1",
+      "stair-house-clearance-stair-system-1-house-wall-1",
+      "stair-route-clearance-stair-system-1-stair-system-2",
+    ].forEach((id) => expect(usesPrototypeReviewThresholdV5(warning(id))).toBe(true));
+    [
+      "beam-cutout-interruption-beam-line-1-1",
+      "joist-cutout-interruption-1",
+      "stair-route-collision-stair-system-1-stair-system-2",
+    ].forEach((id) => expect(usesPrototypeReviewThresholdV5(warning(id))).toBe(false));
+  });
+
   it("keeps the clean rectangle free of framing conflicts", () => {
     const design = migrateDeckDesignToV5(DEFAULT_DESIGN);
     expect(deriveGeometryWarningsV5(design, "platform-1")).toEqual([]);

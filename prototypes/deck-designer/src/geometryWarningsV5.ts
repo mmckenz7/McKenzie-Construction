@@ -10,6 +10,21 @@ import { deriveStairRouteGeometryV3 } from "./stairRouteGeometryV3";
 export type GeometryWarningV5 = GeometryWarningV4;
 
 const EPSILON = .01;
+const PROTOTYPE_REVIEW_THRESHOLD_PREFIXES = Object.freeze([
+  "beam-cutout-clearance-",
+  "beam-line-clearance-",
+  "beam-short-segment-",
+  "cutout-clearance-",
+  "cutout-edge-clearance-",
+  "joist-cutout-clearance-",
+  "stair-edge-remainder-",
+  "stair-house-clearance-",
+  "stair-route-clearance-",
+]);
+
+export function usesPrototypeReviewThresholdV5(warning: GeometryWarningV5): boolean {
+  return PROTOTYPE_REVIEW_THRESHOLD_PREFIXES.some((prefix) => warning.id.startsWith(prefix));
+}
 
 function pointSegmentDistance(point: PolygonPoint, start: PolygonPoint, end: PolygonPoint): number {
   const dx = end.x - start.x, dz = end.z - start.z;

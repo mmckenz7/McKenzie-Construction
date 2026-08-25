@@ -20,7 +20,7 @@ import { deriveLayoutReviewV5 } from "./layoutReviewV5";
 import { addBeamLineV5, removeBeamLineV5, updateBeamLineV5 } from "./framingEditorV5";
 import { setEdgeFinishIntentV5 } from "./finishEditorV5";
 import { deriveWarningSelectionV5 } from "./warningLocatorV5";
-import type { GeometryWarningV5 } from "./geometryWarningsV5";
+import { usesPrototypeReviewThresholdV5, type GeometryWarningV5 } from "./geometryWarningsV5";
 
 const ThreeViewV3 = lazy(async () => ({ default: (await import("./ThreeViewV3")).ThreeViewV3 }));
 const PhotoIntake = lazy(async () => ({ default: (await import("./PhotoIntakeDialog")).PhotoIntake }));
@@ -424,7 +424,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
         <div className="layout-review-status"><strong>{layoutReview.readyToContinue ? "Layout is ready for railings" : "Finish the highlighted geometry first"}</strong><span>Conceptual design · not for construction</span></div>
         <div className="layout-review-items">{layoutReview.items.map((item) => <article key={item.id} className={`layout-review-item ${item.status}`}><div><strong>{item.label}</strong><span>{item.status === "confirmed" ? "Confirmed" : item.status === "field_verify" ? "Field verify" : "Finish required"}</span></div><p>{item.value}</p></article>)}</div>
         {layoutReview.blockers.length > 0 && <section className="layout-review-notes blockers"><strong>Before continuing</strong><ul>{layoutReview.blockers.map((note) => <li key={note}>{note}</li>)}</ul></section>}
-        <section className="layout-review-notes"><strong>Field verification</strong>{layoutReview.geometryWarnings.some((warning) => warning.id.startsWith("beam-cutout-clearance-") || warning.id.startsWith("beam-line-clearance-") || warning.id.startsWith("beam-short-segment-") || warning.id.startsWith("joist-cutout-clearance-") || warning.id.startsWith("stair-edge-remainder-") || warning.id.startsWith("stair-house-clearance-")) && <p className="layout-review-threshold">The 12-inch value is a prototype review threshold only—not a code requirement or structural clearance.</p>}<ul>{layoutReview.fieldVerification.map((note) => { const warning = layoutReview.geometryWarnings.find((item) => item.message === note); return <li key={note}>{warning ? <button type="button" className="layout-review-location" onClick={() => locateReviewWarning(warning)}><span>{note}</span><em>Show in plan</em></button> : note}</li>; })}</ul></section>
+        <section className="layout-review-notes"><strong>Field verification</strong>{layoutReview.geometryWarnings.some(usesPrototypeReviewThresholdV5) && <p className="layout-review-threshold">The 12-inch value is a prototype review threshold only—not a code requirement or structural clearance.</p>}<ul>{layoutReview.fieldVerification.map((note) => { const warning = layoutReview.geometryWarnings.find((item) => item.message === note); return <li key={note}>{warning ? <button type="button" className="layout-review-location" onClick={() => locateReviewWarning(warning)}><span>{note}</span><em>Show in plan</em></button> : note}</li>; })}</ul></section>
       </div>
       <footer><button onClick={() => setLayoutReviewOpen(false)}>Back to layout</button><button className="primary" disabled={!layoutReview.readyToContinue} onClick={enterRailingStage}>Lock layout &amp; continue</button></footer>
     </section></div>}
