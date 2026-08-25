@@ -79,6 +79,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const [photoStartSummary, setPhotoStartSummary] = useState<Readonly<{ photoCount: number; review: PhotoIntakeReview }> | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const planActionTray = useRef<HTMLElement>(null);
+  const photoIntakeReturnFocus = useRef<HTMLElement | null>(null);
   const layoutReviewClose = useRef<HTMLButtonElement>(null);
   const layoutReviewReturnFocus = useRef<HTMLElement | null>(null);
   useEffect(() => { if (layoutReviewOpen) layoutReviewClose.current?.focus(); }, [layoutReviewOpen]);
@@ -247,6 +248,17 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     addCorner(edgeIndex, { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 });
   };
   const applyRailing = (railing: DeckPlatformV5["construction"]["railing"], nextMessage: string) => updateConstruction({ ...platform.construction, railing }, nextMessage);
+  const openPhotoIntake = () => {
+    photoIntakeReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setPhotoIntakeOpen(true);
+  };
+  const closePhotoIntake = () => {
+    setPhotoIntakeOpen(false);
+    requestAnimationFrame(() => {
+      const target = photoIntakeReturnFocus.current;
+      if (target?.isConnected && !target.hasAttribute("disabled")) target.focus();
+    });
+  };
   const requestRailingStage = () => {
     setPreview(null);
     layoutReviewReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -444,7 +456,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   };
 
   return <main>
-    {photoIntakeOpen && <Suspense fallback={<div className="photo-intake-backdrop"><div className="photo-intake-loading" role="status">Preparing local photo review…</div></div>}><PhotoIntake initialFacts={initialPhotoFacts} fallbackSurfaceElevation={platform.elevation} gradeElevation={design.siteContext.gradeElevation} onCancel={() => setPhotoIntakeOpen(false)} onStartDesign={startFromPhotos} /></Suspense>}
+    {photoIntakeOpen && <Suspense fallback={<div className="photo-intake-backdrop"><div className="photo-intake-loading" role="status">Preparing local photo review…</div></div>}><PhotoIntake initialFacts={initialPhotoFacts} fallbackSurfaceElevation={platform.elevation} gradeElevation={design.siteContext.gradeElevation} onCancel={closePhotoIntake} onStartDesign={startFromPhotos} /></Suspense>}
     {layoutReviewOpen && <div className="layout-review-backdrop" role="presentation"><section className="layout-review-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-review-title" aria-describedby="layout-review-description" onKeyDown={handleLayoutReviewKeyDown}>
       <header><div><p className="eyebrow">Single-level geometry check</p><h2 id="layout-review-title">Review deck layout</h2><p id="layout-review-description">Confirm the measured geometry before choosing railings.</p></div><button ref={layoutReviewClose} onClick={closeLayoutReview} aria-label="Close layout review">Close</button></header>
       <div className="layout-review-content">
@@ -455,14 +467,14 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       </div>
       <footer><button onClick={closeLayoutReview}>Back to layout</button><button className="primary" disabled={!layoutReview.readyToContinue} onClick={enterRailingStage}>Lock layout &amp; continue</button></footer>
     </section></div>}
-    <header className="topbar"><div className="brand-mark">M</div><div><p className="eyebrow">McKenzie Construction · isolated R&amp;D</p><h1>Deck Designer</h1></div><div className="header-actions"><button className="quiet" onClick={() => setPhotoIntakeOpen(true)}>Start with photos</button><button className="quiet" onClick={() => { saveDeckDesignV5(localStorage, design); setMessage(`Saved v5 locally at revision ${design.metadata.revision}.`); }}>Save locally</button><button className="quiet" onClick={download}>Download JSON</button><button className="primary" onClick={() => fileInput.current?.click()}>Load JSON</button><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const next = migrateDeckDesignToV5(JSON.parse(await file.text())); dispatch({ type: "reset", design: next }); setSelectedPlatformId(next.platforms[0].id); setWorkflowStage("layout"); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setMessage(`Loaded v5 design “${next.name}”.`); } catch (error) { setMessage(error instanceof Error ? `Load rejected: ${error.message}` : "Load rejected."); } event.target.value = ""; }} /></div></header>
+    <header className="topbar"><div className="brand-mark">M</div><div><p className="eyebrow">McKenzie Construction · isolated R&amp;D</p><h1>Deck Designer</h1></div><div className="header-actions"><button className="quiet" onClick={openPhotoIntake}>Start with photos</button><button className="quiet" onClick={() => { saveDeckDesignV5(localStorage, design); setMessage(`Saved v5 locally at revision ${design.metadata.revision}.`); }}>Save locally</button><button className="quiet" onClick={download}>Download JSON</button><button className="primary" onClick={() => fileInput.current?.click()}>Load JSON</button><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const next = migrateDeckDesignToV5(JSON.parse(await file.text())); dispatch({ type: "reset", design: next }); setSelectedPlatformId(next.platforms[0].id); setWorkflowStage("layout"); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setMessage(`Loaded v5 design “${next.name}”.`); } catch (error) { setMessage(error instanceof Error ? `Load rejected: ${error.message}` : "Load rejected."); } event.target.value = ""; }} /></div></header>
     <section className="warning"><strong>Conceptual — not for construction.</strong> Field and qualified review required.</section>
     <nav className="designer-stage-nav" aria-label="Deck design stages"><button className={workflowStage === "layout" ? "active" : "complete"} onClick={returnToLayoutStage}><span>1</span> Deck layout</button><button className={workflowStage === "railings" ? "active" : workflowStage === "finishes" ? "complete" : ""} onClick={workflowStage === "layout" ? requestRailingStage : returnToRailingStage}><span>2</span> Railings</button><button className={workflowStage === "finishes" ? "active" : ""} disabled={workflowStage === "layout"} onClick={enterFinishStage}><span>3</span> Finishes</button><span className="stage-coming-soon">Materials come next</span></nav>
     {workflowStage === "layout" ? <nav className="mobile-workspace-nav" aria-label="Mobile designer sections"><a href="#design-views">Plan &amp; 3D</a><a href="#design-controls">Setup</a><a href="#house-connection">House</a></nav> : workflowStage === "railings" ? <nav className="mobile-workspace-nav railing-mobile-nav" aria-label="Mobile railing sections"><a href="#design-views">Railing plan</a><a href="#railing-controls">Railing controls</a></nav> : <nav className="mobile-workspace-nav railing-mobile-nav" aria-label="Mobile finish sections"><a href="#design-views">Finish plan</a><a href="#finish-controls">Finish controls</a></nav>}
     <div className="workspace"><aside className="controls-panel" id="design-controls">
       {workflowStage === "layout" ? <>
       <div className="section-heading"><span>01</span><div><p>Deck setup</p><small>Global design settings</small></div></div>
-      {photoStartSummary && <section className={`photo-start-summary${photoStartSummary.review.outlineWarning ? " needs-outline" : ""}`}><strong>Photo-assisted start</strong><p>{photoStartSummary.photoCount} photo{photoStartSummary.photoCount === 1 ? "" : "s"} reviewed. Confirmed facts made the geometry.</p>{photoStartSummary.review.outlineWarning && <p className="outline-warning">{photoStartSummary.review.outlineWarning}</p>}<small>{photoStartSummary.review.fieldVerification.length} field note{photoStartSummary.review.fieldVerification.length === 1 ? "" : "s"} remain.</small><button onClick={() => setPhotoIntakeOpen(true)}>Review photos</button></section>}
+      {photoStartSummary && <section className={`photo-start-summary${photoStartSummary.review.outlineWarning ? " needs-outline" : ""}`}><strong>Photo-assisted start</strong><p>{photoStartSummary.photoCount} photo{photoStartSummary.photoCount === 1 ? "" : "s"} reviewed. Confirmed facts made the geometry.</p>{photoStartSummary.review.outlineWarning && <p className="outline-warning">{photoStartSummary.review.outlineWarning}</p>}<small>{photoStartSummary.review.fieldVerification.length} field note{photoStartSummary.review.fieldVerification.length === 1 ? "" : "s"} remain.</small><button onClick={openPhotoIntake}>Review photos</button></section>}
       <div className="shape-switch"><button onClick={() => applyTemplate("rectangle")}>Rectangle</button><button onClick={() => applyTemplate("l-shape")}>L-shape</button></div>
       <label className="field full"><span>Design name</span><input value={design.name} onChange={(event) => { try { apply(normalizeDeckDesignV5({ ...history.present, name: event.target.value, metadata: { ...history.present.metadata, revision: history.present.metadata.revision + 1 } }), "Design name updated."); } catch { /* retain */ } }} /></label>
       <Suspense fallback={<div className="house-editor-loading" role="status">Preparing deck controls…</div>}><LevelCutoutControls platforms={compatibilityDesign.platforms} platform={compatibilityPlatform} selectedHoleIndex={selectedHoleIndex} onKeepSelectedLevel={keepSelectedLevelOnly} onSetElevation={setPlatformElevation} onAddCutout={addCutout} onSelectCutout={setSelectedHoleIndex} onUpdateCutout={updateCutout} onRemoveCutout={removeCutout} /></Suspense>

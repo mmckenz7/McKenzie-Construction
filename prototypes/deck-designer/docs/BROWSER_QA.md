@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 photo-start modal keyboard regression
+
+- Opening **Start with photos** or **Review photos** moves focus to the labelled Close action. The dialog exposes its title and local-photo authority statement through `aria-labelledby` and `aria-describedby`.
+- Tab from the final enabled **Start rectangle design** action wraps to Close, and Shift+Tab from Close wraps to that final action. Escape and Close return focus to the still-connected control that opened the dialog; successfully starting a confirmed design intentionally advances without restoring the prior control.
+- At 390 × 844, the dialog retained one focus target, fit within the viewport without horizontal overflow, restored focus to **Review photos** after Close, and produced no browser warning/error logs. This changes interaction behavior only—photos remain temporary references and confirmation remains the sole design-authority boundary.
+
 ## 2026-08-25 layout-review modal keyboard regression
 
 - Opening **Review deck layout** moved focus directly to its labeled Close action. The dialog exposes its title and instruction through `aria-labelledby` and `aria-describedby`.

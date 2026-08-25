@@ -31,6 +31,7 @@ const parseFeet = (value: string): number => Number(value) * 12;
 const parseOptionalFeet = (value: string): number | null => value.trim() ? parseFeet(value) : null;
 
 export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeElevation, onCancel, onStartDesign }: Props) {
+  const closeButton = useRef<HTMLButtonElement>(null);
   const [photos, setPhotos] = useState<Partial<Record<GuidedPhotoRole, LocalPhoto>>>({});
   const [additionalPhotos, setAdditionalPhotos] = useState<readonly LocalPhoto[]>([]);
   const urls = useRef(new Set<string>());
@@ -54,6 +55,18 @@ export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeEleva
   const dimensionCancelPending = useRef(false);
   const [error, setError] = useState("");
   useEffect(() => () => { for (const url of urls.current) URL.revokeObjectURL(url); }, []);
+  useEffect(() => { closeButton.current?.focus(); }, []);
+
+  const handleDialogKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Escape") { event.preventDefault(); onCancel(); return; }
+    if (event.key !== "Tab") return;
+    const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.hasAttribute("hidden"));
+    const first = focusable[0], last = focusable.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  };
 
   const draft = useMemo<ConfirmedPhotoFacts>(() => ({
     designName,
@@ -175,8 +188,8 @@ export function PhotoIntake({ initialFacts, fallbackSurfaceElevation, gradeEleva
     }
   };
 
-  return <div className="photo-intake-backdrop" role="presentation"><section className="photo-intake" role="dialog" aria-modal="true" aria-labelledby="photo-intake-title">
-    <header><div><p className="eyebrow">Optional job-photo start</p><h2 id="photo-intake-title">Start with what you know</h2><p>Photos stay on this device. Only confirmed entries create the deck.</p></div><button className="photo-close" onClick={onCancel} aria-label="Close photo start">Close</button><nav className="photo-step-nav" aria-label="Photo design steps"><a href="#photo-step-photos">Photos</a><a href="#photo-step-details">Measurements</a><a href="#photo-step-review">Review</a>{layoutIntent === "non-standard" && <a href="#photo-step-outline">Outline</a>}</nav></header>
+  return <div className="photo-intake-backdrop" role="presentation"><section className="photo-intake" role="dialog" aria-modal="true" aria-labelledby="photo-intake-title" aria-describedby="photo-intake-description" onKeyDown={handleDialogKeyDown}>
+    <header><div><p className="eyebrow">Optional job-photo start</p><h2 id="photo-intake-title">Start with what you know</h2><p id="photo-intake-description">Photos stay on this device. Only confirmed entries create the deck.</p></div><button ref={closeButton} className="photo-close" onClick={onCancel} aria-label="Close photo start">Close</button><nav className="photo-step-nav" aria-label="Photo design steps"><a href="#photo-step-photos">Photos</a><a href="#photo-step-details">Measurements</a><a href="#photo-step-review">Review</a>{layoutIntent === "non-standard" && <a href="#photo-step-outline">Outline</a>}</nav></header>
     <div className="photo-intake-content">
       <section id="photo-step-photos"><div className="photo-step"><span>1</span><div><strong>Add useful photos</strong><small>Any photo can be skipped or replaced.</small></div></div><label className="field photo-layout-intent"><span>Deck shape you expect</span><select value={layoutIntent} onChange={(event) => setLayoutIntent(event.target.value as ConfirmedPhotoFacts["layoutIntent"])}><option value="rectangle">Simple rectangle</option><option value="non-standard">Non-standard · offsets or multiple corners</option></select></label><div className="photo-slot-grid">{PHOTO_SLOTS.map((slot) => {
         const photo = photos[slot.role];
