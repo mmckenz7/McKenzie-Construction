@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 layout-review modal keyboard regression
+
+- Opening **Review deck layout** moved focus directly to its labeled Close action. The dialog exposes its title and instruction through `aria-labelledby` and `aria-describedby`.
+- Tab from the final enabled action wrapped to Close, and Shift+Tab from Close wrapped to **Lock layout & continue**. Escape closed review and restored focus to the exact **Review deck layout** control that opened it. Close and Back use the same guarded restoration path, while continuing to railings intentionally advances workflow.
+- At 390 × 844, opening review again focused Close, retained one lazy canvas with no horizontal overflow, and produced no browser warning/error logs. This changes focus presentation only—no geometry, review findings, history, or saved facts.
+
 ## 2026-08-25 shared joist-axis identity regression
 
 - Visible joist members and cutout-interruption sampling now consume the same immutable path-axis derivation, preventing transient `joist-N` warning sources from drifting from displayed coordinates.

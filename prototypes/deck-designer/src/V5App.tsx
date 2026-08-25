@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent } from "react";
 import { applyPolygonRegionReplacementV5, PolygonEdgeReviewRequiredErrorV5 } from "./commandsV5";
 import { deriveDeckDesignProjectionV5 } from "./designProjectionV5";
 import { derivePlatformGeometryV5 } from "./geometryV5";
@@ -79,6 +79,9 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const [photoStartSummary, setPhotoStartSummary] = useState<Readonly<{ photoCount: number; review: PhotoIntakeReview }> | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const planActionTray = useRef<HTMLElement>(null);
+  const layoutReviewClose = useRef<HTMLButtonElement>(null);
+  const layoutReviewReturnFocus = useRef<HTMLElement | null>(null);
+  useEffect(() => { if (layoutReviewOpen) layoutReviewClose.current?.focus(); }, [layoutReviewOpen]);
   const activeStairSystem = platform.construction.stairSystems.find((system) => system.id === selectedStairSystemId) ?? null;
   const activeLanding = activeStairSystem?.landings.find((landing) => landing.id === selectedLandingId) ?? activeStairSystem?.landings.find((landing) => !landing.locked) ?? null;
   const activeTotalRisers = activeStairSystem ? Math.ceil((platform.elevation - design.siteContext.gradeElevation) / activeStairSystem.maxRiserHeight) : 0;
@@ -244,7 +247,28 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     addCorner(edgeIndex, { x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 });
   };
   const applyRailing = (railing: DeckPlatformV5["construction"]["railing"], nextMessage: string) => updateConstruction({ ...platform.construction, railing }, nextMessage);
-  const requestRailingStage = () => { setPreview(null); setLayoutReviewOpen(true); };
+  const requestRailingStage = () => {
+    setPreview(null);
+    layoutReviewReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setLayoutReviewOpen(true);
+  };
+  const closeLayoutReview = () => {
+    setLayoutReviewOpen(false);
+    requestAnimationFrame(() => {
+      const target = layoutReviewReturnFocus.current;
+      if (target?.isConnected && !target.hasAttribute("disabled")) target.focus();
+    });
+  };
+  const handleLayoutReviewKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Escape") { event.preventDefault(); closeLayoutReview(); return; }
+    if (event.key !== "Tab") return;
+    const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.hasAttribute("hidden"));
+    const first = focusable[0], last = focusable.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  };
   const enterRailingStage = () => { if (!layoutReview.readyToContinue) return; setLayoutReviewOpen(false); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setWorkflowStage("railings"); setMessage("Layout reviewed and locked. Tap railing sides."); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const returnToLayoutStage = () => { setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setWorkflowStage("layout"); setMessage("Layout reopened; attachments stay protected."); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const enterFinishStage = () => { setSelectedEdgeId(null); setWorkflowStage("finishes"); setMessage("Railings retained. Tap one deck side to choose fascia or skirting."); window.scrollTo({ top: 0, behavior: "smooth" }); };
@@ -421,15 +445,15 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
 
   return <main>
     {photoIntakeOpen && <Suspense fallback={<div className="photo-intake-backdrop"><div className="photo-intake-loading" role="status">Preparing local photo review…</div></div>}><PhotoIntake initialFacts={initialPhotoFacts} fallbackSurfaceElevation={platform.elevation} gradeElevation={design.siteContext.gradeElevation} onCancel={() => setPhotoIntakeOpen(false)} onStartDesign={startFromPhotos} /></Suspense>}
-    {layoutReviewOpen && <div className="layout-review-backdrop" role="presentation"><section className="layout-review-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-review-title">
-      <header><div><p className="eyebrow">Single-level geometry check</p><h2 id="layout-review-title">Review deck layout</h2><p>Confirm the measured geometry before choosing railings.</p></div><button onClick={() => setLayoutReviewOpen(false)} aria-label="Close layout review">Close</button></header>
+    {layoutReviewOpen && <div className="layout-review-backdrop" role="presentation"><section className="layout-review-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-review-title" aria-describedby="layout-review-description" onKeyDown={handleLayoutReviewKeyDown}>
+      <header><div><p className="eyebrow">Single-level geometry check</p><h2 id="layout-review-title">Review deck layout</h2><p id="layout-review-description">Confirm the measured geometry before choosing railings.</p></div><button ref={layoutReviewClose} onClick={closeLayoutReview} aria-label="Close layout review">Close</button></header>
       <div className="layout-review-content">
         <div className="layout-review-status"><strong>{layoutReview.readyToContinue ? "Layout is ready for railings" : "Finish the highlighted geometry first"}</strong><span>Conceptual design · not for construction</span></div>
         <div className="layout-review-items">{layoutReview.items.map((item) => <article key={item.id} className={`layout-review-item ${item.status}`}><div><strong>{item.label}</strong><span>{item.status === "confirmed" ? "Confirmed" : item.status === "field_verify" ? "Field verify" : "Finish required"}</span></div><p>{item.value}</p></article>)}</div>
         {layoutReview.blockers.length > 0 && <section className="layout-review-notes blockers"><strong>Before continuing</strong><ul>{layoutReview.blockers.map((note) => { const warning = layoutReview.geometryWarnings.find((item) => item.message === note); return <li key={note}>{warning ? <button type="button" className="layout-review-location" onClick={() => locateReviewWarning(warning)}><span>{note}</span><em>Show in plan</em></button> : note}</li>; })}</ul></section>}
         <section className="layout-review-notes"><strong>Field verification</strong>{layoutReview.geometryWarnings.some(usesPrototypeReviewThresholdV5) && <p className="layout-review-threshold">The 12-inch value is a prototype review threshold only—not a code requirement or structural clearance.</p>}<ul>{layoutReview.fieldVerification.map((note) => { const warning = layoutReview.geometryWarnings.find((item) => item.message === note); return <li key={note}>{warning ? <button type="button" className="layout-review-location" onClick={() => locateReviewWarning(warning)}><span>{note}</span><em>Show in plan</em></button> : note}</li>; })}</ul></section>
       </div>
-      <footer><button onClick={() => setLayoutReviewOpen(false)}>Back to layout</button><button className="primary" disabled={!layoutReview.readyToContinue} onClick={enterRailingStage}>Lock layout &amp; continue</button></footer>
+      <footer><button onClick={closeLayoutReview}>Back to layout</button><button className="primary" disabled={!layoutReview.readyToContinue} onClick={enterRailingStage}>Lock layout &amp; continue</button></footer>
     </section></div>}
     <header className="topbar"><div className="brand-mark">M</div><div><p className="eyebrow">McKenzie Construction · isolated R&amp;D</p><h1>Deck Designer</h1></div><div className="header-actions"><button className="quiet" onClick={() => setPhotoIntakeOpen(true)}>Start with photos</button><button className="quiet" onClick={() => { saveDeckDesignV5(localStorage, design); setMessage(`Saved v5 locally at revision ${design.metadata.revision}.`); }}>Save locally</button><button className="quiet" onClick={download}>Download JSON</button><button className="primary" onClick={() => fileInput.current?.click()}>Load JSON</button><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const next = migrateDeckDesignToV5(JSON.parse(await file.text())); dispatch({ type: "reset", design: next }); setSelectedPlatformId(next.platforms[0].id); setWorkflowStage("layout"); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setMessage(`Loaded v5 design “${next.name}”.`); } catch (error) { setMessage(error instanceof Error ? `Load rejected: ${error.message}` : "Load rejected."); } event.target.value = ""; }} /></div></header>
     <section className="warning"><strong>Conceptual — not for construction.</strong> Field and qualified review required.</section>
