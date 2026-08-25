@@ -36,10 +36,12 @@ const EMPTY_CONTEXT_PLATFORMS: readonly PlatformView[] = Object.freeze([]);
 
 export function disposeSceneResources(root: THREE.Object3D): Readonly<{ geometries: number; materials: number }> {
   const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>();
-  root.traverse((object: any) => {
+  root.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return;
-    geometries.add(object.geometry);
-    (Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => materials.add(material));
+    const mesh = object as THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
+    geometries.add(mesh.geometry);
+    const meshMaterials: readonly THREE.Material[] = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    meshMaterials.forEach((material) => materials.add(material));
   });
   geometries.forEach((geometry) => geometry.dispose());
   materials.forEach((material) => material.dispose());
