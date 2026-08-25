@@ -96,7 +96,9 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Exact and touch/keyboard-movable conceptual main-beam placement from the outside deck edge
 - [x] Editable maximum conceptual support spacing with deterministic even redistribution and quantities
 - [x] Deterministic review note when a recorded cutout interrupts the conceptual beam route
-- [ ] Multi-beam framing intent and broader explainable framing clash/constraint warnings
+- [x] Versioned v4 multi-beam document/migration foundation with stable beam-derived geometry IDs
+- [ ] Activate multi-beam editing only after v3/v4 projection, warning, quantity, history, and storage equivalence gates pass
+- [ ] Broader explainable framing clash/constraint warnings
 - [ ] PBR material library, licensed asset pipeline, GLB metadata, LOD/compression
 - [x] Enforced initial-entry, largest-chunk, and total JavaScript performance budgets
 - [x] Local economy, balanced, and detailed 3D quality tiers
