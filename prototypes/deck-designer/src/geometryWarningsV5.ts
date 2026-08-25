@@ -1,7 +1,7 @@
 import { deriveGeometryWarningsV4, type GeometryWarningV4 } from "./geometryWarningsV4";
 import { deriveConceptualBeamProjection } from "./beamProjection";
 import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
-import type { PolygonPoint } from "./polygon";
+import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
 
 export type GeometryWarningV5 = GeometryWarningV4;
@@ -58,6 +58,28 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
   const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
   if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
   const warnings = [...deriveGeometryWarningsV4(deckDesignV5ToV4Compatibility(normalized), platformId)];
+  const edges = deriveGeometricPolygonEdges(platform.region.outer);
+  platform.construction.stairSystems.forEach((system, systemIndex) => {
+    const edge = edges.find((candidate) => candidate.id === system.edgeId)!;
+    const remainders = [
+      { distance: system.offset, point: edge.start },
+      { distance: edge.length - system.offset - system.width, point: edge.end },
+    ];
+    remainders.forEach((remainder, remainderIndex) => {
+      if (remainder.distance <= EPSILON || remainder.distance >= 12 - EPSILON) return;
+      const other = remainders[1 - remainderIndex].point;
+      const endLabel = Math.abs(remainder.point.x - other.x) >= Math.abs(remainder.point.z - other.z)
+        ? remainder.point.x < other.x ? "left" : "right"
+        : remainder.point.z < other.z ? "top" : "bottom";
+      const measured = Math.round(remainder.distance * 10) / 10;
+      warnings.push(Object.freeze({
+        id: `stair-edge-remainder-${system.id}-${remainderIndex + 1}`,
+        severity: "clearance",
+        geometryIds: Object.freeze([system.id, system.edgeId]),
+        message: `Stair system ${systemIndex + 1} leaves ${measured} inches of deck edge near the ${endLabel} end of its selected side; verify the intended corner placement.`,
+      }));
+    });
+  });
   platform.construction.framing.beamLines.forEach((line, lineIndex) => {
     const beams = deriveConceptualBeamProjection({
       region: platform.region,

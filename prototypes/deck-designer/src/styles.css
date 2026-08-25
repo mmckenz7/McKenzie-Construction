@@ -293,6 +293,7 @@ button:hover { transform: translateY(-1px); }
 .layout-review-notes { padding: 11px 12px; border: 1px solid #d4c58d; border-radius: 8px; background: #fbf7e9; }
 .layout-review-notes.blockers { border-color: #d6a494; background: #fff5f1; }
 .layout-review-notes strong { color: #4d4a32; font-size: 10px; }
+.layout-review-threshold { margin: 7px 0 0; color: #786320; font-size: 9px; line-height: 1.45; }
 .layout-review-notes ul { margin: 7px 0 0; padding-left: 17px; color: #5d6256; font-size: 9px; line-height: 1.5; }
 .layout-review-location { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0; padding: 8px 10px; border-color: #cdbd82; background: #fffdf5; color: #4e584f; text-align: left; line-height: 1.4; }
 .layout-review-location span { flex: 1; }

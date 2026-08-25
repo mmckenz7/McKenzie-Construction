@@ -354,3 +354,10 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Selecting the beam-clearance note closed the review, scrolled to the plan, selected Cutout 1, selected Beam 1 at its recorded eight-foot outside-edge offset, and repeated the exact note in the status message.
 - Pure tests confirm stale warning geometry IDs fail closed instead of selecting a different current object.
 - Reload removed the unsaved QA geometry. Browser logs contained no warnings or errors; existing full-screen mobile review rules remain unchanged.
+## 2026-08-24 v5 stair-edge remainder check
+
+- Moved the saved four-foot stair opening to six inches from the right plan corner, locked it, and opened layout review.
+- Geometry and framing reported one non-blocking six-inch remainder note, identified the right end, and displayed the explicit statement that twelve inches is only a prototype review threshold—not code or structural clearance.
+- Show in plan returned to the correct selected stair side without unlocking or mutating the locked stair system.
+- Moving the same opening to exact zero-inch corner alignment removed the warning and restored Geometry and framing to Confirmed / None detected.
+- Reload restored the saved four-foot stair offset. Browser logs contained no warnings or errors.

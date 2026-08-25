@@ -3,6 +3,7 @@ import { DEFAULT_DESIGN } from "../src/model";
 import { deriveGeometryWarningsV5 } from "../src/geometryWarningsV5";
 import { deriveLayoutReviewV5 } from "../src/layoutReviewV5";
 import { migrateDeckDesignToV5, normalizeDeckDesignV5 } from "../src/modelV5";
+import { deriveGeometricPolygonEdges } from "../src/polygon";
 
 describe("DeckDesign v5 explainable framing warnings", () => {
   it("keeps the clean rectangle free of framing conflicts", () => {
@@ -56,5 +57,20 @@ describe("DeckDesign v5 explainable framing warnings", () => {
       message: "Conceptual beam 1 is 6 inches from cutout 1; verify the intended framing clearance.",
     }));
     expect(warnings.some((warning) => warning.id.startsWith("beam-cutout-interruption"))).toBe(false);
+  });
+
+  it("reports a small nonzero stair-edge remainder but accepts exact corner alignment", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const lowerEdge = deriveGeometricPolygonEdges(platform.region.outer).find((edge) => edge.outward.z > 0)!;
+    const withOffset = (offset: number) => normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{
+      id: "stair-system-1", locked: true, edgeId: lowerEdge.id, offset, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [],
+    }] } }] });
+    expect(deriveGeometryWarningsV5(withOffset(6), platform.id)).toContainEqual(expect.objectContaining({
+      id: "stair-edge-remainder-stair-system-1-1",
+      geometryIds: ["stair-system-1", lowerEdge.id],
+      message: "Stair system 1 leaves 6 inches of deck edge near the right end of its selected side; verify the intended corner placement.",
+    }));
+    expect(deriveGeometryWarningsV5(withOffset(0), platform.id).some((warning) => warning.id.startsWith("stair-edge-remainder"))).toBe(false);
   });
 });
