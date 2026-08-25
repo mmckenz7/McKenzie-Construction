@@ -38,5 +38,9 @@ Validated workflow:
 30. With free angle active, placed the first point on a 40′ × 20′ house edge, drew three odd-angle spans measuring 15′ 4″, 24′ 8″, and 24′ 7″, chose **Close to house**, and tapped the second house edge.
 31. Confirmed closure moved the flexible corners, fixed both house connections, and retained all three displayed measurements plus the 64′ 7″ total.
 32. Confirmed the closure success message, enabled endpoint gate workflow, and zero browser console errors.
+33. Drew a four-span farm-field perimeter, then used **Separate line** twice to add two cross-fences and create three independently measured fence lines.
+34. Started the first divider 5′ back from the perimeter corner and confirmed its exact projected coordinate attached partway along the existing run rather than jumping to the last corner.
+35. Ended both dividers on the opposite perimeter run, confirmed all four divider endpoints displayed as connected, and confirmed the combined total increased from 183′ 10″ to 249′ 8″ without altering a perimeter span.
+36. Confirmed six spans, three fence lines, deterministic independent-line geometry, and zero browser console errors.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

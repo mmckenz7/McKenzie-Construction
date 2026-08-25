@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
 import {
-  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
-  pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToHouseEdge, solvePathBetweenFixedEndsMm, totalLengthMm,
+  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, insertGateAtPoint, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
+  pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm,
   type FenceDesign, type GateType,
 } from "./model";
 import { loadLocalDesign, saveLocalDesign } from "./storage";
@@ -12,7 +12,7 @@ import { panView, zoomViewAt, type ViewBox } from "./view";
 
 type Selection = Readonly<{ type: "point" | "segment"; id: string } | { type: "house" }> | null;
 type Drag = Readonly<{ pointId: string; original: FenceDesign }> | null;
-type Mode = "draw" | "select" | "pan" | "close";
+type Mode = "draw" | "select" | "pan" | "close" | "new-line";
 type PlanPointer = Readonly<{ clientX: number; clientY: number }>;
 type NavigationGesture = Readonly<{
   original: ViewBox;
@@ -61,6 +61,7 @@ export default function App() {
   const [lengthLockEnabled, setLengthLockEnabled] = useState(true);
   const [previewPoint, setPreviewPoint] = useState<Readonly<{ xMm: number; yMm: number }> | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [closurePathPointId, setClosurePathPointId] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const nextId = useRef(1);
   const activePointers = useRef(new Map<number, PlanPointer>());
@@ -70,8 +71,10 @@ export default function App() {
 
   const selectedSegment = selection?.type === "segment" ? design.segments.find(({ id }) => id === selection.id) ?? null : null;
   const selectedPoint = selection?.type === "point" ? design.points.find(({ id }) => id === selection.id) ?? null : null;
+  const selectedPointPath = selectedPoint ? fencePathForPoint(design, selectedPoint.id) : null;
   const houseSelected = selection?.type === "house";
   const totals = useMemo(() => ({ all: totalLengthMm(design), gate: design.segments.filter(({ kind }) => kind === "gate").reduce((sum, item) => sum + segmentLengthMm(design, item), 0) }), [design]);
+  const activePath = design.points.length ? fencePathForPoint(design, design.points.at(-1)!.id) : null;
 
   useEffect(() => {
     const canvas = svgRef.current;
@@ -91,7 +94,7 @@ export default function App() {
       if (event.key !== "Escape") return;
       event.preventDefault();
       if (drag) setHistory((current) => ({ ...current, present: drag.original }));
-      setDrag(null); setMode("select"); setSelection(null); setGateEditorOpen(false); setPreviewPoint(null);
+      setDrag(null); setMode("select"); setSelection(null); setGateEditorOpen(false); setPreviewPoint(null); setClosurePathPointId(null);
       activePointers.current.clear(); navigationGesture.current = null; navigationWasActive.current = false; setIsNavigating(false);
       setNotice("Current tool canceled. Choose Draw, Edit, or Pan when ready.");
     };
@@ -110,26 +113,34 @@ export default function App() {
     const y = view.y + (clientY - box.top) / box.height * view.height;
     return { xMm: Math.round(x), yMm: Math.round(y) };
   };
-  const toPlan = (clientX: number, clientY: number) => {
+  const placementAt = (clientX: number, clientY: number, excludePointId?: string) => {
     const raw = toPlanRaw(clientX, clientY);
     const houseConnection = snapToHouseEdge(raw.xMm, raw.yMm, design.house);
-    return houseConnection ?? snapPlanPosition(raw.xMm, raw.yMm, snapEnabled, null, GRID_MM);
+    if (houseConnection) return { point: houseConnection, connection: "house" as const };
+    const fenceConnection = snapToFenceRun(design, raw.xMm, raw.yMm, 460, excludePointId);
+    if (fenceConnection) return { point: { xMm: fenceConnection.xMm, yMm: fenceConnection.yMm }, connection: "fence" as const };
+    return { point: snapPlanPosition(raw.xMm, raw.yMm, snapEnabled, null, GRID_MM), connection: null };
   };
   const nextPointAt = (clientX: number, clientY: number) => {
-    const candidate = toPlan(clientX, clientY);
     const anchor = design.points.at(-1);
-    if (!anchor || !snapEnabled) return candidate;
-    const house = design.house;
-    const onHouseEdge = house && (
-      ((candidate.xMm === house.xMm || candidate.xMm === house.xMm + house.lengthMm) && candidate.yMm >= house.yMm && candidate.yMm <= house.yMm + house.widthMm)
-      || ((candidate.yMm === house.yMm || candidate.yMm === house.yMm + house.widthMm) && candidate.xMm >= house.xMm && candidate.xMm <= house.xMm + house.lengthMm)
-    );
-    return onHouseEdge ? candidate : snapRunEndpoint(anchor, candidate, true);
+    const placement = placementAt(clientX, clientY, anchor?.id);
+    if (!anchor || !snapEnabled || placement.connection) return placement.point;
+    return snapRunEndpoint(anchor, placement.point, true);
   };
   const addAt = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (mode === "close") { closeAt(event); return; }
-    if (mode !== "draw" || event.target !== event.currentTarget) return;
+    if (mode === "new-line") {
+      const point = placementAt(event.clientX, event.clientY).point;
+      const id = nextId.current++;
+      const next = startFenceLine(design, { id: `point-${id}`, ...point });
+      commit(next, "Separate fence line started. Draw now continues from this new point.");
+      setMode("draw"); setSelection({ type: "point", id: `point-${id}` }); setPreviewPoint(point);
+      return;
+    }
+    if (mode !== "draw") return;
     const point = nextPointAt(event.clientX, event.clientY);
+    const anchor = design.points.at(-1);
+    if (anchor && point.xMm === anchor.xMm && point.yMm === anchor.yMm) { setNotice("Choose a different location for the next fence point."); return; }
     const id = nextId.current++;
     const next = addPoint(design, { id: `point-${id}`, ...point }, `segment-${id}`);
     commit(next, next.points.length === 1 ? "Start point placed. Add another point to create a measured span." : "Measured span added.");
@@ -139,13 +150,16 @@ export default function App() {
     if (mode !== "close") return;
     try {
       if (!design.house) throw new RangeError("Add the measured house footprint before closing the path.");
-      if (design.segments.length < 2) throw new RangeError("Draw at least two measured runs before closing to the house.");
-      if (!isPointOnHouseEdge(design.points[0], design.house)) throw new RangeError("The first fence point must connect to the house. Move it onto a house edge, then try closure again.");
+      const pathPointId = closurePathPointId ?? design.points.at(-1)?.id;
+      if (!pathPointId) throw new RangeError("Draw a fence line before closing it.");
+      const path = fencePathForPoint(design, pathPointId);
+      if (path.segments.length < 2) throw new RangeError("Draw at least two measured runs before closing to the house.");
+      if (!isPointOnHouseEdge(path.points[0], design.house)) throw new RangeError("The first point of this fence line must connect to the house. Move it onto a house edge, then try closure again.");
       const raw = toPlanRaw(event.clientX, event.clientY);
       const target = closestPointOnHouseEdge(design.house, raw.xMm, raw.yMm);
-      const next = solvePathBetweenFixedEndsMm(design, target);
+      const next = solvePathBetweenFixedEndsMm(design, target, undefined, pathPointId);
       commit(next, "Path closed to the house. Both connections and every measured run stayed fixed; the flexible angles were redistributed.");
-      setMode("select"); setSelection({ type: "point", id: next.points.at(-1)!.id }); setPreviewPoint(null);
+      setMode("select"); setSelection({ type: "point", id: path.points.at(-1)!.id }); setPreviewPoint(null); setClosurePathPointId(null);
     } catch (error) { setNotice(error instanceof Error ? error.message : "The path could not close to that house connection."); }
   };
   const zoomAt = (scale: number, clientX?: number, clientY?: number) => {
@@ -216,16 +230,18 @@ export default function App() {
     setGateEditorOpen(false); setSelection({ type: "segment", id }); setMode("select"); setNotice("Span selected. Enter an exact length or edit its gate intent.");
   };
   const startDrag = (event: ReactPointerEvent, pointId: string) => {
-    if (mode === "pan" || mode === "close" || event.metaKey) return;
+    if (mode === "pan" || mode === "close" || mode === "draw" || mode === "new-line" || event.metaKey) return;
     event.stopPropagation();
     setGateEditorOpen(false); setSelection({ type: "point", id: pointId }); setMode("select"); setDrag({ pointId, original: design });
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
   };
   const dragPoint = (event: ReactPointerEvent) => {
     if (!drag) return;
-    let location = toPlan(event.clientX, event.clientY);
-    const pointIndex = drag.original.points.findIndex(({ id }) => id === drag.pointId);
-    if (lengthLockEnabled && snapEnabled && pointIndex > 0) location = snapRunEndpoint(drag.original.points[pointIndex - 1], location, true);
+    const placement = placementAt(event.clientX, event.clientY, drag.pointId);
+    let location = placement.point;
+    const path = fencePathForPoint(drag.original, drag.pointId);
+    const pointIndex = path.points.findIndex(({ id }) => id === drag.pointId);
+    if (lengthLockEnabled && snapEnabled && !placement.connection && pointIndex > 0) location = snapRunEndpoint(path.points[pointIndex - 1], location, true);
     const present = lengthLockEnabled
       ? movePointWithLockedFollowing(drag.original, drag.pointId, location.xMm, location.yMm)
       : movePoint(drag.original, drag.pointId, location.xMm, location.yMm);
@@ -249,15 +265,15 @@ export default function App() {
     try {
       const length = feetAndInchesToMm(Number(feet), Number(inches));
       const end = pointById(design, selectedSegment.toPointId);
-      const house = design.house;
-      const endOnHouse = Boolean(house && isPointOnHouseEdge(end, house));
-      const anchoredAtBothEnds = Boolean(house && design.points.length > 2 && isPointOnHouseEdge(design.points[0], house) && isPointOnHouseEdge(design.points.at(-1)!, house));
+      const selectedPath = fencePathForPoint(design, selectedSegment.fromPointId);
+      const endOnFixedConnection = isPointAttached(design, end.id);
+      const anchoredAtBothEnds = selectedPath.points.length >= 2 && isPointAttached(design, selectedPath.points[0].id) && isPointAttached(design, selectedPath.points.at(-1)!.id);
       const next = anchoredAtBothEnds
-        ? solvePathBetweenFixedEndsMm(design, design.points.at(-1)!, { segmentId: selectedSegment.id, lengthMm: length })
-        : endOnHouse ? setSegmentLengthKeepingEndMm(design, selectedSegment.id, length, lengthLockEnabled) : setSegmentLengthMm(design, selectedSegment.id, length);
+        ? solvePathBetweenFixedEndsMm(design, selectedPath.points.at(-1)!, { segmentId: selectedSegment.id, lengthMm: length })
+        : endOnFixedConnection ? setSegmentLengthKeepingEndMm(design, selectedSegment.id, length, lengthLockEnabled) : setSegmentLengthMm(design, selectedSegment.id, length);
       commit(next, anchoredAtBothEnds
-        ? `Span set to ${formatFeetInches(length)}. Both house connections and the other measured runs stayed fixed while the angles adjusted.`
-        : endOnHouse ? `Span set to ${formatFeetInches(length)} while the house connection stayed fixed.` : `Span set to ${formatFeetInches(length)}.`);
+        ? `Span set to ${formatFeetInches(length)}. Both line connections and the other measured runs stayed fixed while the angles adjusted.`
+        : endOnFixedConnection ? `Span set to ${formatFeetInches(length)} while its connection stayed fixed.` : `Span set to ${formatFeetInches(length)}.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid length."); }
   };
   const addGate = () => {
@@ -267,8 +283,8 @@ export default function App() {
       const id = nextId.current;
       const next = insertGateAtPoint(design, selectedPoint.id, width, gateType, `point-${id}`, `segment-${id}`);
       nextId.current += 1;
-      const anchorIndex = next.points.findIndex(({ id: pointId }) => pointId === selectedPoint.id);
-      const gate = next.segments[anchorIndex];
+      const gate = next.segments.find(({ id: segmentId }) => segmentId === `segment-${id}`)
+        ?? next.segments.find(({ fromPointId, kind }) => fromPointId === selectedPoint.id && kind === "gate");
       commit(next, `${gateType === "double" ? "Double" : "Single"} gate added with a total opening of ${formatFeetInches(width)}.`);
       const totalInches = Math.round(width / 25.4);
       setFeet(String(Math.floor(totalInches / 12))); setInches(String(totalInches % 12));
@@ -306,24 +322,25 @@ export default function App() {
     try {
       const loaded = loadLocalDesign(localStorage);
       if (!loaded) { setNotice("No saved layout exists in this browser yet."); return; }
-      setHistory(createHistory(loaded)); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setView(fittedView(loaded)); setNotice("Saved local layout loaded.");
+      setHistory(createHistory(loaded)); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setNotice("Saved local layout loaded.");
     } catch (error) { setNotice(error instanceof Error ? `Saved layout was not opened: ${error.message}` : "Saved layout was not opened."); }
   };
 
   return <main className="fence-designer">
     <header className="app-header">
-      <div><p className="eyebrow">McKenzie OS · isolated prototype</p><h1>Fence Visual Measure</h1><p>Draw the property-side path. Measurements stay local and contain no pricing or product rules.</p></div>
-      <div className="total-card"><span>Total measured length</span><strong>{formatFeetInches(totals.all)}</strong><small>{design.segments.length} span{design.segments.length === 1 ? "" : "s"}{totals.gate ? ` · ${formatFeetInches(totals.gate)} gate intent` : ""}</small></div>
+      <div><p className="eyebrow">McKenzie OS · isolated prototype</p><h1>Fence Visual Measure</h1><p>Draw perimeter and divider lines. Measurements stay local and contain no pricing or product rules.</p></div>
+      <div className="total-card"><span>Total measured length</span><strong>{formatFeetInches(totals.all)}</strong><small>{design.segments.length} span{design.segments.length === 1 ? "" : "s"} · {fenceLineCount(design)} fence line{fenceLineCount(design) === 1 ? "" : "s"}{totals.gate ? ` · ${formatFeetInches(totals.gate)} gate intent` : ""}</small></div>
     </header>
 
     <nav className="toolbar" aria-label="Drawing controls">
-      <div className="segmented"><button className={mode === "draw" ? "active" : ""} onClick={() => { setMode("draw"); setSelection(null); setNotice("Tap empty plan space to continue the connected fence path."); }}>＋ Draw</button><button className={mode === "select" ? "active" : ""} onClick={() => setMode("select")}>↖ Edit</button><button className={mode === "pan" ? "active" : ""} onClick={() => { setMode("pan"); setSelection(null); setNotice("Drag the plan to move around. Pinch with two fingers to zoom."); }}>✋ Pan</button></div>
+      <div className="segmented"><button className={mode === "draw" ? "active" : ""} onClick={() => { setMode("draw"); setSelection(null); setClosurePathPointId(null); setNotice("Draw continues from the last point. Use Start separate line to begin somewhere else."); }}>＋ Draw</button><button className={mode === "select" ? "active" : ""} onClick={() => setMode("select")}>↖ Edit</button><button className={mode === "pan" ? "active" : ""} onClick={() => { setMode("pan"); setSelection(null); setNotice("Drag the plan to move around. Pinch with two fingers to zoom."); }}>✋ Pan</button></div>
+      <button className={mode === "new-line" ? "active-tool" : ""} onClick={() => { setMode("new-line"); setSelection(null); setClosurePathPointId(null); setPreviewPoint(null); setNotice("Tap anywhere to start a separate fence line. Tap near an existing run to connect partway along it."); }}>＋ Separate line</button>
       <button disabled={history.past.length === 0} onClick={() => { setHistory(undo); setSelection(null); setNotice("Undid the last change."); }}>↶ Undo</button>
       <button disabled={history.future.length === 0} onClick={() => { setHistory(redo); setSelection(null); setNotice("Redid the change."); }}>↷ Redo</button>
       <div className="zoom-controls" aria-label="Plan zoom"><button aria-label="Zoom out" onClick={() => zoomAt(1.25)}>−</button><span>{Math.round(DEFAULT_VIEW.width / view.width * 100)}%</span><button aria-label="Zoom in" onClick={() => zoomAt(0.8)}>＋</button></div>
       <button onClick={() => setView(fittedView(design))}>Fit plan</button>
       <button className={houseSelected ? "active-tool" : ""} onClick={selectHouse}>{design.house ? "⌂ House" : "＋ House"}</button>
-      <button disabled={!design.house || design.segments.length < 2} className={mode === "close" ? "active-tool" : ""} onClick={() => { setMode("close"); setSelection(null); setPreviewPoint(null); setNotice("Tap the second connection on the house. Closure will keep all measured runs fixed and redistribute only the angles."); }}>⇥ Close to house</button>
+      <button disabled={!design.house || !activePath || activePath.segments.length < 2} className={mode === "close" ? "active-tool" : ""} onClick={() => { setMode("close"); setSelection(null); setClosurePathPointId(design.points.at(-1)?.id ?? null); setPreviewPoint(null); setNotice("Tap the second connection on the house. Closure will keep this line's measured runs fixed and redistribute only its angles."); }}>⇥ Close to house</button>
       <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setPreviewPoint(null); setNotice(snapEnabled ? "Free angle is on. Runs now follow the measured geometry without angle assumptions." : "45°/90° angle assist is on."); }}>{snapEnabled ? "⌁ 45°/90° assist" : "◌ Free angle"}</button>
       <button aria-pressed={lengthLockEnabled} className={lengthLockEnabled ? "active-tool" : ""} onClick={() => { setLengthLockEnabled((current) => !current); setNotice(lengthLockEnabled ? "Length lock is off. Dragging a point can now change connected measurements." : "Length lock is on. Dragging adjusts the angle while preserving the incoming and following measurements."); }}>{lengthLockEnabled ? "🔒 Lengths" : "🔓 Lengths"}</button>
       <span className="toolbar-spacer" />
@@ -332,11 +349,11 @@ export default function App() {
 
     <section className="workspace">
       <div className="canvas-shell">
-        <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line preview" /> Live run</span><span><i className="key-line gate" /> Gate intent</span></div>
+        <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot attached" /> Connected endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line preview" /> Live run</span><span><i className="key-line gate" /> Gate intent</span></div>
         <svg ref={svgRef} className={`plan-canvas ${mode}${isNavigating ? " navigating" : ""}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={startNavigation} onPointerMove={moveCanvasPointer} onPointerLeave={() => { if (!drag && !isNavigating) setPreviewPoint(null); }} onPointerUp={endNavigation} onPointerCancel={endNavigation} aria-label="Fence drawing plan">
           <defs><pattern id="grid" width={GRID_MM} height={GRID_MM} patternUnits="userSpaceOnUse"><path d={`M ${GRID_MM} 0 L 0 0 0 ${GRID_MM}`} fill="none" stroke="#d8ddd7" strokeWidth="18" /></pattern></defs>
           <rect x={view.x} y={view.y} width={view.width} height={view.height} fill="url(#grid)" pointerEvents="none" />
-          {design.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode === "close") { event.stopPropagation(); closeAt(event); } else if (mode !== "pan" && !event.metaKey) { event.stopPropagation(); selectHouse(); } }}>
+          {design.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode === "close") { event.stopPropagation(); closeAt(event); } else if (mode !== "pan" && mode !== "new-line" && !event.metaKey) { event.stopPropagation(); selectHouse(); } }}>
             <rect className="house-hit" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <rect className="house-footprint" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <g transform={`translate(${design.house.xMm + design.house.lengthMm / 2} ${design.house.yMm + design.house.widthMm / 2})`} className="house-label"><rect x="-1050" y="-300" width="2100" height="600" rx="180" /><text textAnchor="middle" dominantBaseline="central">HOUSE · {formatFeetInches(design.house.lengthMm)} × {formatFeetInches(design.house.widthMm)}</text></g>
@@ -345,7 +362,7 @@ export default function App() {
             const start = pointById(design, segment.fromPointId); const end = pointById(design, segment.toPointId);
             const midX = (start.xMm + end.xMm) / 2; const midY = (start.yMm + end.yMm) / 2;
             const selected = selection?.type === "segment" && selection.id === segment.id;
-            return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode !== "pan" && mode !== "close" && !event.metaKey) { event.stopPropagation(); selectSegment(segment.id); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode !== "pan" && mode !== "close" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
+            return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode === "select" && !event.metaKey) { event.stopPropagation(); selectSegment(segment.id); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode === "select" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
               <line className="segment-hit" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <line className="segment-line" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <g transform={`translate(${midX} ${midY})`} className="dimension"><rect x="-760" y="-260" width="1520" height="520" rx="180" /><text textAnchor="middle" dominantBaseline="central">{segment.kind === "gate" ? `${segment.gateType === "double" ? "DOUBLE" : "SINGLE"} GATE · ` : ""}{formatFeetInches(segmentLengthMm(design, segment))}</text></g>
@@ -375,11 +392,11 @@ export default function App() {
         <p className="eyebrow">Selection</p>
         {!selection && <div className="inspector-empty"><h2>No item selected</h2><p>Tap a span for exact length and gate intent. Tap or drag a point to edit the path.</p></div>}
         {houseSelected && <div><h2>House footprint</h2><p>{design.house ? "This measured footprint is visual context only and is excluded from fence totals." : "Add an optional measured house footprint before drawing the fence."}</p><h3 className="field-heading">House length</h3><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseFeet} onChange={(event) => setHouseFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseInches} onChange={(event) => setHouseInches(event.target.value)} /></label></div><h3 className="field-heading">House width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Width feet" inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseWidthFeet} onChange={(event) => setHouseWidthFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseWidthInches} onChange={(event) => setHouseWidthInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyHouseLength}>{design.house ? "Update house footprint" : "Add house footprint"}</button>{design.house && <button className="danger wide" onClick={() => { commit(removeHouseReference(design), "House footprint removed."); setSelection(null); }}>Remove house footprint</button>}<small>House-edge connections stay active in free-angle mode. The optional angle assist affects only non-house points. This footprint is not a survey or building record.</small></div>}
-        {selectedPoint && <div><h2>{pointRole(design, selectedPoint.id)}</h2><p className="coordinate">X {formatFeetInches(Math.abs(selectedPoint.xMm))} · Y {formatFeetInches(Math.abs(selectedPoint.yMm))}</p><p>{lengthLockEnabled ? "Drag to adjust the angle. The incoming length stays fixed and every following point moves with it." : "Drag this point freely; connected span lengths will change."}</p>{design.house && design.segments.length >= 2 && selectedPoint.id === design.points.at(-1)?.id && <button className="primary wide" onClick={() => { setMode("close"); setSelection(null); setPreviewPoint(null); setNotice("Tap the second connection on the house. Closure will keep all measured runs fixed and redistribute only the angles."); }}>⇥ Close this path to house</button>}<button className="primary wide" onClick={() => { setGateEditorOpen((current) => !current); setNotice("Choose single or double, then enter the total gate opening width."); }}>{gateEditorOpen ? "Cancel add gate" : "＋ Add gate"}</button>{gateEditorOpen && <div className="gate-editor"><label><span>Gate style</span><select aria-label="Gate style" value={gateType} onChange={(event) => setGateTypeChoice(event.target.value as GateType)}><option value="single">Single gate</option><option value="double">Double gate</option></select></label><h3 className="field-heading">Total gate width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Gate width feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={gateFeet} onChange={(event) => setGateFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Gate width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateInches} onChange={(event) => setGateInches(event.target.value)} /></label></div><button className="primary wide" onClick={addGate}>Place gate from this point</button><small>The total width is the full opening. A double gate is recorded as two-leaf intent only.</small></div>}<button className="danger wide" onClick={removeSelection}>Delete point</button></div>}
+        {selectedPoint && <div><h2>{pointRole(design, selectedPoint.id)}</h2><p className="coordinate">X {formatFeetInches(Math.abs(selectedPoint.xMm))} · Y {formatFeetInches(Math.abs(selectedPoint.yMm))}</p><p>{lengthLockEnabled ? "Drag to adjust this line's angle. Its incoming length stays fixed and only the following points on this line move." : "Drag this point freely; connected span lengths will change."}</p>{design.house && selectedPointPath && selectedPointPath.segments.length >= 2 && selectedPoint.id === selectedPointPath.points.at(-1)?.id && <button className="primary wide" onClick={() => { setMode("close"); setClosurePathPointId(selectedPoint.id); setSelection(null); setPreviewPoint(null); setNotice("Tap the second connection on the house. Closure will keep this line's measured runs fixed and redistribute only its angles."); }}>⇥ Close this line to house</button>}<button className="primary wide" onClick={() => { setGateEditorOpen((current) => !current); setNotice("Choose single or double, then enter the total gate opening width."); }}>{gateEditorOpen ? "Cancel add gate" : "＋ Add gate"}</button>{gateEditorOpen && <div className="gate-editor"><label><span>Gate style</span><select aria-label="Gate style" value={gateType} onChange={(event) => setGateTypeChoice(event.target.value as GateType)}><option value="single">Single gate</option><option value="double">Double gate</option></select></label><h3 className="field-heading">Total gate width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Gate width feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={gateFeet} onChange={(event) => setGateFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Gate width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateInches} onChange={(event) => setGateInches(event.target.value)} /></label></div><button className="primary wide" onClick={addGate}>Place gate from this point</button><small>The total width is the full opening. A double gate is recorded as two-leaf intent only.</small></div>}<button className="danger wide" onClick={removeSelection}>Delete point</button></div>}
         {selectedSegment && <div><h2>{selectedSegment.kind === "gate" ? `${selectedSegment.gateType === "double" ? "Double" : "Single"} gate` : "Fence span"}</h2><div className="length-readout">{formatFeetInches(segmentLengthMm(design, selectedSegment))}</div>{selectedSegment.kind === "gate" && <label className="select-field"><span>Gate style</span><select value={selectedSegment.gateType ?? "single"} onChange={(event) => commit(setGateType(design, selectedSegment.id, event.target.value as GateType), "Gate style updated.")}><option value="single">Single gate</option><option value="double">Double gate</option></select></label>}<div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyExactLength}>Apply exact length</button><button className="wide" onClick={() => commit(setSegmentKind(design, selectedSegment.id, selectedSegment.kind === "gate" ? "fence" : "gate"), selectedSegment.kind === "gate" ? "Span restored to fence intent." : "Whole span marked as a single gate.")}>{selectedSegment.kind === "gate" ? "Mark as fence" : "Mark whole span as single gate"}</button><small>Gate intent does not imply products, posts, hardware, or pricing.</small></div>}
         <div className="notice" role="status">{notice}</div>
       </aside>
     </section>
-    <footer className="app-footer"><span>{snapEnabled ? "45°/90° angle assist" : "Free angle · exact lengths take priority"} · house anchors stay active · Esc cancels</span><span>Close to house flexes all angles · local only · revision {design.revision}</span></footer>
+    <footer className="app-footer"><span>Draw continues last point · Separate line starts anywhere · Esc finishes</span><span>{fenceLineCount(design)} line{fenceLineCount(design) === 1 ? "" : "s"} · exact combined total · local only · revision {design.revision}</span></footer>
   </main>;
 }

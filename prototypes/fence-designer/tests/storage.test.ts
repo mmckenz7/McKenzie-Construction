@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EMPTY_DESIGN, addPoint } from "../src/model";
-import { LEGACY_STORAGE_KEY, loadLocalDesign, saveLocalDesign, STORAGE_KEY } from "../src/storage";
+import { LEGACY_STORAGE_KEY, loadLocalDesign, PREVIOUS_STORAGE_KEY, saveLocalDesign } from "../src/storage";
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -23,6 +23,12 @@ describe("local persistence", () => {
   it("loads and migrates a schema-v1 layout from the legacy storage key", () => {
     const storage = new MemoryStorage();
     storage.setItem(LEGACY_STORAGE_KEY, JSON.stringify({ ...EMPTY_DESIGN, schemaVersion: 1, house: undefined }));
-    expect(loadLocalDesign(storage)).toMatchObject({ schemaVersion: 2, house: null });
+    expect(loadLocalDesign(storage)).toMatchObject({ schemaVersion: 3, house: null });
+  });
+
+  it("loads and migrates a schema-v2 layout from the previous local key", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(PREVIOUS_STORAGE_KEY, JSON.stringify({ ...EMPTY_DESIGN, schemaVersion: 2 }));
+    expect(loadLocalDesign(storage)).toMatchObject({ schemaVersion: 3, house: null });
   });
 });

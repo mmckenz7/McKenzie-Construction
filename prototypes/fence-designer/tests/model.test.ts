@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, formatFeetInches, insertGateAtPoint, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
-  normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToHouseEdge, solvePathBetweenFixedEndsMm,
+  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, insertGateAtPoint, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
+  normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine,
   stableDesignJson, totalLengthMm,
 } from "../src/model";
 
@@ -104,6 +104,62 @@ describe("deterministic fence geometry", () => {
     expect(totalLengthMm(moved)).toBe(totalLengthMm(design));
   });
 
+  it("starts a separate fence line without connecting it to the previous endpoint", () => {
+    const perimeter = rectangleCorner();
+    let design = startFenceLine(perimeter, { id: "point-4", xMm: 1_524, yMm: 0 });
+    design = addPoint(design, { id: "point-5", xMm: 1_524, yMm: 2_000 }, "segment-4");
+    expect(fenceLineCount(design)).toBe(2);
+    expect(design.segments).toHaveLength(3);
+    expect(fencePathForPoint(design, "point-4").points.map(({ id }) => id)).toEqual(["point-4", "point-5"]);
+    expect(design.segments.some(({ fromPointId, toPointId }) => fromPointId === "point-3" && toPointId === "point-4")).toBe(false);
+    expect(totalLengthMm(design)).toBe(totalLengthMm(perimeter) + 2_000);
+  });
+
+  it("snaps a divider start to the middle of an existing perimeter run", () => {
+    const design = rectangleCorner();
+    expect(snapToFenceRun(design, 1_524, 120)).toMatchObject({ xMm: 1_524, yMm: 0, segmentId: "segment-1" });
+    expect(snapToFenceRun(design, 1_524, 800)).toBeNull();
+  });
+
+  it("identifies separate-line endpoints attached partway along perimeter runs", () => {
+    let design = addPoint(rectangleCorner(), { id: "point-4", xMm: 0, yMm: 3_048 }, "segment-3");
+    design = startFenceLine(design, { id: "point-5", xMm: 1_524, yMm: 0 });
+    design = addPoint(design, { id: "point-6", xMm: 1_524, yMm: 1_524 }, "segment-4");
+    design = addPoint(design, { id: "point-7", xMm: 0, yMm: 3_048 }, "segment-5");
+    expect(isPointAttached(design, "point-5")).toBe(true);
+    expect(isPointAttached(design, "point-7")).toBe(true);
+    expect(pointRole(design, "point-5")).toBe("attached endpoint");
+    const solved = solvePathBetweenFixedEndsMm(design, design.points.at(-1)!, { segmentId: "segment-4", lengthMm: 1_800 });
+    expect(solved.points.find(({ id }) => id === "point-5")).toEqual(design.points.find(({ id }) => id === "point-5"));
+    expect(solved.points.find(({ id }) => id === "point-7")).toEqual(design.points.find(({ id }) => id === "point-7"));
+    expect(Math.abs(segmentLengthMm(solved, solved.segments.find(({ id }) => id === "segment-4")!) - 1_800)).toBeLessThanOrEqual(2);
+  });
+
+  it("moves a locked secondary line without moving the perimeter", () => {
+    const perimeter = rectangleCorner();
+    let design = startFenceLine(perimeter, { id: "point-4", xMm: 1_000, yMm: 1_000 });
+    design = addPoint(design, { id: "point-5", xMm: 2_000, yMm: 1_000 }, "segment-4");
+    design = addPoint(design, { id: "point-6", xMm: 2_000, yMm: 2_000 }, "segment-5");
+    const moved = movePointWithLockedFollowing(design, "point-4", 1_500, 1_500);
+    expect(moved.points.slice(0, 3)).toEqual(perimeter.points);
+    expect(moved.points.slice(3)).toEqual([
+      { id: "point-4", xMm: 1_500, yMm: 1_500 },
+      { id: "point-5", xMm: 2_500, yMm: 1_500 },
+      { id: "point-6", xMm: 2_500, yMm: 2_500 },
+    ]);
+  });
+
+  it("adds a gate to a secondary line without joining it to the perimeter path", () => {
+    const perimeter = rectangleCorner();
+    let design = startFenceLine(perimeter, { id: "point-4", xMm: 1_000, yMm: 0 });
+    design = addPoint(design, { id: "point-5", xMm: 1_000, yMm: 3_000 }, "segment-4");
+    const edited = insertGateAtPoint(design, "point-4", 1_000, "single", "point-6", "segment-5");
+    expect(fenceLineCount(edited)).toBe(2);
+    expect(edited.segments.find(({ id }) => id === "segment-5")).toMatchObject({ fromPointId: "point-4", toPointId: "point-6", kind: "gate" });
+    expect(fencePathForPoint(edited, "point-4").segments).toHaveLength(2);
+    expect(edited.points.slice(0, 3)).toEqual(perimeter.points);
+  });
+
   it("identifies open endpoints, corners, and inline points", () => {
     const design = rectangleCorner();
     expect(pointRole(design, "point-1")).toBe("open endpoint");
@@ -181,15 +237,17 @@ describe("validated serialization", () => {
     expect(restored.segments[1]).toMatchObject({ kind: "gate", gateType: "double" });
   });
 
-  it("rejects disconnected segment topology", () => {
+  it("accepts separate ordered fence lines and rejects branching topology", () => {
     const design = rectangleCorner();
-    expect(() => normalizeDesign({ ...design, segments: [{ ...design.segments[0], toPointId: "point-3" }, design.segments[1]] })).toThrow(/adjacent points/);
+    const separate = startFenceLine(design, { id: "point-4", xMm: 8_000, yMm: 8_000 });
+    expect(normalizeDesign(separate)).toEqual(separate);
+    expect(() => normalizeDesign({ ...design, segments: [...design.segments, { id: "segment-3", fromPointId: "point-1", toPointId: "point-3", kind: "fence" }] })).toThrow(/more than one/);
   });
 
   it("migrates saved schema-v1 layouts with no invented house measurement", () => {
     const design = rectangleCorner();
     const migrated = normalizeDesign({ ...design, schemaVersion: 1, house: undefined });
-    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.schemaVersion).toBe(3);
     expect(migrated.house).toBeNull();
   });
 });

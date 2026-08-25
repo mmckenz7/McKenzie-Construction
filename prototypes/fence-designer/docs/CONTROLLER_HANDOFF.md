@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws one ordered connected path around an optional exact measured house footprint, defaults to free angles while keeping house anchors active, previews each prospective run with a live feet/inches label, and treats exact lengths and both house connections as authoritative. A native **Close to house** workflow redistributes correction across multiple odd-angle corners while preserving every measured fence/gate run. The prototype also supports locked-length chain dragging or free point editing, optional 45°/90° assistance, exact-width single/double gates, contained wheel zoom plus dedicated/two-finger/Command-drag panning, undo/redo, and validated local JSON.
+Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws independently editable perimeter and divider lines around an optional exact measured house footprint. Draw continues from the last point by default, while **Separate line** starts a secondary fence anywhere and snaps its endpoints partway along existing runs without forcing a corner connection. Free angles remain the default; house and fence-run connections stay authoritative. **Close to house** redistributes correction across odd-angle corners while preserving measured fence/gate runs. The combined total includes every line exactly once. The prototype also supports locked-length line-local dragging or free point editing, optional 45°/90° assistance, exact-width single/double gates, contained wheel zoom plus dedicated/two-finger/Command-drag panning, undo/redo, and validated local JSON.
 
 ## Files and ownership
 
@@ -25,7 +25,7 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 - Database, cloud state, environment variables, or APIs: none.
 - Shared domain models: none.
 - New shared architecture: none.
-- Prototype document schema: local-only `FenceDesign` schema v2 with deterministic schema-v1 local-storage migration. It is not proposed as an application integration contract.
+- Prototype document schema: local-only `FenceDesign` schema v3 with deterministic schema-v1 and schema-v2 local-storage migration. It is not proposed as an application integration contract.
 
 ## Dependencies
 
@@ -37,11 +37,11 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 29 deterministic tests passed.
+- 35 deterministic tests passed.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
-- Browser QA passed for free-angle defaults with independent house anchoring, multi-angle full-chain closure between two house connections, post-closure exact-length solving, optional 45°/90° assistance, locked-length downstream dragging, free point reshaping, native single/double gate insertion and exact total width, Escape cancellation, contained wheel zoom, dedicated/two-finger/Command-drag pan, draw, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
+- Browser QA passed for a four-run perimeter plus two interior dividers, midpoint existing-run connections, independent line editing and totals, free-angle defaults with house/fence anchoring, multi-angle full-chain closure, exact-length solving between fixed connections, optional 45°/90° assistance, native single/double gates, Escape cancellation, contained wheel zoom, dedicated/two-finger/Command-drag pan, delete, undo/redo, local save/load, visual states, mobile layout, and console cleanliness.
 - The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
 - Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 
@@ -49,7 +49,8 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 - The house is a user-measured rectangular context footprint, not a building record. Non-rectangular footprints remain a later extension.
 - Local-plan geometry is not a survey, legal boundary, aerial measurement, or field verification.
-- On an open path, exact segment editing moves the end point along the existing bearing, so a following connected span changes visibly. On a path anchored to the house at both ends, the full chain is re-solved instead.
+- On an unanchored open line, exact segment editing moves the end point along the existing bearing, so a following connected span changes visibly. When both line endpoints connect to the house or another fence run, only that line is re-solved instead.
+- Mid-run divider connections are geometric anchors, not graph branches: the perimeter and divider retain separate coincident endpoint records so either line can be edited without silently changing the other's measured topology.
 - House-connected exact edits preserve the house endpoint and solve the nearest angle when locked geometry can reach it. When it cannot, the editor requires an unlock or another corner adjustment rather than silently changing measurements.
 - Full-chain closure requires the first fence point on the house and at least two measured runs. It preserves displayed run measurements with at most two millimeters of integer-coordinate rounding; impossible target/length combinations are rejected.
 - A gate records an exact total opening width and single/double intent. “Double” does not calculate individual leaf sizes and carries no gate assembly, post, hardware, product, quantity, labor, or price rules.
@@ -62,4 +63,4 @@ No decision blocks the local MVP. The address/aerial/lot-line slice requires an 
 
 ## Recommended next action
 
-Have the owner use the house footprint and midpoint edge connections on one real property layout. For the next provider-backed slice, evaluate Mapbox Standard Satellite/Search for address and imagery plus Regrid Parcel API/Tileserver for lot context, behind reviewed server-side credential handling. Keep parcel lines visibly labeled as non-survey context and require measured confirmation before they influence fence dimensions.
+Have the owner use one real farm/HOA layout to validate the naming and placement flow for perimeter versus divider lines, including a cross-fence attached a measured distance back from a corner. For the next provider-backed slice, evaluate Mapbox Standard Satellite/Search for address and imagery plus Regrid Parcel API/Tileserver for lot context, behind reviewed server-side credential handling. Keep parcel lines visibly labeled as non-survey context and require measured confirmation before they influence fence dimensions.

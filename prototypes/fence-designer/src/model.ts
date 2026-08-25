@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 2 as const;
+export const SCHEMA_VERSION = 3 as const;
 export const MM_PER_FOOT = 304.8;
 export const MM_PER_INCH = 25.4;
 
@@ -46,7 +46,7 @@ const text = (value: unknown, label: string, max = 120): string => {
 export function normalizeDesign(input: unknown): FenceDesign {
   if (!input || typeof input !== "object") throw new TypeError("Fence design must be an object.");
   const raw = input as Record<string, unknown>;
-  if (raw.schemaVersion !== 1 && raw.schemaVersion !== SCHEMA_VERSION) throw new TypeError("Unsupported fence design schema version.");
+  if (raw.schemaVersion !== 1 && raw.schemaVersion !== 2 && raw.schemaVersion !== SCHEMA_VERSION) throw new TypeError("Unsupported fence design schema version.");
   if (!Array.isArray(raw.points) || !Array.isArray(raw.segments)) throw new TypeError("Fence design points and segments must be arrays.");
   const points = raw.points.map((item, index) => {
     if (!item || typeof item !== "object") throw new TypeError(`Point ${index + 1} must be an object.`);
@@ -74,12 +74,26 @@ export function normalizeDesign(input: unknown): FenceDesign {
     return normalized;
   });
   if (new Set(segments.map(({ id }) => id)).size !== segments.length) throw new TypeError("Segment IDs must be unique.");
-  if (segments.length !== Math.max(0, points.length - 1)) throw new TypeError("A fence design must be one connected path.");
-  segments.forEach((segment, index) => {
-    if (segment.fromPointId !== points[index]?.id || segment.toPointId !== points[index + 1]?.id) throw new TypeError("Fence segments must connect adjacent points in order.");
+  const incoming = new Map<string, Segment>(); const outgoing = new Map<string, Segment>();
+  segments.forEach((segment) => {
+    if (incoming.has(segment.toPointId)) throw new TypeError("A fence point cannot have more than one incoming run.");
+    if (outgoing.has(segment.fromPointId)) throw new TypeError("A fence point cannot have more than one outgoing run.");
+    incoming.set(segment.toPointId, segment); outgoing.set(segment.fromPointId, segment);
   });
+  const visitedPoints = new Set<string>(); const visitedSegments = new Set<string>();
+  points.filter(({ id }) => !incoming.has(id)).forEach((root) => {
+    let pointId: string | undefined = root.id;
+    while (pointId) {
+      if (visitedPoints.has(pointId)) throw new TypeError("Fence lines cannot contain a cycle.");
+      visitedPoints.add(pointId);
+      const segment = outgoing.get(pointId);
+      if (!segment) break;
+      visitedSegments.add(segment.id); pointId = segment.toPointId;
+    }
+  });
+  if (visitedPoints.size !== points.length || visitedSegments.size !== segments.length) throw new TypeError("Fence lines must be separate ordered paths without branches or cycles.");
   let house: HouseReference | null = null;
-  if (raw.schemaVersion === SCHEMA_VERSION && raw.house !== null) {
+  if (raw.schemaVersion !== 1 && raw.house !== null) {
     if (!raw.house || typeof raw.house !== "object") throw new TypeError("House reference must be an object or null.");
     const item = raw.house as Record<string, unknown>;
     const lengthMm = integer(item.lengthMm, "House length");
@@ -99,6 +113,28 @@ export function normalizeDesign(input: unknown): FenceDesign {
 }
 
 const revise = (design: FenceDesign, patch: Partial<Pick<FenceDesign, "points" | "segments" | "name" | "house">>): FenceDesign => normalizeDesign({ ...design, ...patch, revision: design.revision + 1 });
+
+const incomingSegment = (design: FenceDesign, pointId: string) => design.segments.find(({ toPointId }) => toPointId === pointId);
+const outgoingSegment = (design: FenceDesign, pointId: string) => design.segments.find(({ fromPointId }) => fromPointId === pointId);
+
+export function fencePathForPoint(design: FenceDesign, pointId: string): Readonly<{ points: readonly Point[]; segments: readonly Segment[] }> {
+  if (!design.points.some(({ id }) => id === pointId)) throw new TypeError("Point does not exist.");
+  let startId = pointId;
+  for (let incoming = incomingSegment(design, startId); incoming; incoming = incomingSegment(design, startId)) startId = incoming.fromPointId;
+  const points: Point[] = []; const segments: Segment[] = [];
+  let currentId: string | undefined = startId;
+  while (currentId) {
+    points.push(pointById(design, currentId));
+    const outgoing = outgoingSegment(design, currentId);
+    if (!outgoing) break;
+    segments.push(outgoing); currentId = outgoing.toPointId;
+  }
+  return Object.freeze({ points: Object.freeze(points), segments: Object.freeze(segments) });
+}
+
+export function fenceLineCount(design: FenceDesign): number {
+  return design.points.length - design.segments.length;
+}
 
 export function setHouseReference(design: FenceDesign, lengthMm: number, widthMm: number): FenceDesign {
   if (!Number.isSafeInteger(lengthMm) || lengthMm < 305 || lengthMm > 304_800 || !Number.isSafeInteger(widthMm) || widthMm < 305 || widthMm > 304_800) throw new RangeError("House length and width must each be from 1 through 1,000 feet.");
@@ -159,6 +195,35 @@ export function isPointOnHouseEdge(point: Readonly<{ xMm: number; yMm: number }>
   return onVertical || onHorizontal;
 }
 
+export function snapToFenceRun(
+  design: FenceDesign,
+  xMm: number,
+  yMm: number,
+  toleranceMm = 460,
+  excludePointId?: string,
+): Readonly<{ xMm: number; yMm: number; segmentId: string }> | null {
+  const candidates = design.segments
+    .filter(({ fromPointId, toPointId }) => fromPointId !== excludePointId && toPointId !== excludePointId)
+    .map((segment) => {
+      const start = pointById(design, segment.fromPointId); const end = pointById(design, segment.toPointId);
+      const dx = end.xMm - start.xMm; const dy = end.yMm - start.yMm;
+      const squaredLength = dx ** 2 + dy ** 2;
+      const position = squaredLength === 0 ? 0 : Math.max(0, Math.min(1, ((xMm - start.xMm) * dx + (yMm - start.yMm) * dy) / squaredLength));
+      const point = { xMm: Math.round(start.xMm + position * dx), yMm: Math.round(start.yMm + position * dy) };
+      return { ...point, segmentId: segment.id, distance: Math.hypot(point.xMm - xMm, point.yMm - yMm) };
+    })
+    .filter(({ distance }) => distance <= toleranceMm)
+    .sort((first, second) => first.distance - second.distance || first.segmentId.localeCompare(second.segmentId));
+  const chosen = candidates[0];
+  return chosen ? Object.freeze({ xMm: chosen.xMm, yMm: chosen.yMm, segmentId: chosen.segmentId }) : null;
+}
+
+export function isPointAttached(design: FenceDesign, pointId: string): boolean {
+  const point = pointById(design, pointId);
+  if (design.house && isPointOnHouseEdge(point, design.house)) return true;
+  return snapToFenceRun(design, point.xMm, point.yMm, 2, pointId) !== null;
+}
+
 export function snapRunEndpoint(
   anchor: Readonly<{ xMm: number; yMm: number }>,
   candidate: Readonly<{ xMm: number; yMm: number }>,
@@ -179,11 +244,16 @@ export function snapRunEndpoint(
   });
 }
 
-export function addPoint(design: FenceDesign, point: Point, segmentId?: string): FenceDesign {
+export function addPoint(design: FenceDesign, point: Point, segmentId?: string, fromPointId: string | null = design.points.at(-1)?.id ?? null): FenceDesign {
   if (design.points.some(({ id }) => id === point.id)) throw new TypeError("Point ID already exists.");
-  const previous = design.points.at(-1);
+  const previous = fromPointId ? pointById(design, fromPointId) : null;
+  if (previous && outgoingSegment(design, previous.id)) throw new RangeError("That fence endpoint already continues to another run.");
   const segment = previous ? Object.freeze({ id: segmentId ?? `segment-${design.segments.length + 1}`, fromPointId: previous.id, toPointId: point.id, kind: "fence" as const }) : null;
   return revise(design, { points: [...design.points, point], segments: segment ? [...design.segments, segment] : design.segments });
+}
+
+export function startFenceLine(design: FenceDesign, point: Point): FenceDesign {
+  return addPoint(design, point, undefined, null);
 }
 
 export function movePoint(design: FenceDesign, pointId: string, xMm: number, yMm: number): FenceDesign {
@@ -194,12 +264,12 @@ export function movePoint(design: FenceDesign, pointId: string, xMm: number, yMm
 
 export function movePointWithLockedFollowing(design: FenceDesign, pointId: string, candidateXMm: number, candidateYMm: number): FenceDesign {
   integer(candidateXMm, "Candidate point x"); integer(candidateYMm, "Candidate point y");
-  const index = design.points.findIndex(({ id }) => id === pointId);
-  if (index < 0) throw new TypeError("Point does not exist.");
-  const selected = design.points[index];
+  const path = fencePathForPoint(design, pointId);
+  const index = path.points.findIndex(({ id }) => id === pointId);
+  const selected = path.points[index];
   let xMm = candidateXMm; let yMm = candidateYMm;
   if (index > 0) {
-    const anchor = design.points[index - 1];
+    const anchor = path.points[index - 1];
     const lockedLength = Math.hypot(selected.xMm - anchor.xMm, selected.yMm - anchor.yMm);
     const candidateLength = Math.hypot(candidateXMm - anchor.xMm, candidateYMm - anchor.yMm);
     if (lockedLength === 0) throw new RangeError("The incoming span needs a measurable length before it can be locked.");
@@ -209,18 +279,20 @@ export function movePointWithLockedFollowing(design: FenceDesign, pointId: strin
     yMm = Math.round(anchor.yMm + uy * lockedLength);
   }
   const dx = xMm - selected.xMm; const dy = yMm - selected.yMm;
-  return revise(design, { points: design.points.map((point, pointIndex) => pointIndex < index ? point : Object.freeze({ ...point, xMm: point.xMm + dx, yMm: point.yMm + dy })) });
+  const followingIds = new Set(path.points.slice(index).map(({ id }) => id));
+  return revise(design, { points: design.points.map((point) => followingIds.has(point.id) ? Object.freeze({ ...point, xMm: point.xMm + dx, yMm: point.yMm + dy }) : point) });
 }
 
 export function deletePoint(design: FenceDesign, pointId: string, replacementSegmentId: string): FenceDesign {
-  const index = design.points.findIndex(({ id }) => id === pointId);
-  if (index < 0) throw new TypeError("Point does not exist.");
+  if (!design.points.some(({ id }) => id === pointId)) throw new TypeError("Point does not exist.");
+  const incoming = incomingSegment(design, pointId); const outgoing = outgoingSegment(design, pointId);
   const points = design.points.filter(({ id }) => id !== pointId);
-  const segments = points.slice(0, -1).map((point, segmentIndex) => {
-    const next = points[segmentIndex + 1];
-    const existing = design.segments.find(({ fromPointId, toPointId }) => fromPointId === point.id && toPointId === next.id);
-    return existing ?? Object.freeze({ id: replacementSegmentId, fromPointId: point.id, toPointId: next.id, kind: "fence" as const });
-  });
+  const removedIds = new Set([incoming?.id, outgoing?.id].filter((id): id is string => Boolean(id)));
+  const segments = design.segments.filter(({ id }) => !removedIds.has(id));
+  if (incoming && outgoing) {
+    const insertionIndex = Math.min(design.segments.findIndex(({ id }) => id === incoming.id), design.segments.findIndex(({ id }) => id === outgoing.id));
+    segments.splice(Math.max(0, insertionIndex), 0, Object.freeze({ id: replacementSegmentId, fromPointId: incoming.fromPointId, toPointId: outgoing.toPointId, kind: "fence" as const }));
+  }
   return revise(design, { points, segments });
 }
 
@@ -251,10 +323,10 @@ export function insertGateAtPoint(
   if (pointIndex < 0) throw new TypeError("Gate anchor point does not exist.");
   if (design.points.some(({ id }) => id === newPointId) || design.segments.some(({ id }) => id === newGateSegmentId)) throw new TypeError("Gate point and segment IDs must be unique.");
   const anchor = design.points[pointIndex];
-  const outgoing = design.segments[pointIndex];
+  const outgoing = outgoingSegment(design, pointId);
 
   if (outgoing) {
-    const end = design.points[pointIndex + 1];
+    const end = pointById(design, outgoing.toPointId);
     const runLength = segmentLengthMm(design, outgoing);
     if (widthMm > runLength) throw new RangeError(`Gate width must fit within the following ${formatFeetInches(runLength)} span.`);
     if (widthMm === runLength) return setSegmentKind(design, outgoing.id, "gate", gateType);
@@ -268,12 +340,14 @@ export function insertGateAtPoint(
     const points = [...design.points.slice(0, pointIndex + 1), gateEnd, ...design.points.slice(pointIndex + 1)];
     const gate = Object.freeze({ id: newGateSegmentId, fromPointId: anchor.id, toPointId: gateEnd.id, kind: "gate" as const, gateType });
     const remainder = Object.freeze({ ...outgoing, fromPointId: gateEnd.id });
-    const segments = [...design.segments.slice(0, pointIndex), gate, remainder, ...design.segments.slice(pointIndex + 1)];
+    const outgoingIndex = design.segments.findIndex(({ id }) => id === outgoing.id);
+    const segments = [...design.segments.slice(0, outgoingIndex), gate, remainder, ...design.segments.slice(outgoingIndex + 1)];
     return revise(design, { points, segments });
   }
 
-  if (pointIndex === 0) throw new RangeError("Draw one fence run first so the gate has a direction.");
-  const previous = design.points[pointIndex - 1];
+  const incoming = incomingSegment(design, pointId);
+  if (!incoming) throw new RangeError("Draw one fence run first so the gate has a direction.");
+  const previous = pointById(design, incoming.fromPointId);
   const rawLength = Math.hypot(anchor.xMm - previous.xMm, anchor.yMm - previous.yMm);
   if (rawLength === 0) throw new RangeError("The preceding span needs a measurable direction before adding a gate.");
   const gateEnd = Object.freeze({
@@ -315,15 +389,15 @@ export function setSegmentLengthMm(design: FenceDesign, segmentId: string, lengt
 
 export function setSegmentLengthKeepingEndMm(design: FenceDesign, segmentId: string, lengthMm: number, lockPreviousLength: boolean): FenceDesign {
   if (!Number.isSafeInteger(lengthMm) || lengthMm < 25 || lengthMm > 304_800) throw new RangeError("Segment length must be from 1 inch through 1,000 feet.");
-  const segmentIndex = design.segments.findIndex(({ id }) => id === segmentId);
-  if (segmentIndex < 0) throw new TypeError("Segment does not exist.");
-  const segment = design.segments[segmentIndex];
+  const segment = design.segments.find(({ id }) => id === segmentId);
+  if (!segment) throw new TypeError("Segment does not exist.");
   const start = pointById(design, segment.fromPointId);
   const end = pointById(design, segment.toPointId);
+  const previousSegment = incomingSegment(design, start.id);
   let xMm: number; let yMm: number;
 
-  if (lockPreviousLength && segmentIndex > 0) {
-    const previous = design.points[segmentIndex - 1];
+  if (lockPreviousLength && previousSegment) {
+    const previous = pointById(design, previousSegment.fromPointId);
     const incomingLength = Math.hypot(start.xMm - previous.xMm, start.yMm - previous.yMm);
     const centers = Math.hypot(end.xMm - previous.xMm, end.yMm - previous.yMm);
     if (incomingLength === 0 || centers === 0 || centers > incomingLength + lengthMm || centers < Math.abs(incomingLength - lengthMm)) {
@@ -352,16 +426,22 @@ export function solvePathBetweenFixedEndsMm(
   design: FenceDesign,
   target: Readonly<{ xMm: number; yMm: number }>,
   lengthOverride?: Readonly<{ segmentId: string; lengthMm: number }>,
+  pathPointId?: string,
 ): FenceDesign {
-  if (design.segments.length < 2) throw new RangeError("Draw at least two measured runs before closing to the house.");
   if (!Number.isSafeInteger(target.xMm) || !Number.isSafeInteger(target.yMm)) throw new TypeError("Closure point must use integer millimeters.");
   if (lengthOverride && (!Number.isSafeInteger(lengthOverride.lengthMm) || lengthOverride.lengthMm < 25 || lengthOverride.lengthMm > 304_800)) {
     throw new RangeError("Segment length must be from 1 inch through 1,000 feet.");
   }
   if (lengthOverride && !design.segments.some(({ id }) => id === lengthOverride.segmentId)) throw new TypeError("Segment does not exist.");
 
-  const lengths = design.segments.map((segment) => segment.id === lengthOverride?.segmentId ? lengthOverride.lengthMm : segmentLengthMm(design, segment));
-  const start = design.points[0];
+  const pathAnchorId = lengthOverride
+    ? design.segments.find(({ id }) => id === lengthOverride.segmentId)!.fromPointId
+    : pathPointId ?? design.points.at(-1)?.id;
+  if (!pathAnchorId) throw new RangeError("Draw a fence line before closing it.");
+  const path = fencePathForPoint(design, pathAnchorId);
+  if (path.segments.length < 2) throw new RangeError("A fixed-end line needs at least two measured runs so an interior angle can adjust.");
+  const lengths = path.segments.map((segment) => segment.id === lengthOverride?.segmentId ? lengthOverride.lengthMm : segmentLengthMm(design, segment));
+  const start = path.points[0];
   const anchorDistance = Math.hypot(target.xMm - start.xMm, target.yMm - start.yMm);
   const total = lengths.reduce((sum, length) => sum + length, 0);
   const longest = Math.max(...lengths);
@@ -370,12 +450,12 @@ export function solvePathBetweenFixedEndsMm(
     throw new RangeError("Those measured runs cannot reach that house connection. Add or change a measured run, or choose a reachable house point.");
   }
 
-  const points = design.points.map(({ xMm, yMm }) => ({ xMm, yMm }));
+  const points = path.points.map(({ xMm, yMm }) => ({ xMm, yMm }));
   const direction = (from: Readonly<{ xMm: number; yMm: number }>, to: Readonly<{ xMm: number; yMm: number }>, fallbackIndex: number) => {
     const dx = to.xMm - from.xMm; const dy = to.yMm - from.yMm; const distance = Math.hypot(dx, dy);
     if (distance > 0.000001) return { x: dx / distance, y: dy / distance };
-    const originalStart = design.points[Math.max(0, fallbackIndex)];
-    const originalEnd = design.points[Math.min(design.points.length - 1, fallbackIndex + 1)];
+    const originalStart = path.points[Math.max(0, fallbackIndex)];
+    const originalEnd = path.points[Math.min(path.points.length - 1, fallbackIndex + 1)];
     const originalDistance = Math.hypot(originalEnd.xMm - originalStart.xMm, originalEnd.yMm - originalStart.yMm);
     return originalDistance > 0.000001
       ? { x: (originalEnd.xMm - originalStart.xMm) / originalDistance, y: (originalEnd.yMm - originalStart.yMm) / originalDistance }
@@ -401,21 +481,21 @@ export function solvePathBetweenFixedEndsMm(
   }
   points[0] = { xMm: start.xMm, yMm: start.yMm };
   points[points.length - 1] = { xMm: target.xMm, yMm: target.yMm };
+  const solvedById = new Map(path.points.map((point, index) => [point.id, { xMm: Math.round(points[index].xMm), yMm: Math.round(points[index].yMm) }]));
   const solved = revise(design, {
-    points: design.points.map((point, index) => Object.freeze({ ...point, xMm: Math.round(points[index].xMm), yMm: Math.round(points[index].yMm) })),
+    points: design.points.map((point) => solvedById.has(point.id) ? Object.freeze({ ...point, ...solvedById.get(point.id)! }) : point),
   });
-  const preserved = solved.segments.every((segment, index) => Math.abs(segmentLengthMm(solved, segment) - lengths[index]) <= 2);
+  const preserved = path.segments.every((segment, index) => Math.abs(segmentLengthMm(solved, segment) - lengths[index]) <= 2);
   if (!preserved) throw new RangeError("The measured runs could not close within field-measurement precision. Adjust one measured run and try again.");
   return solved;
 }
 
-export function pointRole(design: FenceDesign, pointId: string): "open endpoint" | "corner" | "inline" {
-  const index = design.points.findIndex(({ id }) => id === pointId);
-  if (index < 0) throw new TypeError("Point does not exist.");
-  if (index === 0 || index === design.points.length - 1) return "open endpoint";
-  const before = design.points[index - 1];
-  const point = design.points[index];
-  const after = design.points[index + 1];
+export function pointRole(design: FenceDesign, pointId: string): "open endpoint" | "attached endpoint" | "corner" | "inline" {
+  const point = pointById(design, pointId);
+  const incoming = incomingSegment(design, pointId); const outgoing = outgoingSegment(design, pointId);
+  if (!incoming || !outgoing) return isPointAttached(design, pointId) ? "attached endpoint" : "open endpoint";
+  const before = pointById(design, incoming.fromPointId);
+  const after = pointById(design, outgoing.toPointId);
   const first = Math.atan2(point.yMm - before.yMm, point.xMm - before.xMm);
   const second = Math.atan2(after.yMm - point.yMm, after.xMm - point.xMm);
   let deflection = Math.abs(second - first);
