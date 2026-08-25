@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 shared joist-axis identity regression
+
+- Visible joist members and cutout-interruption sampling now consume the same immutable path-axis derivation, preventing transient `joist-N` warning sources from drifting from displayed coordinates.
+- Pure tests cover both board/joist directions, deterministic axis replay, and two valid cutouts with isolated exact path IDs. Full validation passed 319/319 tests plus isolation, typecheck, build, goldens, and bundle ceilings.
+- Desktop and 390 × 844 review checks retained one lazy canvas, reachable **Close** and **Lock layout & continue** actions, no horizontal overflow, and no browser warning/error logs. No authored joists or saved facts were introduced.
+
 ## 2026-08-25 one-pass joist warning projection regression
 
 - The active one-level v5 review now projects transient joist paths once and reuses the same immutable result for recorded-wall and every cutout-adjacency check; exact per-cutout interrupted-path sampling is unchanged.

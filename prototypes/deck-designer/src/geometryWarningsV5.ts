@@ -4,7 +4,7 @@ import { positiveRegionOverlapArea } from "./geometryWarningsV3";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
-import { conceptualJoistVerticalRange, derivePolygonMembers, type ProjectedMember } from "./polygonProjection";
+import { conceptualJoistVerticalRange, deriveJoistPathAxes, derivePolygonMembers, type ProjectedMember } from "./polygonProjection";
 import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
 import { deriveStairRouteGeometryV3 } from "./stairRouteGeometryV3";
 
@@ -87,16 +87,11 @@ function interruptedJoistIds(design: DeckDesignV5, platformId: string, holeIndex
   const platform = design.platforms.find((candidate) => candidate.id === platformId)!;
   const holeRegion = { outer: platform.region.holes[holeIndex], holes: [] };
   const horizontalBoards = platform.construction.decking.direction === "left_right";
-  const minimum = Math.min(...platform.region.outer.map((point) => horizontalBoards ? point.x : point.z));
-  const maximum = Math.max(...platform.region.outer.map((point) => horizontalBoards ? point.x : point.z));
-  const bays = Math.ceil((maximum - minimum) / platform.construction.framing.joistSpacing);
-  return Object.freeze(Array.from({ length: bays + 1 }, (_, index) => {
-    const coordinate = minimum + ((maximum - minimum) * index) / bays;
-    const sample = index === bays ? coordinate - .000001 : coordinate;
+  return Object.freeze(deriveJoistPathAxes(platform.region.outer, platform.construction.decking.direction, platform.construction.framing.joistSpacing).map((axis) => {
     const crossings = horizontalBoards
-      ? verticalRegionIntervalsAt(holeRegion, sample)
-      : horizontalRegionIntervalsAt(holeRegion, sample);
-    return crossings.length ? `joist-${index + 1}` : null;
+      ? verticalRegionIntervalsAt(holeRegion, axis.sampleCoordinate)
+      : horizontalRegionIntervalsAt(holeRegion, axis.sampleCoordinate);
+    return crossings.length ? axis.id : null;
   }).filter((id): id is string => id !== null));
 }
 

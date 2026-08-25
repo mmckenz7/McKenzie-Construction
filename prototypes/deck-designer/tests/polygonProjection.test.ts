@@ -1,7 +1,7 @@
 // @ts-ignore The production root intentionally does not install this isolated prototype package's test runner.
 import { describe, expect, it } from "vitest";
 import { signedPolygonArea } from "../src/polygon";
-import { derivePolygonMembers, triangulatePolygon } from "../src/polygonProjection";
+import { deriveJoistPathAxes, derivePolygonMembers, triangulatePolygon } from "../src/polygonProjection";
 
 const lShape = [
   { x: 0, z: 0 }, { x: 240, z: 0 }, { x: 240, z: 120 },
@@ -60,6 +60,18 @@ describe("polygon surface projection spike", () => {
       { boardWidth: 12, gap: 1, joistSpacing: 24, boardDirection: "house_yard" },
     )).toEqual(houseYard);
     expect(houseYard.surfaceBoards).not.toEqual(leftRight.surfaceBoards);
+  });
+
+  it("uses the same exact joist path axes for both projection directions", () => {
+    for (const direction of ["left_right", "house_yard"] as const) {
+      const axes = deriveJoistPathAxes(outer, direction, 24);
+      const projection = derivePolygonMembers({ outer, holes: [hole] }, {
+        boardWidth: 12, gap: 1, joistSpacing: 24, boardDirection: direction,
+      });
+      expect([...new Set(projection.joists.map((member) => member.id.match(/^joist-\d+/)![0]))]).toEqual(axes.map((axis) => axis.id));
+      expect(Object.isFrozen(axes)).toBe(true);
+      expect(deriveJoistPathAxes(outer, direction, 24)).toEqual(axes);
+    }
   });
 
   it("rejects projection parameters outside recorded prototype bounds", () => {

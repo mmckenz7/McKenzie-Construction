@@ -59,6 +59,21 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     }));
   });
 
+  it("keeps exact joist path identities isolated across multiple cutouts", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, region: { ...platform.region, holes: [
+      [{ x: 20, z: 24 }, { x: 44, z: 24 }, { x: 44, z: 60 }, { x: 20, z: 60 }],
+      [{ x: 68, z: 84 }, { x: 92, z: 84 }, { x: 92, z: 120 }, { x: 68, z: 120 }],
+    ] } }] });
+    const warnings = deriveGeometryWarningsV5(design, platform.id).filter((warning) => warning.id.startsWith("joist-cutout-interruption-"));
+    expect(warnings).toEqual([
+      expect.objectContaining({ id: "joist-cutout-interruption-1", geometryIds: ["platform-1:hole-1", "joist-3"] }),
+      expect.objectContaining({ id: "joist-cutout-interruption-2", geometryIds: ["platform-1:hole-2", "joist-6"] }),
+    ]);
+    expect(deriveGeometryWarningsV5(design, platform.id).filter((warning) => warning.id.startsWith("joist-cutout-interruption-"))).toEqual(warnings);
+  });
+
   it("surfaces framing interruptions as field verification without claiming a design", () => {
     const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
     const platform = base.platforms[0];
