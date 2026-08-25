@@ -1,5 +1,14 @@
 # Browser QA record
 
+## 2026-08-25 keyboard stair positioning
+
+- The currently unlocked authored stair system's plan handle now accepts arrow keys as well as pointer and touch dragging. Horizontal or vertical keys follow the exact attached-edge direction, use the active plan snap, and clamp at zero or the edge length minus stair width without overshoot.
+- Its accessible name reports the current position, snap amount, and available drag/arrow interaction. A high-contrast focus-visible treatment makes the active handle clear without changing design state.
+- Focused tests cover horizontal and vertical edges in both authored directions, perpendicular-key rejection, both bounds, locked-system immutability, deterministic v5 commit, and monotonic Undo/Redo restoration.
+- Desktop QA moved a 4-foot stair position to 4.5 feet with one arrow press, advanced revision 8 to 9, and then restored 4 feet and 4.5 feet through Undo and Redo at monotonic revisions 10 and 11. Finishing the side removed the movement handle and retained one 3D canvas.
+- At 390 by 844, selecting the locked stair exposed the intentional **Edit stairs** action; entering edit mode restored the exact stair-position and width fields plus the keyboard/touch movement handle while retaining one canvas and the conceptual warning. The temporary viewport override was reset afterward.
+- Full validation passed 265 tests, isolation, production-equivalent type checking, build, golden fixtures, and bundle budgets at 86.6 KiB initial / 121.7 KiB largest / 239.7 KiB total gzip. This is interaction-only; no geometry, quantity, schema, catalog, estimating, API, migration, or shared-adapter semantics changed.
+
 ## 2026-08-25 exact stair-to-deck overlap
 
 - The existing returned-stair blocker now measures positive-area intersection against the normalized deck region instead of relying on footprint sample points. Focused coverage proves a narrow angled crossing is detected, boundary-only contact stays allowed, and a footprint contained entirely in a recorded cutout remains outside solid deck area.

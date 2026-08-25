@@ -418,6 +418,7 @@ button:hover { transform: translateY(-1px); }
 .dimension-handle.active { cursor: grabbing; }
 .stair-move-handle { fill: #fff; stroke: #b55f32; stroke-width: 2.25; cursor: grab; touch-action: none; }
 .stair-move-handle:hover, .stair-move-handle:focus, .stair-move-handle.active { fill: #ffd4ad; stroke-width: 3; outline: none; }
+.stair-move-handle:focus-visible { fill: #f3ff8d; stroke: #0c543c; stroke-width: 4; }
 .stair-move-handle.active { cursor: grabbing; }
 .v3-edge { fill: rgba(255,255,255,.001); stroke: none; cursor: pointer; outline: none; }
 .v3-edge:hover, .v3-edge:focus { fill: rgba(200, 221, 60, .52); }

@@ -47,6 +47,31 @@ type Props = {
 };
 
 const snap = (value: number, increment: number) => Math.round(value / increment) * increment;
+
+export type StairKeyboardMove = Readonly<{ handled: boolean; offset: number }>;
+
+export function stairKeyboardMove(
+  stair: Pick<StairSystemV3, "locked" | "offset" | "width">,
+  edge: Readonly<{ start: Point; end: Point; length: number }>,
+  key: string,
+  snapIncrement: number,
+): StairKeyboardMove {
+  if (stair.locked || !Number.isFinite(snapIncrement) || snapIncrement <= 0 || !Number.isFinite(edge.length) || edge.length < stair.width) {
+    return Object.freeze({ handled: false, offset: stair.offset });
+  }
+  const dx = edge.end.x - edge.start.x, dz = edge.end.z - edge.start.z;
+  const horizontal = Math.abs(dx) >= Math.abs(dz);
+  const negativeKey = horizontal ? "ArrowLeft" : "ArrowUp";
+  const positiveKey = horizontal ? "ArrowRight" : "ArrowDown";
+  if (key !== negativeKey && key !== positiveKey) return Object.freeze({ handled: false, offset: stair.offset });
+  const axisDirection = horizontal ? Math.sign(dx) : Math.sign(dz);
+  if (axisDirection === 0) return Object.freeze({ handled: false, offset: stair.offset });
+  const visualDirection = key === positiveKey ? 1 : -1;
+  const maximum = edge.length - stair.width;
+  const offset = Math.min(maximum, Math.max(0, stair.offset + visualDirection * axisDirection * snapIncrement));
+  return Object.freeze({ handled: true, offset });
+}
+
 const openingHitCorners = (start: Point, end: Point, width = 18): readonly Point[] => {
   const length = Math.hypot(end.x - start.x, end.z - start.z) || 1;
   const nx = -(end.z - start.z) / length * width / 2, nz = (end.x - start.x) / length * width / 2;
@@ -101,6 +126,13 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
     if (!point || !stairEdge || !stair) return;
     const offset = stairOffsetFromPoint(stairEdge, stair.width, point, snapIncrement);
     commit ? onStairCommit(offset) : onStairPreview(offset);
+  };
+  const nudgeStairs = (event: KeyboardEvent<SVGCircleElement>) => {
+    if (!stairEdge || !stair) return;
+    const move = stairKeyboardMove(stair, stairEdge, event.key, snapIncrement);
+    if (!move.handled) return;
+    event.preventDefault();
+    if (move.offset !== stair.offset) onStairCommit(move.offset);
   };
   const nudgeCorner = (index: number, event: KeyboardEvent<SVGCircleElement>) => {
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
@@ -215,7 +247,7 @@ export function PlanViewV3({ platform, activeStairSystem = null, geometry, house
       {selectedHole.map((point, cornerIndex) => <g key={`hole-handle-${cornerIndex}`}><circle cx={x(point.x)} cy={y(point.z)} r="16" className="cutout-resize-hit" role="button" tabIndex={0} aria-label={`Resize cutout ${selectedHoleIndex + 1} from corner ${cornerIndex + 1}`} onKeyDown={(event) => nudgeHole(cornerIndex, event)} onPointerDown={(event) => { const start = localPoint(event); if (!start) return; event.currentTarget.setPointerCapture(event.pointerId); holeDrag.current = { index: selectedHoleIndex, mode: cornerIndex, start, hole: selectedHole }; setActive(`hole-corner-${cornerIndex}`); }} onPointerMove={(event) => { const drag = holeDrag.current; if (drag?.index !== selectedHoleIndex || drag.mode !== cornerIndex || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const hole = draggedHole(event); if (hole) onHolePreview?.(selectedHoleIndex, hole); }} onPointerUp={(event) => { const drag = holeDrag.current; if (drag?.index !== selectedHoleIndex || drag.mode !== cornerIndex) return; const hole = draggedHole(event); if (hole) onHoleCommit?.(selectedHoleIndex, hole); event.currentTarget.releasePointerCapture(event.pointerId); holeDrag.current = null; setActive(null); }} onPointerCancel={() => { holeDrag.current = null; setActive(null); onCancel(); }} /><circle cx={x(point.x)} cy={y(point.z)} r="5.5" className="cutout-resize-handle" aria-hidden="true" pointerEvents="none" /></g>)}
     </>}
     {editingEnabled && platform.region.outer.map((point, index) => <circle key={index} cx={x(point.x)} cy={y(point.z)} r={active === `corner-${index}` ? 7 : 5.5} className="dimension-handle corner-handle" role="button" tabIndex={0} aria-label={`Editable corner at ${point.x} inches left/right and ${point.z} inches away; drag or use arrow keys`} onKeyDown={(event) => nudgeCorner(index, event)} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive(`corner-${index}`); }} onPointerMove={(event) => { if (active === `corner-${index}` && event.currentTarget.hasPointerCapture(event.pointerId)) { const point = localPoint(event); if (point) onCornerPreview(index, point); } }} onPointerUp={(event) => { if (active !== `corner-${index}`) return; const point = localPoint(event); if (point) onCornerCommit(index, point); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />)}
-    {editingEnabled && stair && !stair.locked && stairCenter && <circle cx={x(stairCenter.x)} cy={y(stairCenter.z)} r={active === "stairs" ? 8 : 6.5} className="stair-move-handle" role="button" tabIndex={0} aria-label={`Move ${stair.id} along selected geometric edge`} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive("stairs"); }} onPointerMove={(event) => { if (active === "stairs" && event.currentTarget.hasPointerCapture(event.pointerId)) stairPointer(event, false); }} onPointerUp={(event) => { if (active !== "stairs") return; stairPointer(event, true); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />}
+    {editingEnabled && stair && !stair.locked && stairCenter && <circle cx={x(stairCenter.x)} cy={y(stairCenter.z)} r={active === "stairs" ? 8 : 6.5} className="stair-move-handle" role="button" tabIndex={0} aria-label={`Move ${stair.id}, currently ${formatFeetInches(stair.offset)} from the start of its selected side; drag or use arrow keys; snaps to ${formatFeetInches(snapIncrement)}`} onKeyDown={nudgeStairs} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setActive("stairs"); }} onPointerMove={(event) => { if (active === "stairs" && event.currentTarget.hasPointerCapture(event.pointerId)) stairPointer(event, false); }} onPointerUp={(event) => { if (active !== "stairs") return; stairPointer(event, true); event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }} onPointerCancel={() => { setActive(null); onCancel(); }} />}
     {editingEnabled && beamHandle && <><circle cx={x(beamHandle.x)} cy={y(beamHandle.z)} r="15" className="beam-move-hit" role="button" tabIndex={0} aria-label={`Move conceptual beam, currently ${formatFeetInches(selectedBeam?.offsetFromOutside ?? effectiveBeamInsetV3(platform))} from the outside edge`} onKeyDown={(event) => { const increaseKeys = platform.construction.decking.direction === "left_right" ? ["ArrowUp"] : ["ArrowLeft"]; const decreaseKeys = platform.construction.decking.direction === "left_right" ? ["ArrowDown"] : ["ArrowRight"]; if (!increaseKeys.includes(event.key) && !decreaseKeys.includes(event.key)) return; event.preventDefault(); const direction = increaseKeys.includes(event.key) ? 1 : -1; onBeamCommit?.((selectedBeam?.offsetFromOutside ?? effectiveBeamInsetV3(platform)) + direction * snapIncrement); }} onPointerDown={(event) => { if (selectedBeam) onSelectBeamLine?.(selectedBeam.id); event.currentTarget.setPointerCapture(event.pointerId); beamDrag.current = true; setActive("beam-move"); }} onPointerMove={(event) => { if (!beamDrag.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return; beamPointer(event, false); }} onPointerUp={(event) => { if (!beamDrag.current) return; beamPointer(event, true); event.currentTarget.releasePointerCapture(event.pointerId); beamDrag.current = false; setActive(null); }} onPointerCancel={() => { beamDrag.current = false; setActive(null); onCancel(); }} /><rect x={x(beamHandle.x) - 5} y={y(beamHandle.z) - 5} width="10" height="10" rx="2" className={`beam-move-handle${active === "beam-move" ? " active" : ""}`} aria-hidden="true" pointerEvents="none" /></>}
     {editingEnabled && houseGeometry.houseOpenings.filter((opening) => opening.kind === "door").map((opening) => <polygon key={`select-${opening.wallId}-${opening.id}`} points={openingHitCorners(opening.start, opening.end).map((p) => `${x(p.x)},${y(p.z)}`).join(" ")} className="plan-house-opening-hit" role="button" tabIndex={0} aria-label={`Edit recorded door ${opening.id.replaceAll("-", " ")}`} onClick={() => onSelectHouseOpening?.(opening.id)} onKeyDown={(event) => { if (event.key !== "Enter" && event.key !== " ") return; event.preventDefault(); onSelectHouseOpening?.(opening.id); }} />)}
   </svg>;
