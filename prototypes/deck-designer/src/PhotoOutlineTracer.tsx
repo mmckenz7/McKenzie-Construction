@@ -166,7 +166,21 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
   const [stairEndInput, setStairEndInput] = useState("");
   const [stairWidthInput, setStairWidthInput] = useState("");
   const [stairNotice, setStairNotice] = useState("");
-  useEffect(() => { undoStack.current = []; setUndoCount(0); setSelection(null); }, [width, projection]);
+  useEffect(() => {
+    outlineDrag.current = null;
+    stairDrag.current = null;
+    activeDrag.current = null;
+    frozenView.current = null;
+    exactEditStart.current = null;
+    touchPoints.current.clear();
+    pinchStart.current = null;
+    undoStack.current = [];
+    setActive(null);
+    setUndoCount(0);
+    setSelection(null);
+    setManualView(null);
+    setStairNotice("");
+  }, [width, projection]);
   const edges = useMemo(() => deriveGeometricPolygonEdges(outer), [outer]);
   const stairPreviewResult = useMemo(() => {
     if (!stairEdgeId) return Object.freeze({ preview: null, diagnostic: "" });

@@ -483,3 +483,11 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - At 390 × 844, the fresh/recovery status and all three local/JSON controls remained available with one canvas.
 - Pure startup gates cover saved v1, v2, v3, v4, and v5 documents plus malformed highest-priority storage. Every source is preserved; malformed data blocks fall-through, opens a fresh design only in memory, and displays that retained data was not replaced.
 - Repeated production builds measured 86.4 KiB initial, 121.7 KiB largest, and 239.5 KiB total JavaScript gzip. Enforced ceilings are tightened to 90/130/245 KiB. The dormant legacy screen remains in prototype source as a rollback reference but is absent from the active bundle.
+
+## 2026-08-25 — photo-trace overall-size recovery
+
+- Completed a width edit on an untouched rectangle and confirmed the four-corner trace resized only after Enter, with no pending warning or temporary Undo entry.
+- Added an eight-corner offset and temporary stairs, then completed another width edit. The traced geometry and stairs remained visible while current and pending envelopes were shown; Start from confirmed outline was disabled.
+- Chose Keep current outline and confirmed the prior measurements, eight corners, stairs, and tracer Undo remained. Escape during a later field edit restored the focused transaction with no pending change.
+- Chose Apply size and reset outline and confirmed the trace became the requested four-corner rectangle, temporary stairs were removed, and tracer Undo returned disabled. Local photo state is not included in this reset path and remains owned by the dialog.
+- Desktop semantic QA found no blank dialog or runtime error. Focused pure tests cover invalid/partial dimensions, unchanged recovery, untouched auto-resize, and staging whenever custom geometry or temporary stairs exist.
