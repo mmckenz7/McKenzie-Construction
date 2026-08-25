@@ -373,6 +373,11 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Exercised economy/balanced quality plus Perspective and Top camera presets, then applied the legacy L-shape-with-landing template and confirmed deck, framing, railing, stairs, landing, and house context remained visible.
 - Reloaded the existing saved v5 designer on its original local origin and confirmed its current 3D canvas still loads independently of the fresh-project test.
 - The build reduced total JavaScript from 251.8 KiB to 250.0 KiB gzip while retaining the 99/170/252 KiB initial/largest/total ceilings.
+## 2026-08-25 — stable one-level 3D context
+
+- Reloaded the saved v5 one-level design and confirmed exactly one WebGL canvas was present.
+- Exercised Top and Perspective camera presets; both retained one canvas and updated the same visible deck/stair model without a loading fallback.
+- Reloaded after the check so the saved local design and default camera were handed back unchanged.
 ## 2026-08-24 — adjacent conceptual joist-to-cutout review
 
 - Added a centered rectangular cutout through the desktop controls and opened layout review.

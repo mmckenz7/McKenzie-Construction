@@ -32,6 +32,7 @@ export type ThreeViewGeometry = Readonly<{
 }> & FinishGeometry;
 type PlatformView = Readonly<{ platform: ThreeViewPlatform; geometry: ThreeViewGeometry }>;
 type Props = { platform: ThreeViewPlatform; geometry: ThreeViewGeometry; contextPlatforms?: readonly PlatformView[]; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality };
+const EMPTY_CONTEXT_PLATFORMS: readonly PlatformView[] = Object.freeze([]);
 
 function member(group: THREE.Group, value: Readonly<{ start: { x: number; z: number }; end: { x: number; z: number } }>, y: number, height: number, depth: number, material: THREE.Material) {
   const dx = value.end.x - value.start.x, dz = value.end.z - value.start.z;
@@ -48,7 +49,7 @@ function slopedMember(group: THREE.Group, value: Readonly<{ start: { x: number; 
   mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
 }
 
-export function ThreeViewV3({ platform, geometry, contextPlatforms = [], houseGeometry, gradeElevation, preset, presetRequest, showFraming, quality }: Props) {
+export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTEXT_PLATFORMS, houseGeometry, gradeElevation, preset, presetRequest, showFraming, quality }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
