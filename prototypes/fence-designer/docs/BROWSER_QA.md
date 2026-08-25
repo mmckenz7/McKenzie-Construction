@@ -45,5 +45,13 @@ Validated workflow:
 37. Opened **Site walk** in the browser, visually reviewed the panel, and verified the responsive mobile rules stack its mark, separate-line, correction, and finish controls into full-width touch targets.
 38. Confirmed Site Walk does not request location when the panel opens, requests a fresh position only from the explicit mark action, and presents a useful browser permission/availability failure without changing the design.
 39. Confirmed **KGIS** opens a separate reference panel, validates an address locally, and builds an official KGIS aerial/address link without importing GIS geometry into the plan or totals.
+40. Opened the new **Property** panel and confirmed Acres, KGIS, and Google reference actions remain explicit user actions with no automatic request.
+41. Uploaded a local PNG through the visible file chooser and confirmed it rendered below the grid and measured geometry without changing the 0′ 0″ total or document revision.
+42. Confirmed independent visibility controls for the reference image, grid, house, and dimension labels; hiding and restoring the image did not remove or mutate it.
+43. Entered a known 40′ 0″ distance, picked two canvas points, and confirmed the image calibrated with a clear success notice while fence geometry remained unchanged.
+44. Rotated the image 12°, locked it, and confirmed calibration and position controls became disabled while opacity and layer visibility remained usable.
+45. Drew an 18′ 2″ fence run over the calibrated locked image and confirmed the reference layer remained visible and excluded from the measured total.
+46. Tested the Property panel at a 390 × 844 viewport. Controls stacked to full width, the plan remained 359 px wide, and the document had no horizontal overflow.
+47. Checked browser console errors after upload, calibration, layer toggling, locking, rotation, and fence drawing: none.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws independently editable perimeter and divider lines around an optional exact measured house footprint. **Site walk** now converts explicit tap-to-mark phone GPS fixes into a private local plan, supports a separate-line-next field action, reports phone accuracy, and lets the user immediately replace the latest GPS distance with an authoritative tape/wheel/laser length. Raw latitude/longitude never enters the design or storage. **KGIS** now provides a safe official address-to-aerial/property reference launch while keeping building and parcel context outside measured geometry. Existing Draw, closure, gate, navigation, history, and local-save workflows remain intact.
+Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/`. It draws independently editable perimeter and divider lines around an optional exact measured house footprint. **Site walk** converts explicit tap-to-mark phone GPS fixes into a private local plan, supports a separate-line-next field action, reports phone accuracy, and lets the user immediately replace the latest GPS-shaped distance with an authoritative tape/wheel/laser length. Raw latitude/longitude never enters the design or storage. **Property** now provides explicit Acres, KGIS, and Google reference launches plus a transient local reference-image layer with two-point calibration, opacity, rotation, nudging, locking, and independent layer visibility. Reference context stays outside measured geometry. Existing Draw, closure, gate, navigation, history, and local-save workflows remain intact.
 
 ## Files and ownership
 
@@ -12,6 +12,8 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 - `src/view.ts`: deterministic bounded focal-point zoom and viewport-to-plan pan conversion shared by buttons, wheel/trackpad, mouse drag, and touch pinch interactions.
 - `src/gps.ts`: deterministic local GPS projection, explicit high-accuracy browser request, error mapping, and accuracy presentation.
 - `src/kgis.ts`: validated official KGIS address-link builder.
+- `src/property-reference.ts`: validated official Acres, KGIS, and Google reference destinations with no provider fetch.
+- `src/background.ts`: deterministic reference-image fit, calibration, move, and rotation math.
 - `src/parent-build-tooling.d.ts`: type-only declarations that let the parent Next.js check this nested package without installing prototype tooling at the repository root.
 - `src/App.tsx` and `src/styles.css`: touch-friendly SVG editor and inspector.
 - `src/app/sales/fence-designer/page.tsx` (repository root): thin OS route adapter that renders the prototype inside the existing protected Sales layout.
@@ -39,11 +41,11 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 41 deterministic tests passed.
+- 46 deterministic tests passed.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
-- Browser QA passed for Site Walk panel behavior and permission failure handling, KGIS reference lookup, a four-run perimeter plus two interior dividers, midpoint connections, independent line editing and totals, free-angle defaults, full-chain closure, exact-length solving, optional angle assistance, native gates, Escape cancellation, contained zoom/pan, local save/load, mobile layout, and console cleanliness.
+- Browser QA passed for local reference-image upload, 40-foot two-point calibration, independent layers, opacity/rotation/movement/locking, mobile layout, drawing over a locked reference, Site Walk panel behavior and permission failure handling, KGIS reference lookup, a four-run perimeter plus two interior dividers, midpoint connections, independent line editing and totals, free-angle defaults, full-chain closure, exact-length solving, optional angle assistance, native gates, Escape cancellation, contained zoom/pan, local save/load, and console cleanliness.
 - The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
 - Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 
@@ -59,7 +61,9 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 - Full-chain closure requires the first fence point on the house and at least two measured runs. It preserves displayed run measurements with at most two millimeters of integer-coordinate rounding; impossible target/length combinations are rejected.
 - A gate records an exact total opening width and single/double intent. “Double” does not calculate individual leaf sizes and carries no gate assembly, post, hardware, product, quantity, labor, or price rules.
 - Local storage is device/browser specific and has no multi-user or cloud durability.
-- The Deck photo workflow contains no reusable two-point scale calibration. Adding a background image without a trustworthy transform would weaken the measurement boundary, so it is deferred.
+- The local reference image is transient and intentionally excluded from local design storage. Refreshing the page requires reloading and recalibrating it; this avoids browser-storage failures and accidental persistence of licensed imagery.
+- Acres Plus provides visual parcel context but no supported KML/API geometry export. The prototype opens Acres for manual reference and does not scrape it.
+- Google Earth imagery cannot be uploaded into this commercial web tool. Google Maps remains an external visual reference until a licensed Google Maps Platform integration is approved.
 
 ## Owner decisions needed later
 

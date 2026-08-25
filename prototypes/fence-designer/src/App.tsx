@@ -2,19 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
+import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform, type BackgroundTransform, type PlanPosition } from "./background";
 import {
   EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, insertGateAtPoint, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
   pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm,
   type FenceDesign, type GateType,
 } from "./model";
 import { formatGpsAccuracy, gpsOriginAt, projectGpsFix, readCurrentGps, type GpsOrigin } from "./gps";
-import { kgisAddressMapUrl } from "./kgis";
+import { propertyReferenceLinks, type PropertyReferenceLinks } from "./property-reference";
 import { loadLocalDesign, saveLocalDesign } from "./storage";
 import { panView, zoomViewAt, type ViewBox } from "./view";
 
 type Selection = Readonly<{ type: "point" | "segment"; id: string } | { type: "house" }> | null;
 type Drag = Readonly<{ pointId: string; original: FenceDesign }> | null;
-type Mode = "draw" | "select" | "pan" | "close" | "new-line";
+type Mode = "draw" | "select" | "pan" | "close" | "new-line" | "calibrate";
+type ReferenceBackground = Readonly<{ src: string; name: string; transform: BackgroundTransform; opacity: number; locked: boolean }>;
+type ReferenceProvider = keyof PropertyReferenceLinks;
 type PlanPointer = Readonly<{ clientX: number; clientY: number }>;
 type NavigationGesture = Readonly<{
   original: ViewBox;
@@ -74,7 +77,13 @@ export default function App() {
   const [walkInches, setWalkInches] = useState("0");
   const [propertyPanelOpen, setPropertyPanelOpen] = useState(false);
   const [kgisAddress, setKgisAddress] = useState("");
+  const [referenceBackground, setReferenceBackground] = useState<ReferenceBackground | null>(null);
+  const [calibrationPoints, setCalibrationPoints] = useState<readonly PlanPosition[]>([]);
+  const [calibrationFeet, setCalibrationFeet] = useState("");
+  const [calibrationInches, setCalibrationInches] = useState("0");
+  const [layers, setLayers] = useState({ reference: true, grid: true, house: true, dimensions: true });
   const svgRef = useRef<SVGSVGElement>(null);
+  const referenceFileRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(1);
   const gpsRequestId = useRef(0);
   const activePointers = useRef(new Map<number, PlanPointer>());
@@ -108,7 +117,7 @@ export default function App() {
       event.preventDefault();
       if (drag) setHistory((current) => ({ ...current, present: drag.original }));
       gpsRequestId.current += 1;
-      setDrag(null); setMode("select"); setSelection(null); setGateEditorOpen(false); setPreviewPoint(null); setClosurePathPointId(null); setSiteWalkActive(false); setGpsBusy(false); setNextGpsStartsLine(false);
+      setDrag(null); setMode("select"); setSelection(null); setGateEditorOpen(false); setPreviewPoint(null); setClosurePathPointId(null); setSiteWalkActive(false); setGpsBusy(false); setNextGpsStartsLine(false); setCalibrationPoints([]);
       activePointers.current.clear(); navigationGesture.current = null; navigationWasActive.current = false; setIsNavigating(false);
       setNotice("Current tool canceled. Choose Draw, Edit, or Pan when ready.");
     };
@@ -141,7 +150,22 @@ export default function App() {
     if (!anchor || !snapEnabled || placement.connection) return placement.point;
     return snapRunEndpoint(anchor, placement.point, true);
   };
+  const calibrateAt = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (!referenceBackground) { setMode("select"); setNotice("Upload a reference image before calibrating it."); return; }
+    if (referenceBackground.locked) { setMode("select"); setNotice("Unlock the reference image before calibrating it."); return; }
+    const point = toPlanRaw(event.clientX, event.clientY);
+    if (calibrationPoints.length === 0) {
+      setCalibrationPoints([point]); setNotice("First calibration point marked. Tap the second point on the same known distance."); return;
+    }
+    try {
+      const knownDistanceMm = feetAndInchesToMm(Number(calibrationFeet), Number(calibrationInches));
+      const transform = calibrateBackgroundTransform(referenceBackground.transform, calibrationPoints[0], point, knownDistanceMm);
+      setReferenceBackground({ ...referenceBackground, transform });
+      setCalibrationPoints([]); setMode("select"); setNotice(`Reference image calibrated to ${formatFeetInches(knownDistanceMm)}. Fence measurements were not changed.`);
+    } catch (error) { setCalibrationPoints([]); setMode("select"); setNotice(error instanceof Error ? error.message : "The reference image could not be calibrated."); }
+  };
   const addAt = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (mode === "calibrate") { calibrateAt(event); return; }
     if (mode === "close") { closeAt(event); return; }
     if (mode === "new-line") {
       const point = placementAt(event.clientX, event.clientY).point;
@@ -244,7 +268,7 @@ export default function App() {
     setGateEditorOpen(false); setSelection({ type: "segment", id }); setMode("select"); setNotice("Span selected. Enter an exact length or edit its gate intent.");
   };
   const startDrag = (event: ReactPointerEvent, pointId: string) => {
-    if (mode === "pan" || mode === "close" || mode === "draw" || mode === "new-line" || event.metaKey) return;
+    if (mode === "pan" || mode === "close" || mode === "draw" || mode === "new-line" || mode === "calibrate" || event.metaKey) return;
     event.stopPropagation();
     setGateEditorOpen(false); setSelection({ type: "point", id: pointId }); setMode("select"); setDrag({ pointId, original: design });
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
@@ -372,11 +396,54 @@ export default function App() {
       setSiteWalkActive(true); setMode("select"); setPreviewPoint(null); setSelection(null); setNotice(gpsOrigin ? "Site Walk ready. Walk to the next corner and mark it." : design.points.length ? "Stand at the last drawn point and set the GPS reference." : "Stand at the first fence point and mark the starting GPS position.");
     }
   };
-  const openKgis = () => {
+  const openPropertyReference = (provider: ReferenceProvider) => {
     try {
-      window.open(kgisAddressMapUrl(kgisAddress), "_blank", "noopener,noreferrer");
-      setNotice("Opened the official KGIS aerial/property map. Treat its building and parcel lines as reference only, then confirm fence measurements on site.");
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid Knox County address."); }
+      const links = propertyReferenceLinks(kgisAddress);
+      window.open(links[provider], "_blank", "noopener,noreferrer");
+      setNotice(provider === "acres"
+        ? "Opened Acres. Search the address there, then return with a permitted area-map image or use it beside Fence Measure as a reference."
+        : provider === "kgis"
+          ? "Opened the official KGIS aerial/property map. Treat its parcel and building lines as reference only."
+          : "Opened Google Maps at the address for visual reference. Google imagery is not imported into Fence Measure.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid property address."); }
+  };
+  const loadReferenceImage = (file: File | undefined) => {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) { setNotice("Choose a PNG, JPEG, or WebP image. For a PDF survey, save the relevant page as an image first."); return; }
+    if (file.size > 15 * 1024 * 1024) { setNotice("Choose a reference image smaller than 15 MB."); return; }
+    const reader = new FileReader();
+    reader.onerror = () => setNotice("The local reference image could not be read.");
+    reader.onload = () => {
+      if (typeof reader.result !== "string") { setNotice("The local reference image could not be read."); return; }
+      const image = new Image();
+      image.onerror = () => setNotice("The selected file is not a usable reference image.");
+      image.onload = () => {
+        setReferenceBackground({ src: reader.result as string, name: file.name, transform: fittedBackgroundTransform(image.naturalWidth, image.naturalHeight, view), opacity: 0.58, locked: false });
+        setLayers((current) => ({ ...current, reference: true })); setMode("select"); setCalibrationPoints([]);
+        setNotice("Reference image loaded locally. Enter a known distance, then pick two points to calibrate it before tracing.");
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  const startCalibration = () => {
+    if (!referenceBackground) { setNotice("Upload a reference image first."); return; }
+    if (referenceBackground.locked) { setNotice("Unlock the reference image before calibrating it."); return; }
+    try {
+      const distance = feetAndInchesToMm(Number(calibrationFeet), Number(calibrationInches));
+      setCalibrationPoints([]); setMode("calibrate"); setSelection(null); setPreviewPoint(null);
+      setNotice(`Calibration ready for ${formatFeetInches(distance)}. Tap the first point on the known distance.`);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid calibration distance."); }
+  };
+  const nudgeReference = (dxMm: number, dyMm: number) => {
+    if (!referenceBackground || referenceBackground.locked) return;
+    setReferenceBackground({ ...referenceBackground, transform: moveBackgroundTransform(referenceBackground.transform, dxMm, dyMm) });
+  };
+  const fitReference = () => {
+    if (!referenceBackground || referenceBackground.locked) return;
+    const image = new Image();
+    image.onload = () => setReferenceBackground((current) => current ? { ...current, transform: fittedBackgroundTransform(image.naturalWidth, image.naturalHeight, view) } : current);
+    image.src = referenceBackground.src;
   };
   const selectHouse = () => {
     if (design.house) {
@@ -432,7 +499,7 @@ export default function App() {
       <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setPreviewPoint(null); setNotice(snapEnabled ? "Free angle is on. Runs now follow the measured geometry without angle assumptions." : "45°/90° angle assist is on."); }}>{snapEnabled ? "⌁ 45°/90° assist" : "◌ Free angle"}</button>
       <button aria-pressed={lengthLockEnabled} className={lengthLockEnabled ? "active-tool" : ""} onClick={() => { setLengthLockEnabled((current) => !current); setNotice(lengthLockEnabled ? "Length lock is off. Dragging a point can now change connected measurements." : "Length lock is on. Dragging adjusts the angle while preserving the incoming and following measurements."); }}>{lengthLockEnabled ? "🔒 Lengths" : "🔓 Lengths"}</button>
       <button aria-pressed={siteWalkActive} className={siteWalkActive ? "active-tool" : ""} onClick={toggleSiteWalk}>📍 Site walk</button>
-      <button aria-pressed={propertyPanelOpen} className={propertyPanelOpen ? "active-tool" : ""} onClick={() => setPropertyPanelOpen((current) => !current)}>⌖ KGIS</button>
+      <button aria-pressed={propertyPanelOpen} className={propertyPanelOpen ? "active-tool" : ""} onClick={() => setPropertyPanelOpen((current) => !current)}>⌖ Property</button>
       <span className="toolbar-spacer" />
       <button onClick={save}>Save local</button><button onClick={load}>Load local</button>
     </nav>
@@ -454,10 +521,30 @@ export default function App() {
         <small>Phone GPS establishes approximate shape only. Accuracy is the phone’s reported radius, not a guarantee. Exact entered lengths remain authoritative; no latitude or longitude is saved in the design.</small>
       </div>}
       {propertyPanelOpen && <div className="field-panel property-panel">
-        <div className="field-panel-heading"><div><p className="eyebrow">Knox County reference</p><h2>Open the property in KGIS</h2></div><span className="reference-chip">Reference only</span></div>
-        <p>Enter the street address without city, state, or ZIP. KGIS opens its current aerial, building, and parcel context in a separate tab.</p>
-        <div className="property-lookup"><label><span>Property address</span><input value={kgisAddress} onChange={(event) => setKgisAddress(event.target.value)} placeholder="Street number and street" autoComplete="street-address" /></label><button className="primary" onClick={openKgis}>Open KGIS map ↗</button></div>
-        <small>KGIS parcel and building lines are government GIS reference data, not a boundary survey or a measured house size. They are not imported into fence totals. Confirm the house and fence dimensions in the field.</small>
+        <div className="field-panel-heading"><div><p className="eyebrow">Free property reference</p><h2>Look it up, then bring back a permitted image</h2></div><span className="reference-chip">Reference only</span></div>
+        <p>Use Acres Plus, KGIS, or Google beside this tool. Nothing is scraped or imported automatically. Upload a survey, plat, Acres area map, or other image you are allowed to use.</p>
+        <div className="property-lookup"><label><span>Property address</span><input value={kgisAddress} onChange={(event) => setKgisAddress(event.target.value)} placeholder="Street address" autoComplete="street-address" /></label><div className="reference-links"><button onClick={() => openPropertyReference("acres")}>Open Acres ↗</button><button onClick={() => openPropertyReference("kgis")}>Open KGIS ↗</button><button onClick={() => openPropertyReference("googleMaps")}>Open Google ↗</button></div></div>
+        <div className="reference-workflow">
+          <div className="reference-upload"><input ref={referenceFileRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { loadReferenceImage(event.target.files?.[0]); event.currentTarget.value = ""; }} /><button className="primary" onClick={() => referenceFileRef.current?.click()}>{referenceBackground ? "Replace reference image" : "Upload reference image"}</button>{referenceBackground && <span title={referenceBackground.name}>{referenceBackground.name}</span>}</div>
+          {referenceBackground && <>
+            <div className="layer-controls" aria-label="Visible plan layers">
+              <strong>Visible layers</strong>
+              {(["reference", "grid", "house", "dimensions"] as const).map((layer) => <label key={layer}><input type="checkbox" checked={layers[layer]} onChange={() => setLayers((current) => ({ ...current, [layer]: !current[layer] }))} /><span>{layer === "reference" ? "Reference image" : layer === "dimensions" ? "Measurements" : `${layer[0].toUpperCase()}${layer.slice(1)}`}</span></label>)}
+            </div>
+            <div className="reference-adjustments">
+              <label><span>Image opacity · {Math.round(referenceBackground.opacity * 100)}%</span><input type="range" min="10" max="100" value={Math.round(referenceBackground.opacity * 100)} onChange={(event) => setReferenceBackground({ ...referenceBackground, opacity: Number(event.target.value) / 100 })} /></label>
+              <label><span>Rotation</span><input aria-label="Reference rotation degrees" type="number" step="1" value={referenceBackground.transform.rotationDegrees} disabled={referenceBackground.locked} onChange={(event) => setReferenceBackground({ ...referenceBackground, transform: rotateBackgroundTransform(referenceBackground.transform, Number(event.target.value)) })} /></label>
+              <div className="reference-position"><span>Move image</span><div><button aria-label="Move reference left" disabled={referenceBackground.locked} onClick={() => nudgeReference(-305, 0)}>←</button><button aria-label="Move reference up" disabled={referenceBackground.locked} onClick={() => nudgeReference(0, -305)}>↑</button><button aria-label="Move reference down" disabled={referenceBackground.locked} onClick={() => nudgeReference(0, 305)}>↓</button><button aria-label="Move reference right" disabled={referenceBackground.locked} onClick={() => nudgeReference(305, 0)}>→</button></div></div>
+            </div>
+            <div className="calibration-editor">
+              <div><strong>Set image scale</strong><span>Enter one known real-world distance, then tap its two endpoints on the image.</span></div>
+              <div className="exact-grid"><label><span>Feet</span><input aria-label="Calibration feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={calibrationFeet} onChange={(event) => setCalibrationFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Calibration inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={calibrationInches} onChange={(event) => setCalibrationInches(event.target.value)} /></label></div>
+              <button className={mode === "calibrate" ? "active-tool" : "primary"} disabled={referenceBackground.locked} onClick={startCalibration}>{mode === "calibrate" ? "Pick calibration points…" : "Pick two points"}</button>
+            </div>
+            <div className="reference-actions"><button disabled={referenceBackground.locked} onClick={fitReference}>Fit image to view</button><button aria-pressed={referenceBackground.locked} className={referenceBackground.locked ? "active-tool" : ""} onClick={() => setReferenceBackground({ ...referenceBackground, locked: !referenceBackground.locked })}>{referenceBackground.locked ? "🔒 Image locked" : "🔓 Lock image"}</button><button className="danger" onClick={() => { setReferenceBackground(null); setCalibrationPoints([]); if (mode === "calibrate") setMode("select"); setNotice("Local reference image removed. Fence measurements were not changed."); }}>Remove image</button></div>
+          </>}
+        </div>
+        <small>Reference imagery and GIS lines are not a boundary survey. Google Earth imagery cannot be uploaded for commercial web use; use Google only as a separate viewer. The reference image stays on this device for the current page session and is never included in fence totals.</small>
       </div>}
     </section>}
 
@@ -466,8 +553,13 @@ export default function App() {
         <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot attached" /> Connected endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line preview" /> Live run</span><span><i className="key-line gate" /> Gate intent</span></div>
         <svg ref={svgRef} className={`plan-canvas ${mode}${isNavigating ? " navigating" : ""}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={startNavigation} onPointerMove={moveCanvasPointer} onPointerLeave={() => { if (!drag && !isNavigating) setPreviewPoint(null); }} onPointerUp={endNavigation} onPointerCancel={endNavigation} aria-label="Fence drawing plan">
           <defs><pattern id="grid" width={GRID_MM} height={GRID_MM} patternUnits="userSpaceOnUse"><path d={`M ${GRID_MM} 0 L 0 0 0 ${GRID_MM}`} fill="none" stroke="#d8ddd7" strokeWidth="18" /></pattern></defs>
-          <rect x={view.x} y={view.y} width={view.width} height={view.height} fill="url(#grid)" pointerEvents="none" />
-          {design.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode === "close") { event.stopPropagation(); closeAt(event); } else if (mode !== "pan" && mode !== "new-line" && !event.metaKey) { event.stopPropagation(); selectHouse(); } }}>
+          {referenceBackground && layers.reference && (() => {
+            const transform = referenceBackground.transform;
+            const centerX = transform.xMm + transform.widthMm / 2; const centerY = transform.yMm + transform.heightMm / 2;
+            return <image className="reference-image" href={referenceBackground.src} x={transform.xMm} y={transform.yMm} width={transform.widthMm} height={transform.heightMm} opacity={referenceBackground.opacity} preserveAspectRatio="none" transform={`rotate(${transform.rotationDegrees} ${centerX} ${centerY})`} pointerEvents="none" aria-label={`Local reference image ${referenceBackground.name}`} />;
+          })()}
+          {layers.grid && <rect x={view.x} y={view.y} width={view.width} height={view.height} fill="url(#grid)" pointerEvents="none" />}
+          {design.house && layers.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode === "close") { event.stopPropagation(); closeAt(event); } else if (mode !== "pan" && mode !== "new-line" && mode !== "calibrate" && !event.metaKey) { event.stopPropagation(); selectHouse(); } }}>
             <rect className="house-hit" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <rect className="house-footprint" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <g transform={`translate(${design.house.xMm + design.house.lengthMm / 2} ${design.house.yMm + design.house.widthMm / 2})`} className="house-label"><rect x="-1050" y="-300" width="2100" height="600" rx="180" /><text textAnchor="middle" dominantBaseline="central">HOUSE · {formatFeetInches(design.house.lengthMm)} × {formatFeetInches(design.house.widthMm)}</text></g>
@@ -479,7 +571,7 @@ export default function App() {
             return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode === "select" && !event.metaKey) { event.stopPropagation(); selectSegment(segment.id); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode === "select" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
               <line className="segment-hit" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <line className="segment-line" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
-              <g transform={`translate(${midX} ${midY})`} className="dimension"><rect x="-760" y="-260" width="1520" height="520" rx="180" /><text textAnchor="middle" dominantBaseline="central">{segment.kind === "gate" ? `${segment.gateType === "double" ? "DOUBLE" : "SINGLE"} GATE · ` : ""}{formatFeetInches(segmentLengthMm(design, segment))}</text></g>
+              {layers.dimensions && <g transform={`translate(${midX} ${midY})`} className="dimension"><rect x="-760" y="-260" width="1520" height="520" rx="180" /><text textAnchor="middle" dominantBaseline="central">{segment.kind === "gate" ? `${segment.gateType === "double" ? "DOUBLE" : "SINGLE"} GATE · ` : ""}{formatFeetInches(segmentLengthMm(design, segment))}</text></g>}
             </g>;
           })}
           {mode === "draw" && previewPoint && design.points.at(-1) && (() => {
@@ -498,8 +590,9 @@ export default function App() {
               <circle className="point-hit" r="460" /><circle className="point-dot" r="190" />
             </g>;
           })}
+          {mode === "calibrate" && calibrationPoints.map((point, index) => <g key={`${point.xMm}-${point.yMm}-${index}`} className="calibration-point" transform={`translate(${point.xMm} ${point.yMm})`} pointerEvents="none"><circle r="230" /><line x1="-380" y1="0" x2="380" y2="0" /><line x1="0" y1="-380" x2="0" y2="380" /><text y="-470" textAnchor="middle">{index + 1}</text></g>)}
         </svg>
-        {design.points.length === 0 && !design.house && <div className="empty-state"><strong>Start with one property point</strong><span>Choose Draw, then tap anywhere on the grid.</span></div>}
+        {design.points.length === 0 && !design.house && !referenceBackground && <div className="empty-state"><strong>Start with one property point</strong><span>Choose Draw, then tap anywhere on the grid.</span></div>}
       </div>
 
       <aside className="inspector">
@@ -511,6 +604,6 @@ export default function App() {
         <div className="notice" role="status">{notice}</div>
       </aside>
     </section>
-    <footer className="app-footer"><span>Site Walk: GPS shape + exact field lengths · KGIS: reference only</span><span>{fenceLineCount(design)} line{fenceLineCount(design) === 1 ? "" : "s"} · exact combined total · local only · revision {design.revision}</span></footer>
+    <footer className="app-footer"><span>Reference layers: local image only · Site Walk: GPS shape + exact field lengths</span><span>{fenceLineCount(design)} line{fenceLineCount(design) === 1 ? "" : "s"} · exact combined total · local only · revision {design.revision}</span></footer>
   </main>;
 }
