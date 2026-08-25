@@ -81,6 +81,19 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     });
   });
   platform.construction.framing.beamLines.forEach((line, lineIndex) => {
+    platform.construction.framing.beamLines.slice(lineIndex + 1).forEach((otherLine, otherIndex) => {
+      const clearance = Math.abs(otherLine.offsetFromOutside - line.offsetFromOutside);
+      if (clearance >= 12 - EPSILON) return;
+      const measured = Math.round(clearance * 10) / 10;
+      warnings.push(Object.freeze({
+        id: `beam-line-clearance-${line.id}-${otherLine.id}`,
+        severity: "clearance",
+        geometryIds: Object.freeze([line.id, otherLine.id]),
+        message: `Conceptual beams ${lineIndex + 1} and ${lineIndex + otherIndex + 2} are ${measured} inches apart in plan; verify that both recorded beam routes are intended.`,
+      }));
+    });
+  });
+  platform.construction.framing.beamLines.forEach((line, lineIndex) => {
     const beams = deriveConceptualBeamProjection({
       region: platform.region,
       boardDirection: platform.construction.decking.direction,

@@ -73,4 +73,18 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     }));
     expect(deriveGeometryWarningsV5(withOffset(0), platform.id).some((warning) => warning.id.startsWith("stair-edge-remainder"))).toBe(false);
   });
+
+  it("reports measured spacing between closely recorded conceptual beam lines", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, framing: { ...platform.construction.framing, beamLines: [
+      { id: "beam-line-yard", offsetFromOutside: 24, maxSupportSpacing: 72 },
+      { id: "beam-line-near-yard", offsetFromOutside: 30, maxSupportSpacing: 72 },
+    ] } } }] });
+    expect(deriveGeometryWarningsV5(design, platform.id)).toContainEqual(expect.objectContaining({
+      id: "beam-line-clearance-beam-line-yard-beam-line-near-yard",
+      geometryIds: ["beam-line-yard", "beam-line-near-yard"],
+      message: "Conceptual beams 1 and 2 are 6 inches apart in plan; verify that both recorded beam routes are intended.",
+    }));
+  });
 });

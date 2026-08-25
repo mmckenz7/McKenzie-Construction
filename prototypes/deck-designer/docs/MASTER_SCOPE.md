@@ -104,6 +104,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Measured conceptual beam-to-cutout clearance notes below twelve inches, distinct from actual interruptions
 - [x] Contextual Show in plan actions that resolve exact warning source IDs and fail closed on stale references
 - [x] Measured stair-opening edge-remainder notes below twelve inches while allowing exact corner alignment
+- [x] Measured conceptual beam-line proximity notes with exact source traceability
 - [ ] Broader explainable framing clash/constraint warnings beyond recorded cutout interruptions
 - [ ] PBR material library, licensed asset pipeline, GLB metadata, LOD/compression
 - [x] Enforced initial-entry, largest-chunk, and total JavaScript performance budgets

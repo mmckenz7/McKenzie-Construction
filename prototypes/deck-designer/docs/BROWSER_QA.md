@@ -361,3 +361,9 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Show in plan returned to the correct selected stair side without unlocking or mutating the locked stair system.
 - Moving the same opening to exact zero-inch corner alignment removed the warning and restored Geometry and framing to Confirmed / None detected.
 - Reload restored the saved four-foot stair offset. Browser logs contained no warnings or errors.
+## 2026-08-24 — conceptual beam-line proximity review
+
+- Added a second conceptual beam six inches from the existing beam through the desktop controls.
+- Confirmed layout review reports the measured non-blocking proximity note and displays the explicit prototype-only twelve-inch threshold disclaimer.
+- Confirmed **Show in plan** closes the review, selects the first exact referenced beam, and leaves the authoritative design unchanged.
+- Reloaded to restore the saved local design; browser console reported no warnings or errors.
