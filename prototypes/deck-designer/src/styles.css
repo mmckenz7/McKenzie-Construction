@@ -392,6 +392,7 @@ button:hover { transform: translateY(-1px); }
 .plan-board { stroke: #987454; stroke-width: .55; }
 .plan-joist { stroke: #365d4a; stroke-width: .75; stroke-dasharray: 3 2; opacity: .72; }
 .plan-beam { stroke: #244638; stroke-width: 2.1; opacity: .82; pointer-events: none; }
+.plan-beam.selected { stroke: #d0672f; stroke-width: 3.5; opacity: 1; pointer-events: stroke; cursor: pointer; }
 .plan-support-post { fill: #244638; stroke: #f4f7f3; stroke-width: .65; pointer-events: none; }
 .beam-move-hit { fill: transparent; stroke: transparent; stroke-width: 12px; pointer-events: all; cursor: grab; touch-action: none; }
 .beam-move-hit:focus { outline: none; stroke: rgba(11, 95, 198, .28); }

@@ -36,8 +36,9 @@ const failures = [];
 // Phase B keeps the initial experience below 100 KiB while showing multi-level context.
 if (initial.gzipBytes > 99 * 1024) failures.push(`initial entry is ${report.initialEntryGzipKiB} KiB (budget 99 KiB)`);
 if (largest.gzipBytes > 170 * 1024) failures.push(`largest chunk is ${report.largestChunkGzipKiB} KiB (budget 170 KiB)`);
-// Direct object selection and constrained outline editing stay below the next whole-KiB ceiling.
-if (totalGzipBytes > 244 * 1024) failures.push(`total JavaScript is ${report.totalJavaScriptGzipKiB} KiB (budget 244 KiB)`);
+// V4 multi-beam authority, compatibility restoration, and touch controls stay
+// below the next measured whole-KiB ceiling without relaxing entry/chunk caps.
+if (totalGzipBytes > 248 * 1024) failures.push(`total JavaScript is ${report.totalJavaScriptGzipKiB} KiB (budget 248 KiB)`);
 
 if (failures.length > 0) {
   throw new Error(`Bundle budget exceeded: ${failures.join("; ")}`);
