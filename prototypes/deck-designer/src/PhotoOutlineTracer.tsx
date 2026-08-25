@@ -9,9 +9,9 @@ import { photoTraceCornerFromPointer, photoTraceSegmentFromPointer, photoTraceSt
 
 type ReferencePhoto = Readonly<{ name: string; url: string }>;
 type TraceSelection = Readonly<{ kind: "corner" | "segment"; index: number }> | null;
-type TraceSnapshot = Readonly<{ outer: readonly PolygonPoint[]; stairEdgeId: string | null; stairOffset: number | null; stairWidth: number }>;
-type OutlinePointerDrag = Readonly<{ pointerId: number; kind: "corner" | "segment"; index: number; pointerDown: PolygonPoint; start: TraceSnapshot; lastOuter: readonly PolygonPoint[]; houseCorner: boolean }>;
-type StairPointerDrag = Readonly<{ pointerId: number; pointerDown: PolygonPoint; start: TraceSnapshot; lastOffset: number }>;
+export type PhotoTraceSnapshot = Readonly<{ outer: readonly PolygonPoint[]; stairEdgeId: string | null; stairOffset: number | null; stairWidth: number }>;
+type OutlinePointerDrag = Readonly<{ pointerId: number; kind: "corner" | "segment"; index: number; pointerDown: PolygonPoint; start: PhotoTraceSnapshot; lastOuter: readonly PolygonPoint[]; houseCorner: boolean }>;
+type StairPointerDrag = Readonly<{ pointerId: number; pointerDown: PolygonPoint; start: PhotoTraceSnapshot; lastOffset: number }>;
 type ViewBounds = Readonly<{ minX: number; minZ: number; margin: number; width: number; height: number }>;
 type Props = Readonly<{
   width: number;
@@ -49,6 +49,35 @@ export function isRectangleTrace(outer: readonly PolygonPoint[], width: number, 
   const rectangle = rectangleTrace(width, projection);
   return outer.length === rectangle.length && outer.every((point, index) =>
     Math.abs(point.x - rectangle[index].x) < .01 && Math.abs(point.z - rectangle[index].z) < .01);
+}
+
+export function samePhotoTraceSnapshot(first: PhotoTraceSnapshot, second: PhotoTraceSnapshot): boolean {
+  return samePhotoTrace(first.outer, second.outer)
+    && first.stairEdgeId === second.stairEdgeId
+    && first.stairOffset === second.stairOffset
+    && first.stairWidth === second.stairWidth;
+}
+
+export function reconcilePhotoTraceSnapshot(snapshot: PhotoTraceSnapshot, outer: readonly PolygonPoint[]): PhotoTraceSnapshot {
+  const stairEdge = snapshot.stairEdgeId
+    ? deriveGeometricPolygonEdges(outer).find((edge) => edge.id === snapshot.stairEdgeId)
+    : null;
+  const stairRemainsValid = stairEdge && snapshot.stairOffset !== null
+    && snapshot.stairOffset >= 0
+    && snapshot.stairOffset + snapshot.stairWidth <= stairEdge.length;
+  const next = Object.freeze({
+    outer,
+    stairEdgeId: stairRemainsValid ? snapshot.stairEdgeId : null,
+    stairOffset: stairRemainsValid ? snapshot.stairOffset : null,
+    stairWidth: snapshot.stairWidth,
+  });
+  return samePhotoTraceSnapshot(snapshot, next) ? snapshot : next;
+}
+
+export function resetPhotoTraceSnapshot(snapshot: PhotoTraceSnapshot, width: number, projection: number): PhotoTraceSnapshot {
+  const outer = rectangleTrace(width, projection);
+  if (samePhotoTrace(snapshot.outer, outer)) return snapshot;
+  return reconcilePhotoTraceSnapshot(snapshot, outer);
 }
 
 function mergeCollinearTraceCorners(outer: readonly PolygonPoint[]): readonly PolygonPoint[] {
@@ -121,8 +150,8 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
   const stairDrag = useRef<StairPointerDrag | null>(null);
   const activeDrag = useRef<string | null>(null);
   const frozenView = useRef<ViewBounds | null>(null);
-  const undoStack = useRef<readonly TraceSnapshot[]>([]);
-  const exactEditStart = useRef<TraceSnapshot | null>(null);
+  const undoStack = useRef<readonly PhotoTraceSnapshot[]>([]);
+  const exactEditStart = useRef<PhotoTraceSnapshot | null>(null);
   const touchPoints = useRef(new Map<number, Readonly<{ x: number; y: number }>>());
   const pinchStart = useRef<Readonly<{ distance: number; anchor: PolygonPoint; view: ViewBounds }> | null>(null);
   const [activePhoto, setActivePhoto] = useState(0);
@@ -136,9 +165,18 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
   const [stairStartInput, setStairStartInput] = useState("");
   const [stairEndInput, setStairEndInput] = useState("");
   const [stairWidthInput, setStairWidthInput] = useState("");
+  const [stairNotice, setStairNotice] = useState("");
   useEffect(() => { undoStack.current = []; setUndoCount(0); setSelection(null); }, [width, projection]);
   const edges = useMemo(() => deriveGeometricPolygonEdges(outer), [outer]);
-  const stairPreview = useMemo(() => stairEdgeId ? derivePhotoTraceStairPreview(outer, stairEdgeId, surfaceElevation, gradeElevation, stairWidth, 10, 7.75, stairOffset ?? undefined) : null, [gradeElevation, outer, stairEdgeId, stairOffset, stairWidth, surfaceElevation]);
+  const stairPreviewResult = useMemo(() => {
+    if (!stairEdgeId) return Object.freeze({ preview: null, diagnostic: "" });
+    try {
+      return Object.freeze({ preview: derivePhotoTraceStairPreview(outer, stairEdgeId, surfaceElevation, gradeElevation, stairWidth, 10, 7.75, stairOffset ?? undefined), diagnostic: "" });
+    } catch {
+      return Object.freeze({ preview: null, diagnostic: "Temporary stairs no longer fit this outline. Place them again on a confirmed side." });
+    }
+  }, [gradeElevation, outer, stairEdgeId, stairOffset, stairWidth, surfaceElevation]);
+  const stairPreview = stairPreviewResult.preview;
   const houseEdgeIndex = edges.findIndex((edge) => Math.abs(edge.start.z) < .01 && Math.abs(edge.end.z) < .01);
   const fixedHouseCorners = new Set(houseEdgeIndex < 0 ? [] : [houseEdgeIndex, (houseEdgeIndex + 1) % outer.length]);
   const viewPoints = [...outer, ...(stairPreview?.treads.flat() ?? [])];
@@ -172,24 +210,36 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     const height = Math.min(computedView.height * 2, Math.max(computedView.height / 4, current.height / factor));
     setManualView(Object.freeze({ minX: centerX - width / 2, minZ: centerZ - height / 2, margin: 0, width, height }));
   };
-  const traceSnapshot = (snapshotOuter = outer, snapshotStairEdgeId = stairEdgeId, snapshotStairOffset = stairOffset, snapshotStairWidth = stairWidth): TraceSnapshot => Object.freeze({
+  const traceSnapshot = (snapshotOuter = outer, snapshotStairEdgeId = stairEdgeId, snapshotStairOffset = stairOffset, snapshotStairWidth = stairWidth): PhotoTraceSnapshot => Object.freeze({
     outer: Object.freeze(snapshotOuter.map((point) => Object.freeze({ ...point }))),
     stairEdgeId: snapshotStairEdgeId,
     stairOffset: snapshotStairOffset,
     stairWidth: snapshotStairWidth,
   });
-  const rememberSnapshot = (frozen: TraceSnapshot) => {
+  const rememberSnapshot = (frozen: PhotoTraceSnapshot) => {
     const previous = undoStack.current[undoStack.current.length - 1];
-    if (previous && JSON.stringify(previous) === JSON.stringify(frozen)) return;
+    if (previous && samePhotoTraceSnapshot(previous, frozen)) return;
     undoStack.current = Object.freeze([...undoStack.current.slice(-39), frozen]);
     setUndoCount(undoStack.current.length);
   };
   const remember = (snapshotOuter = outer) => rememberSnapshot(traceSnapshot(snapshotOuter));
+  const applyTraceSnapshot = (next: PhotoTraceSnapshot) => {
+    onChange(next.outer);
+    if (next.stairWidth !== stairWidth) onStairWidthChange(next.stairWidth);
+    if (next.stairEdgeId !== stairEdgeId || next.stairOffset !== stairOffset) onStairPlacementChange(next.stairEdgeId, next.stairOffset);
+  };
+  const applyTraceOuter = (nextOuter: readonly PolygonPoint[], basis = traceSnapshot()) => {
+    const next = reconcilePhotoTraceSnapshot(basis, nextOuter);
+    if (basis.stairEdgeId && !next.stairEdgeId) setStairNotice("Outline changed, so temporary stairs were removed. Select a confirmed side to place them again.");
+    else setStairNotice("");
+    applyTraceSnapshot(next);
+    return next;
+  };
   const beginExactEdit = () => { if (!exactEditStart.current) exactEditStart.current = traceSnapshot(); };
   const finishExactEdit = () => {
     const start = exactEditStart.current;
     exactEditStart.current = null;
-    if (start && JSON.stringify(start) !== JSON.stringify(traceSnapshot())) rememberSnapshot(start);
+    if (start && !samePhotoTraceSnapshot(start, traceSnapshot())) rememberSnapshot(start);
   };
   const cancelExactEdit = () => {
     const start = exactEditStart.current;
@@ -209,9 +259,8 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
       setStairStartInput(String(feet(start.stairOffset)));
       if (stairEdge) setStairEndInput(String(feet(stairEdge.length - start.stairWidth - start.stairOffset)));
     }
-    onChange(start.outer);
-    onStairWidthChange(start.stairWidth);
-    onStairPlacementChange(start.stairEdgeId, start.stairOffset);
+    applyTraceSnapshot(start);
+    setStairNotice("");
     onError("");
   };
   const exactFieldKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -228,13 +277,12 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     undoStack.current = Object.freeze(undoStack.current.slice(0, -1));
     setUndoCount(undoStack.current.length);
     setSelection(null);
-    onChange(previous.outer);
-    onStairWidthChange(previous.stairWidth);
-    onStairPlacementChange(previous.stairEdgeId, previous.stairOffset);
+    applyTraceSnapshot(previous);
+    setStairNotice("");
     onError("");
   };
   const accept = (candidate: readonly PolygonPoint[]): boolean => {
-    try { onChange(validatePhotoTrace(candidate)); onError(""); return true; }
+    try { applyTraceOuter(validatePhotoTrace(candidate)); onError(""); return true; }
     catch (error) { onError(error instanceof Error ? error.message : "That outline is not valid."); return false; }
   };
   const addOffset = (index: number) => {
@@ -247,7 +295,7 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     } catch (error) { onError(error instanceof Error ? error.message : "An offset cannot be added there."); }
   };
   const endDrag = () => { outlineDrag.current = null; activeDrag.current = null; frozenView.current = null; setActive(null); };
-  const cancelDrag = () => { const drag = outlineDrag.current; if (drag && !samePhotoTrace(drag.lastOuter, drag.start.outer)) onChange(drag.start.outer); endDrag(); };
+  const cancelDrag = () => { const drag = outlineDrag.current; if (drag && !samePhotoTrace(drag.lastOuter, drag.start.outer)) { applyTraceSnapshot(drag.start); setStairNotice(""); } endDrag(); };
   const cancelStairDrag = () => { const drag = stairDrag.current; if (drag && drag.lastOffset !== drag.start.stairOffset && drag.start.stairEdgeId) onStairPlacementChange(drag.start.stairEdgeId, drag.start.stairOffset); stairDrag.current = null; setActive(null); };
   const selectedCorner = selection?.kind === "corner" ? outer[selection.index] : undefined;
   const selectedEdge = selection?.kind === "segment" ? edges[selection.index] : undefined;
@@ -271,21 +319,36 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     if (!selectedCorner || !Number.isFinite(value) || selection?.kind !== "corner") return;
     const xFeet = axis === "x" ? value : feet(selectedCorner.x);
     const zFeet = axis === "z" ? value : feet(selectedCorner.z);
-    try { onChange(moveTraceCornerToFeet(outer, selection.index, xFeet, zFeet, selectedHouseCorner)); onError(""); }
+    try { applyTraceOuter(moveTraceCornerToFeet(outer, selection.index, xFeet, zFeet, selectedHouseCorner), exactEditStart.current ?? traceSnapshot()); onError(""); }
     catch (error) { onError(error instanceof Error ? error.message : "That corner position is not valid."); }
   };
   const setSegmentLengthFeet = (value: number) => {
     if (!selectedEdge || !Number.isFinite(value) || selection?.kind !== "segment") return;
-    try { onChange(resizeTraceSegmentToFeet(outer, selection.index, value)); onError(""); }
+    try { applyTraceOuter(resizeTraceSegmentToFeet(outer, selection.index, value), exactEditStart.current ?? traceSnapshot()); onError(""); }
     catch (error) { onError(error instanceof Error ? error.message : "That segment length is not valid."); }
   };
   const toggleStairsOnSelectedEdge = () => {
     if (!selectedEdge) return;
+    const start = traceSnapshot();
     const nextEdgeId = stairEdgeId === selectedEdge.id ? null : selectedEdge.id;
     const nextWidth = Math.min(stairWidth, Math.floor(selectedEdge.length / snapIncrement) * snapIncrement);
+    const nextOffset = nextEdgeId ? centeredStairOffset(selectedEdge.length, nextWidth) : null;
+    const next = traceSnapshot(outer, nextEdgeId, nextOffset, nextWidth);
+    if (samePhotoTraceSnapshot(start, next)) return;
     if (nextEdgeId) onStairWidthChange(nextWidth);
-    onStairPlacementChange(nextEdgeId, nextEdgeId ? centeredStairOffset(selectedEdge.length, nextWidth) : null);
+    onStairPlacementChange(nextEdgeId, nextOffset);
+    rememberSnapshot(start);
     if (nextEdgeId) requestAnimationFrame(() => svg.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  };
+  const resetTrace = () => {
+    const start = traceSnapshot();
+    const next = resetPhotoTraceSnapshot(start, width, projection);
+    setSelection(null);
+    if (samePhotoTraceSnapshot(start, next)) return;
+    applyTraceSnapshot(next);
+    if (start.stairEdgeId && !next.stairEdgeId) setStairNotice("Outline reset removed temporary stairs because their exact side no longer exists. Place them again if needed.");
+    else setStairNotice("");
+    rememberSnapshot(start);
   };
   const setStairClearanceFeet = (from: "start" | "end", value: number) => {
     if (!selectedEdge || stairEdgeId !== selectedEdge.id || !Number.isFinite(value)) return;
@@ -320,7 +383,7 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
       const candidate = validatePhotoTrace(drag.kind === "corner"
         ? photoTraceCornerFromPointer(drag.start.outer, drag.index, drag.pointerDown, pointer, snapIncrement, drag.houseCorner)
         : photoTraceSegmentFromPointer(drag.start.outer, drag.index, drag.pointerDown, pointer, snapIncrement));
-      if (!samePhotoTrace(candidate, drag.lastOuter)) onChange(candidate);
+      if (!samePhotoTrace(candidate, drag.lastOuter)) applyTraceOuter(candidate, drag.start);
       outlineDrag.current = Object.freeze({ ...drag, lastOuter: candidate });
       onError("");
       return true;
@@ -331,7 +394,8 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     if (!drag || drag.pointerId !== pointerId) return;
     previewOutlineDrag(pointerId, clientX, clientY);
     const finished = outlineDrag.current ?? drag;
-    if (!samePhotoTrace(finished.lastOuter, finished.start.outer)) rememberSnapshot(finished.start);
+    const finalSnapshot = reconcilePhotoTraceSnapshot(finished.start, finished.lastOuter);
+    if (!samePhotoTraceSnapshot(finalSnapshot, finished.start)) rememberSnapshot(finished.start);
     endDrag();
   };
   const previewStairDrag = (pointerId: number, clientX: number, clientY: number): boolean => {
@@ -357,7 +421,10 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     const move = stairKeyboardMove({ locked: false, offset: currentOffset, width: stairWidth }, edge, event.key, snapIncrement);
     if (!move.handled) return;
     event.preventDefault();
-    if (move.offset !== currentOffset) onStairPlacementChange(edge.id, move.offset);
+    if (move.offset === currentOffset) return;
+    const start = traceSnapshot();
+    onStairPlacementChange(edge.id, move.offset);
+    rememberSnapshot(start);
   };
   const nudgeTraceCorner = (index: number, houseCorner: boolean, event: KeyboardEvent<SVGCircleElement>) => {
     try {
@@ -367,8 +434,13 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
       setSelection({ kind: "corner", index });
       if (move.outer === outer) return;
       const candidate = validatePhotoTrace(move.outer);
-      remember(outer);
-      onChange(candidate);
+      const start = traceSnapshot();
+      const next = reconcilePhotoTraceSnapshot(start, candidate);
+      if (samePhotoTraceSnapshot(start, next)) return;
+      rememberSnapshot(start);
+      applyTraceSnapshot(next);
+      if (start.stairEdgeId && !next.stairEdgeId) setStairNotice("Outline changed, so temporary stairs were removed. Select a confirmed side to place them again.");
+      else setStairNotice("");
       onError("");
     } catch (error) { onError(error instanceof Error ? error.message : "That corner position is not valid."); }
   };
@@ -379,8 +451,13 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
       event.preventDefault();
       setSelection({ kind: "segment", index });
       const candidate = validatePhotoTrace(move.outer);
-      remember(outer);
-      onChange(candidate);
+      if (samePhotoTrace(candidate, outer)) return;
+      const start = traceSnapshot();
+      const next = reconcilePhotoTraceSnapshot(start, candidate);
+      rememberSnapshot(start);
+      applyTraceSnapshot(next);
+      if (start.stairEdgeId && !next.stairEdgeId) setStairNotice("Outline changed, so temporary stairs were removed. Select a confirmed side to place them again.");
+      else setStairNotice("");
       onError("");
     } catch (error) { onError(error instanceof Error ? error.message : "That segment position is not valid."); }
   };
@@ -437,7 +514,8 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
       <small>Photos are visual references only. The measured plan beside them is the geometry.</small>
     </section>
     <section className="trace-plan">
-      <div className="trace-plan-heading"><div><strong>Confirmed outline</strong><small>{outer.length} corners · 6-inch snap</small></div><div className="trace-heading-actions"><button disabled={undoCount === 0} onClick={undo}>Undo{undoCount > 0 ? ` (${undoCount})` : ""}</button><button onClick={() => { remember(outer); setSelection(null); onChange(rectangleTrace(width, projection)); }}>Reset rectangle</button></div></div>
+      <div className="trace-plan-heading"><div><strong>Confirmed outline</strong><small>{outer.length} corners · 6-inch snap</small></div><div className="trace-heading-actions"><button disabled={undoCount === 0} onClick={undo}>Undo{undoCount > 0 ? ` (${undoCount})` : ""}</button><button onClick={resetTrace}>Reset rectangle</button></div></div>
+      {(stairNotice || stairPreviewResult.diagnostic) && <p className="trace-stair-notice" role="status">{stairNotice || stairPreviewResult.diagnostic}</p>}
       <div className="trace-guide" aria-label="Outline steps"><span><b>1</b> Add offsets</span><span><b>2</b> Shape with handles</span><span><b>3</b> Check lengths</span></div>
       <div className="trace-view-actions" aria-label="Plan view controls"><button onClick={() => zoomPlan(1 / 1.35)} aria-label="Zoom out">−</button><button onClick={() => zoomPlan(1.35)} aria-label="Zoom in">+</button><button onClick={() => setManualView(null)}>Fit</button><small>Pinch to zoom and move.</small></div>
       <svg ref={svg} viewBox={`0 0 ${view.width} ${view.height}`} role="img" aria-label={`Photo-reference outline with ${outer.length} corners`} onPointerDownCapture={onPlanPointerDownCapture} onPointerMoveCapture={onPlanPointerMoveCapture} onPointerUpCapture={onPlanPointerEndCapture} onPointerCancelCapture={onPlanPointerEndCapture}>

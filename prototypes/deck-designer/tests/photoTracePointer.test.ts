@@ -1,7 +1,7 @@
 // @ts-ignore The production root intentionally does not install this isolated prototype package's test runner.
 import { describe, expect, it } from "vitest";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
-import { PhotoOutlineTracer, validatePhotoTrace } from "../src/PhotoOutlineTracer";
+import { PhotoOutlineTracer, reconcilePhotoTraceSnapshot, resetPhotoTraceSnapshot, samePhotoTraceSnapshot, validatePhotoTrace } from "../src/PhotoOutlineTracer";
 import { photoTraceCornerFromPointer, photoTraceSegmentFromPointer, photoTraceStairOffsetFromPointer, samePhotoTrace } from "../src/photoTracePointer";
 
 const rectangle = Object.freeze([{ x: 0, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 144 }, { x: 0, z: 144 }]);
@@ -70,5 +70,51 @@ describe("temporary photo trace pointer transactions", () => {
     expect(source).toMatch(/event\.key\s*===\s*"Enter"/);
     expect(source).toMatch(/event\.key\s*===\s*"Escape"/);
     expect((source.match(/data-trace-exact-group/g) ?? []).length).toBe(6);
+  });
+
+  it("keeps a valid stair when an already-rectangular trace is reset", () => {
+    const edge = deriveGeometricPolygonEdges(rectangle)[2];
+    const start = Object.freeze({ outer: rectangle, stairEdgeId: edge.id, stairOffset: 48, stairWidth: 48 });
+    expect(resetPhotoTraceSnapshot(start, 144, 144)).toBe(start);
+  });
+
+  it("preserves an exact surviving stair edge and clears a stale one during a real reset", () => {
+    const offsetOutline = Object.freeze([
+      { x: 0, z: 0 }, { x: 144, z: 0 }, { x: 144, z: 144 },
+      { x: 0, z: 144 }, { x: -24, z: 120 }, { x: -24, z: 24 },
+    ]);
+    const survivingEdge = deriveGeometricPolygonEdges(offsetOutline)[1];
+    const kept = resetPhotoTraceSnapshot(Object.freeze({ outer: offsetOutline, stairEdgeId: survivingEdge.id, stairOffset: 48, stairWidth: 48 }), 144, 144);
+    expect(kept.stairEdgeId).toBe(survivingEdge.id);
+    expect(kept.stairOffset).toBe(48);
+
+    const staleEdge = deriveGeometricPolygonEdges(offsetOutline)[3];
+    const cleared = resetPhotoTraceSnapshot(Object.freeze({ outer: offsetOutline, stairEdgeId: staleEdge.id, stairOffset: 12, stairWidth: 36 }), 144, 144);
+    expect(cleared.stairEdgeId).toBeNull();
+    expect(cleared.stairOffset).toBeNull();
+    expect(samePhotoTraceSnapshot(cleared, kept)).toBe(false);
+  });
+
+  it("clears split, removed, or non-fitting temporary stair references before render", () => {
+    const edge = deriveGeometricPolygonEdges(rectangle)[2];
+    const start = Object.freeze({ outer: rectangle, stairEdgeId: edge.id, stairOffset: 48, stairWidth: 48 });
+    const splitEdgeOutline = Object.freeze([
+      rectangle[0], rectangle[1], rectangle[2],
+      { x: 96, z: 144 }, { x: 96, z: 168 }, { x: 48, z: 168 }, { x: 48, z: 144 }, rectangle[3],
+    ]);
+    expect(reconcilePhotoTraceSnapshot(start, splitEdgeOutline).stairEdgeId).toBeNull();
+    expect(reconcilePhotoTraceSnapshot(start, rectangle)).toBe(start);
+    expect(reconcilePhotoTraceSnapshot(Object.freeze({ ...start, stairWidth: 150 }), rectangle).stairEdgeId).toBeNull();
+  });
+
+  it("guards temporary stair actions, segment arrows, and reset against no-op Undo", () => {
+    const source = PhotoOutlineTracer.toString();
+    expect(source).toContain("samePhotoTraceSnapshot(start, next)");
+    expect(source).toContain("move.offset === currentOffset");
+    expect(source).toMatch(/samePhotoTrace[^;]+candidate, outer/);
+    expect(source).toContain("resetPhotoTraceSnapshot(start, width, projection)");
+    expect(source).toContain("applyTraceSnapshot(drag.start)");
+    expect(source).toContain("Temporary stairs no longer fit this outline");
+    expect(source).toContain("preview: null");
   });
 });

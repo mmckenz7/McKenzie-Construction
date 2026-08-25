@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 temporary stair-reference reconciliation
+
+- Temporary stair add/remove and each real keyboard nudge now record exactly one local Undo. Repeated arrows at the 16-foot bound kept `Undo (17)` unchanged; a rectangle Reset kept its valid 8/8-foot stair and added nothing.
+- Adding a bumpout on the same selected side split its exact edge. The photo dialog remained visible with eight corners, cleared the now-stale stair, displayed a place-it-again notice, and reported `Undo (2)` instead of blanking. Undo restored the original four-corner rectangle, exact temporary stair, and prior `Undo (1)` while the authoritative design remained revision 8.
+- An exact length edit on the stair edge temporarily cleared the stale stair and displayed the notice. Escape restored the 20-foot edge and stair together, cleared the notice, and added no Undo. Pure reset/reconciliation tests cover exact surviving edges, split/removed edges, non-fitting widths, already-rectangular reset, and stale clearing; server-render coverage proves stale imported temporary facts fail closed to a visible diagnostic.
+
 ## 2026-08-25 transactional photo-trace exact fields
 
 - Exact corner, segment, stair-width, and synchronized stair-clearance entries capture one complete temporary outline-and-stair snapshot when their field group receives focus. Leaving the group records one temporary Undo only when the normalized valid facts actually changed.
