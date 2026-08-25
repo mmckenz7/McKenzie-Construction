@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-25 conceptual beam/recorded-wall review regression
+
+- Loaded the active one-level v5 editor locally at the default desktop viewport; the measured plan, shared 3D renderer, conceptual beam controls, and clean layout review all rendered normally with one canvas.
+- Opened **Review deck layout** and confirmed the clean rectangle remained ready for railings with no false geometry warning.
+- Repeated the open review at a 390 × 844 mobile viewport. **Close** and **Lock layout & continue** remained visible and the page retained one 3D canvas.
+- Browser warning/error logs were empty. Exact beam/wall crossing, elevation separation/contact, opening-only passage, endpoint contact, multi-panel/segment deduplication, deterministic replay, and authored-beam locator behavior are covered by pure v5 tests.
+
 ## 2026-08-25 temporary stair-reference reconciliation
 
 - Temporary stair add/remove and each real keyboard nudge now record exactly one local Undo. Repeated arrows at the 16-foot bound kept `Undo (17)` unchanged; a rectangle Reset kept its valid 8/8-foot stair and added nothing.

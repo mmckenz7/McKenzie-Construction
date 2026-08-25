@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 // @ts-ignore Isolated prototype dependency.
 import * as THREE from "three";
+import { CONCEPTUAL_BEAM_CENTER_OFFSET, CONCEPTUAL_BEAM_HEIGHT } from "./beamProjection";
 // @ts-ignore Isolated prototype dependency.
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RENDER_QUALITY_POLICIES, type RenderQuality } from "./renderQuality";
@@ -96,7 +97,7 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTE
       for (const board of itemGeometry.surfaceBoards) member(model, board, itemPlatform.elevation, 1, itemPlatform.construction.decking.boardWidth, deck);
       if (showFraming) {
         for (const joist of itemGeometry.joists) member(model, joist, itemPlatform.elevation - 5, 7.25, 1.5, frame);
-        for (const beam of itemGeometry.beams) member(model, beam, itemPlatform.elevation - 13, 9.25, 4.5, frame);
+        for (const beam of itemGeometry.beams) member(model, beam, itemPlatform.elevation - CONCEPTUAL_BEAM_CENTER_OFFSET, CONCEPTUAL_BEAM_HEIGHT, 4.5, frame);
         for (const post of itemGeometry.supportPosts) { const height = Math.max(1, post.top - gradeElevation); const mesh = new THREE.Mesh(new THREE.BoxGeometry(5.5, height, 5.5), frame); mesh.position.set(post.x, gradeElevation + height / 2, post.z); mesh.castShadow = true; model.add(mesh); }
       }
       for (const span of itemGeometry.fasciaSpans ?? []) member(model, span, itemPlatform.elevation - 4, 8, 1.5, fascia);

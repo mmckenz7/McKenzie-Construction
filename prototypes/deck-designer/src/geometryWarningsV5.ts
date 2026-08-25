@@ -1,5 +1,5 @@
 import { deriveGeometryWarningsV4, type GeometryWarningV4 } from "./geometryWarningsV4";
-import { deriveConceptualBeamProjection } from "./beamProjection";
+import { conceptualBeamVerticalRange, deriveConceptualBeamProjection } from "./beamProjection";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
@@ -43,6 +43,26 @@ function segmentsIntersect(a: PolygonPoint, b: PolygonPoint, c: PolygonPoint, d:
   return first * second <= EPSILON && third * fourth <= EPSILON &&
     Math.max(Math.min(a.x, b.x), Math.min(c.x, d.x)) <= Math.min(Math.max(a.x, b.x), Math.max(c.x, d.x)) + EPSILON &&
     Math.max(Math.min(a.z, b.z), Math.min(c.z, d.z)) <= Math.min(Math.max(a.z, b.z), Math.max(c.z, d.z)) + EPSILON;
+}
+
+function segmentsCrossBeyondEndpointContact(a: PolygonPoint, b: PolygonPoint, c: PolygonPoint, d: PolygonPoint): boolean {
+  const abX = b.x - a.x, abZ = b.z - a.z;
+  const cdX = d.x - c.x, cdZ = d.z - c.z;
+  const abLength = Math.hypot(abX, abZ), cdLength = Math.hypot(cdX, cdZ);
+  if (abLength <= EPSILON || cdLength <= EPSILON) return false;
+  const denominator = abX * cdZ - abZ * cdX;
+  const relativeX = c.x - a.x, relativeZ = c.z - a.z;
+  if (Math.abs(denominator) > EPSILON) {
+    const alongAb = (relativeX * cdZ - relativeZ * cdX) / denominator;
+    const alongCd = (relativeX * abZ - relativeZ * abX) / denominator;
+    return alongAb > EPSILON / abLength && alongAb < 1 - EPSILON / abLength &&
+      alongCd > EPSILON / cdLength && alongCd < 1 - EPSILON / cdLength;
+  }
+  if (Math.abs(relativeX * abZ - relativeZ * abX) > EPSILON) return false;
+  const lengthSquared = abX * abX + abZ * abZ;
+  const first = (relativeX * abX + relativeZ * abZ) / lengthSquared;
+  const second = ((d.x - a.x) * abX + (d.z - a.z) * abZ) / lengthSquared;
+  return (Math.min(1, Math.max(first, second)) - Math.max(0, Math.min(first, second))) * abLength > EPSILON;
 }
 
 function segmentDistance(a: PolygonPoint, b: PolygonPoint, c: PolygonPoint, d: PolygonPoint): number {
@@ -139,6 +159,31 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     });
   });
   const house = deriveHouseContextGeometry(normalized.siteContext);
+  const beamVerticalRange = conceptualBeamVerticalRange(platform.elevation);
+  platform.construction.framing.beamLines.forEach((line) => {
+    const beams = deriveConceptualBeamProjection({
+      region: platform.region,
+      boardDirection: platform.construction.decking.direction,
+      platformElevation: platform.elevation,
+      beamLines: [line],
+    }).beams;
+    normalized.siteContext.houseWalls.forEach((wall) => {
+      const panels = house.houseWallPanels.filter((panel) => panel.wallId === wall.id &&
+        panel.baseElevation < beamVerticalRange.top - EPSILON &&
+        panel.baseElevation + panel.height > beamVerticalRange.base + EPSILON);
+      const crossedSegmentIds = beams
+        .filter((beam) => panels.some((panel) => segmentsCrossBeyondEndpointContact(beam.start, beam.end, panel.start, panel.end)))
+        .map((beam) => beam.id)
+        .sort((left, right) => left.localeCompare(right));
+      if (!crossedSegmentIds.length) return;
+      warnings.push(Object.freeze({
+        id: `beam-house-plan-review-${line.id}-${wall.id}`,
+        severity: "clearance",
+        geometryIds: Object.freeze([line.id, ...crossedSegmentIds, wall.id]),
+        message: `Conceptual beam route (${line.id}) passes through recorded house-wall context (${wall.id}) where their displayed vertical ranges overlap; field-verify the intended framing and wall layout.`,
+      }));
+    });
+  });
   platform.construction.stairSystems.forEach((system, systemIndex) => {
     const route = stairRoutes[systemIndex];
     const footprints = [...route.treads.map((tread) => tread.corners), ...route.landings.map((landing) => landing.corners)];

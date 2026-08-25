@@ -22,6 +22,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     [
       "beam-cutout-interruption-beam-line-1-1",
       "joist-cutout-interruption-1",
+      "beam-house-plan-review-beam-line-1-house-wall-2",
       "platform-house-plan-review-platform-1-house-wall-2",
       "stair-route-collision-stair-system-1-stair-system-2",
     ].forEach((id) => expect(usesPrototypeReviewThresholdV5(warning(id))).toBe(false));
@@ -169,6 +170,55 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     const review = deriveLayoutReviewV5(design, "platform-1");
     expect(review.readyToContinue).toBe(true);
     expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 1 clearance note" }));
+  });
+
+  it("reports an exact beam-route and wall-context crossing without blocking layout", () => {
+    const wall = { id: "house-wall-beam", start: { x: 96, z: 60 }, end: { x: 96, z: 180 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] };
+    const design = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: [wall] } });
+    const warning = deriveGeometryWarningsV5(design, "platform-1").find((candidate) => candidate.id === "beam-house-plan-review-beam-line-1-house-wall-beam")!;
+    expect(warning).toEqual({
+      id: "beam-house-plan-review-beam-line-1-house-wall-beam",
+      severity: "clearance",
+      geometryIds: ["beam-line-1", "beam-line-1-segment-1", "house-wall-beam"],
+      message: "Conceptual beam route (beam-line-1) passes through recorded house-wall context (house-wall-beam) where their displayed vertical ranges overlap; field-verify the intended framing and wall layout.",
+    });
+    expect(usesPrototypeReviewThresholdV5(warning)).toBe(false);
+    const review = deriveLayoutReviewV5(design, "platform-1");
+    expect(review.readyToContinue).toBe(true);
+    expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 1 clearance note" }));
+  });
+
+  it("excludes vertical separation, exact vertical contact, endpoint contact, and opening-only passage", () => {
+    const walls = [
+      { id: "house-wall-above", start: { x: 48, z: 60 }, end: { x: 48, z: 180 }, baseElevation: 39.63, height: 48, attachment: "unknown" as const, openings: [] },
+      { id: "house-wall-below", start: { x: 72, z: 60 }, end: { x: 72, z: 180 }, baseElevation: -48, height: 78.37, attachment: "unknown" as const, openings: [] },
+      { id: "house-wall-endpoint", start: { x: 192, z: 120 }, end: { x: 192, z: 180 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] },
+      {
+        id: "house-wall-opening", start: { x: 120, z: 60 }, end: { x: 120, z: 180 }, baseElevation: 0, height: 48, attachment: "unknown" as const,
+        openings: [{ id: "opening-at-beam", kind: "door" as const, offset: 48, width: 24, sillHeight: 0, height: 48 }],
+      },
+    ];
+    const design = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: walls } });
+    expect(deriveGeometryWarningsV5(design, "platform-1").filter((warning) => warning.id.startsWith("beam-house-plan-review-"))).toEqual([]);
+  });
+
+  it("deduplicates projected panels and beam segments by authored beam-line and wall with deterministic replay", () => {
+    const splitWall = {
+      id: "house-wall-z", start: { x: 12, z: 120 }, end: { x: 180, z: 120 }, baseElevation: 0, height: 48, attachment: "unknown" as const,
+      openings: [{ id: "opening-splitting-wall", kind: "door" as const, offset: 72, width: 24, sillHeight: 0, height: 48 }],
+    };
+    const collinearWall = { id: "house-wall-a", start: { x: 36, z: 120 }, end: { x: 84, z: 120 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] };
+    const base = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: [splitWall, collinearWall] } });
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, region: { ...platform.region, holes: [[
+      { x: 108, z: 108 }, { x: 132, z: 108 }, { x: 132, z: 132 }, { x: 108, z: 132 },
+    ]] } }] });
+    const warnings = deriveGeometryWarningsV5(design, platform.id).filter((warning) => warning.id.startsWith("beam-house-plan-review-"));
+    expect(warnings).toEqual([
+      expect.objectContaining({ id: "beam-house-plan-review-beam-line-1-house-wall-a", geometryIds: ["beam-line-1", "beam-line-1-segment-1", "house-wall-a"] }),
+      expect.objectContaining({ id: "beam-house-plan-review-beam-line-1-house-wall-z", geometryIds: ["beam-line-1", "beam-line-1-segment-1", "beam-line-1-segment-2", "house-wall-z"] }),
+    ]);
+    expect(deriveGeometryWarningsV5(design, platform.id)).toEqual(deriveGeometryWarningsV5(design, platform.id));
   });
 
   it("keeps stair overlap blocking while reporting distinct measured spacing between nearby routes", () => {

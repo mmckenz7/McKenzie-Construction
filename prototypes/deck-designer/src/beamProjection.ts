@@ -14,6 +14,14 @@ export type ConceptualBeamProjection = Readonly<{
   supportPosts: readonly ConceptualSupportPost[];
 }>;
 
+export const CONCEPTUAL_BEAM_CENTER_OFFSET = 13;
+export const CONCEPTUAL_BEAM_HEIGHT = 9.25;
+
+export function conceptualBeamVerticalRange(platformElevation: number): Readonly<{ base: number; top: number }> {
+  const center = platformElevation - CONCEPTUAL_BEAM_CENTER_OFFSET;
+  return Object.freeze({ base: center - CONCEPTUAL_BEAM_HEIGHT / 2, top: center + CONCEPTUAL_BEAM_HEIGHT / 2 });
+}
+
 function evenlySpacedPositions(length: number, maximumSpacing: number): readonly number[] {
   const bays = Math.max(1, Math.ceil(length / maximumSpacing));
   return Object.freeze(Array.from({ length: bays + 1 }, (_, index) => (length * index) / bays));

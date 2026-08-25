@@ -113,6 +113,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Distinct stair-route wall-crossing blockers and measured near-wall field-review notes
 - [x] One deterministic traceable blocker per distinct authored house wall crossed by a stair route, with split-panel deduplication and exact-contact allowance
 - [x] Provenance-safe measured wall-to-platform plan review using vertically applicable projected panels, solid-region subtraction, opening/cutout voids, and authored-wall deduplication
+- [x] Provenance-safe conceptual beam-to-recorded-wall review with strict 3D applicability, opening gaps, and exact authored/derived traceability
 - [x] Distinct stair-route overlap blockers and measured nearby-route field-review notes
 - [x] Exact positive-area stair-route intersection against the normalized deck region, preserving boundary and cutout-void semantics
 - [ ] Broader explainable framing clash/constraint warnings beyond recorded cutout interruptions

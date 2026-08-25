@@ -48,4 +48,12 @@ describe("v5 contextual warning locator", () => {
     expect(warning.geometryIds).toContain("house-wall-2");
     expect(deriveWarningSelectionV5(design.platforms[0], warning)).toEqual({ holeIndex: null, beamLineId: null, stairSystemId: "stair-system-1", edgeId: edge.id });
   });
+
+  it("selects only the authored beam from a beam/wall review while retaining wall traceability", () => {
+    const wall = { id: "house-wall-beam", start: { x: 96, z: 60 }, end: { x: 96, z: 180 }, baseElevation: 0, height: 48, attachment: "unknown" as const, openings: [] };
+    const design = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: [wall] } });
+    const warning = deriveGeometryWarningsV5(design, "platform-1").find((candidate) => candidate.id === "beam-house-plan-review-beam-line-1-house-wall-beam")!;
+    expect(warning.geometryIds).toContain("house-wall-beam");
+    expect(deriveWarningSelectionV5(design.platforms[0], warning)).toEqual({ holeIndex: null, beamLineId: "beam-line-1", stairSystemId: null, edgeId: null });
+  });
 });
