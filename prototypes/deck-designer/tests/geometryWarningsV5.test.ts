@@ -121,4 +121,43 @@ describe("DeckDesign v5 explainable framing warnings", () => {
       message: "Stair system 1 passes 6 inches from a recorded house wall; verify the intended site clearance.",
     }));
   });
+
+  it("keeps stair overlap blocking while reporting distinct measured spacing between nearby routes", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const lowerEdge = deriveGeometricPolygonEdges(platform.region.outer).find((edge) => edge.outward.z > 0)!;
+    const stairSystem = (id: string, offset: number) => ({
+      id, locked: true, edgeId: lowerEdge.id, offset, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [],
+    });
+    const nearby = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [
+      stairSystem("stair-system-left", 24), stairSystem("stair-system-right", 78),
+    ] } }] });
+    expect(deriveGeometryWarningsV5(nearby, platform.id)).toContainEqual(expect.objectContaining({
+      id: "stair-route-clearance-stair-system-left-stair-system-right",
+      geometryIds: ["stair-system-left", "stair-system-right"],
+      message: "Stair systems 1 and 2 pass 6 inches apart in plan; verify the intended route clearance.",
+    }));
+
+    const edges = deriveGeometricPolygonEdges(platform.region.outer);
+    const turnedSystem = (id: string, edgeId: string, offset: number, turn: "left" | "right") => ({
+      id, locked: true, edgeId, offset, width: 48, treadDepth: 10, maxRiserHeight: 7.75,
+      landings: [{ id: `${id}-landing-1`, locked: true, afterRiser: 0, width: 48, depth: 48, turn, connections: [] }],
+    });
+    const overlapping = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [
+      turnedSystem("stair-system-left", edges[1].id, 96, "right"), turnedSystem("stair-system-right", edges[2].id, 0, "left"),
+    ] } }] });
+    const overlapWarnings = deriveGeometryWarningsV5(overlapping, platform.id);
+    expect(overlapWarnings).toContainEqual(expect.objectContaining({
+      id: "stair-route-collision-stair-system-left-stair-system-right",
+      severity: "collision",
+    }));
+    expect(overlapWarnings.some((warning) => warning.id.startsWith("stair-route-clearance"))).toBe(false);
+
+    const touching = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [
+      stairSystem("stair-system-left", 24), stairSystem("stair-system-right", 72),
+    ] } }] });
+    const contactWarnings = deriveGeometryWarningsV5(touching, platform.id);
+    expect(contactWarnings.some((warning) => warning.id.startsWith("stair-route-collision"))).toBe(false);
+    expect(contactWarnings.some((warning) => warning.id.startsWith("stair-route-clearance"))).toBe(false);
+  });
 });
