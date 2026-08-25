@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { findInternalThreadParticipant, threadCounterpartyAddresses } from "../src/lib/communications/thread-classification.ts";
+import {
+  automatedConversationLabel,
+  findInternalThreadParticipant,
+  findVendorThreadParticipant,
+  threadCounterpartyAddresses,
+} from "../src/lib/communications/thread-classification.ts";
 
 const inbox = readFileSync("src/app/sales/communications/page.tsx", "utf8");
 const threadPage = readFileSync("src/app/sales/communications/[threadId]/page.tsx", "utf8");
@@ -38,11 +43,25 @@ test("recognition uses the latest counterparty instead of every address stored o
   assert.deepEqual(outbound, ["michael@mckenzie-builds.com"]);
 });
 
+test("vendor and automated triage are exact and deterministic", () => {
+  const vendors = [{ id: "vendor-1", name: "Knox Supply", emails: ["orders@knox.example"] }];
+  assert.deepEqual(findVendorThreadParticipant(["ORDERS@KNOX.EXAMPLE"], vendors), vendors[0]);
+  assert.equal(findVendorThreadParticipant(["sales@knox.example"], vendors), null);
+  assert.equal(automatedConversationLabel({ direction: "inbound", sender: "no-reply@example.com", recipient: "info@mckenzie-builds.com" }), "Automated notification");
+  assert.equal(automatedConversationLabel({ direction: "inbound", sender: "news@example.com", recipient: "info@mckenzie-builds.com", body: "Manage preferences or unsubscribe" }), "Newsletter");
+  assert.equal(automatedConversationLabel({ direction: "inbound", sender: "customer@example.com", recipient: "info@mckenzie-builds.com", body: "Please call me" }), null);
+});
+
 test("internal conversations remain unassigned and never enter the CRM matcher", () => {
   assert.match(inbox, /\["internal", "Internal"\]/);
   assert.match(inbox, /Internal team conversation/);
   assert.match(inbox, /Internal · Unassigned/);
+  assert.match(inbox, /Vendor · Unassigned/);
+  assert.match(inbox, /Needs review before matching/);
   assert.match(threadPage, /Internal · \{internalMember\.name\} · Unassigned/);
+  assert.match(threadPage, /Vendor · \{vendor\.name\} · Unassigned/);
+  assert.match(threadPage, /Recognized from an exact active supplier email/);
+  assert.match(threadPage, /Kept in the company inbox without creating an assignment or CRM record/);
   assert.match(threadPage, /does not create or attach to a CRM record/);
   assert.match(threadPage, /internalMember \? <section/);
 });

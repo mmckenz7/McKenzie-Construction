@@ -21,7 +21,7 @@ test("Company Inbox is the neutral primary communication destination", () => {
 test("the main inbox is not driven by projects or CRM matching", () => {
   assert.doesNotMatch(companyInbox, /\.or\("lead_id\.not\.is\.null,customer_id\.not\.is\.null"\)/);
   assert.doesNotMatch(companyInbox, /projectId/);
-  assert.match(companyInbox, /Not matched to a CRM record yet/);
+  assert.match(companyInbox, /Needs review before matching/);
 });
 
 test("record cards and project activity link back to canonical conversations", () => {

@@ -110,5 +110,5 @@ test("Mission Control and Company Inbox retain unmatched conversations", () => {
   const customerInbox = readFileSync(new URL("../src/app/sales/communications/page.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(missionControl, /lead_id\.not\.is\.null,customer_id\.not\.is\.null/);
   assert.doesNotMatch(customerInbox, /lead_id\.not\.is\.null,customer_id\.not\.is\.null/);
-  assert.match(customerInbox, /Not matched to a CRM record yet/);
+  assert.match(customerInbox, /Needs review before matching/);
 });
