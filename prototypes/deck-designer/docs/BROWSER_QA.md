@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-25 interactive measured-plan semantics
+
+- The active measured SVG plan is now exposed as one named, described interactive group instead of an image that can flatten its focusable descendants. Exact edge, cutout, stair-system, and landing controls expose their existing selection state; movement-only handles do not claim toggle state.
+- Static accessibility regressions cover editable versus side-selection instructions, child-control exposure, exact selected edge/cutout/landing/stair state, and render-time design/geometry immutability. Existing dense-edge touch-target ordering and locked-stair handle coverage remain unchanged.
+- Desktop accessibility-tree QA exposed all four sides and every movement handle beneath the named plan group. Enter and Space selected the exact side and updated its pressed state; after the normal explicit outline unlock, an arrow-key segment move created revision 3, changed the perpendicular sides from 12′ 0″ to 12′ 6″, and updated area and quantities through the normal history path.
+- At 390 × 844, the same group and all four exact sides remained keyboard reachable, Space updated only the selected side, and the model retained one canvas. The QA state was not saved and the temporary tab was closed.
+- Full validation passed 338/338 tests, isolation, typecheck, build, and unchanged golden fixtures. Bundle budgets remain unchanged and pass at 88.8 KiB initial / 121.7 KiB largest / 244.8 KiB total JavaScript gzip.
+
 ## 2026-08-25 render-local quantity geometry reuse
 
 - The active one-level v5 render now passes its already-derived immutable platform geometry into deterministic accessory projection instead of deriving the same boards, joists, beams, posts, stairs, landings, railings, and finishes again through each quantity-version layer.
