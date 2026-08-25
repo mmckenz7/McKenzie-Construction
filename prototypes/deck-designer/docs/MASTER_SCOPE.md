@@ -49,6 +49,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Edge selection with contextual railing/stair actions and explainable conceptual warnings
 - [x] Drag handles and selectable grid snapping for rectangle and L-cutout dimensions
 - [x] Direct bounded pointer, touch, keyboard, and exact-input stair movement along exact v3 geometric edges
+- [x] Forgiving active-plan touch targets with deterministic stair/corner/segment overlap priority and no tap-only mutation
 - [x] Staged Deck Layout → locked Railings workflow with a dedicated uncluttered railing-selection page
 - [x] Exact selected-side angle entry with deterministic attached-corner updates
 - [ ] Multi-side angle constraints and broader accessory selection

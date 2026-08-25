@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 active-plan touch targets
+
+- Active polygon corners, white segment handles, and the current unlocked stair now use transparent 36-unit focusable targets while retaining the same small visible marks. Keyboard names, six-inch snap instructions, and visible focus highlighting remain on the interactive target/mark pair.
+- Dense-edge regression coverage renders a four-foot platform with a full-width stair so the stair, segment midpoint, and nearby corner targets overlap. Markup order deterministically gives the active stair priority over corners and corners priority over segments; a locked stair exposes no movement target.
+- Pointer calculations now start at pointer-down and apply only the snapped delta to recorded geometry. Three tap-only checks on a segment, corner, and stair retained revision 8 after preview state settled; a stair arrow move still changed 4 feet to 4.5 feet through the normal revision path.
+
 ## 2026-08-25 active-plan segment selection continuity
 
 - The active v5 plan's white segment handle now identifies its six-inch snap and arrow-key behavior in its accessible name. A handled arrow selects the exact side before committing the normal safe region replacement.

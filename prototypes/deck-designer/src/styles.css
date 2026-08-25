@@ -418,13 +418,18 @@ button:hover { transform: translateY(-1px); }
 .dimension-handle { fill: var(--lime); stroke: #173b2d; stroke-width: 1.5; cursor: grab; touch-action: none; }
 .dimension-handle:hover, .dimension-handle:focus, .dimension-handle.active { fill: #f3ff8d; stroke-width: 2.4; outline: none; }
 .dimension-handle.active { cursor: grabbing; }
-.stair-move-handle { fill: #fff; stroke: #b55f32; stroke-width: 2.25; cursor: grab; touch-action: none; }
-.stair-move-handle:hover, .stair-move-handle:focus, .stair-move-handle.active { fill: #ffd4ad; stroke-width: 3; outline: none; }
-.stair-move-handle:focus-visible { fill: #f3ff8d; stroke: #0c543c; stroke-width: 4; }
+.stair-move-hit, .corner-move-hit, .segment-move-hit { fill: transparent; stroke: transparent; pointer-events: all; touch-action: none; outline: none; }
+.stair-move-hit, .corner-move-hit { cursor: grab; }
+.segment-move-hit { cursor: move; }
+.stair-move-handle { fill: #fff; stroke: #b55f32; stroke-width: 2.25; }
+.stair-move-hit:hover + .stair-move-handle, .stair-move-hit:focus + .stair-move-handle, .stair-move-handle.active { fill: #c8dd3c; stroke-width: 3; }
+.stair-move-hit:focus-visible + .stair-move-handle { fill: #f3ff8d; stroke: #0c543c; stroke-width: 4; }
 .stair-move-handle.active { cursor: grabbing; }
 .v3-edge { fill: rgba(255,255,255,.001); stroke: none; cursor: pointer; outline: none; }
 .v3-edge:hover, .v3-edge:focus { fill: rgba(200, 221, 60, .52); }
 .corner-handle { fill: #f3ff8d; }
+.corner-move-hit:hover + .corner-handle, .corner-move-hit:focus + .corner-handle { fill: #c8dd3c; stroke-width: 2.4; }
+.corner-move-hit:focus-visible + .corner-handle { stroke: #0c543c; stroke-width: 4; }
 .full-action { width: 100%; margin-top: 10px; }
 .review-card small { display: block; margin-top: 8px; }
 .review-card .primary { width: 100%; }
@@ -435,8 +440,9 @@ button:hover { transform: translateY(-1px); }
 .add-corner-button.active { background: #d87d45; border-color: #9c4723; }
 .add-corner-mode .v3-edge { fill: rgba(216, 125, 69, .3); cursor: crosshair; }
 .add-corner-mode .v3-edge:hover { fill: rgba(216, 125, 69, .7); }
-.segment-move-handle { fill: #fff; stroke: #275747; stroke-width: 1.5; cursor: move; touch-action: none; }
-.segment-move-handle:hover, .segment-move-handle:focus, .segment-move-handle.active { fill: #c8dd3c; stroke-width: 2.4; outline: none; }
+.segment-move-handle { fill: #fff; stroke: #275747; stroke-width: 1.5; }
+.segment-move-hit:hover + .segment-move-handle, .segment-move-hit:focus + .segment-move-handle, .segment-move-handle.active { fill: #c8dd3c; stroke-width: 2.4; }
+.segment-move-hit:focus-visible + .segment-move-handle { stroke: #0c543c; stroke-width: 4; }
 .preset-offset-heading { margin-top: 18px; }
 .three-framing { margin: 8px 16px 12px; }
 .three-card { min-height: 0; }
