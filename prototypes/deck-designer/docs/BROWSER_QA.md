@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 cutout and beam no-op pointer safety
+
+- Audit reproduced false history changes from the older large targets: a beam tap advanced revision 8 to 9, then cutout center and corner taps advanced 9 to 10 to 11 without intentional movement.
+- Beam and cutout gestures now derive from pointer-down delta plus the recorded starting inset/rectangle. Pure tests cover off-center pointer-down, tap-only, sub-snap movement, return-to-origin, real move/resize, rotated beam direction, exact bounds, pointer cancel, and lost capture.
+- Browser retest kept the beam at revision 8 and the new cutout at revision 9 through center and corner taps. Intentional keyboard moves then advanced the cutout center, cutout corner, and beam through revisions 10, 11, and 12 using their existing authoritative commands.
+
 ## 2026-08-25 active-plan touch targets
 
 - Active polygon corners, white segment handles, and the current unlocked stair now use transparent 36-unit focusable targets while retaining the same small visible marks. Keyboard names, six-inch snap instructions, and visible focus highlighting remain on the interactive target/mark pair.

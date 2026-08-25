@@ -84,4 +84,12 @@ describe("active-plan touch target priority", () => {
   it("exposes no stair hit target when the authored stair system is locked", () => {
     expect(markup(true)).not.toContain('class="stair-move-hit"');
   });
+
+  it("wires pointer cancel and lost-capture cleanup for large cutout and beam targets", () => {
+    const source = PlanViewV3.toString();
+    expect(source).toContain("onPointerCancel");
+    expect(source).toContain("onLostPointerCapture");
+    expect(source).toContain("cancelHoleDrag");
+    expect(source).toContain("cancelBeamDrag");
+  });
 });

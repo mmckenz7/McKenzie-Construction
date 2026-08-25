@@ -57,6 +57,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Prototype-only contained-hole region kernel with subtractive area and split member intervals
 - [x] Browser editor for exact rectangular cutouts/obstacles on the selected platform
 - [x] Direct cutout center/corner editing with pointer, touch, keyboard, and exact numeric fallback
+- [x] Delta-based cutout and beam dragging with no tap-only, sub-snap, return-to-origin, or canceled revision
 - [x] Prototype-only concave triangulation and deterministic board/joist segmentation around holes
 - [x] Prototype-only neutral polygon measurement/quantity report with explicit classification and warnings
 - [x] Prototype-only geometric edge identity experiment with localized edit stability

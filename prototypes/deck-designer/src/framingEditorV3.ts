@@ -30,3 +30,11 @@ export function beamInsetFromPointV3(platform: DeckPlatformV3, point: Point, sna
   const inset = Math.round((bounds.maximum - coordinate) / snapIncrement) * snapIncrement;
   return clampBeamInsetV3(platform, inset);
 }
+
+export function beamInsetFromPointerDeltaV3(platform: DeckPlatformV3, startingInset: number, pointerDown: Point, pointer: Point, snapIncrement: number): number {
+  if (!Number.isFinite(startingInset)) throw new TypeError("Beam starting distance must be finite.");
+  if (!Number.isFinite(snapIncrement) || snapIncrement <= 0) throw new RangeError("Beam drag step must be greater than zero.");
+  const axisDelta = platform.construction.decking.direction === "left_right" ? pointer.z - pointerDown.z : pointer.x - pointerDown.x;
+  const inset = Math.round((startingInset - axisDelta) / snapIncrement) * snapIncrement;
+  return clampBeamInsetV3(platform, inset);
+}
