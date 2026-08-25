@@ -10,7 +10,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
-          if (["LandingConnectionsEditor", "LevelCutoutControls", "HouseConnectionEditor", "RailingStageControls", "PhotoIntakeDialog", "platformCommandsV3", "levelConnectionAlignmentV3", "connectedStairAssemblyV3"].some((name) => id.includes(`/${name}.`))) return "designer-controls";
+          if (["LandingConnectionsEditor", "LevelCutoutControls", "HouseConnectionEditor", "RailingStageControls", "FinishStageControls", "PhotoIntakeDialog", "platformCommandsV3", "levelConnectionAlignmentV3", "connectedStairAssemblyV3"].some((name) => id.includes(`/${name}.`))) return "designer-controls";
         },
       },
     },

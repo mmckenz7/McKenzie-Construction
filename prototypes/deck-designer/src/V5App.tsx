@@ -49,6 +49,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const [history, dispatch] = useReducer(designHistoryReducerV5, initialDesign, createHistoryV5);
   const [preview, setPreview] = useState<DeckDesignV5 | null>(null);
   const [selectedPlatformId, setSelectedPlatformId] = useState(initialDesign.platforms[0].id);
+  const [layoutReviewOpen, setLayoutReviewOpen] = useState(false);
   const design = preview ?? history.present;
   const platform = design.platforms.find((item) => item.id === selectedPlatformId) ?? design.platforms[0];
   const compatibilityDesign = useMemo(() => deckDesignV5ToV3Compatibility(design), [design]);
@@ -56,7 +57,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const geometry = useMemo(() => derivePlatformGeometryV5(design, platform.id), [design, platform.id]);
   const houseGeometry = useMemo(() => deriveHouseContextGeometry(design.siteContext), [design.siteContext]);
   const projection = useMemo(() => deriveDeckDesignProjectionV5(design), [design]);
-  const layoutReview = useMemo(() => deriveLayoutReviewV5(design, platform.id), [design, platform.id]);
+  const layoutReview = useMemo(() => layoutReviewOpen ? deriveLayoutReviewV5(design, platform.id) : null, [design, layoutReviewOpen, platform.id]);
   const [message, setMessage] = useState(initialMessage);
   const [snapIncrement, setSnapIncrement] = useState(6);
   const [keepCornersSquare, setKeepCornersSquare] = useState(true);
@@ -75,7 +76,6 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const [presetRequest, setPresetRequest] = useState(0);
   const [quality, setQuality] = useState<RenderQuality>("balanced");
   const [photoIntakeOpen, setPhotoIntakeOpen] = useState(startWithPhotos);
-  const [layoutReviewOpen, setLayoutReviewOpen] = useState(false);
   const [photoStartSummary, setPhotoStartSummary] = useState<Readonly<{ photoCount: number; review: PhotoIntakeReview }> | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const planActionTray = useRef<HTMLElement>(null);
@@ -281,7 +281,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   };
-  const enterRailingStage = () => { if (!layoutReview.readyToContinue) return; setLayoutReviewOpen(false); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setWorkflowStage("railings"); setMessage("Layout reviewed and locked. Tap railing sides."); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const enterRailingStage = () => { if (!layoutReview?.readyToContinue) return; setLayoutReviewOpen(false); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setWorkflowStage("railings"); setMessage("Layout reviewed and locked. Tap railing sides."); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const returnToLayoutStage = () => { setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setWorkflowStage("layout"); setMessage("Layout reopened; attachments stay protected."); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const enterFinishStage = () => { setSelectedEdgeId(null); setWorkflowStage("finishes"); setMessage("Railings retained. Tap one deck side to choose fascia or skirting."); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const returnToRailingStage = () => { setSelectedEdgeId(null); setWorkflowStage("railings"); setMessage("Finish choices retained. Railing workspace reopened."); window.scrollTo({ top: 0, behavior: "smooth" }); };
@@ -457,7 +457,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
 
   return <main>
     {photoIntakeOpen && <Suspense fallback={<div className="photo-intake-backdrop"><div className="photo-intake-loading" role="status">Preparing local photo review…</div></div>}><PhotoIntake initialFacts={initialPhotoFacts} fallbackSurfaceElevation={platform.elevation} gradeElevation={design.siteContext.gradeElevation} onCancel={closePhotoIntake} onStartDesign={startFromPhotos} /></Suspense>}
-    {layoutReviewOpen && <div className="layout-review-backdrop" role="presentation"><section className="layout-review-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-review-title" aria-describedby="layout-review-description" onKeyDown={handleLayoutReviewKeyDown}>
+    {layoutReviewOpen && layoutReview && <div className="layout-review-backdrop" role="presentation"><section className="layout-review-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-review-title" aria-describedby="layout-review-description" onKeyDown={handleLayoutReviewKeyDown}>
       <header><div><p className="eyebrow">Single-level geometry check</p><h2 id="layout-review-title">Review deck layout</h2><p id="layout-review-description">Confirm the measured geometry before choosing railings.</p></div><button ref={layoutReviewClose} onClick={closeLayoutReview} aria-label="Close layout review">Close</button></header>
       <div className="layout-review-content">
         <div className="layout-review-status"><strong>{layoutReview.readyToContinue ? "Layout is ready for railings" : "Finish the highlighted geometry first"}</strong><span>Conceptual design · not for construction</span></div>

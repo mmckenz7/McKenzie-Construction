@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 active-workflow performance headroom
+
+- The active v5 editor no longer derives the complete deterministic geometry review during ordinary plan dragging or exact-field edits while the review dialog is closed. Opening **Review deck layout** derives the same findings on demand; closing it removes that repeated editing cost without changing warning authority or saved facts.
+- The existing prototype-local control modules now share one intentional deferred package, including the small finishes controls. This removes an otherwise separate chunk boundary and lowers measured total JavaScript from 245.0 to 244.5 KiB gzip without raising any budget.
+- Full validation passed 328/328 tests, isolation, typecheck, build, and golden fixtures. Desktop and 390 × 844 checks retained the clean review result, enabled railing transition, one lazy canvas, keyboard close/focus restoration, and no broken workflow state.
+
 ## 2026-08-25 displayed support-post/house-wall review regression
 
 - The one-level v5 review now compares actual displayed support-post positions and their shared 5.5-inch square footprints with recorded house-wall panels after openings, using the renderer's exact displayed post base/top range.
