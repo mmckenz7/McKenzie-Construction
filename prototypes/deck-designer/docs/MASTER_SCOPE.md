@@ -5,7 +5,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 ## Phase A — deterministic rectangle foundation
 
 - [x] One versioned, unit-explicit authoritative design document
-- [x] Deterministic local v1-to-v2 design migration
+- [x] Deterministic local v1-to-v5 migration with non-overwriting fallback and malformed-storage recovery
 - [x] Exact width, projection, and surface elevation
 - [x] Deterministic normalization and validation
 - [x] 2D measured plan

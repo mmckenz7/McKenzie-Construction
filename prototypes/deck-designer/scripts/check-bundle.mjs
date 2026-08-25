@@ -33,12 +33,11 @@ const report = {
 console.log("Bundle budget report", JSON.stringify(report, null, 2));
 
 const failures = [];
-// Phase B keeps the initial experience below 100 KiB while showing multi-level context.
-if (initial.gzipBytes > 99 * 1024) failures.push(`initial entry is ${report.initialEntryGzipKiB} KiB (budget 99 KiB)`);
-if (largest.gzipBytes > 170 * 1024) failures.push(`largest chunk is ${report.largestChunkGzipKiB} KiB (budget 170 KiB)`);
-// V5 finish authority adds a complete lazy Finishes stage plus exact 2D/3D
-// projections while keeping the initial entry and largest-chunk caps intact.
-if (totalGzipBytes > 252 * 1024) failures.push(`total JavaScript is ${report.totalJavaScriptGzipKiB} KiB (budget 252 KiB)`);
+// The v5-only entry leaves the dormant legacy authoring screen available in source
+// without shipping it to the active browser. Preserve the measured headroom.
+if (initial.gzipBytes > 90 * 1024) failures.push(`initial entry is ${report.initialEntryGzipKiB} KiB (budget 90 KiB)`);
+if (largest.gzipBytes > 130 * 1024) failures.push(`largest chunk is ${report.largestChunkGzipKiB} KiB (budget 130 KiB)`);
+if (totalGzipBytes > 245 * 1024) failures.push(`total JavaScript is ${report.totalJavaScriptGzipKiB} KiB (budget 245 KiB)`);
 
 if (failures.length > 0) {
   throw new Error(`Bundle budget exceeded: ${failures.join("; ")}`);

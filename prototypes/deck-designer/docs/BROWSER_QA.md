@@ -410,3 +410,12 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Confirmed layout review keeps the six-inch stair-edge remainder and six-inch house-wall clearance as distinct non-blocking notes while allowing the layout to continue.
 - Confirmed **Show in plan** closes review, selects the locked stair system and exact side, and exposes **Edit stairs** without unlocking or changing geometry.
 - Reloaded to restore the saved local design; browser console reported no warnings or errors.
+
+## 2026-08-25 — v5-only active entry and recovery
+
+- A fresh `localhost` origin opened directly into a normalized in-memory v5 rectangle, showed the explicit fresh-design status, exposed Save locally, Download JSON, and Load JSON, and rendered exactly one 3D canvas.
+- Reloading retained the fresh in-memory fallback without an automatic local write. Navigating away and using browser Back recovered the complete designer and one canvas with no warnings or errors.
+- The existing `127.0.0.1` saved origin loaded its stored v5 document directly with the saved-design status, v5 schema label, and exactly one canvas.
+- At 390 × 844, the fresh/recovery status and all three local/JSON controls remained available with one canvas.
+- Pure startup gates cover saved v1, v2, v3, v4, and v5 documents plus malformed highest-priority storage. Every source is preserved; malformed data blocks fall-through, opens a fresh design only in memory, and displays that retained data was not replaced.
+- Repeated production builds measured 86.4 KiB initial, 121.7 KiB largest, and 239.5 KiB total JavaScript gzip. Enforced ceilings are tightened to 90/130/245 KiB. The dormant legacy screen remains in prototype source as a rollback reference but is absent from the active bundle.
