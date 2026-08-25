@@ -1,4 +1,5 @@
 export type ViewBox = Readonly<{ x: number; y: number; width: number; height: number }>;
+export type ViewPoint = Readonly<{ xMm: number; yMm: number }>;
 
 export const MIN_VIEW_WIDTH = 2_000;
 export const MAX_VIEW_WIDTH = 104_000;
@@ -29,4 +30,14 @@ export function panView(view: ViewBox, deltaX: number, deltaY: number, viewportW
     x: view.x - deltaX / viewportWidth * view.width,
     y: view.y - deltaY / viewportHeight * view.height,
   };
+}
+
+export function offsetDimensionPosition(start: ViewPoint, end: ViewPoint, offsetMm: number): ViewPoint {
+  const midX = (start.xMm + end.xMm) / 2;
+  const midY = (start.yMm + end.yMm) / 2;
+  const dx = end.xMm - start.xMm;
+  const dy = end.yMm - start.yMm;
+  const length = Math.hypot(dx, dy);
+  if (!Number.isFinite(offsetMm) || length === 0) return { xMm: midX, yMm: midY };
+  return { xMm: midX + dy / length * offsetMm, yMm: midY - dx / length * offsetMm };
 }

@@ -56,5 +56,8 @@ Validated workflow:
 48. Confirmed the desktop Property panel makes **Capture map tab** and **Paste image** primary actions, leaves file upload as a fallback, and explains the Acres/KGIS tab-picker and screenshot shortcuts without requiring saved files.
 49. Pasted an image directly from the browser clipboard, confirmed it was compressed and rendered as the reference layer, then used **Save local**, refreshed, and used **Load local** to restore the image and its transform on the same device.
 50. Confirmed removing the reference clears its separate local record without changing the fence design, totals, or revision.
+51. Drew a live 32′ 3″ run and confirmed its changing value appeared in a fixed top-right measurement card while the dashed run, target point, and plan remained unobstructed.
+52. Placed the run and confirmed the live card disappeared at the zero-length continuation state, while the completed 32′ 3″ label appeared beside the run with a leader rather than covering the fence line.
+53. Zoomed to 211% and confirmed the completed dimension retained a compact, readable screen size and offset with zero browser console errors.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

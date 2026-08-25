@@ -12,7 +12,7 @@ import { formatGpsAccuracy, gpsOriginAt, projectGpsFix, readCurrentGps, type Gps
 import { propertyReferenceLinks, type PropertyReferenceLinks } from "./property-reference";
 import { captureReferenceDisplay, rasterizeReferenceBlob, readReferenceImageFromClipboard, referenceImageErrorMessage, type RasterizedReferenceImage } from "./reference-image";
 import { loadLocalDesign, loadLocalReference, saveLocalDesign, saveLocalReference } from "./storage";
-import { panView, zoomViewAt, type ViewBox } from "./view";
+import { offsetDimensionPosition, panView, zoomViewAt, type ViewBox } from "./view";
 
 type Selection = Readonly<{ type: "point" | "segment"; id: string } | { type: "house" }> | null;
 type Drag = Readonly<{ pointId: string; original: FenceDesign }> | null;
@@ -98,6 +98,10 @@ export default function App() {
   const houseSelected = selection?.type === "house";
   const totals = useMemo(() => ({ all: totalLengthMm(design), gate: design.segments.filter(({ kind }) => kind === "gate").reduce((sum, item) => sum + segmentLengthMm(design, item), 0) }), [design]);
   const activePath = design.points.length ? fencePathForPoint(design, design.points.at(-1)!.id) : null;
+  const liveRunLengthMm = mode === "draw" && previewPoint && design.points.at(-1)
+    ? Math.round(Math.hypot(previewPoint.xMm - design.points.at(-1)!.xMm, previewPoint.yMm - design.points.at(-1)!.yMm))
+    : null;
+  const dimensionScale = view.width / DEFAULT_VIEW.width;
 
   useEffect(() => {
     const canvas = svgRef.current;
@@ -569,6 +573,7 @@ export default function App() {
     <section className="workspace">
       <div className="canvas-shell">
         <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot attached" /> Connected endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line preview" /> Live run</span><span><i className="key-line gate" /> Gate intent</span></div>
+        {liveRunLengthMm !== null && liveRunLengthMm > 0 && <div className="live-measurement" role="status" aria-live="polite"><span>Current run</span><strong>{formatFeetInches(liveRunLengthMm)}</strong><small>{snapEnabled ? "45°/90° assist" : "Free angle"} · click to place</small></div>}
         <svg ref={svgRef} className={`plan-canvas ${mode}${isNavigating ? " navigating" : ""}`} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} onPointerDown={startNavigation} onPointerMove={moveCanvasPointer} onPointerLeave={() => { if (!drag && !isNavigating) setPreviewPoint(null); }} onPointerUp={endNavigation} onPointerCancel={endNavigation} aria-label="Fence drawing plan">
           <defs><pattern id="grid" width={GRID_MM} height={GRID_MM} patternUnits="userSpaceOnUse"><path d={`M ${GRID_MM} 0 L 0 0 0 ${GRID_MM}`} fill="none" stroke="#d8ddd7" strokeWidth="18" /></pattern></defs>
           {referenceBackground && layers.reference && (() => {
@@ -586,20 +591,22 @@ export default function App() {
             const start = pointById(design, segment.fromPointId); const end = pointById(design, segment.toPointId);
             const midX = (start.xMm + end.xMm) / 2; const midY = (start.yMm + end.yMm) / 2;
             const selected = selection?.type === "segment" && selection.id === segment.id;
+            const label = formatFeetInches(segmentLengthMm(design, segment));
+            const dimensionText = segment.kind === "gate" ? `${segment.gateType === "double" ? "DOUBLE" : "SINGLE"} GATE · ${label}` : label;
+            const dimensionPosition = offsetDimensionPosition(start, end, 700 * dimensionScale);
+            const dimensionWidth = Math.max(1_520, dimensionText.length * 180) * dimensionScale;
             return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode === "select" && !event.metaKey) { event.stopPropagation(); selectSegment(segment.id); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode === "select" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
               <line className="segment-hit" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <line className="segment-line" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
-              {layers.dimensions && <g transform={`translate(${midX} ${midY})`} className="dimension"><rect x="-760" y="-260" width="1520" height="520" rx="180" /><text textAnchor="middle" dominantBaseline="central">{segment.kind === "gate" ? `${segment.gateType === "double" ? "DOUBLE" : "SINGLE"} GATE · ` : ""}{formatFeetInches(segmentLengthMm(design, segment))}</text></g>}
+              {layers.dimensions && <g className="dimension"><line className="dimension-leader" x1={midX} y1={midY} x2={dimensionPosition.xMm} y2={dimensionPosition.yMm} style={{ strokeWidth: 26 * dimensionScale }} /><g transform={`translate(${dimensionPosition.xMm} ${dimensionPosition.yMm})`}><rect x={-dimensionWidth / 2} y={-260 * dimensionScale} width={dimensionWidth} height={520 * dimensionScale} rx={180 * dimensionScale} style={{ strokeWidth: 28 * dimensionScale }} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: (segment.kind === "gate" ? 270 : 310) * dimensionScale }}>{dimensionText}</text></g></g>}
             </g>;
           })}
           {mode === "draw" && previewPoint && design.points.at(-1) && (() => {
             const start = design.points.at(-1)!;
             const length = Math.round(Math.hypot(previewPoint.xMm - start.xMm, previewPoint.yMm - start.yMm));
-            const midX = (start.xMm + previewPoint.xMm) / 2; const midY = (start.yMm + previewPoint.yMm) / 2;
             return <g className="run-preview" pointerEvents="none" role="img" aria-label={`Live run ${formatFeetInches(length)}${snapEnabled ? ", snap on" : ", snap off"}`}>
               <line x1={start.xMm} y1={start.yMm} x2={previewPoint.xMm} y2={previewPoint.yMm} />
               <circle cx={previewPoint.xMm} cy={previewPoint.yMm} r="155" />
-              <g transform={`translate(${midX} ${midY})`} className="preview-dimension"><rect x="-780" y="-285" width="1560" height="570" rx="190" /><text textAnchor="middle" dominantBaseline="central">{snapEnabled ? "SNAP · " : ""}{formatFeetInches(length)}</text></g>
             </g>;
           })()}
           {design.points.map((point) => {

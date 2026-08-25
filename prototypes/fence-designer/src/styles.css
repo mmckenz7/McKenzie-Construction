@@ -77,6 +77,9 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .plan-canvas.pan.navigating { cursor: grabbing; }
 .canvas-key { position: absolute; z-index: 2; top: 14px; left: 14px; display: flex; flex-wrap: wrap; gap: 12px; border: 1px solid #d5dbd4; background: rgb(255 255 255 / .92); border-radius: 9px; padding: 8px 10px; font-size: .72rem; font-weight: 700; pointer-events: none; }
 .canvas-key span { display: flex; align-items: center; gap: 5px; }
+.live-measurement { position: absolute; z-index: 3; top: 14px; right: 14px; min-width: 180px; display: grid; gap: 1px; padding: 10px 14px; border: 2px solid #dc8123; border-radius: 11px; background: rgb(255 249 239 / .96); box-shadow: 0 5px 18px rgb(47 36 21 / .16); pointer-events: none; }
+.live-measurement span, .live-measurement small { color: #7c5a37; font-size: .7rem; font-weight: 800; }
+.live-measurement strong { color: #8d470f; font: 600 1.55rem Georgia, serif; }
 .key-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #fbf8ee; border: 3px solid #d47b25; }
 .key-dot.corner { border-color: #173f31; }
 .key-dot.attached { border-color: #39725b; background: #dceee5; }
@@ -88,14 +91,13 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .segment.gate .segment-line { stroke: #c66722; stroke-dasharray: 460 260; }
 .segment.selected .segment-line { stroke: #e4922d; stroke-width: 240; }
 .plan-canvas.new-line .segment-line { stroke: #39725b; }
-.dimension rect { fill: #fff; stroke: #bdc9bf; stroke-width: 28; }
-.dimension text { font-size: 310px; font-weight: 800; fill: #17352a; pointer-events: none; }
+.dimension rect { fill: #fff; stroke: #bdc9bf; }
+.dimension text { font-weight: 800; fill: #17352a; pointer-events: none; }
+.dimension-leader { stroke: #87958d; stroke-dasharray: 80 55; pointer-events: none; }
 .gate .dimension rect { fill: #fff5e8; stroke: #d78334; }
-.gate .dimension text { fill: #9d4b17; font-size: 270px; }
+.gate .dimension text { fill: #9d4b17; }
 .run-preview > line { stroke: #e4922d; stroke-width: 145; stroke-linecap: round; stroke-dasharray: 360 230; }
 .run-preview > circle { fill: #fff7ea; stroke: #e4922d; stroke-width: 90; }
-.preview-dimension rect { fill: #fff7ea; stroke: #e4922d; stroke-width: 32; }
-.preview-dimension text { fill: #884514; font-size: 285px; font-weight: 850; }
 .reference-image { filter: saturate(.85) contrast(.96); }
 .calibration-point circle { fill: #fff4dd; stroke: #d97720; stroke-width: 90; }
 .calibration-point line { stroke: #d97720; stroke-width: 85; }
@@ -149,6 +151,7 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
   .field-actions button, .property-lookup button, .walk-length-editor button, .reference-actions button { width: 100%; }
   .reference-links { display: grid; grid-template-columns: 1fr; }
   .reference-upload { align-items: stretch; flex-direction: column; }
+  .live-measurement { top: auto; right: 10px; bottom: 10px; min-width: 155px; }
   .mark-location { min-width: 0; min-height: 54px; font-size: 1.05rem; }
   .app-footer { flex-direction: column; gap: 3px; }
 }

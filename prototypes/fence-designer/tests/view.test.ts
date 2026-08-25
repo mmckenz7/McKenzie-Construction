@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_VIEW_WIDTH, MIN_VIEW_WIDTH, panView, zoomViewAt, type ViewBox } from "../src/view";
+import { MAX_VIEW_WIDTH, MIN_VIEW_WIDTH, offsetDimensionPosition, panView, zoomViewAt, type ViewBox } from "../src/view";
 
 const view: ViewBox = { x: 0, y: 0, width: 10_000, height: 5_000 };
 
@@ -19,5 +19,14 @@ describe("plan view navigation", () => {
 
   it("pans by viewport pixels in plan coordinates", () => {
     expect(panView(view, 100, -50, 1_000, 500)).toEqual({ x: -1_000, y: 500, width: 10_000, height: 5_000 });
+  });
+
+  it("places completed dimensions beside horizontal and vertical runs", () => {
+    expect(offsetDimensionPosition({ xMm: 0, yMm: 0 }, { xMm: 1_000, yMm: 0 }, 200)).toEqual({ xMm: 500, yMm: -200 });
+    expect(offsetDimensionPosition({ xMm: 0, yMm: 0 }, { xMm: 0, yMm: 1_000 }, 200)).toEqual({ xMm: 200, yMm: 500 });
+  });
+
+  it("leaves a zero-length label at its midpoint", () => {
+    expect(offsetDimensionPosition({ xMm: 20, yMm: 30 }, { xMm: 20, yMm: 30 }, 200)).toEqual({ xMm: 20, yMm: 30 });
   });
 });

@@ -32,6 +32,8 @@ Length lock is also UI editing state. When enabled, dragging a line's first poin
 
 Interaction state is cancelable with Escape. A non-passive canvas wheel handler prevents plan zoom from scrolling the surrounding OS page. Dedicated Pan mode remains available, while Command-drag temporarily pans from any tool and two simultaneous touch pointers pan/pinch without placing a drawing point.
 
+Live length presentation is screen-space UI state: while a prospective run follows the pointer, its feet/inches value appears in a fixed canvas card rather than over the geometry. Completed dimensions are derived from authoritative segment length, offset perpendicular to their run, and connected by a visual leader. Label size and offset scale with the plan view so zooming does not turn a short-run label into an oversized obstruction. Label placement never affects geometry, totals, history, or serialization.
+
 ## Site Walk boundary
 
 Site Walk requests browser geolocation only after a user taps a mark button. Each request asks for a fresh high-accuracy fix with a 20-second timeout. The first fix defines an in-memory latitude/longitude origin mapped to a local integer-millimeter plan point. Later fixes use a deterministic local tangent-plane projection: longitude produces east/west X and latitude produces north/south Y. The absolute origin and raw fixes remain transient UI state and are excluded from the schema, JSON, local storage, and notices.
