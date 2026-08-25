@@ -53,5 +53,8 @@ Validated workflow:
 45. Drew an 18′ 2″ fence run over the calibrated locked image and confirmed the reference layer remained visible and excluded from the measured total.
 46. Tested the Property panel at a 390 × 844 viewport. Controls stacked to full width, the plan remained 359 px wide, and the document had no horizontal overflow.
 47. Checked browser console errors after upload, calibration, layer toggling, locking, rotation, and fence drawing: none.
+48. Confirmed the desktop Property panel makes **Capture map tab** and **Paste image** primary actions, leaves file upload as a fallback, and explains the Acres/KGIS tab-picker and screenshot shortcuts without requiring saved files.
+49. Pasted an image directly from the browser clipboard, confirmed it was compressed and rendered as the reference layer, then used **Save local**, refreshed, and used **Load local** to restore the image and its transform on the same device.
+50. Confirmed removing the reference clears its separate local record without changing the fence design, totals, or revision.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.

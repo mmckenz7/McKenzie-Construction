@@ -44,6 +44,10 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .property-lookup input { min-height: 46px; border: 1px solid #bfc8c0; border-radius: 8px; padding: 8px 10px; color: #22342c; background: #fff; }
 .reference-links, .reference-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .reference-workflow { display: grid; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #dde2dc; }
+.reference-capture-actions { display: grid; grid-template-columns: minmax(180px, 1.25fr) minmax(150px, 1fr) minmax(125px, .7fr); gap: 8px; }
+.capture-help { display: grid; gap: 4px; padding: 11px 13px; border-radius: 9px; background: #f4f6f3; color: #617068; font-size: .78rem; line-height: 1.4; }
+.capture-help strong { color: #294237; }
+.capture-help b { color: #43584d; }
 .reference-upload { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .reference-upload span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #5b6961; font-size: .78rem; }
 .layer-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 12px; border: 1px solid #d7ddd6; border-radius: 9px; background: #f7f9f6; }
@@ -141,7 +145,7 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
   .field-panels { padding: 9px; }
   .field-panel { padding: 13px; }
   .field-panel-heading { align-items: flex-start; }
-  .field-actions, .property-lookup, .walk-length-editor, .reference-adjustments, .calibration-editor { display: grid; grid-template-columns: 1fr; }
+  .field-actions, .property-lookup, .walk-length-editor, .reference-adjustments, .reference-capture-actions, .calibration-editor { display: grid; grid-template-columns: 1fr; }
   .field-actions button, .property-lookup button, .walk-length-editor button, .reference-actions button { width: 100%; }
   .reference-links { display: grid; grid-template-columns: 1fr; }
   .reference-upload { align-items: stretch; flex-direction: column; }

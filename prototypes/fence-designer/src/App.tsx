@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
-import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform, type BackgroundTransform, type PlanPosition } from "./background";
+import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform, type PlanPosition, type ReferenceBackground } from "./background";
 import {
   EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, insertGateAtPoint, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
   pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm,
@@ -10,13 +10,13 @@ import {
 } from "./model";
 import { formatGpsAccuracy, gpsOriginAt, projectGpsFix, readCurrentGps, type GpsOrigin } from "./gps";
 import { propertyReferenceLinks, type PropertyReferenceLinks } from "./property-reference";
-import { loadLocalDesign, saveLocalDesign } from "./storage";
+import { captureReferenceDisplay, rasterizeReferenceBlob, readReferenceImageFromClipboard, referenceImageErrorMessage, type RasterizedReferenceImage } from "./reference-image";
+import { loadLocalDesign, loadLocalReference, saveLocalDesign, saveLocalReference } from "./storage";
 import { panView, zoomViewAt, type ViewBox } from "./view";
 
 type Selection = Readonly<{ type: "point" | "segment"; id: string } | { type: "house" }> | null;
 type Drag = Readonly<{ pointId: string; original: FenceDesign }> | null;
 type Mode = "draw" | "select" | "pan" | "close" | "new-line" | "calibrate";
-type ReferenceBackground = Readonly<{ src: string; name: string; transform: BackgroundTransform; opacity: number; locked: boolean }>;
 type ReferenceProvider = keyof PropertyReferenceLinks;
 type PlanPointer = Readonly<{ clientX: number; clientY: number }>;
 type NavigationGesture = Readonly<{
@@ -78,6 +78,7 @@ export default function App() {
   const [propertyPanelOpen, setPropertyPanelOpen] = useState(false);
   const [kgisAddress, setKgisAddress] = useState("");
   const [referenceBackground, setReferenceBackground] = useState<ReferenceBackground | null>(null);
+  const [referenceBusy, setReferenceBusy] = useState<"capture" | "paste" | "upload" | null>(null);
   const [calibrationPoints, setCalibrationPoints] = useState<readonly PlanPosition[]>([]);
   const [calibrationFeet, setCalibrationFeet] = useState("");
   const [calibrationInches, setCalibrationInches] = useState("0");
@@ -407,24 +408,30 @@ export default function App() {
           : "Opened Google Maps at the address for visual reference. Google imagery is not imported into Fence Measure.");
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid property address."); }
   };
-  const loadReferenceImage = (file: File | undefined) => {
+  const applyReferenceImage = (image: RasterizedReferenceImage, name: string, message: string) => {
+    setReferenceBackground({ src: image.src, name, transform: fittedBackgroundTransform(image.widthPx, image.heightPx, view), opacity: 0.58, locked: false });
+    setLayers((current) => ({ ...current, reference: true })); setMode("select"); setCalibrationPoints([]); setNotice(message);
+  };
+  const loadReferenceImage = async (file: File | undefined) => {
     if (!file) return;
     if (!/^image\/(png|jpeg|webp)$/.test(file.type)) { setNotice("Choose a PNG, JPEG, or WebP image. For a PDF survey, save the relevant page as an image first."); return; }
     if (file.size > 15 * 1024 * 1024) { setNotice("Choose a reference image smaller than 15 MB."); return; }
-    const reader = new FileReader();
-    reader.onerror = () => setNotice("The local reference image could not be read.");
-    reader.onload = () => {
-      if (typeof reader.result !== "string") { setNotice("The local reference image could not be read."); return; }
-      const image = new Image();
-      image.onerror = () => setNotice("The selected file is not a usable reference image.");
-      image.onload = () => {
-        setReferenceBackground({ src: reader.result as string, name: file.name, transform: fittedBackgroundTransform(image.naturalWidth, image.naturalHeight, view), opacity: 0.58, locked: false });
-        setLayers((current) => ({ ...current, reference: true })); setMode("select"); setCalibrationPoints([]);
-        setNotice("Reference image loaded locally. Enter a known distance, then pick two points to calibrate it before tracing.");
-      };
-      image.src = reader.result;
-    };
-    reader.readAsDataURL(file);
+    setReferenceBusy("upload");
+    try { applyReferenceImage(await rasterizeReferenceBlob(file), file.name, "Reference image loaded locally. Enter a known distance, then pick two points to calibrate it before tracing."); }
+    catch (error) { setNotice(referenceImageErrorMessage(error, "upload")); }
+    finally { setReferenceBusy(null); }
+  };
+  const pasteReferenceImage = async () => {
+    setReferenceBusy("paste"); setNotice("Reading an image from the clipboard…");
+    try { applyReferenceImage(await readReferenceImageFromClipboard(navigator.clipboard), "Pasted map capture", "Clipboard image pasted without saving a device file. Calibrate it before tracing."); }
+    catch (error) { setNotice(referenceImageErrorMessage(error, "paste")); }
+    finally { setReferenceBusy(null); }
+  };
+  const captureMapTab = async () => {
+    setReferenceBusy("capture"); setNotice("Choose the Acres or KGIS tab in the browser’s sharing window.");
+    try { applyReferenceImage(await captureReferenceDisplay(navigator.mediaDevices), "Captured map tab", "Map tab captured locally without saving a device file. Calibrate it before tracing."); }
+    catch (error) { setNotice(referenceImageErrorMessage(error, "capture")); }
+    finally { setReferenceBusy(null); }
   };
   const startCalibration = () => {
     if (!referenceBackground) { setNotice("Upload a reference image first."); return; }
@@ -471,13 +478,17 @@ export default function App() {
     }
     setSelection(null);
   };
-  const save = () => { saveLocalDesign(localStorage, design); setNotice("Saved in this browser only."); };
+  const save = () => {
+    try { saveLocalDesign(localStorage, design); saveLocalReference(localStorage, referenceBackground); setNotice(referenceBackground ? "Fence layout and compressed reference image saved in this browser only." : "Fence layout saved in this browser only."); }
+    catch (error) { setNotice(error instanceof Error ? `Local save failed: ${error.message}` : "Local save failed. The reference image may be too large for this browser."); }
+  };
   const load = () => {
     try {
       const loaded = loadLocalDesign(localStorage);
       if (!loaded) { setNotice("No saved layout exists in this browser yet."); return; }
+      const loadedReference = loadLocalReference(localStorage);
       gpsRequestId.current += 1; setGpsOrigin(null); setGpsAccuracyMeters(null); setLastWalkSegmentId(null); setSiteWalkActive(false); setGpsBusy(false);
-      setHistory(createHistory(loaded)); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setNotice("Saved local layout loaded. Start Site Walk at the last point to align a new GPS session.");
+      setHistory(createHistory(loaded)); setReferenceBackground(loadedReference); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setNotice(loadedReference ? "Saved fence layout and reference image loaded. Start Site Walk at the last point to align a new GPS session." : "Saved local layout loaded. Start Site Walk at the last point to align a new GPS session.");
     } catch (error) { setNotice(error instanceof Error ? `Saved layout was not opened: ${error.message}` : "Saved layout was not opened."); }
   };
 
@@ -521,11 +532,18 @@ export default function App() {
         <small>Phone GPS establishes approximate shape only. Accuracy is the phone’s reported radius, not a guarantee. Exact entered lengths remain authoritative; no latitude or longitude is saved in the design.</small>
       </div>}
       {propertyPanelOpen && <div className="field-panel property-panel">
-        <div className="field-panel-heading"><div><p className="eyebrow">Free property reference</p><h2>Look it up, then bring back a permitted image</h2></div><span className="reference-chip">Reference only</span></div>
-        <p>Use Acres Plus, KGIS, or Google beside this tool. Nothing is scraped or imported automatically. Upload a survey, plat, Acres area map, or other image you are allowed to use.</p>
+        <div className="field-panel-heading"><div><p className="eyebrow">Free property reference</p><h2>Open the map, then capture it here</h2></div><span className="reference-chip">Reference only</span></div>
+        <p>Open Acres Plus or KGIS, position the property and turn on the layers you need. Return here and capture that browser tab, or paste a copied screenshot. No image file has to be saved on your device.</p>
         <div className="property-lookup"><label><span>Property address</span><input value={kgisAddress} onChange={(event) => setKgisAddress(event.target.value)} placeholder="Street address" autoComplete="street-address" /></label><div className="reference-links"><button onClick={() => openPropertyReference("acres")}>Open Acres ↗</button><button onClick={() => openPropertyReference("kgis")}>Open KGIS ↗</button><button onClick={() => openPropertyReference("googleMaps")}>Open Google ↗</button></div></div>
         <div className="reference-workflow">
-          <div className="reference-upload"><input ref={referenceFileRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { loadReferenceImage(event.target.files?.[0]); event.currentTarget.value = ""; }} /><button className="primary" onClick={() => referenceFileRef.current?.click()}>{referenceBackground ? "Replace reference image" : "Upload reference image"}</button>{referenceBackground && <span title={referenceBackground.name}>{referenceBackground.name}</span>}</div>
+          <input ref={referenceFileRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { void loadReferenceImage(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+          <div className="reference-capture-actions">
+            <button className="primary" disabled={referenceBusy !== null} onClick={() => void captureMapTab()}>{referenceBusy === "capture" ? "Choose the map tab…" : referenceBackground ? "Recapture map tab" : "Capture map tab"}</button>
+            <button disabled={referenceBusy !== null} onClick={() => void pasteReferenceImage()}>{referenceBusy === "paste" ? "Reading clipboard…" : "Paste image"}</button>
+            <button disabled={referenceBusy !== null} onClick={() => referenceFileRef.current?.click()}>{referenceBusy === "upload" ? "Loading file…" : "Upload file"}</button>
+          </div>
+          <div className="capture-help"><strong>Desktop test flow</strong><span><b>Capture map tab:</b> choose the open Acres or KGIS tab in the browser picker.</span><span><b>Paste image:</b> copy a screenshot, return here, and paste it directly. On Mac use Control–Shift–Command–4; on Windows use Windows–Shift–S.</span></div>
+          {referenceBackground && <div className="reference-upload"><span title={referenceBackground.name}>Using: {referenceBackground.name}</span></div>}
           {referenceBackground && <>
             <div className="layer-controls" aria-label="Visible plan layers">
               <strong>Visible layers</strong>
@@ -541,10 +559,10 @@ export default function App() {
               <div className="exact-grid"><label><span>Feet</span><input aria-label="Calibration feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={calibrationFeet} onChange={(event) => setCalibrationFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Calibration inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={calibrationInches} onChange={(event) => setCalibrationInches(event.target.value)} /></label></div>
               <button className={mode === "calibrate" ? "active-tool" : "primary"} disabled={referenceBackground.locked} onClick={startCalibration}>{mode === "calibrate" ? "Pick calibration points…" : "Pick two points"}</button>
             </div>
-            <div className="reference-actions"><button disabled={referenceBackground.locked} onClick={fitReference}>Fit image to view</button><button aria-pressed={referenceBackground.locked} className={referenceBackground.locked ? "active-tool" : ""} onClick={() => setReferenceBackground({ ...referenceBackground, locked: !referenceBackground.locked })}>{referenceBackground.locked ? "🔒 Image locked" : "🔓 Lock image"}</button><button className="danger" onClick={() => { setReferenceBackground(null); setCalibrationPoints([]); if (mode === "calibrate") setMode("select"); setNotice("Local reference image removed. Fence measurements were not changed."); }}>Remove image</button></div>
+            <div className="reference-actions"><button disabled={referenceBackground.locked} onClick={fitReference}>Fit image to view</button><button aria-pressed={referenceBackground.locked} className={referenceBackground.locked ? "active-tool" : ""} onClick={() => setReferenceBackground({ ...referenceBackground, locked: !referenceBackground.locked })}>{referenceBackground.locked ? "🔒 Image locked" : "🔓 Lock image"}</button><button className="danger" onClick={() => { setReferenceBackground(null); saveLocalReference(localStorage, null); setCalibrationPoints([]); if (mode === "calibrate") setMode("select"); setNotice("Local reference image removed. Fence measurements were not changed."); }}>Remove image</button></div>
           </>}
         </div>
-        <small>Reference imagery and GIS lines are not a boundary survey. Google Earth imagery cannot be uploaded for commercial web use; use Google only as a separate viewer. The reference image stays on this device for the current page session and is never included in fence totals.</small>
+        <small>Reference imagery and GIS lines are not a boundary survey. Google stays a separate viewer. Captured images never leave this browser, are compressed for local use, and are saved with Save local so the design can be reopened on this same device. They are never included in fence totals.</small>
       </div>}
     </section>}
 

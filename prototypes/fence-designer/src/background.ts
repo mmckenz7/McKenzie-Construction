@@ -8,6 +8,14 @@ export type BackgroundTransform = Readonly<{
   rotationDegrees: number;
 }>;
 
+export type ReferenceBackground = Readonly<{
+  src: string;
+  name: string;
+  transform: BackgroundTransform;
+  opacity: number;
+  locked: boolean;
+}>;
+
 export function fittedBackgroundTransform(
   imageWidthPx: number,
   imageHeightPx: number,
