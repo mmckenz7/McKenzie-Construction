@@ -30,7 +30,9 @@ export function TextMessageComposer({
       const response = await fetch("/api/communications/texts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId, leadId, customerId, body }),
+        body: JSON.stringify(threadId
+          ? { threadId, body }
+          : { leadId, customerId, body }),
       });
       const result = await response.json() as { success?: boolean; error?: string };
       if (!response.ok || !result.success) throw new Error(result.error || "The text could not be sent.");

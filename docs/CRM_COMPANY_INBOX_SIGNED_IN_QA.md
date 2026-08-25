@@ -4,6 +4,20 @@ Status: prepared for bulk execution once Preview sign-in is available.
 
 Scope: `/communications`, `/communications/new`, CRM conversation continuity, and the communications APIs exercised by these screens. This checklist must not be used to test Production or to change cloud configuration, database schema, secrets, shared domain models, Deck Designer, Fence Designer, Estimating, or Material Catalog.
 
+## Local preflight evidence
+
+The checklist boxes below remain unchecked until they are exercised in the signed-in staging Preview. The following boundaries have already been verified locally so the live pass can focus on browser behavior and existing staging records:
+
+| Area | Local evidence | Still requires signed-in Preview |
+| --- | --- | --- |
+| Access and company isolation | Canonical and Sales layouts require an authenticated Sales workspace. Conversation mutation, email, text, and Microsoft attachment routes verify Sales access; admin-client mutations and attachment reads also verify the configured singleton company. | Confirm redirects and forbidden behavior with the two staging roles. |
+| Assignment and matching | Unmatched threads cannot be assigned, matching is one-time, and existing email/text threads now take their CRM identity only from the stored thread—not request-supplied Lead or Customer IDs. | Exercise match, assign, unassign, archive, read/unread, and close/reopen on existing records. |
+| Folders and search | Inbox/Sent/Needs Attention/Archived are projections of existing thread/message facts. Search, channel, and department filters are URL-addressable and explicitly bounded to 100 threads and 150 messages. | Compare each projection and filter intersection with visible staging data. |
+| To/Cc/Bcc and attachments | Address validation, cross-field deduplication, sandbox checking, private Bcc delivery, supported type/count/size rules, metadata-only retry behavior, safe filenames, matched-message checks, and explicit Microsoft downloads have focused regression coverage. | Send only to existing allowlisted recipients and use non-sensitive test files. |
+| Lead → Customer → Project continuity | Record histories reuse canonical thread IDs, customers are preferred over source leads, and project activity is a read-only projection with canonical conversation links. | Follow one existing converted record through all three staging views and reply once. |
+
+Preflight validation on the isolated branch: 53 focused communications tests passed, TypeScript passed, ESLint reported 0 errors (24 unrelated pre-existing warnings), and the Next.js 16 webpack production build passed. No remote data or provider was changed during this audit.
+
 ## Safe setup
 
 - Use the Git-backed Preview for the isolated communications branch.

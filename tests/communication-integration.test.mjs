@@ -23,6 +23,7 @@ const threadControlsRoute = readFileSync("src/app/api/communications/threads/[th
 const threadControls = readFileSync("src/components/communication-thread-controls.tsx", "utf8");
 const threadMessages = readFileSync("src/components/communication-thread-messages.tsx", "utf8");
 const textRoute = readFileSync("src/app/api/communications/texts/route.ts", "utf8");
+const textComposer = readFileSync("src/components/text-message-composer.tsx", "utf8");
 const threadMatch = readFileSync("src/components/communication-thread-match.tsx", "utf8");
 
 test("communication history and consent tables are service-role only", () => {
@@ -97,6 +98,19 @@ test("Mission Control replies are server validated, sandboxed, threaded, and aud
   assert.match(replyRoute, /lead_activities/);
   assert.match(provider, /headers: message\.headers/);
   assert.equal((replyRoute.match(/\.neq\("provider", "twilio"\)/g) ?? []).length, 2);
+});
+
+test("existing conversations own their CRM identity across email and text replies", () => {
+  assert.match(replyRoute, /leadId = threadResult\.data\.lead_id;/);
+  assert.match(replyRoute, /customerId = threadResult\.data\.customer_id;/);
+  assert.doesNotMatch(replyRoute, /threadResult\.data\.lead_id \?\? leadId/);
+  assert.doesNotMatch(replyRoute, /threadResult\.data\.customer_id \?\? customerId/);
+  assert.match(textRoute, /leadId = thread\.data\.lead_id;/);
+  assert.match(textRoute, /customerId = thread\.data\.customer_id;/);
+  assert.doesNotMatch(textRoute, /thread\.data\.lead_id \?\? leadId/);
+  assert.doesNotMatch(textRoute, /thread\.data\.customer_id \?\? customerId/);
+  assert.match(replyComposer, /if \(threadId\) \{\s*form\.set\("threadId", threadId\);\s*\} else \{/);
+  assert.match(textComposer, /threadId\s*\? \{ threadId, body \}\s*:\s*\{ leadId, customerId, body \}/);
 });
 
 test("text replies prefer the matched CRM phone over stale thread participants", () => {

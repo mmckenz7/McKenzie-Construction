@@ -70,8 +70,10 @@ export async function POST(request: Request) {
     if (thread.error || !thread.data) {
       return Response.json({ success: false, error: "The text conversation could not be found." }, { status: 404 });
     }
-    leadId = thread.data.lead_id ?? leadId;
-    customerId = thread.data.customer_id ?? customerId;
+    // An existing thread owns its CRM relationship. Never let request-supplied
+    // record IDs add a second or unmatched CRM identity to its audit history.
+    leadId = thread.data.lead_id;
+    customerId = thread.data.customer_id;
     participantRecipient = (thread.data.participant_addresses as string[])
       .map((address) => e164UsPhone(String(address)))
       .find((address) => Boolean(address && address !== sender)) ?? null;

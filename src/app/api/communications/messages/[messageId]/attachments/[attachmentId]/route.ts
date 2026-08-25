@@ -4,6 +4,7 @@ import {
   listMicrosoftMessageAttachments,
 } from "@/lib/communications/microsoft-attachments";
 import { safeAttachmentFilename } from "@/lib/communications/microsoft-attachment-core";
+import { communicationWorkspaceMatchesSingletonCompany } from "@/lib/communications/workspace-company";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import { canAccessWorkspace, getWorkspaceAccess } from "@/lib/workspace-access";
 
@@ -19,6 +20,9 @@ export async function GET(
 
   const { messageId, attachmentId } = await context.params;
   const supabase = createAdminServerClient();
+  if (!await communicationWorkspaceMatchesSingletonCompany(supabase, workspace.access!.company_id)) {
+    return new Response("The company workspace could not be verified.", { status: 403 });
+  }
   const location = await getMatchedMicrosoftMessageLocation(supabase, messageId);
   if (!location) return new Response("The matched message could not be found.", { status: 404 });
 

@@ -62,9 +62,12 @@ export function CommunicationReplyComposer({
       const preparedRecipients = prepareSecondaryEmailRecipients(effectiveRecipient, cc, bcc);
       if (preparedRecipients.error) throw new Error(preparedRecipients.error);
       const form = new FormData();
-      if (threadId) form.set("threadId", threadId);
-      if (leadId) form.set("leadId", leadId);
-      if (customerId) form.set("customerId", customerId);
+      if (threadId) {
+        form.set("threadId", threadId);
+      } else {
+        if (leadId) form.set("leadId", leadId);
+        if (customerId) form.set("customerId", customerId);
+      }
       if (editableRecipient) form.set("recipient", effectiveRecipient);
       form.set("subject", subject);
       form.set("body", body);

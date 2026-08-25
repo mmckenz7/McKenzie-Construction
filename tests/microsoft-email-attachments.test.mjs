@@ -40,7 +40,7 @@ test("attachment filenames remove response-header control characters", () => {
   assert.equal(safeAttachmentFilename(""), "email-attachment");
 });
 
-test("attachment routes require Sales access and matched Microsoft messages", () => {
+test("attachment routes require the Sales workspace and matched Microsoft messages", () => {
   const listRoute = readFileSync("src/app/api/communications/messages/[messageId]/attachments/route.ts", "utf8");
   const downloadRoute = readFileSync("src/app/api/communications/messages/[messageId]/attachments/[attachmentId]/route.ts", "utf8");
   const attachmentLibrary = readFileSync("src/lib/communications/microsoft-attachments.ts", "utf8");
@@ -49,6 +49,8 @@ test("attachment routes require Sales access and matched Microsoft messages", ()
   const threadMessages = readFileSync("src/components/communication-thread-messages.tsx", "utf8");
   assert.match(listRoute, /canAccessWorkspace\(workspace\.access, "sales"\)/);
   assert.match(downloadRoute, /canAccessWorkspace\(workspace\.access, "sales"\)/);
+  assert.match(listRoute, /communicationWorkspaceMatchesSingletonCompany\(supabase, workspace\.access!\.company_id\)/);
+  assert.match(downloadRoute, /communicationWorkspaceMatchesSingletonCompany\(supabase, workspace\.access!\.company_id\)/);
   assert.match(attachmentLibrary, /lead_id\.not\.is\.null,customer_id\.not\.is\.null/);
   assert.match(downloadRoute, /Content-Disposition/);
   assert.match(downloadRoute, /X-Content-Type-Options/);

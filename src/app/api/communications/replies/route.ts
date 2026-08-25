@@ -145,8 +145,10 @@ export async function POST(request: Request) {
     if (threadResult.error || !threadResult.data) {
       return Response.json({ success: false, error: "The email conversation could not be found." }, { status: 404 });
     }
-    leadId = threadResult.data.lead_id ?? leadId;
-    customerId = threadResult.data.customer_id ?? customerId;
+    // An existing thread owns its CRM relationship. Never let request-supplied
+    // record IDs bypass the explicit conversation-match action.
+    leadId = threadResult.data.lead_id;
+    customerId = threadResult.data.customer_id;
     department = threadResult.data.department;
     canonicalSubject = threadResult.data.subject?.trim() || subject;
   } else if (leadId || customerId) {
