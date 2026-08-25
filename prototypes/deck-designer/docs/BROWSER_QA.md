@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-25 keyboard photo-trace outline shaping
+
+- The photo-reference tracer's round corner handles and white segment handles now accept arrow keys as well as pointer/touch drag. Accessible names state the movement behavior and fixed six-inch trace snap, and focused handles receive the same high-contrast treatment as the temporary stair handle.
+- A free lower corner moved from 20 to 19.5 feet along the house axis with one arrow press. The exact corner field updated to 19.5 feet, temporary Undo became available, and the authoritative design beneath the dialog remained revision 8.
+- The selected lower segment then moved six inches away from the house; both connected side lengths changed from 12 to 12.5 feet while the selected segment retained its 19.5-foot length. One temporary Undo restored the prior segment position without discarding the corner edit.
+- Confirming the outline was the only step that created authoritative geometry: the exact 234-by-144-inch corner entered v5 revision 9, and the 2D, 3D, area, perimeter, board, joist, beam, railing, and support projections all updated from that normalized polygon.
+- Pure tests cover horizontal and vertical segment directions, perpendicular-key rejection, free-corner movement, exact house-line constraint, unrelated-key rejection, and pointer/keyboard segment parity. Full validation passed 271 tests in 44 files, isolation, production-equivalent type checking, build, golden fixtures, and bundle budgets at 86.5 KiB initial / 121.7 KiB largest / 240.1 KiB total gzip.
+
 ## 2026-08-25 keyboard photo-trace stair positioning
 
 - The focusable stair handle in the measured photo-reference tracer now accepts arrow keys with the same prototype-local edge-axis helper used by the authored v5 plan. Its accessible name reports the current offset, six-inch trace snap, and pointer/keyboard instructions, with a visible focus treatment.

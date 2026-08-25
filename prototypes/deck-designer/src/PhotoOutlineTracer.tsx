@@ -5,6 +5,7 @@ import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment } from "./polyg
 import { centeredStairOffset, derivePhotoTraceStairPreview, validateStairWidth } from "./photoTraceStairs";
 import { stairOffsetFromPoint } from "./editor";
 import { stairKeyboardMove } from "./stairKeyboard";
+import { photoTraceCornerKeyboardMove, photoTraceSegmentKeyboardMove } from "./photoTraceKeyboard";
 
 type ReferencePhoto = Readonly<{ name: string; url: string }>;
 type TraceSelection = Readonly<{ kind: "corner" | "segment"; index: number }> | null;
@@ -273,6 +274,31 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     event.preventDefault();
     if (move.offset !== currentOffset) onStairPlacementChange(edge.id, move.offset);
   };
+  const nudgeTraceCorner = (index: number, houseCorner: boolean, event: KeyboardEvent<SVGCircleElement>) => {
+    try {
+      const move = photoTraceCornerKeyboardMove(outer, index, event.key, snapIncrement, houseCorner);
+      if (!move.handled) return;
+      event.preventDefault();
+      setSelection({ kind: "corner", index });
+      if (move.outer === outer) return;
+      const candidate = validatePhotoTrace(move.outer);
+      remember(outer);
+      onChange(candidate);
+      onError("");
+    } catch (error) { onError(error instanceof Error ? error.message : "That corner position is not valid."); }
+  };
+  const nudgeTraceSegment = (index: number, event: KeyboardEvent<SVGRectElement>) => {
+    try {
+      const move = photoTraceSegmentKeyboardMove(outer, index, event.key, snapIncrement);
+      if (!move.handled) return;
+      event.preventDefault();
+      setSelection({ kind: "segment", index });
+      const candidate = validatePhotoTrace(move.outer);
+      remember(outer);
+      onChange(candidate);
+      onError("");
+    } catch (error) { onError(error instanceof Error ? error.message : "That segment position is not valid."); }
+  };
   const segmentDescription = (edge: (typeof edges)[number]) => {
     const horizontal = Math.abs(edge.end.x - edge.start.x) >= Math.abs(edge.end.z - edge.start.z);
     return `${formatLength(edge.length)} ${horizontal ? "horizontal" : "vertical"} segment`;
@@ -348,12 +374,12 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
           const rawAngle = Math.atan2(edge.end.z - edge.start.z, edge.end.x - edge.start.x) * 180 / Math.PI;
           const labelAngle = rawAngle > 90 ? rawAngle - 180 : rawAngle < -90 ? rawAngle + 180 : rawAngle;
           return <g key={`trace-edge-${index}`}><line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className={`${index === houseEdgeIndex ? "trace-house-edge" : "trace-edge"}${selection?.kind === "segment" && selection.index === index ? " highlighted" : ""}`} />{stairEdgeId === edge.id && <line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className="trace-stair-selection" />}<line x1={x(edge.start.x)} y1={y(edge.start.z)} x2={x(edge.end.x)} y2={y(edge.end.z)} className="trace-edge-hit" role="button" tabIndex={0} aria-label={`Select ${segmentDescription(edge)}`} onClick={() => setSelection({ kind: "segment", index })} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelection({ kind: "segment", index }); } }} /><rect x={x(labelX) - 36} y={y(labelZ) - 10} width="72" height="20" rx="5" className="trace-dimension-hit" role="button" tabIndex={0} aria-label={`Edit length of ${segmentDescription(edge)}`} onClick={(event) => { event.stopPropagation(); setSelection({ kind: "segment", index }); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelection({ kind: "segment", index }); } }} transform={`rotate(${labelAngle} ${x(labelX)} ${y(labelZ)})`} /><text x={x(labelX)} y={y(labelZ)} transform={`rotate(${labelAngle} ${x(labelX)} ${y(labelZ)})`} className="trace-dimension-label">{formatLength(edge.length)}</text>{index !== houseEdgeIndex && (() => {
-          return <rect x={x(midpoint.x) - 9} y={y(midpoint.z) - 9} width="18" height="18" rx="4" className={`trace-segment-handle${selection?.kind === "segment" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`Move ${segmentDescription(edge)}`} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); remember(outer); frozenView.current = computedView; dragStart.current = outer; segmentDrag.current = { index, midpoint, outward: edge.outward }; activeDrag.current = `segment-${index}`; setSelection({ kind: "segment", index }); setActive(`segment-${index}`); }} onPointerMove={(event) => { if (activeDrag.current !== `segment-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const point = pointFromClient(event.clientX, event.clientY); const origin = segmentDrag.current; if (!point || !origin) return; try { accept(movePolygonSegment(dragStart.current ?? outer, index, (point.x - origin.midpoint.x) * origin.outward.x + (point.z - origin.midpoint.z) * origin.outward.z, snapIncrement, false)); } catch { /* reject preview */ } }} onPointerUp={(event) => { event.currentTarget.releasePointerCapture(event.pointerId); endDrag(); }} onPointerCancel={cancelDrag} />;
+          return <rect x={x(midpoint.x) - 9} y={y(midpoint.z) - 9} width="18" height="18" rx="4" className={`trace-segment-handle${selection?.kind === "segment" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`Move ${segmentDescription(edge)} perpendicular to itself; drag or use arrow keys; snaps to ${formatLength(snapIncrement)}`} onKeyDown={(event) => nudgeTraceSegment(index, event)} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); remember(outer); frozenView.current = computedView; dragStart.current = outer; segmentDrag.current = { index, midpoint, outward: edge.outward }; activeDrag.current = `segment-${index}`; setSelection({ kind: "segment", index }); setActive(`segment-${index}`); }} onPointerMove={(event) => { if (activeDrag.current !== `segment-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const point = pointFromClient(event.clientX, event.clientY); const origin = segmentDrag.current; if (!point || !origin) return; try { accept(movePolygonSegment(dragStart.current ?? outer, index, (point.x - origin.midpoint.x) * origin.outward.x + (point.z - origin.midpoint.z) * origin.outward.z, snapIncrement, false)); } catch { /* reject preview */ } }} onPointerUp={(event) => { event.currentTarget.releasePointerCapture(event.pointerId); endDrag(); }} onPointerCancel={cancelDrag} />;
         })()}</g>;
         })}
         {outer.map((point, index) => {
           const houseCorner = fixedHouseCorners.has(index);
-          return <circle key={index} cx={x(point.x)} cy={y(point.z)} r="10" className={`trace-corner${houseCorner ? " house" : ""}${selection?.kind === "corner" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`${houseCorner ? "Move house-line" : "Move"} corner ${index + 1}`} onPointerDown={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.setPointerCapture(event.pointerId); remember(outer); frozenView.current = computedView; dragStart.current = outer; activeDrag.current = `corner-${index}`; setSelection({ kind: "corner", index }); setActive(`corner-${index}`); }} onPointerMove={(event: PointerEvent<SVGCircleElement>) => { if (activeDrag.current !== `corner-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const next = pointFromClient(event.clientX, event.clientY); if (!next) return; const constrained = houseCorner ? Object.freeze({ x: next.x, z: 0 }) : next; try { accept(movePolygonCorner(dragStart.current ?? outer, index, constrained, false, snapIncrement)); } catch { /* reject preview */ } }} onPointerUp={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.releasePointerCapture(event.pointerId); endDrag(); }} onPointerCancel={cancelDrag} />;
+          return <circle key={index} cx={x(point.x)} cy={y(point.z)} r="10" className={`trace-corner${houseCorner ? " house" : ""}${selection?.kind === "corner" && selection.index === index ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`${houseCorner ? "Move house-line" : "Move"} corner ${index + 1}; drag or use arrow keys; snaps to ${formatLength(snapIncrement)}`} onKeyDown={(event) => nudgeTraceCorner(index, houseCorner, event)} onPointerDown={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.setPointerCapture(event.pointerId); remember(outer); frozenView.current = computedView; dragStart.current = outer; activeDrag.current = `corner-${index}`; setSelection({ kind: "corner", index }); setActive(`corner-${index}`); }} onPointerMove={(event: PointerEvent<SVGCircleElement>) => { if (activeDrag.current !== `corner-${index}` || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const next = pointFromClient(event.clientX, event.clientY); if (!next) return; const constrained = houseCorner ? Object.freeze({ x: next.x, z: 0 }) : next; try { accept(movePolygonCorner(dragStart.current ?? outer, index, constrained, false, snapIncrement)); } catch { /* reject preview */ } }} onPointerUp={(event: PointerEvent<SVGCircleElement>) => { event.currentTarget.releasePointerCapture(event.pointerId); endDrag(); }} onPointerCancel={cancelDrag} />;
         })}
       </svg>
       {(selectedCorner || selectedEdge) && <div className="trace-dimension-editor">
