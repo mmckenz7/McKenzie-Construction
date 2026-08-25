@@ -19,6 +19,8 @@ import { V3NumberField } from "./V3NumberField";
 import { deriveLayoutReviewV5 } from "./layoutReviewV5";
 import { addBeamLineV5, removeBeamLineV5, updateBeamLineV5 } from "./framingEditorV5";
 import { setEdgeFinishIntentV5 } from "./finishEditorV5";
+import { deriveWarningSelectionV5 } from "./warningLocatorV5";
+import type { GeometryWarningV5 } from "./geometryWarningsV5";
 
 const ThreeViewV3 = lazy(async () => ({ default: (await import("./ThreeViewV3")).ThreeViewV3 }));
 const PhotoIntake = lazy(async () => ({ default: (await import("./PhotoIntakeDialog")).PhotoIntake }));
@@ -357,6 +359,24 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     setMessage(`${openingId.replaceAll("-", " ")} selected. Edit its measured door facts in House connection.`);
     window.requestAnimationFrame(() => document.getElementById("house-connection")?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   };
+  const locateReviewWarning = (warning: GeometryWarningV5) => {
+    const selection = deriveWarningSelectionV5(platform, warning);
+    setSelectedHoleIndex(selection.holeIndex);
+    if (selection.beamLineId) setSelectedBeamLineId(selection.beamLineId);
+    if (selection.stairSystemId) {
+      const stair = platform.construction.stairSystems.find((system) => system.id === selection.stairSystemId)!;
+      setSelectedStairSystemId(stair.id);
+      setSelectedLandingId(stair.landings[0]?.id ?? null);
+      setSelectedEdgeId(stair.edgeId);
+    } else {
+      setSelectedStairSystemId(null);
+      setSelectedLandingId(null);
+      setSelectedEdgeId(selection.edgeId);
+    }
+    setLayoutReviewOpen(false);
+    setMessage(`Located review note: ${warning.message}`);
+    window.requestAnimationFrame(() => document.getElementById("design-views")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+  };
   const updateHouseConnection = (next: DeckDesignV5, attachment: "unknown" | "ledger" | "non-ledger") => apply(next, attachment === "unknown" ? "House updated; connection needs field review." : "House connection updated.");
   const download = () => { const url = URL.createObjectURL(new Blob([stableDeckDesignV5Json(design)], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = "deck-design-v5.json"; link.click(); URL.revokeObjectURL(url); };
   const applyTemplate = (kind: "rectangle" | "l-shape") => {
@@ -404,7 +424,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
         <div className="layout-review-status"><strong>{layoutReview.readyToContinue ? "Layout is ready for railings" : "Finish the highlighted geometry first"}</strong><span>Conceptual design · not for construction</span></div>
         <div className="layout-review-items">{layoutReview.items.map((item) => <article key={item.id} className={`layout-review-item ${item.status}`}><div><strong>{item.label}</strong><span>{item.status === "confirmed" ? "Confirmed" : item.status === "field_verify" ? "Field verify" : "Finish required"}</span></div><p>{item.value}</p></article>)}</div>
         {layoutReview.blockers.length > 0 && <section className="layout-review-notes blockers"><strong>Before continuing</strong><ul>{layoutReview.blockers.map((note) => <li key={note}>{note}</li>)}</ul></section>}
-        <section className="layout-review-notes"><strong>Field verification</strong><ul>{layoutReview.fieldVerification.map((note) => <li key={note}>{note}</li>)}</ul></section>
+        <section className="layout-review-notes"><strong>Field verification</strong><ul>{layoutReview.fieldVerification.map((note) => { const warning = layoutReview.geometryWarnings.find((item) => item.message === note); return <li key={note}>{warning ? <button type="button" className="layout-review-location" onClick={() => locateReviewWarning(warning)}><span>{note}</span><em>Show in plan</em></button> : note}</li>; })}</ul></section>
       </div>
       <footer><button onClick={() => setLayoutReviewOpen(false)}>Back to layout</button><button className="primary" disabled={!layoutReview.readyToContinue} onClick={enterRailingStage}>Lock layout &amp; continue</button></footer>
     </section></div>}

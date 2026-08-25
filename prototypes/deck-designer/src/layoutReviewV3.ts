@@ -17,6 +17,7 @@ export type LayoutReviewV3 = Readonly<{
   items: readonly LayoutReviewItemV3[];
   blockers: readonly string[];
   fieldVerification: readonly string[];
+  geometryWarnings: readonly GeometryWarningV3[];
 }>;
 
 const feet = (inches: number): string => `${(Math.round(inches / 12 * 100) / 100).toLocaleString()} ft`;
@@ -60,5 +61,5 @@ export function deriveLayoutReviewFromWarningsV3(design: DeckDesignV3, platformI
     Object.freeze({ id: "cutouts", label: "Cutouts", value: `${measurements.holeCount} recorded`, status: "confirmed" as const }),
     Object.freeze({ id: "geometry", label: "Geometry and framing", value: geometryWarnings.length ? `${collisions.length} collision${collisions.length === 1 ? "" : "s"} · ${clearances.length} clearance note${clearances.length === 1 ? "" : "s"}` : "None detected", status: collisions.length ? "finish_required" as const : clearances.length ? "field_verify" as const : "confirmed" as const }),
   ]);
-  return Object.freeze({ platformId, readyToContinue: blockers.length === 0, items, blockers: Object.freeze(blockers), fieldVerification: Object.freeze(fieldVerification) });
+  return Object.freeze({ platformId, readyToContinue: blockers.length === 0, items, blockers: Object.freeze(blockers), fieldVerification: Object.freeze(fieldVerification), geometryWarnings: Object.freeze([...geometryWarnings]) });
 }

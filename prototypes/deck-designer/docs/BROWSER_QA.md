@@ -348,3 +348,9 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Layout review reported the exact six-inch plan clearance as a field-review note and kept it distinct from the beam-crosses-cutout interruption warning.
 - The same review separately reported the two conceptual joist paths interrupted by the cutout; the existing unfinished stair remained the only blocker.
 - Reload removed the unsaved cutout and beam movement. Browser logs contained no warnings or errors.
+## 2026-08-24 v5 contextual warning locator check
+
+- Created an unsaved cutout, placed Beam 1 six inches away, and opened layout review. Both geometry/framing notes exposed touch-sized Show in plan actions.
+- Selecting the beam-clearance note closed the review, scrolled to the plan, selected Cutout 1, selected Beam 1 at its recorded eight-foot outside-edge offset, and repeated the exact note in the status message.
+- Pure tests confirm stale warning geometry IDs fail closed instead of selecting a different current object.
+- Reload removed the unsaved QA geometry. Browser logs contained no warnings or errors; existing full-screen mobile review rules remain unchanged.
