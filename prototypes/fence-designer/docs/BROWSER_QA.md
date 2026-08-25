@@ -66,3 +66,7 @@ Validated workflow:
 58. Checked browser logs after edge-aware placement and the flip/reset flow: no application warnings or errors.
 
 Repository validation note: the supported webpack production build completed successfully, including TypeScript and the protected `/sales/fence-designer` route.
+
+## Pending takeoff visual QA
+
+The Black Aluminum Materials panel has deterministic calculation and TypeScript coverage. A local browser visual-QA attempt on August 25, 2026 could not navigate back to the restarted local preview because the browser security policy blocked the local URL from its error page. No visual pass is claimed for the new panel. Required next checks are desktop and mobile layout, live recalculation after fence/gate edits, gate-opening grouping, natural-run-post versus added-end-post presentation, and console cleanliness.

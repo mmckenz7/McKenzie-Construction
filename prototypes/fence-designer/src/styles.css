@@ -66,6 +66,19 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .calibration-editor { display: grid; grid-template-columns: minmax(230px, 1fr) minmax(220px, 280px) auto; gap: 12px; align-items: end; padding: 12px; border-radius: 10px; background: #edf3ef; }
 .calibration-editor > div:first-child { display: grid; gap: 3px; }
 .calibration-editor > div:first-child span { color: #67756d; font-size: .78rem; }
+.takeoff-summary { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; }
+.takeoff-summary article { display: grid; gap: 3px; padding: 12px 14px; border: 1px solid #d7ddd6; border-radius: 10px; background: #f7f9f6; }
+.takeoff-summary span { color: #68766e; font-size: .73rem; font-weight: 800; }
+.takeoff-summary strong { color: #173f31; font: 550 1.45rem Georgia, serif; }
+.takeoff-columns { display: grid; grid-template-columns: repeat(3, minmax(170px, 1fr)); gap: 14px; margin-top: 14px; }
+.takeoff-columns section { padding: 12px 14px; border: 1px solid #d7ddd6; border-radius: 10px; }
+.takeoff-columns h3 { margin: 0 0 8px; color: #344a3e; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+.takeoff-columns dl { display: grid; gap: 6px; margin: 0; }
+.takeoff-columns dl > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.takeoff-columns dt { color: #58685f; font-size: .82rem; }
+.takeoff-columns dd { margin: 0; color: #173f31; font-weight: 850; }
+.takeoff-empty { margin: 0; color: #78827d; font-size: .82rem; }
+.takeoff-warning { margin-top: 12px; padding: 10px 12px; border-left: 4px solid #d7822d; border-radius: 8px; background: #fff4e7; color: #7c4a18; font-size: .82rem; }
 .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 310px; }
 .canvas-shell { min-height: 560px; position: relative; overflow: hidden; background: #f7f7f2; }
 .plan-canvas { display: block; width: 100%; height: 100%; min-height: 560px; touch-action: none; overscroll-behavior: contain; user-select: none; }
@@ -147,7 +160,7 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
   .field-panels { padding: 9px; }
   .field-panel { padding: 13px; }
   .field-panel-heading { align-items: flex-start; }
-  .field-actions, .property-lookup, .walk-length-editor, .reference-adjustments, .reference-capture-actions, .calibration-editor { display: grid; grid-template-columns: 1fr; }
+  .field-actions, .property-lookup, .walk-length-editor, .reference-adjustments, .reference-capture-actions, .calibration-editor, .takeoff-summary, .takeoff-columns { display: grid; grid-template-columns: 1fr; }
   .field-actions button, .property-lookup button, .walk-length-editor button, .reference-actions button { width: 100%; }
   .reference-links { display: grid; grid-template-columns: 1fr; }
   .reference-upload { align-items: stretch; flex-direction: column; }
