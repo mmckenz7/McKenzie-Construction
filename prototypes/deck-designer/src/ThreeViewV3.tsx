@@ -3,16 +3,35 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 // @ts-ignore Isolated prototype dependency.
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { DeckPlatformGeometryV3 } from "./geometryV3";
-import type { DeckPlatformV3 } from "./modelV3";
 import { RENDER_QUALITY_POLICIES, type RenderQuality } from "./renderQuality";
 import type { CameraPreset } from "./ThreeView";
 import type { HouseContextGeometry } from "./houseContextGeometry";
 import type { EdgeFinishGeometryV5 } from "./edgeFinishProjectionV5";
 
 type FinishGeometry = Partial<EdgeFinishGeometryV5>;
-type PlatformView = Readonly<{ platform: DeckPlatformV3; geometry: DeckPlatformGeometryV3 & FinishGeometry }>;
-type Props = { platform: DeckPlatformV3; geometry: DeckPlatformGeometryV3 & FinishGeometry; contextPlatforms?: readonly PlatformView[]; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality };
+type Point2 = Readonly<{ x: number; z: number }>;
+type Point3 = Readonly<{ x: number; y: number; z: number }>;
+type Member = Readonly<{ start: Point2; end: Point2 }>;
+type Post = Readonly<{ x: number; z: number; top: number }>;
+export type ThreeViewPlatform = Readonly<{ id: string; elevation: number; construction: Readonly<{ decking: Readonly<{ boardWidth: number }>; railing: Readonly<{ height: number }> }> }>;
+export type ThreeViewGeometry = Readonly<{
+  footprint: readonly Point2[];
+  surfaceBoards: readonly Member[];
+  joists: readonly Member[];
+  beams: readonly Member[];
+  supportPosts: readonly Post[];
+  railSegments: readonly Member[];
+  landingRailSegments: readonly (Member & Readonly<{ y: number }>)[];
+  railPosts: readonly Post[];
+  landingRailPosts: readonly Post[];
+  stairRailSegments: readonly Readonly<{ start: Point3; end: Point3 }>[];
+  stairRailPosts: readonly Readonly<{ x: number; y: number; z: number; height: number }>[];
+  stairTreads: readonly Readonly<{ x: number; y: number; z: number; width: number; depth: number; rise: number; rotationY: number; corners: readonly Point2[] }>[];
+  landings: readonly Readonly<{ center: Point2; y: number; width: number; depth: number; rotationY: number; corners: readonly Point2[] }>[];
+  landingSupportPosts: readonly Post[];
+}> & FinishGeometry;
+type PlatformView = Readonly<{ platform: ThreeViewPlatform; geometry: ThreeViewGeometry }>;
+type Props = { platform: ThreeViewPlatform; geometry: ThreeViewGeometry; contextPlatforms?: readonly PlatformView[]; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality };
 
 function member(group: THREE.Group, value: Readonly<{ start: { x: number; z: number }; end: { x: number; z: number } }>, y: number, height: number, depth: number, material: THREE.Material) {
   const dx = value.end.x - value.start.x, dz = value.end.z - value.start.z;

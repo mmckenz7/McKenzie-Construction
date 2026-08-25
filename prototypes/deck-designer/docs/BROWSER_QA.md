@@ -367,6 +367,12 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Confirmed layout review reports the measured non-blocking proximity note and displays the explicit prototype-only twelve-inch threshold disclaimer.
 - Confirmed **Show in plan** closes the review, selects the first exact referenced beam, and leaves the authoritative design unchanged.
 - Reloaded to restore the saved local design; browser console reported no warnings or errors.
+## 2026-08-24 — shared first-run/current 3D renderer
+
+- Opened the designer on a fresh local origin and confirmed the first-run rectangle loads one interactive 3D canvas through the current renderer.
+- Exercised economy/balanced quality plus Perspective and Top camera presets, then applied the legacy L-shape-with-landing template and confirmed deck, framing, railing, stairs, landing, and house context remained visible.
+- Reloaded the existing saved v5 designer on its original local origin and confirmed its current 3D canvas still loads independently of the fresh-project test.
+- The build reduced total JavaScript from 251.8 KiB to 250.0 KiB gzip while retaining the 99/170/252 KiB initial/largest/total ceilings.
 ## 2026-08-24 — adjacent conceptual joist-to-cutout review
 
 - Added a centered rectangular cutout through the desktop controls and opened layout review.
