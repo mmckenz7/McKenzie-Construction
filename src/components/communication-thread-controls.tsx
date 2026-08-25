@@ -15,6 +15,7 @@ type CommunicationThreadControlsProps = {
   assignedToId: string | null;
   teamMembers: TeamMemberOption[];
   compact?: boolean;
+  mailboxOnly?: boolean;
 };
 
 export function CommunicationThreadControls({
@@ -24,6 +25,7 @@ export function CommunicationThreadControls({
   assignedToId,
   teamMembers,
   compact = false,
+  mailboxOnly = false,
 }: CommunicationThreadControlsProps) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -68,13 +70,13 @@ export function CommunicationThreadControls({
     <button type="button" className={buttonClass} disabled={busy} onClick={() => update({ isRead: unreadCount > 0 })}>
       {unreadCount > 0 ? "Mark read" : "Mark unread"}
     </button>
-    <button type="button" className={buttonClass} disabled={busy} onClick={() => update({ status: status === "closed" ? "open" : "closed" })}>
+    {!mailboxOnly ? <button type="button" className={buttonClass} disabled={busy} onClick={() => update({ status: status === "closed" ? "open" : "closed" })}>
       {status === "closed" ? "Reopen" : "Close"}
-    </button>
+    </button> : null}
     <button type="button" className={`${buttonClass} hover:border-amber-400 hover:text-amber-800`} disabled={busy} onClick={() => update({ status: status === "archived" ? "open" : "archived" })}>
       {status === "archived" ? "Restore" : "Archive"}
     </button>
-    {!compact ? <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+    {!compact && !mailboxOnly ? <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
       Assigned to
       <select
         className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-800"

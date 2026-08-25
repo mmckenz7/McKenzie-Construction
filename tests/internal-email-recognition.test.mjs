@@ -55,8 +55,8 @@ test("vendor and automated triage are exact and deterministic", () => {
 test("internal conversations remain unassigned and never enter the CRM matcher", () => {
   assert.match(inbox, /\["internal", "Internal"\]/);
   assert.match(inbox, /Internal team conversation/);
-  assert.match(inbox, /Internal · Unassigned/);
-  assert.match(inbox, /Vendor · Unassigned/);
+  assert.match(inbox, /Vendor conversation/);
+  assert.match(inbox, /mailboxOnly=\{!lead && !customer\}/);
   assert.match(inbox, /Needs review before matching/);
   assert.match(threadPage, /Internal · \{internalMember\.name\} · Unassigned/);
   assert.match(threadPage, /Vendor · \{vendor\.name\} · Unassigned/);

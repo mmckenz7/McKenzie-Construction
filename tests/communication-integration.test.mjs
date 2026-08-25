@@ -118,9 +118,10 @@ test("the shared channel-first composer is available from inbox, lead, and custo
   assert.match(replyRoute, /canonicalSubject = threadResult\.data\.subject/);
 });
 
-test("matched inbox conversations have server-validated operational controls", () => {
+test("inbox conversations have server-validated controls and assignment still requires a CRM match", () => {
   assert.match(threadControlsRoute, /canAccessWorkspace\(workspace\.access, "sales"\)/);
-  assert.match(threadControlsRoute, /lead_id\.not\.is\.null,customer_id\.not\.is\.null/);
+  assert.match(threadControlsRoute, /assignedToId !== undefined && !threadResult\.data\.lead_id && !threadResult\.data\.customer_id/);
+  assert.match(threadControlsRoute, /Read and archive controls do not require assignment/);
   assert.match(threadControlsRoute, /threadStatuses\.has\(status\)/);
   assert.match(threadControlsRoute, /eq\("status", "active"\)/);
   assert.match(threadControlsRoute, /unread_count = 0/);

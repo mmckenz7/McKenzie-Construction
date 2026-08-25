@@ -16,6 +16,9 @@ export const dynamic = "force-dynamic";
 type CommunicationsPageProps = {
   searchParams: Promise<{
     view?: string;
+    q?: string;
+    channel?: string;
+    department?: string;
   }>;
 };
 
@@ -52,11 +55,16 @@ type Message = {
   created_at: string;
 };
 
+const folders = [
+  ["inbox", "Inbox"],
+  ["sent", "Sent"],
+  ["attention", "Needs attention"],
+  ["archived", "Archived"],
+] as const;
+
 const views = [
-  ["all", "All"],
   ["unread", "Unread"],
   ["closed", "Closed"],
-  ["archived", "Archived"],
   ["customers", "Customers"],
   ["vendors", "Vendors"],
   ["internal", "Internal"],
@@ -67,6 +75,29 @@ const views = [
   ["operations", "Operations"],
   ["billing", "Billing"],
 ] as const;
+
+const channels = new Set(["all", "email", "sms"]);
+const departments = new Set(["all", "general", "sales", "estimating", "operations", "billing"]);
+
+function inboxHref({
+  view,
+  query,
+  channel,
+  department,
+}: {
+  view: string;
+  query: string;
+  channel: string;
+  department: string;
+}) {
+  const params = new URLSearchParams();
+  if (view !== "inbox") params.set("view", view);
+  if (query) params.set("q", query);
+  if (channel !== "all") params.set("channel", channel);
+  if (department !== "all") params.set("department", department);
+  const suffix = params.toString();
+  return suffix ? `/communications?${suffix}` : "/communications";
+}
 
 function timestamp(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -88,8 +119,17 @@ function messageTime(message: Message) {
 export default async function CommunicationsPage({
   searchParams,
 }: CommunicationsPageProps) {
-  const { view: rawView } = await searchParams;
-  const view = views.some(([value]) => value === rawView) ? rawView! : "all";
+  const {
+    view: rawView,
+    q: rawQuery,
+    channel: rawChannel,
+    department: rawDepartment,
+  } = await searchParams;
+  const availableViews = [...folders, ...views];
+  const view = availableViews.some(([value]) => value === rawView) ? rawView! : "inbox";
+  const query = (rawQuery ?? "").trim().slice(0, 120);
+  const channel = channels.has(rawChannel ?? "") ? rawChannel! : "all";
+  const department = departments.has(rawDepartment ?? "") ? rawDepartment! : "all";
   const supabase = createAdminServerClient();
   let threadQuery = supabase
     .from("communication_threads")
@@ -103,9 +143,14 @@ export default async function CommunicationsPage({
     : threadQuery.neq("status", "archived");
   if (view === "unread") threadQuery = threadQuery.gt("unread_count", 0);
   if (view === "closed") threadQuery = threadQuery.eq("status", "closed");
-  if (["sales", "estimating", "operations", "billing"].includes(view)) {
-    threadQuery = threadQuery.eq("department", view);
-  }
+  const selectedDepartment = department !== "all"
+    ? department
+    : ["sales", "estimating", "operations", "billing"].includes(view)
+      ? view
+      : null;
+  if (selectedDepartment) threadQuery = threadQuery.eq("department", selectedDepartment);
+  if (channel === "sms") threadQuery = threadQuery.eq("provider", "twilio");
+  if (channel === "email") threadQuery = threadQuery.neq("provider", "twilio");
 
   const [threadsResult, messagesResult, outboxResult, mailboxResult, teamResult, suppliersResult] = await Promise.all([
     threadQuery,
@@ -116,8 +161,7 @@ export default async function CommunicationsPage({
       .limit(150),
     supabase
       .from("communication_outbox")
-      .select("id,channel,recipient,sender,subject,body,status,lead_id,created_at")
-      .not("lead_id", "is", null)
+      .select("id,channel,recipient,sender,subject,body,status,lead_id,source_type,source_id,created_at")
       .in("status", ["queued", "processing", "failed", "canceled"])
       .order("created_at", { ascending: false })
       .limit(50),
@@ -198,18 +242,12 @@ export default async function CommunicationsPage({
     : view === "vendors"
       ? "vendor"
       : view === "internal" || view === "automated" || view === "review"
-        ? view
+      ? view
         : null;
-  const threads = viewKind
-    ? rawThreads.filter((thread) => triageByThread.get(thread.id)?.kind === viewKind)
-    : rawThreads;
-  const matchedThreadIds = new Set(
-    threads.map((thread) => thread.id),
-  );
   const pendingMessages: Message[] = (outboxResult.data ?? []).map((message) => ({
     id: message.id,
     channel: message.channel,
-    thread_id: null,
+    thread_id: ["inbox_reply", "inbox_compose"].includes(message.source_type) ? message.source_id : null,
     direction: "outbound",
     sender: message.sender,
     recipient: message.recipient,
@@ -224,6 +262,66 @@ export default async function CommunicationsPage({
     sent_at: null,
     created_at: message.created_at,
   }));
+  const sentThreadIds = new Set(allInboxMessages
+    .filter((message) => message.direction === "outbound" && message.thread_id)
+    .map((message) => message.thread_id!));
+  for (const message of pendingMessages) {
+    if (message.thread_id) sentThreadIds.add(message.thread_id);
+  }
+  const attentionThreadIds = new Set([...allInboxMessages, ...pendingMessages]
+    .filter((message) => ["failed", "undelivered", "canceled"].includes(message.status) && message.thread_id)
+    .map((message) => message.thread_id!));
+  let candidateThreads = viewKind
+    ? rawThreads.filter((thread) => triageByThread.get(thread.id)?.kind === viewKind)
+    : rawThreads;
+  if (view === "sent") candidateThreads = candidateThreads.filter((thread) => sentThreadIds.has(thread.id));
+  if (view === "attention") {
+    candidateThreads = candidateThreads.filter((thread) =>
+      thread.unread_count > 0 ||
+      attentionThreadIds.has(thread.id) ||
+      triageByThread.get(thread.id)?.kind === "review",
+    );
+  }
+  const candidateLeadIds = [...new Set(candidateThreads.map((thread) => thread.lead_id).filter((id): id is string => Boolean(id)))];
+  const leadsResult = candidateLeadIds.length
+    ? await supabase.from("leads").select("id,name,email,phone").in("id", candidateLeadIds)
+    : { data: [], error: null };
+  const candidateCustomerIds = [...new Set(candidateThreads.map((thread) => thread.customer_id).filter((id): id is string => Boolean(id)))];
+  const customersResult = candidateCustomerIds.length
+    ? await supabase.from("customers").select("id,customer_name,email,phone").in("id", candidateCustomerIds)
+    : { data: [], error: null };
+  const leads = new Map((leadsResult.data ?? []).map((lead) => [String(lead.id), lead]));
+  const customers = new Map((customersResult.data ?? []).map((customer) => [String(customer.id), customer]));
+  const searchTextByThread = new Map<string, string[]>();
+  for (const message of allInboxMessages) {
+    if (!message.thread_id) continue;
+    const values = searchTextByThread.get(message.thread_id) ?? [];
+    values.push(message.subject ?? "", message.body, message.sender, message.recipient);
+    searchTextByThread.set(message.thread_id, values);
+  }
+  const normalizedQuery = query.toLocaleLowerCase("en-US");
+  const threads = normalizedQuery
+    ? candidateThreads.filter((thread) => {
+      const triage = triageByThread.get(thread.id);
+      const lead = thread.lead_id ? leads.get(thread.lead_id) : null;
+      const customer = thread.customer_id ? customers.get(thread.customer_id) : null;
+      return [
+        thread.subject ?? "",
+        ...thread.participant_addresses,
+        lead?.name ?? "",
+        lead?.email ?? "",
+        customer?.customer_name ?? "",
+        customer?.email ?? "",
+        triage?.internal?.name ?? "",
+        triage?.vendor?.name ?? "",
+        triage?.automated ?? "",
+        ...(searchTextByThread.get(thread.id) ?? []),
+      ].join(" ").toLocaleLowerCase("en-US").includes(normalizedQuery);
+    })
+    : candidateThreads;
+  const matchedThreadIds = new Set(
+    threads.map((thread) => thread.id),
+  );
   const matchedInboxMessages = allInboxMessages
     .filter((message) =>
       Boolean(
@@ -237,16 +335,6 @@ export default async function CommunicationsPage({
   for (const message of messages) {
     if (message.thread_id && !latestByThread.has(message.thread_id)) latestByThread.set(message.thread_id, message);
   }
-  const leadIds = [...new Set(threads.map((thread) => thread.lead_id).filter((id): id is string => Boolean(id)))];
-  const leadsResult = leadIds.length
-    ? await supabase.from("leads").select("id,name,email,phone").in("id", leadIds)
-    : { data: [], error: null };
-  const customerIds = [...new Set(threads.map((thread) => thread.customer_id).filter((id): id is string => Boolean(id)))];
-  const customersResult = customerIds.length
-    ? await supabase.from("customers").select("id,customer_name,email,phone").in("id", customerIds)
-    : { data: [], error: null };
-  const leads = new Map((leadsResult.data ?? []).map((lead) => [String(lead.id), lead]));
-  const customers = new Map((customersResult.data ?? []).map((customer) => [String(customer.id), customer]));
   const unread = threads.reduce((total, thread) => total + thread.unread_count, 0);
   const openConversations = threads.filter((thread) => thread.status === "open" || thread.status === "waiting").length;
   const matchedRecords = new Set(
@@ -256,7 +344,11 @@ export default async function CommunicationsPage({
         ? [`customer:${thread.customer_id}`]
         : []),
   ).size;
-  const needsAttention = messages.filter((message) => ["failed", "undelivered"].includes(message.status)).length;
+  const needsAttention = threads.filter((thread) =>
+    thread.unread_count > 0 ||
+    attentionThreadIds.has(thread.id) ||
+    triageByThread.get(thread.id)?.kind === "review",
+  ).length;
   const mailbox = mailboxResult.data;
   const lastSyncAgeMinutes = mailbox?.last_sync_at
     ? Math.max(0, Math.round((Date.now() - Date.parse(mailbox.last_sync_at)) / 60_000))
@@ -285,9 +377,19 @@ export default async function CommunicationsPage({
       {[['Unread', unread], ['Open', openConversations], ['Matched', matchedRecords], ['Needs attention', needsAttention]].map(([label, value]) => <article key={String(label)} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{value}</p></article>)}
     </section>
 
-    <section className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div><p className="text-sm font-semibold text-slate-900">{mailbox?.address ?? "Microsoft 365 mailbox not configured"}</p><p className="mt-1 text-xs text-slate-500">{mailbox?.last_sync_at ? `Last synchronized ${timestamp(mailbox.last_sync_at)}` : "Synchronization has not run yet"} · {titleCase(mailbox?.last_sync_status ?? "not configured")}</p></div>
-      <div className="flex flex-wrap gap-1">{views.map(([value, label]) => <Link key={value} href={value === "all" ? "/communications" : `/communications?view=${value}`} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${view === value ? "bg-slate-950 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>{label}</Link>)}</div>
+    <section className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+        <nav aria-label="Mailbox folders" className="flex flex-wrap gap-1">{folders.map(([value, label]) => <Link key={value} href={inboxHref({ view: value, query, channel, department })} className={`rounded-md px-3 py-2 text-sm font-semibold ${view === value ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}>{label}</Link>)}</nav>
+        <div className="text-right"><p className="text-sm font-semibold text-slate-900">{mailbox?.address ?? "Microsoft 365 mailbox not configured"}</p><p className="mt-0.5 text-xs text-slate-500">{mailbox?.last_sync_at ? `Last synchronized ${timestamp(mailbox.last_sync_at)}` : "Synchronization has not run yet"} · {titleCase(mailbox?.last_sync_status ?? "not configured")}</p></div>
+      </div>
+      <form action="/communications" method="get" className="grid gap-3 border-b border-slate-200 bg-slate-50 px-4 py-4 sm:grid-cols-[minmax(220px,1fr)_150px_170px_auto] sm:px-5">
+        {view !== "inbox" ? <input type="hidden" name="view" value={view} /> : null}
+        <label><span className="sr-only">Search conversations</span><input type="search" name="q" defaultValue={query} maxLength={120} placeholder="Search people, addresses, subjects, or messages" className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500" /></label>
+        <label><span className="sr-only">Channel</span><select name="channel" defaultValue={channel} className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800"><option value="all">Email and text</option><option value="email">Email only</option><option value="sms">Text only</option></select></label>
+        <label><span className="sr-only">Department</span><select name="department" defaultValue={department} className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800"><option value="all">All departments</option><option value="general">General</option><option value="sales">Sales</option><option value="estimating">Estimating</option><option value="operations">Operations</option><option value="billing">Billing</option></select></label>
+        <div className="flex gap-2"><button type="submit" className="min-h-10 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800">Search</button>{query || channel !== "all" || department !== "all" ? <Link href={inboxHref({ view, query: "", channel: "all", department: "all" })} className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-600 hover:text-slate-950">Clear</Link> : null}</div>
+      </form>
+      <div className="flex flex-wrap gap-1 px-4 py-3 sm:px-5"><span className="mr-1 self-center text-xs font-semibold uppercase tracking-wider text-slate-400">View</span>{views.map(([value, label]) => <Link key={value} href={inboxHref({ view: value, query, channel, department })} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold ${view === value ? "bg-blue-50 text-blue-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>{label}</Link>)}</div>
     </section>
 
     <details className="mt-5 rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -323,7 +425,7 @@ export default async function CommunicationsPage({
           return <article key={thread.id} className="grid gap-3 px-5 py-5 transition hover:bg-slate-50 lg:grid-cols-[170px_1fr_280px]">
             <div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">{thread.provider === "twilio" ? "Text" : "Email"}</span><span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{thread.department}</span>{thread.unread_count ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">{thread.unread_count} new</span> : null}</div><p className="mt-2 text-xs text-slate-500">{timestamp(thread.last_message_at)}</p>{thread.assigned_to_id ? <p className="mt-1 text-xs text-slate-500">{teamById.get(thread.assigned_to_id) ?? "Assigned"}</p> : null}</div>
             <div className="min-w-0"><Link href={`/communications/${thread.id}`} className="truncate font-semibold text-slate-950 hover:text-blue-700">{thread.subject || "Conversation"}</Link><p className="mt-1 text-sm text-slate-600">{matchedName}</p>{internalMember ? <p className="mt-1 text-xs font-semibold text-blue-700">Internal team conversation</p> : vendor ? <p className="mt-1 text-xs font-semibold text-violet-700">Vendor conversation</p> : automated ? <p className="mt-1 text-xs font-semibold text-slate-600">{automated}</p> : !lead && !customer ? <p className="mt-1 text-xs font-semibold text-amber-700">Needs review before matching</p> : null}{latest ? <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{latest.body}</p> : null}</div>
-            <div className="flex flex-wrap items-start justify-end gap-2">{phone ? <a href={`tel:${phone}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Device call</a> : null}{lead || customer ? <><Link href={`/communications/${thread.id}#reply`} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white">Reply</Link><CommunicationThreadControls compact threadId={thread.id} status={thread.status} unreadCount={thread.unread_count} assignedToId={thread.assigned_to_id} teamMembers={teamMembers} /></> : internalMember ? <span className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800">Internal · Unassigned</span> : vendor ? <span className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800">Vendor · Unassigned</span> : automated ? <span className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">Automated</span> : <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Review</span>}</div>
+            <div className="flex flex-wrap items-start justify-end gap-2">{phone ? <a href={`tel:${phone}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Device call</a> : null}<Link href={`/communications/${thread.id}${lead || customer ? "#reply" : ""}`} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white">{lead || customer ? "Reply" : "Open"}</Link><CommunicationThreadControls compact mailboxOnly={!lead && !customer} threadId={thread.id} status={thread.status} unreadCount={thread.unread_count} assignedToId={thread.assigned_to_id} teamMembers={teamMembers} /></div>
           </article>;
         })}
       </div>}

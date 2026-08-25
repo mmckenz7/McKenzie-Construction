@@ -204,13 +204,19 @@ export async function PATCH(
     .from("communication_threads")
     .select("id,status,assigned_to_id,lead_id,customer_id")
     .eq("id", threadId)
-    .or("lead_id.not.is.null,customer_id.not.is.null")
     .maybeSingle();
 
   if (threadResult.error || !threadResult.data) {
     return Response.json(
-      { success: false, error: "The matched conversation could not be found." },
+      { success: false, error: "The conversation could not be found." },
       { status: 404 },
+    );
+  }
+
+  if (assignedToId !== undefined && !threadResult.data.lead_id && !threadResult.data.customer_id) {
+    return Response.json(
+      { success: false, error: "Match the conversation before assigning it. Read and archive controls do not require assignment." },
+      { status: 409 },
     );
   }
 
