@@ -8,7 +8,7 @@ import {
   pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setHouseReferenceAt, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm,
   type FenceDesign, type GateType,
 } from "./model";
-import { formatGpsAccuracy, gpsOriginAt, projectGpsFix, readCurrentGps, type GpsOrigin } from "./gps";
+import { acquireBestGps, formatGpsAccuracy, gpsOriginAt, projectGpsFix, projectGpsLeg, type GpsFix, type GpsOrigin } from "./gps";
 import { propertyReferenceLinks, type PropertyReferenceLinks } from "./property-reference";
 import { captureReferenceDisplay, rasterizeReferenceBlob, readReferenceImageFromClipboard, referenceImageErrorMessage, type RasterizedReferenceImage } from "./reference-image";
 import { loadLocalDesign, loadLocalReference, saveLocalDesign, saveLocalReference } from "./storage";
@@ -79,6 +79,7 @@ export default function App() {
   const [lastWalkSegmentId, setLastWalkSegmentId] = useState<string | null>(null);
   const [walkFeet, setWalkFeet] = useState("");
   const [walkInches, setWalkInches] = useState("0");
+  const [walkLengthConfirmed, setWalkLengthConfirmed] = useState(true);
   const [propertyPanelOpen, setPropertyPanelOpen] = useState(false);
   const [takeoffPanelOpen, setTakeoffPanelOpen] = useState(false);
   const [takeoffViewEnabled, setTakeoffViewEnabled] = useState(false);
@@ -97,11 +98,13 @@ export default function App() {
   const referenceFileRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(1);
   const gpsRequestId = useRef(0);
+  const lastGpsFix = useRef<GpsFix | null>(null);
   const activePointers = useRef(new Map<number, PlanPointer>());
   const navigationGesture = useRef<NavigationGesture>(null);
   const navigationWasActive = useRef(false);
   const design = history.present;
   const takeoffReady = design.segments.length > 0 && takeoffConfirmedRevision === design.revision;
+  const walkNeedsExactLength = siteWalkActive && snapEnabled && lastWalkSegmentId !== null && !walkLengthConfirmed;
 
   const selectedSegment = selection?.type === "segment" ? design.segments.find(({ id }) => id === selection.id) ?? null : null;
   const selectedGatePreviousFence = selectedSegment?.kind === "gate" ? design.segments.find(({ toPointId, kind }) => toPointId === selectedSegment.fromPointId && kind === "fence") ?? null : null;
@@ -420,10 +423,19 @@ export default function App() {
   };
   const markGpsPoint = async () => {
     const requestId = ++gpsRequestId.current;
-    setGpsBusy(true); setNotice("Getting a fresh high-accuracy GPS position…");
+    setGpsBusy(true); setNotice("Acquiring the best available GPS lock for up to 20 seconds…");
     try {
-      const fix = await readCurrentGps(navigator.geolocation);
+      const previousGpsFix = lastGpsFix.current;
+      const fix = await acquireBestGps(navigator.geolocation, {
+        previousFix: previousGpsFix,
+        onSample: (bestFix) => {
+          if (requestId !== gpsRequestId.current) return;
+          setGpsAccuracyMeters(bestFix.accuracyMeters);
+          setNotice(`GPS lock improving… best reading ${formatGpsAccuracy(bestFix.accuracyMeters)}. Stand still with open sky; this will wait up to 20 seconds.`);
+        },
+      });
       if (requestId !== gpsRequestId.current) return;
+      lastGpsFix.current = fix;
       setGpsAccuracyMeters(fix.accuracyMeters);
       if (!gpsOrigin) {
         const existingAnchor = design.points.at(-1);
@@ -437,14 +449,16 @@ export default function App() {
         const id = nextId.current++;
         const next = startFenceLine(design, { id: `point-${id}`, xMm: anchor.xMm, yMm: anchor.yMm });
         commit(next, `Starting GPS point marked with ${formatGpsAccuracy(fix.accuracyMeters)} reported accuracy.`);
-        setSelection({ type: "point", id: `point-${id}` }); setView(fittedView(next));
+        setSelection(null); setView(fittedView(next));
         return;
       }
-      let point = projectGpsFix(gpsOrigin, fix);
+      const activeAnchor = design.points.at(-1);
+      let point = previousGpsFix && activeAnchor
+        ? projectGpsLeg(previousGpsFix, activeAnchor, fix)
+        : projectGpsFix(gpsOrigin, fix);
       let connection: "house" | "fence" | null = null;
       const connectionToleranceMm = Math.max(460, Math.min(3_000, Math.round(fix.accuracyMeters * 1_000)));
       const houseConnection = snapToHouseEdge(point.xMm, point.yMm, design.house, connectionToleranceMm);
-      const activeAnchor = design.points.at(-1);
       const fenceConnection = houseConnection ? null : snapToFenceRun(design, point.xMm, point.yMm, connectionToleranceMm, nextGpsStartsLine ? undefined : activeAnchor?.id);
       if (houseConnection) { point = houseConnection; connection = "house"; }
       else if (fenceConnection) { point = { xMm: fenceConnection.xMm, yMm: fenceConnection.yMm }; connection = "fence"; }
@@ -452,19 +466,19 @@ export default function App() {
         const activePoints = fencePathForPoint(design, activeAnchor.id).points;
         const previous = activePoints.length > 1 ? activePoints.at(-2) : null;
         const referenceBearing = previous ? Math.atan2(activeAnchor.yMm - previous.yMm, activeAnchor.xMm - previous.xMm) : 0;
-        point = snapRunEndpoint(activeAnchor, point, true, 45, referenceBearing);
+        point = snapRunEndpoint(activeAnchor, point, true, 90, referenceBearing);
       }
       if (activeAnchor && !nextGpsStartsLine && point.xMm === activeAnchor.xMm && point.yMm === activeAnchor.yMm) throw new RangeError("This GPS fix is at the last point. Walk to the next corner and try again.");
       const id = nextId.current++;
       const pointId = `point-${id}`; const segmentId = `segment-${id}`;
       const next = nextGpsStartsLine ? startFenceLine(design, { id: pointId, ...point }) : addPoint(design, { id: pointId, ...point }, segmentId);
       commit(next, `${nextGpsStartsLine ? "Separate GPS fence line started" : "GPS point marked"}${connection ? ` and attached to the ${connection === "house" ? "house" : "nearest fence run"}` : ""}. Reported phone accuracy: ${formatGpsAccuracy(fix.accuracyMeters)}.`);
-      setNextGpsStartsLine(false); setSelection({ type: "point", id: pointId }); setView(fittedView(next));
+      setNextGpsStartsLine(false); setSelection(null); setView(fittedView(next));
       const addedSegment = next.segments.find(({ id: candidateId }) => candidateId === segmentId);
       if (addedSegment) {
         const totalInches = Math.round(segmentLengthMm(next, addedSegment) / 25.4);
-        setLastWalkSegmentId(segmentId); setWalkFeet(String(Math.floor(totalInches / 12))); setWalkInches(String(totalInches % 12));
-      } else setLastWalkSegmentId(null);
+        setLastWalkSegmentId(segmentId); setWalkFeet(String(Math.floor(totalInches / 12))); setWalkInches(String(totalInches % 12)); setWalkLengthConfirmed(false);
+      } else { setLastWalkSegmentId(null); setWalkLengthConfirmed(true); }
     } catch (error) {
       if (requestId === gpsRequestId.current) setNotice(error instanceof Error ? error.message : "The GPS point could not be marked.");
     } finally { if (requestId === gpsRequestId.current) setGpsBusy(false); }
@@ -474,7 +488,7 @@ export default function App() {
     try {
       const result = editSegmentToExactLength(lastWalkSegmentId, walkFeet, walkInches);
       commit(result.next, `Last GPS run corrected to the field measurement ${formatFeetInches(result.length)}. The entered measurement is now authoritative.`);
-      setView(fittedView(result.next));
+      setWalkLengthConfirmed(true); setView(fittedView(result.next));
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid field measurement."); }
   };
   const toggleSiteWalk = () => {
@@ -581,7 +595,7 @@ export default function App() {
       const loaded = loadLocalDesign(localStorage);
       if (!loaded) { setNotice("No saved layout exists in this browser yet."); return; }
       const loadedReference = loadLocalReference(localStorage);
-      gpsRequestId.current += 1; setGpsOrigin(null); setGpsAccuracyMeters(null); setLastWalkSegmentId(null); setSiteWalkActive(false); setGpsBusy(false);
+      gpsRequestId.current += 1; lastGpsFix.current = null; setGpsOrigin(null); setGpsAccuracyMeters(null); setLastWalkSegmentId(null); setWalkLengthConfirmed(true); setSiteWalkActive(false); setGpsBusy(false);
       setHistory(createHistory(loaded)); setReferenceBackground(loadedReference); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setNotice(loadedReference ? "Saved fence layout and reference image loaded. Start Site Walk at the last point to align a new GPS session." : "Saved local layout loaded. Start Site Walk at the last point to align a new GPS session.");
     } catch (error) { setNotice(error instanceof Error ? `Saved layout was not opened: ${error.message}` : "Saved layout was not opened."); }
   };
@@ -624,16 +638,18 @@ export default function App() {
         <div className="field-panel-heading"><div><p className="eyebrow">Site walk</p><h2>Mark the point where you are standing</h2></div>{gpsAccuracyMeters !== null && <span aria-live="polite" className={`accuracy-chip${gpsAccuracyMeters <= 5 ? " good" : ""}`}>{formatGpsAccuracy(gpsAccuracyMeters)} GPS</span>}</div>
         <p>{!gpsOrigin ? (design.points.length ? "Stand at the last drawn point first. This aligns GPS to the existing plan without adding a duplicate point." : "Stand at the first fence point. Your first mark creates the local plan origin.") : nextGpsStartsLine ? "Walk to the starting point for the separate fence line, then mark it." : "Walk to the next corner or connection, stand still, then mark it."}</p>
         <div className="field-actions">
-          <button className="primary mark-location" disabled={gpsBusy} onClick={markGpsPoint}>{gpsBusy ? "Getting GPS…" : !gpsOrigin && design.points.length ? "Set GPS reference here" : nextGpsStartsLine ? "Mark separate-line start" : design.points.length ? "Mark next fence point" : "Mark starting point"}</button>
-          <button disabled={gpsBusy || !gpsOrigin} className={nextGpsStartsLine ? "active-tool" : ""} onClick={() => { setNextGpsStartsLine((current) => !current); setNotice(nextGpsStartsLine ? "Separate-line start canceled." : "The next GPS mark will start a separate fence line instead of continuing the last one."); }}>{nextGpsStartsLine ? "Cancel separate line" : "＋ Separate line next"}</button>
-          <button onClick={toggleSiteWalk}>Finish site walk</button>
+          <button className="primary mark-location" disabled={gpsBusy || walkNeedsExactLength} onClick={markGpsPoint}>{gpsBusy ? "Locking GPS…" : walkNeedsExactLength ? "Enter exact length below" : !gpsOrigin && design.points.length ? "Set GPS reference here" : nextGpsStartsLine ? "Mark separate-line start" : design.points.length ? "Mark next fence point" : "Mark starting point"}</button>
+          <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setNotice(snapEnabled ? "Site Walk is using free GPS angles." : "90° corners are on. GPS chooses the rough direction; each new leg aligns straight or square to the previous leg and requires an exact length."); }}>{snapEnabled ? "□ 90° corners on" : "◌ Free GPS angles"}</button>
+          <button disabled={gpsBusy || !gpsOrigin || walkNeedsExactLength} className={nextGpsStartsLine ? "active-tool" : ""} onClick={() => { setNextGpsStartsLine((current) => !current); setNotice(nextGpsStartsLine ? "Separate-line start canceled." : "The next GPS mark will start a separate fence line instead of continuing the last one."); }}>{nextGpsStartsLine ? "Cancel separate line" : "＋ Separate line next"}</button>
+          <button className="finish-site-walk" onClick={toggleSiteWalk}>End site walk</button>
         </div>
+        <div className="walk-status" role="status">{notice}</div>
         {lastWalkSegmentId && design.segments.some(({ id }) => id === lastWalkSegmentId) && <div className="walk-length-editor">
           <div><strong>Correct the last GPS run</strong><span>Enter the tape, wheel, or laser measurement.</span></div>
           <div className="exact-grid"><label><span>Feet</span><input aria-label="Site walk exact feet" inputMode="numeric" type="number" min="0" max="1000" value={walkFeet} onChange={(event) => setWalkFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Site walk exact inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={walkInches} onChange={(event) => setWalkInches(event.target.value)} /></label></div>
-          <button className="primary" onClick={applyWalkLength}>Use exact length</button>
+          <button className="primary" onClick={applyWalkLength}>{walkLengthConfirmed ? "Exact length applied" : "Use exact length"}</button>
         </div>}
-        <small>Phone GPS establishes approximate shape only. Accuracy is the phone’s reported radius, not a guarantee. Exact entered lengths remain authoritative; no latitude or longitude is saved in the design.</small>
+        <small>The phone samples GPS for up to 20 seconds, accepts an early lock at ±16 ft or better, and rejects readings worse than approximately ±49 ft. GPS establishes approximate shape only. Exact entered lengths remain authoritative; no latitude or longitude is saved in the design.</small>
       </div>}
       {propertyPanelOpen && <div className="field-panel property-panel">
         <div className="field-panel-heading"><div><p className="eyebrow">Free property reference</p><h2>Open the map, then capture it here</h2></div><span className="reference-chip">Reference only</span></div>

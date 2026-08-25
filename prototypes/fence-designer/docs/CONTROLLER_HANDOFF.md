@@ -13,7 +13,7 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 - `src/takeoff.ts`: pure derived Black Aluminum and Treated Pine Privacy takeoffs plus the shared read-only visual bay/post projection.
 - `src/map-contract.ts`: plain normalized-coordinate renderer contract, lifecycle/offline harness, separately confirmed address selection, and base/overlay layer registry.
 - `src/measurement-provenance.ts`: explicit source, capture-context, verification, observation, correction, and reported-accuracy matrix including Moasure.
-- `src/gps.ts`: deterministic local GPS projection, explicit high-accuracy browser request, error mapping, and accuracy presentation.
+- `src/gps.ts`: deterministic local GPS projection, bounded 20-second best-fix acquisition, explicit high-accuracy browser request, poor-fix rejection, error mapping, and accuracy presentation.
 - `src/kgis.ts`: validated official KGIS address-link builder.
 - `src/property-reference.ts`: validated official Acres, KGIS, and Google reference destinations with no provider fetch.
 - `src/background.ts`: deterministic reference-image fit, calibration, move, rotation, and four-corner house-straightening math.
@@ -46,11 +46,11 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 99 deterministic tests passed, including fifteen Black Aluminum tests, five Treated Pine/shared-drawing tests, five local-reference transform tests, twenty-nine geometry/model tests, and thirteen renderer/address/layer/provenance contract tests.
+- 104 deterministic tests passed, including fifteen Black Aluminum tests, five Treated Pine/shared-drawing tests, nine GPS tests, five local-reference transform tests, twenty-nine geometry/model tests, and thirteen renderer/address/layer/provenance contract tests.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
-- Browser QA passed for the full measurement workflow and the Materials audit layer on desktop and phone viewports. Focused Site Walk was verified at 375 × 667, 390 × 844, and 844 × 390: only GPS/line/finish actions, zoom, and the plan remain; the primary mark action is at least 52 px high; portrait and landscape stay horizontally contained; and console warnings/errors remain empty. Previous-segment-relative angle assistance, inline gate placement, the independent grid toggle, live takeoff recalculation, overlay/revision isolation, accessible summary/markers, and console cleanliness were also confirmed.
+- Browser QA passed for the full measurement workflow and the Materials audit layer on desktop and phone viewports. Focused Site Walk was verified at 375 × 667, 390 × 844, and 844 × 390. The iPhone one-point field-test finding produced an additional pass: later marks now wait past repeated cached coordinates for actual movement, active status remains in the visible field panel, GPS points do not open the inspector, and phones expose one unambiguous **End site walk** action. The primary mark action remains at least 52 px high; portrait and landscape stay horizontally contained; and console warnings/errors remain empty. Previous-segment-relative angle assistance, inline gate placement, the independent grid toggle, live takeoff recalculation, overlay/revision isolation, accessible summary/markers, and console cleanliness were also confirmed.
 - The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
 - Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 
@@ -58,7 +58,7 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 - The house is a user-measured rectangular context footprint, not a building record. Non-rectangular footprints remain a later extension.
 - Local-plan geometry is not a survey, legal boundary, aerial measurement, or field verification.
-- Consumer phone GPS can drift by several feet or more, especially near buildings, trees, or poor sky view. The UI displays the phone's accuracy estimate and never promotes GPS-derived run length over an entered field measurement.
+- Consumer phone GPS can drift by several feet or more, especially near buildings, trees, or poor sky view. Site Walk now samples for up to 20 seconds, accepts an early lock at 5 meters or better, and rejects fixes worse than 15 meters, but the 15-meter ceiling is only a gross preliminary-shape boundary and remains unsuitable for short residential runs. The UI displays the phone's accuracy estimate and never promotes GPS-derived run length over an entered field measurement.
 - KGIS publishes useful parcel, address, building-footprint, and aerial context, but its raw ArcGIS endpoint returned HTTP 401 outside the KGIS viewer during compatibility testing. This slice links only to the official viewer. Automatic geometry import requires KGIS-approved access plus a reviewed server adapter; do not add credentials or a client-side bypass.
 - On an unanchored open line, exact segment editing moves the end point along the existing bearing, so a following connected span changes visibly. When both line endpoints connect to the house or another fence run, only that line is re-solved instead.
 - Mid-run divider connections are geometric anchors, not graph branches: the perimeter and divider retain separate coincident endpoint records so either line can be edited without silently changing the other's measured topology.

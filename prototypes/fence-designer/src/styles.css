@@ -39,6 +39,7 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .walk-length-editor { display: grid; grid-template-columns: minmax(175px, 1fr) minmax(210px, 280px) auto; gap: 12px; align-items: end; margin-top: 12px; border-top: 1px solid #dde2dc; padding-top: 12px; }
 .walk-length-editor > div:first-child { display: grid; gap: 3px; }
 .walk-length-editor > div:first-child span { color: #67756d; font-size: .8rem; }
+.walk-status { margin-top: 9px; padding: 8px 10px; border-left: 4px solid #779383; border-radius: 7px; background: #eef3ee; color: #43564c; font-size: .78rem; line-height: 1.35; }
 .property-lookup { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 10px; align-items: end; }
 .property-lookup label { display: grid; gap: 5px; color: #59675f; font-size: .76rem; font-weight: 800; }
 .property-lookup input { min-height: 46px; border: 1px solid #bfc8c0; border-radius: 8px; padding: 8px 10px; color: #22342c; background: #fff; }
@@ -233,10 +234,9 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 
   :scope.site-walk-active { min-height: 100dvh; }
   :scope.site-walk-active .app-header, :scope.site-walk-active .app-footer { display: none; }
-  :scope.site-walk-active .toolbar { justify-content: space-between; }
-  :scope.site-walk-active .toolbar > *:not(.zoom-controls):not(.site-walk-toggle) { display: none; }
+  :scope.site-walk-active .toolbar { justify-content: flex-start; }
+  :scope.site-walk-active .toolbar > *:not(.zoom-controls) { display: none; }
   :scope.site-walk-active .toolbar .zoom-controls { order: 1; }
-  :scope.site-walk-active .toolbar .site-walk-toggle { order: 2; margin-left: auto; }
   :scope.site-walk-active .field-panels { padding: 0; }
   :scope.site-walk-active .field-panel:not(.site-walk-panel) { display: none; }
   :scope.site-walk-active .site-walk-panel { border: 0; border-radius: 0; padding: 10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left)); box-shadow: 0 4px 14px rgb(28 52 40 / .12); }
@@ -255,7 +255,7 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 
 @media (max-width: 900px) and (orientation: landscape) {
   :scope.site-walk-active .site-walk-panel > p, :scope.site-walk-active .site-walk-panel > small { display: none; }
-  :scope.site-walk-active .site-walk-panel .field-actions { grid-template-columns: minmax(210px, 1.4fr) 1fr 1fr; }
+  :scope.site-walk-active .site-walk-panel .field-actions { grid-template-columns: minmax(210px, 1.4fr) repeat(3, 1fr); }
   :scope.site-walk-active .site-walk-panel .mark-location { grid-column: auto; }
   :scope.site-walk-active .canvas-shell, :scope.site-walk-active .plan-canvas { min-height: 72dvh; }
 }
