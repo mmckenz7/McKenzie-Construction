@@ -128,6 +128,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Render-local immutable geometry reuse for deterministic quantities with full-design fingerprint validation
 - [x] Local economy, balanced, and detailed 3D quality tiers
 - [x] Labelled/described interactive measured-plan semantics with exact selected-object state
+- [x] Exact accessible selected state for active workflow, board, beam, landing, turn, and camera controls
 - [ ] Broader accessibility checks and tablet interaction
 
 ## Phase D — isolated workflow services (separate approval required)

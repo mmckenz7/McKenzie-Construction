@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-25 active-control selected states
+
+- Persistent single-select controls now expose the same current state visually and through `aria-pressed`: workflow stage, board direction, board pattern, authored beam, selected landing, direction after a landing, and camera preset. Disabled/unavailable stage choices omit pressed state; commands and movement handles remain ordinary actions.
+- Static rendering verifies exactly one pressed item for each available single-select group, including omission on the disabled Finishes step. Source regressions bind landing, turn, and beam state to their recorded selections and keep command buttons unmarked.
+- Desktop and 390 × 844 browser checks retained one 3D canvas and no mobile horizontal overflow. The default state exposed exactly one current layout stage, board direction, pattern, beam, and perspective camera. Selecting house-to-yard boards and the top camera produced one pressed item in each group; Undo restored the recorded board selection while correctly retaining the view-only camera choice.
+- The build remains within unchanged ceilings at 83.5 KiB initial / 121.7 KiB largest / 244.9 KiB total JavaScript gzip. No geometry, history rules, JSON, projections, schema, catalog, estimating, or shared adapter changed.
+
 ## 2026-08-25 active-plan single-pointer transactions
 
 - Platform, segment, cutout-center, cutout-corner, deck-corner, unlocked-stair, and beam drags now share one active pointer owner. A second pointer cannot replace the recorded start facts or complete another pointer's gesture.
