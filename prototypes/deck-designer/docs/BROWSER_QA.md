@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 one-pass beam warning projection regression
+
+- Loaded the active one-level v5 editor locally with exactly one lazy 3D canvas and the clean rectangle ready for review. Each authored beam line is now clipped and projected once per warning pass, then its same derived beam/support IDs are reused across cutout, recorded-wall, and short-fragment checks.
+- Opened **Review deck layout** at desktop and 390 × 844 mobile sizes. **Close** and **Lock layout & continue** remained available, mobile retained exactly one canvas with no horizontal overflow, and browser warning/error logs were empty.
+- Full validation retained 317/317 tests, all golden designs, and the established bundle ceilings. This is projection reuse only; warning meaning, geometry, quantities, storage, and shared contracts are unchanged.
+
 ## 2026-08-25 displayed support-post/cutout review regression
 
 - Loaded the active one-level v5 editor locally; the clean saved rectangle reached one 3D canvas after lazy renderer load and remained ready for railings with no false geometry note.

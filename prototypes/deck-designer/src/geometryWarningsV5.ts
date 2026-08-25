@@ -160,6 +160,12 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     });
   });
   const house = deriveHouseContextGeometry(normalized.siteContext);
+  const beamProjectionByLineId = new Map(platform.construction.framing.beamLines.map((line) => [line.id, deriveConceptualBeamProjection({
+    region: platform.region,
+    boardDirection: platform.construction.decking.direction,
+    platformElevation: platform.elevation,
+    beamLines: [line],
+  })] as const));
   const projectedJoists = derivePolygonMembers(platform.region, {
     boardWidth: platform.construction.decking.boardWidth,
     gap: platform.construction.decking.gap,
@@ -185,12 +191,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     }));
   });
   platform.construction.framing.beamLines.forEach((line) => {
-    const posts = deriveConceptualBeamProjection({
-      region: platform.region,
-      boardDirection: platform.construction.decking.direction,
-      platformElevation: platform.elevation,
-      beamLines: [line],
-    }).supportPosts;
+    const posts = beamProjectionByLineId.get(line.id)!.supportPosts;
     platform.region.holes.forEach((hole, holeIndex) => {
       const half = CONCEPTUAL_SUPPORT_POST_SIZE / 2;
       const overlappingPostIds = posts.filter((post) => positiveRegionOverlapArea([
@@ -208,12 +209,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
   });
   const beamVerticalRange = conceptualBeamVerticalRange(platform.elevation);
   platform.construction.framing.beamLines.forEach((line) => {
-    const beams = deriveConceptualBeamProjection({
-      region: platform.region,
-      boardDirection: platform.construction.decking.direction,
-      platformElevation: platform.elevation,
-      beamLines: [line],
-    }).beams;
+    const beams = beamProjectionByLineId.get(line.id)!.beams;
     normalized.siteContext.houseWalls.forEach((wall) => {
       const panels = house.houseWallPanels.filter((panel) => panel.wallId === wall.id &&
         panel.baseElevation < beamVerticalRange.top - EPSILON &&
@@ -280,12 +276,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     });
   });
   platform.construction.framing.beamLines.forEach((line, lineIndex) => {
-    const beams = deriveConceptualBeamProjection({
-      region: platform.region,
-      boardDirection: platform.construction.decking.direction,
-      platformElevation: platform.elevation,
-      beamLines: [line],
-    }).beams;
+    const beams = beamProjectionByLineId.get(line.id)!.beams;
     beams.forEach((beam) => {
       const length = Math.hypot(beam.end.x - beam.start.x, beam.end.z - beam.start.z);
       if (length >= 12 - EPSILON) return;
