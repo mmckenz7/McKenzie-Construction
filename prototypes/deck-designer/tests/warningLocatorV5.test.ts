@@ -23,6 +23,16 @@ describe("v5 contextual warning locator", () => {
     expect(deriveWarningSelectionV5(platform, warning)).toEqual({ holeIndex: null, beamLineId: null, stairSystemId: null, edgeId: null });
   });
 
+  it("selects the authored beam and recorded cutout from a displayed support-footprint review", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, region: { ...platform.region, holes: [[
+      { x: 72, z: 96 }, { x: 120, z: 96 }, { x: 120, z: 132 }, { x: 72, z: 132 },
+    ]] } }] });
+    const warning = deriveGeometryWarningsV5(design, platform.id).find((candidate) => candidate.id === "beam-support-cutout-review-beam-line-1-1")!;
+    expect(deriveWarningSelectionV5(design.platforms[0], warning)).toEqual({ holeIndex: 0, beamLineId: "beam-line-1", stairSystemId: null, edgeId: null });
+  });
+
   it("selects the exact stair and attached side for a deck-overlap blocker", () => {
     const base = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, platform: { ...DEFAULT_DESIGN.platform, kind: "l-shape", width: 240, projection: 180, cutoutWidth: 72, cutoutDepth: 60 } });
     const platform = base.platforms[0];

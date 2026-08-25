@@ -1,5 +1,6 @@
 import { deriveGeometryWarningsV4, type GeometryWarningV4 } from "./geometryWarningsV4";
-import { conceptualBeamVerticalRange, deriveConceptualBeamProjection } from "./beamProjection";
+import { CONCEPTUAL_SUPPORT_POST_SIZE, conceptualBeamVerticalRange, deriveConceptualBeamProjection } from "./beamProjection";
+import { positiveRegionOverlapArea } from "./geometryWarningsV3";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
@@ -182,6 +183,28 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
       geometryIds: Object.freeze([platform.id, ...crossedPathIds, wall.id]),
       message: `${crossedPathIds.length} conceptual joist ${crossedPathIds.length === 1 ? "path passes" : "paths pass"} through recorded house-wall context (${wall.id}) where their displayed vertical ranges overlap; field-verify the intended framing and wall layout.`,
     }));
+  });
+  platform.construction.framing.beamLines.forEach((line) => {
+    const posts = deriveConceptualBeamProjection({
+      region: platform.region,
+      boardDirection: platform.construction.decking.direction,
+      platformElevation: platform.elevation,
+      beamLines: [line],
+    }).supportPosts;
+    platform.region.holes.forEach((hole, holeIndex) => {
+      const half = CONCEPTUAL_SUPPORT_POST_SIZE / 2;
+      const overlappingPostIds = posts.filter((post) => positiveRegionOverlapArea([
+        { x: post.x - half, z: post.z - half }, { x: post.x + half, z: post.z - half },
+        { x: post.x + half, z: post.z + half }, { x: post.x - half, z: post.z + half },
+      ], hole, []) > EPSILON).map((post) => post.id).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+      if (!overlappingPostIds.length) return;
+      warnings.push(Object.freeze({
+        id: `beam-support-cutout-review-${line.id}-${holeIndex + 1}`,
+        severity: "clearance",
+        geometryIds: Object.freeze([line.id, `${platform.id}:hole-${holeIndex + 1}`, ...overlappingPostIds]),
+        message: `The current conceptual display places ${overlappingPostIds.length} support-post footprint${overlappingPostIds.length === 1 ? "" : "s"} inside recorded cutout ${holeIndex + 1}; field-review the beam and support intent. Reviewed structural post placement may change.`,
+      }));
+    });
   });
   const beamVerticalRange = conceptualBeamVerticalRange(platform.elevation);
   platform.construction.framing.beamLines.forEach((line) => {

@@ -21,6 +21,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     ].forEach((id) => expect(usesPrototypeReviewThresholdV5(warning(id))).toBe(true));
     [
       "beam-cutout-interruption-beam-line-1-1",
+      "beam-support-cutout-review-beam-line-1-1",
       "joist-cutout-interruption-1",
       "joist-house-plan-review-platform-1-house-wall-2",
       "beam-house-plan-review-beam-line-1-house-wall-2",
@@ -66,7 +67,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     ]] } }] });
     const review = deriveLayoutReviewV5(design, platform.id);
     expect(review.readyToContinue).toBe(true);
-    expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 3 clearance notes" }));
+    expect(review.items.find((item) => item.id === "geometry")).toEqual(expect.objectContaining({ status: "field_verify", value: "0 collisions · 4 clearance notes" }));
     expect(review.fieldVerification).toContain("Cutout 1 interrupts 3 conceptual joist paths; header and trimmer framing is not designed and requires qualified review.");
   });
 
@@ -85,6 +86,33 @@ describe("DeckDesign v5 explainable framing warnings", () => {
       message: "Conceptual beam 1 is 6 inches from cutout 1; verify the intended framing clearance.",
     }));
     expect(warnings.some((warning) => warning.id.startsWith("beam-cutout-interruption"))).toBe(false);
+  });
+
+  it("reports exact displayed support-post footprints inside a recorded cutout without blocking", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, region: { ...platform.region, holes: [[
+      { x: 72, z: 96 }, { x: 120, z: 96 }, { x: 120, z: 132 }, { x: 72, z: 132 },
+    ]] } }] });
+    const warning = deriveGeometryWarningsV5(design, platform.id).find((item) => item.id === "beam-support-cutout-review-beam-line-1-1")!;
+    expect(warning).toEqual(expect.objectContaining({
+      severity: "clearance",
+      geometryIds: ["beam-line-1", "platform-1:hole-1", "beam-line-1-segment-1-support-2", "beam-line-1-segment-2-support-1"],
+    }));
+    expect(warning.message).toContain("Reviewed structural post placement may change");
+    expect(deriveLayoutReviewV5(design, platform.id).readyToContinue).toBe(true);
+    expect(deriveGeometryWarningsV5(design, platform.id)).toEqual(deriveGeometryWarningsV5(design, platform.id));
+  });
+
+  it("allows exact support-post footprint contact and nearby separation from a cutout", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const withHoleAt = (nearZ: number) => normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, region: { ...platform.region, holes: [[
+      { x: 36, z: nearZ }, { x: 92, z: nearZ }, { x: 92, z: 136 }, { x: 36, z: 136 },
+    ]] } }] });
+    for (const design of [withHoleAt(122.75), withHoleAt(123)]) {
+      expect(deriveGeometryWarningsV5(design, platform.id).some((item) => item.id.startsWith("beam-support-cutout-review-"))).toBe(false);
+    }
   });
 
   it("reports a small nonzero stair-edge remainder but accepts exact corner alignment", () => {

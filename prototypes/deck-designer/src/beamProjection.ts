@@ -16,6 +16,7 @@ export type ConceptualBeamProjection = Readonly<{
 
 export const CONCEPTUAL_BEAM_CENTER_OFFSET = 13;
 export const CONCEPTUAL_BEAM_HEIGHT = 9.25;
+export const CONCEPTUAL_SUPPORT_POST_SIZE = 5.5;
 
 export function conceptualBeamVerticalRange(platformElevation: number): Readonly<{ base: number; top: number }> {
   const center = platformElevation - CONCEPTUAL_BEAM_CENTER_OFFSET;

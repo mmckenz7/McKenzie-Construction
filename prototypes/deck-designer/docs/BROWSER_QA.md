@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-25 displayed support-post/cutout review regression
+
+- Loaded the active one-level v5 editor locally; the clean saved rectangle reached one 3D canvas after lazy renderer load and remained ready for railings with no false geometry note.
+- Opened **Review deck layout** at desktop and 390 × 844 mobile sizes. **Close** and **Lock layout & continue** remained available, and mobile retained exactly one canvas.
+- Browser warning/error logs were empty. Pure v5 tests prove the valid clipped-beam endpoint overlap, exact footprint contact, nearby separation, multi-post aggregation, deterministic replay, non-blocking stage continuity, and authored beam/cutout locator behavior.
+
 ## 2026-08-25 conceptual joist/recorded-wall review regression
 
 - Loaded the active one-level v5 editor locally at the default desktop viewport; the measured plan, shared 3D renderer, conceptual framing controls, and clean layout review rendered normally with exactly one canvas.
