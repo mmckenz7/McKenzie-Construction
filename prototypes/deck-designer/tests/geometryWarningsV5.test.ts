@@ -105,4 +105,20 @@ describe("DeckDesign v5 explainable framing warnings", () => {
       message: "Conceptual beam 1 has a 6-inch projected segment; verify that the recorded beam route is intended.",
     }));
   });
+
+  it("keeps wall crossings blocking while reporting a distinct measured near-wall stair route", () => {
+    const base = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, siteContext: { ...DEFAULT_DESIGN.siteContext, houseWalls: [...DEFAULT_DESIGN.siteContext.houseWalls, {
+      id: "house-wall-2", start: { x: 66, z: 144 }, end: { x: 66, z: 240 }, baseElevation: 0, height: 120, attachment: "unknown" as const, openings: [],
+    }] } });
+    const platform = base.platforms[0];
+    const lowerEdge = deriveGeometricPolygonEdges(platform.region.outer).find((edge) => edge.outward.z > 0)!;
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [{
+      id: "stair-system-1", locked: true, edgeId: lowerEdge.id, offset: 72, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [],
+    }] } }] });
+    expect(deriveGeometryWarningsV5(design, platform.id)).toContainEqual(expect.objectContaining({
+      id: "stair-house-clearance-stair-system-1-house-wall-2",
+      geometryIds: ["stair-system-1", "house-wall-2"],
+      message: "Stair system 1 passes 6 inches from a recorded house wall; verify the intended site clearance.",
+    }));
+  });
 });

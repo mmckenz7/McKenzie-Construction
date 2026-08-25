@@ -379,3 +379,9 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Confirmed layout review distinguishes the beam interruption from the resulting measured six-inch projected beam fragment.
 - Confirmed the prototype-only twelve-inch disclaimer remains visible and **Show in plan** selects the authored beam line at its unchanged two-foot offset.
 - Reloaded to restore the saved local design; browser console reported no warnings or errors.
+## 2026-08-24 — near-wall stair-route review
+
+- Added a second stair system to the left deck side and positioned its opening six inches from the recorded house-side endpoint.
+- Confirmed layout review keeps the six-inch stair-edge remainder and six-inch house-wall clearance as distinct non-blocking notes while allowing the layout to continue.
+- Confirmed **Show in plan** closes review, selects the locked stair system and exact side, and exposes **Edit stairs** without unlocking or changing geometry.
+- Reloaded to restore the saved local design; browser console reported no warnings or errors.

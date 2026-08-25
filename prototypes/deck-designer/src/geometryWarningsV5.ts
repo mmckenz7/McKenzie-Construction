@@ -1,9 +1,11 @@
 import { deriveGeometryWarningsV4, type GeometryWarningV4 } from "./geometryWarningsV4";
 import { deriveConceptualBeamProjection } from "./beamProjection";
+import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 import { derivePolygonMembers, type ProjectedMember } from "./polygonProjection";
 import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
+import { deriveStairRouteGeometryV3 } from "./stairRouteGeometryV3";
 
 export type GeometryWarningV5 = GeometryWarningV4;
 
@@ -35,6 +37,10 @@ function segmentDistance(a: PolygonPoint, b: PolygonPoint, c: PolygonPoint, d: P
 
 function beamToHoleDistance(beams: readonly Readonly<{ start: PolygonPoint; end: PolygonPoint }>[], hole: readonly PolygonPoint[]): number {
   return Math.min(...beams.flatMap((beam) => hole.map((point, index) => segmentDistance(beam.start, beam.end, point, hole[(index + 1) % hole.length]))));
+}
+
+function segmentToPolygonDistance(start: PolygonPoint, end: PolygonPoint, polygon: readonly PolygonPoint[]): number {
+  return Math.min(...polygon.map((point, index) => segmentDistance(start, end, point, polygon[(index + 1) % polygon.length])));
 }
 
 function interruptedJoistIds(design: DeckDesignV5, platformId: string, holeIndex: number): readonly string[] {
@@ -101,6 +107,33 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
         severity: "clearance",
         geometryIds: Object.freeze([system.id, system.edgeId]),
         message: `Stair system ${systemIndex + 1} leaves ${measured} inches of deck edge near the ${endLabel} end of its selected side; verify the intended corner placement.`,
+      }));
+    });
+  });
+  const house = deriveHouseContextGeometry(normalized.siteContext);
+  platform.construction.stairSystems.forEach((system, systemIndex) => {
+    const route = deriveStairRouteGeometryV3({
+      system,
+      edge: edges.find((candidate) => candidate.id === system.edgeId)!,
+      platformElevation: platform.elevation,
+      gradeElevation: normalized.siteContext.gradeElevation,
+      railingHeight: platform.construction.railing.height,
+      namespaceIds: platform.construction.stairSystems.length > 1 || systemIndex > 0,
+      targetPlatformElevations: Object.fromEntries(normalized.platforms.map((item) => [item.id, item.elevation])),
+    });
+    const footprints = [...route.treads.map((tread) => tread.corners), ...route.landings.map((landing) => landing.corners)];
+    normalized.siteContext.houseWalls.forEach((wall) => {
+      if (warnings.some((warning) => warning.id === `stair-route-house-collision-${system.id}-${wall.id}`)) return;
+      const panels = house.houseWallPanels.filter((panel) => panel.wallId === wall.id);
+      if (!panels.length || !footprints.length) return;
+      const clearance = Math.min(...panels.flatMap((panel) => footprints.map((footprint) => segmentToPolygonDistance(panel.start, panel.end, footprint))));
+      if (clearance <= EPSILON || clearance >= 12 - EPSILON) return;
+      const measured = Math.round(clearance * 10) / 10;
+      warnings.push(Object.freeze({
+        id: `stair-house-clearance-${system.id}-${wall.id}`,
+        severity: "clearance",
+        geometryIds: Object.freeze([system.id, wall.id]),
+        message: `Stair system ${systemIndex + 1} passes ${measured} inches from a recorded house wall; verify the intended site clearance.`,
       }));
     });
   });
