@@ -123,6 +123,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [ ] PBR material library, licensed asset pipeline, GLB metadata, LOD/compression
 - [x] Enforced initial-entry, largest-chunk, and total JavaScript performance budgets
 - [x] On-demand deterministic layout review during active editing, with deferred controls packaged below the existing bundle ceilings
+- [x] Render-local immutable geometry reuse for deterministic quantities with full-design fingerprint validation
 - [x] Local economy, balanced, and detailed 3D quality tiers
 - [ ] Broader accessibility checks and tablet interaction
 

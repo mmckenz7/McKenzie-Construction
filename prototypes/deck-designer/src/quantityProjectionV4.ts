@@ -1,6 +1,6 @@
-import { derivePlatformGeometryV4 } from "./geometryV4";
-import { deckDesignV4ToV3Compatibility, normalizeDeckDesignV4, type DeckDesignV4 } from "./modelV4";
-import { deriveDeckAccessoryProjectionV3, type DeckProjectionQuantityV3 } from "./quantityProjectionV3";
+import { derivePlatformGeometryV4, type DeckPlatformGeometryV4 } from "./geometryV4";
+import { normalizeDeckDesignV4, v3CompatibilityPlatform, type DeckDesignV4, type DeckPlatformV4 } from "./modelV4";
+import { deriveDeckAccessoryProjectionV3FromGeometry, type DeckProjectionQuantityV3 } from "./quantityProjectionV3";
 
 export type DeckAccessoryProjectionReportV4 = Readonly<{
   reportVersion: 1;
@@ -15,12 +15,10 @@ const round = (value: number): number => Math.round(value * 100) / 100;
 const memberLength = (member: Readonly<{ start: { x: number; z: number }; end: { x: number; z: number } }>): number =>
   Math.hypot(member.end.x - member.start.x, member.end.z - member.start.z);
 
-export function deriveDeckAccessoryProjectionV4(design: DeckDesignV4, platformId: string): DeckAccessoryProjectionReportV4 {
-  const normalized = normalizeDeckDesignV4(design);
-  const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
-  if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
-  const base = deriveDeckAccessoryProjectionV3(deckDesignV4ToV3Compatibility(normalized), platformId);
-  const geometry = derivePlatformGeometryV4(normalized, platformId);
+/** @internal Geometry must come from the validated v5 render source or immediate default derivation. */
+export function deriveDeckAccessoryProjectionV4FromGeometry(platform: DeckPlatformV4, geometry: DeckPlatformGeometryV4): DeckAccessoryProjectionReportV4 {
+  const platformId = platform.id;
+  const base = deriveDeckAccessoryProjectionV3FromGeometry(v3CompatibilityPlatform(platform), geometry);
   const beamInches = geometry.beams.reduce((sum, beam) => sum + memberLength(beam), 0);
   const spacingSummary = platform.construction.framing.beamLines.map((line) => `${line.id}: ${line.maxSupportSpacing} in`).join("; ");
   const framing: DeckProjectionQuantityV3[] = [
@@ -48,6 +46,13 @@ export function deriveDeckAccessoryProjectionV4(design: DeckDesignV4, platformId
     designSchemaVersion: 4,
     quantities: Object.freeze([...framing, ...base.quantities.filter((quantity) => quantity.key !== "beam-linear-feet" && quantity.key !== "support-post-count")]),
   });
+}
+
+export function deriveDeckAccessoryProjectionV4(design: DeckDesignV4, platformId: string): DeckAccessoryProjectionReportV4 {
+  const normalized = normalizeDeckDesignV4(design);
+  const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
+  if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
+  return deriveDeckAccessoryProjectionV4FromGeometry(platform, derivePlatformGeometryV4(normalized, platformId));
 }
 
 export function stableDeckAccessoryProjectionV4Json(report: DeckAccessoryProjectionReportV4): string {

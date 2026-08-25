@@ -1,6 +1,6 @@
-import { deriveEdgeFinishGeometryV5 } from "./edgeFinishProjectionV5";
-import { deriveDeckAccessoryProjectionV4 } from "./quantityProjectionV4";
-import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
+import { derivePlatformGeometryV5, type DeckPlatformGeometryV5 } from "./geometryV5";
+import { normalizeDeckDesignV5, v4CompatibilityPlatform, type DeckDesignV5, type DeckPlatformV5 } from "./modelV5";
+import { deriveDeckAccessoryProjectionV4FromGeometry } from "./quantityProjectionV4";
 
 export type DeckProjectionQuantityV5 = Readonly<{
   key: string;
@@ -24,10 +24,10 @@ export type DeckAccessoryProjectionReportV5 = Readonly<{
 const round = (value: number): number => Math.round(value * 100) / 100;
 const length = (span: Readonly<{ start: { x: number; z: number }; end: { x: number; z: number } }>) => Math.hypot(span.end.x - span.start.x, span.end.z - span.start.z);
 
-export function deriveDeckAccessoryProjectionV5(design: DeckDesignV5, platformId: string): DeckAccessoryProjectionReportV5 {
-  const normalized = normalizeDeckDesignV5(design);
-  const base = deriveDeckAccessoryProjectionV4(deckDesignV5ToV4Compatibility(normalized), platformId);
-  const geometry = deriveEdgeFinishGeometryV5(normalized, platformId);
+/** @internal Geometry must come from the validated v5 render source or immediate default derivation. */
+export function deriveDeckAccessoryProjectionV5FromGeometry(platform: DeckPlatformV5, geometry: DeckPlatformGeometryV5): DeckAccessoryProjectionReportV5 {
+  const platformId = platform.id;
+  const base = deriveDeckAccessoryProjectionV4FromGeometry(v4CompatibilityPlatform(platform), geometry);
   const fasciaInches = geometry.fasciaSpans.reduce((sum, span) => sum + length(span), 0);
   const skirtingSquareInches = geometry.skirtingPanels.reduce((sum, panel) => sum + length(panel) * (panel.top - panel.bottom), 0);
   const finishes: DeckProjectionQuantityV5[] = [];
@@ -42,4 +42,11 @@ export function deriveDeckAccessoryProjectionV5(design: DeckDesignV5, platformId
     explanation: `${geometry.skirtingPanels.length} selected free-edge conceptual panel${geometry.skirtingPanels.length === 1 ? "" : "s"} measured from recorded grade to deck elevation after stair openings; product, ventilation, access, waste, and installation details are not determined`,
   }));
   return Object.freeze({ ...base, designSchemaVersion: 5, quantities: Object.freeze([...base.quantities, ...finishes]) as readonly DeckProjectionQuantityV5[] });
+}
+
+export function deriveDeckAccessoryProjectionV5(design: DeckDesignV5, platformId: string): DeckAccessoryProjectionReportV5 {
+  const normalized = normalizeDeckDesignV5(design);
+  const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
+  if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
+  return deriveDeckAccessoryProjectionV5FromGeometry(platform, derivePlatformGeometryV5(normalized, platformId));
 }

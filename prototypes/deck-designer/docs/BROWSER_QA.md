@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-25 render-local quantity geometry reuse
+
+- The active one-level v5 render now passes its already-derived immutable platform geometry into deterministic accessory projection instead of deriving the same boards, joists, beams, posts, stairs, landings, railings, and finishes again through each quantity-version layer.
+- Reuse requires the exact geometry platform ID and complete normalized v5 design fingerprint. Tests reject stale same-ID geometry after dimension, cutout, stair/landing, framing, board-direction, finish, or elevation changes, plus missing/cross-platform sources; default and reused projection JSON remain exact matches across migrations and multi-platform recovery.
+- A local 500-iteration comparison on the default rectangle measured 223.6 ms for independent projection versus 108.6 ms with the current render geometry reused. This is a directional local measurement, not a customer-hardware performance claim.
+- Full validation passed 334/334 tests, isolation, typecheck, build, and golden fixtures at 88.6 KiB initial / 121.7 KiB largest / 244.7 KiB total gzip under unchanged ceilings. Desktop and 390 × 844 checks changed joist spacing from 16 to 18 inches and immediately retained the exact 12-path / 144-linear-foot projection, one canvas, clean layout review, railing advancement, and Escape focus restoration. The QA edit remained unsaved.
+
 ## 2026-08-25 active-workflow performance headroom
 
 - The active v5 editor no longer derives the complete deterministic geometry review during ordinary plan dragging or exact-field edits while the review dialog is closed. Opening **Review deck layout** derives the same findings on demand; closing it removes that repeated editing cost without changing warning authority or saved facts.

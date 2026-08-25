@@ -1,11 +1,20 @@
 import { deckDesignV5Fingerprint, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
+import { derivePlatformGeometryV5, type DeckPlatformGeometryV5 } from "./geometryV5";
 import { derivePolygonProjectionReport } from "./polygonReport";
-import { deriveDeckAccessoryProjectionV5 } from "./quantityProjectionV5";
+import { deriveDeckAccessoryProjectionV5FromGeometry } from "./quantityProjectionV5";
 
 const round = (value: number): number => Math.round(value * 100) / 100;
 
-export function deriveDeckDesignProjectionV5(design: DeckDesignV5) {
+export type DeckPlatformGeometrySourceV5 = readonly [designFingerprint: string, geometry: DeckPlatformGeometryV5];
+
+export function deriveDeckDesignProjectionV5(design: DeckDesignV5, geometrySource?: DeckPlatformGeometrySourceV5) {
   const normalized = normalizeDeckDesignV5(design);
+  const designFingerprint = deckDesignV5Fingerprint(normalized);
+  const sourceGeometry = geometrySource?.[1];
+  if (sourceGeometry && (
+    !normalized.platforms.some((platform) => platform.id === sourceGeometry.platformId)
+    || geometrySource[0] !== designFingerprint
+  )) throw new RangeError("Reusable geometry is stale or mismatched.");
   const platforms = Object.freeze([...normalized.platforms].sort((a, b) => a.id.localeCompare(b.id)).map((platform) => Object.freeze({
     platformId: platform.id,
     elevation: platform.elevation,
@@ -16,7 +25,7 @@ export function deriveDeckDesignProjectionV5(design: DeckDesignV5) {
       surfacePattern: platform.construction.decking.pattern,
       joistSpacing: platform.construction.framing.joistSpacing,
     }),
-    accessories: deriveDeckAccessoryProjectionV5(normalized, platform.id),
+    accessories: deriveDeckAccessoryProjectionV5FromGeometry(platform, sourceGeometry?.platformId === platform.id ? sourceGeometry : derivePlatformGeometryV5(normalized, platform.id)),
   })));
   const aggregate = new Map<string, { quantityClass: "takeoff_candidate" | "visualization"; amount: number; unit: "sq ft" | "lin ft" | "each"; platformIds: Set<string>; sourceGeometry: string[] }>();
   platforms.forEach((platform) => [...platform.surface.quantities, ...platform.accessories.quantities].forEach((line) => {
@@ -31,7 +40,7 @@ export function deriveDeckDesignProjectionV5(design: DeckDesignV5) {
   })));
   return Object.freeze({
     projectionVersion: 1 as const, designSchemaVersion: 5 as const, designId: normalized.id,
-    designFingerprint: deckDesignV5Fingerprint(normalized), coordinateUnits: "in" as const, platforms, aggregateQuantities,
+    designFingerprint, coordinateUnits: "in" as const, platforms, aggregateQuantities,
     warnings: Object.freeze(["conceptual_not_for_construction", "field_verification_required", "inter_platform_connections_not_determined"] as const),
   });
 }

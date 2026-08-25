@@ -1,5 +1,5 @@
-import { CONCEPTUAL_RAIL_POST_SPACING_IN, derivePlatformGeometryV3 } from "./geometryV3";
-import { normalizeDeckDesignV3, type DeckDesignV3 } from "./modelV3";
+import { CONCEPTUAL_RAIL_POST_SPACING_IN, derivePlatformGeometryV3, type DeckPlatformGeometryV3 } from "./geometryV3";
+import { normalizeDeckDesignV3, type DeckDesignV3, type DeckPlatformV3 } from "./modelV3";
 
 export type DeckProjectionQuantityV3 = Readonly<{
   key: string;
@@ -30,14 +30,12 @@ const squareFeet = (squareInches: number): number => round(squareInches / 144);
 const memberLength = (member: Readonly<{ start: { x: number; z: number }; end: { x: number; z: number } }>): number =>
   Math.hypot(member.end.x - member.start.x, member.end.z - member.start.z);
 
-export function deriveDeckAccessoryProjectionV3(
-  design: DeckDesignV3,
-  platformId: string,
+/** @internal Geometry must come from the validated v5 render source or immediate default derivation. */
+export function deriveDeckAccessoryProjectionV3FromGeometry(
+  platform: DeckPlatformV3,
+  geometry: DeckPlatformGeometryV3,
 ): DeckAccessoryProjectionReportV3 {
-  const normalized = normalizeDeckDesignV3(design);
-  const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
-  if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
-  const geometry = derivePlatformGeometryV3(normalized, platformId);
+  const platformId = platform.id;
   const railInches = geometry.railSegments.reduce((sum, rail) => sum + memberLength(rail), 0);
   const beamInches = geometry.beams.reduce((sum, beam) => sum + memberLength(beam), 0);
   const quantities: DeckProjectionQuantityV3[] = [
@@ -204,6 +202,16 @@ export function deriveDeckAccessoryProjectionV3(
       "structural_design_not_determined",
     ] as const),
   });
+}
+
+export function deriveDeckAccessoryProjectionV3(
+  design: DeckDesignV3,
+  platformId: string,
+): DeckAccessoryProjectionReportV3 {
+  const normalized = normalizeDeckDesignV3(design);
+  const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
+  if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
+  return deriveDeckAccessoryProjectionV3FromGeometry(platform, derivePlatformGeometryV3(normalized, platformId));
 }
 
 export function stableDeckAccessoryProjectionV3Json(report: DeckAccessoryProjectionReportV3): string {
