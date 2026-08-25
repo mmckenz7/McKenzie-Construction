@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { safeAttachmentFilename } from "@/lib/communications/microsoft-attachment-core";
+import { prepareSecondaryEmailRecipients } from "@/lib/communications/email-recipients";
 import { outboundAttachmentError } from "@/lib/communications/outbound-attachment-core";
 import { deliverCommunication } from "@/lib/communications/provider";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
@@ -12,6 +13,8 @@ type ReplyRequest = {
   customerId?: unknown;
   subject?: unknown;
   body?: unknown;
+  ccRecipients?: unknown;
+  bccRecipients?: unknown;
 };
 
 type ParsedReply = ReplyRequest & {
@@ -54,6 +57,8 @@ async function parseReplyRequest(request: Request): Promise<ParsedReply> {
       customerId: form.get("customerId"),
       subject: form.get("subject"),
       body: form.get("body"),
+      ccRecipients: form.get("ccRecipients"),
+      bccRecipients: form.get("bccRecipients"),
       attachments: form.getAll("attachments").filter((value): value is File => value instanceof File),
     };
   }
@@ -88,7 +93,7 @@ export async function POST(request: Request) {
   const attachmentError = outboundAttachmentError(payload.attachments);
 
   if (!requestedThreadId && !requestedLeadId && !requestedCustomerId) {
-    return Response.json({ success: false, error: "Choose a matched lead or customer before replying." }, { status: 400 });
+    return Response.json({ success: false, error: "Choose an email conversation or customer before sending." }, { status: 400 });
   }
   if (!subject || subject.length > 300) {
     return Response.json({ success: false, error: "Enter a subject no longer than 300 characters." }, { status: 400 });
@@ -129,9 +134,9 @@ export async function POST(request: Request) {
   let inReplyTo: string | null = null;
 
   if (threadId) {
-    const threadResult = await supabase.from("communication_threads").select("id,subject,department,lead_id,customer_id").eq("id", threadId).neq("provider", "twilio").or("lead_id.not.is.null,customer_id.not.is.null").maybeSingle();
+    const threadResult = await supabase.from("communication_threads").select("id,subject,department,lead_id,customer_id").eq("id", threadId).neq("provider", "twilio").maybeSingle();
     if (threadResult.error || !threadResult.data) {
-      return Response.json({ success: false, error: "The matched conversation could not be found." }, { status: 404 });
+      return Response.json({ success: false, error: "The email conversation could not be found." }, { status: 404 });
     }
     leadId = threadResult.data.lead_id ?? leadId;
     customerId = threadResult.data.customer_id ?? customerId;
@@ -168,12 +173,19 @@ export async function POST(request: Request) {
     leadId = leadId ?? customerResult.data?.source_lead_id ?? null;
   }
   if (!validEmail(recipient)) {
-    return Response.json({ success: false, error: "This lead or customer does not have a valid email address." }, { status: 400 });
+    return Response.json({ success: false, error: "This conversation does not have a valid email recipient." }, { status: 400 });
   }
 
+  const preparedRecipients = prepareSecondaryEmailRecipients(recipient, payload.ccRecipients, payload.bccRecipients);
+  if (preparedRecipients.error) {
+    return Response.json({ success: false, error: preparedRecipients.error }, { status: 400 });
+  }
+  const { ccRecipients, bccRecipients } = preparedRecipients;
+
   const allowed = new Set((settingsResult.data.communication_test_recipients ?? []).map(comparableAddress));
-  if (settingsResult.data.communication_sandbox_mode && !allowed.has(comparableAddress(recipient))) {
-    return Response.json({ success: false, error: `${recipient} is not on the communication sandbox allowlist.` }, { status: 409 });
+  const blockedRecipient = [recipient, ...ccRecipients, ...bccRecipients].find((address) => !allowed.has(comparableAddress(address)));
+  if (settingsResult.data.communication_sandbox_mode && blockedRecipient) {
+    return Response.json({ success: false, error: `${blockedRecipient} is not on the communication sandbox allowlist.` }, { status: 409 });
   }
 
   const sentAt = new Date().toISOString();
@@ -203,7 +215,7 @@ export async function POST(request: Request) {
     channel: "email",
     recipient,
     sender,
-    cc_recipients: [],
+    cc_recipients: ccRecipients,
     subject: replySubject(canonicalSubject),
     body,
     status: "processing",
@@ -221,6 +233,7 @@ export async function POST(request: Request) {
       reply_to_email: settingsResult.data.company_email?.trim() || null,
       in_reply_to: inReplyTo,
       attachments: attachmentMetadata,
+      cc_recipients: ccRecipients,
     },
   }).select("id").single();
   if (outboxResult.error || !outboxResult.data) {
@@ -235,7 +248,8 @@ export async function POST(request: Request) {
       recipient,
       sender,
       replyTo: settingsResult.data.company_email?.trim() || null,
-      ccRecipients: [],
+      ccRecipients,
+      bccRecipients,
       subject: replySubject(canonicalSubject),
       body,
       idempotencyKey: outboxIdempotencyKey,
@@ -246,14 +260,14 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 500) : "Provider delivery failed.";
     await supabase.from("communication_outbox").update({
-      status: attachments.length ? "failed" : "queued",
+      status: attachments.length || bccRecipients.length ? "failed" : "queued",
       processing_started_at: null,
-      next_attempt_at: attachments.length ? null : new Date(Date.now() + 5 * 60_000).toISOString(),
+      next_attempt_at: attachments.length || bccRecipients.length ? null : new Date(Date.now() + 5 * 60_000).toISOString(),
       last_error_code: "provider_delivery_failed",
       last_error_message: message,
     }).eq("id", outboxResult.data.id);
-    const retryMessage = attachments.length
-      ? "The reply was not sent. Mission Control does not retain attachment contents for automatic retries; please try again."
+    const retryMessage = attachments.length || bccRecipients.length
+      ? "The reply was not sent. For privacy, Mission Control does not retain attachment contents or Bcc addresses for automatic retries; please try again."
       : "The reply was queued for retry.";
     return Response.json({ success: false, error: `${retryMessage} ${message}` }, { status: 502 });
   }
@@ -273,6 +287,7 @@ export async function POST(request: Request) {
       in_reply_to: inReplyTo,
       provider_accepted_status: delivery.acceptedStatus,
       attachments: attachmentMetadata,
+      cc_recipients: ccRecipients,
     },
   }).eq("id", outboxResult.data.id);
 
@@ -294,7 +309,7 @@ export async function POST(request: Request) {
     has_attachments: attachments.length > 0,
     department,
     sent_at: sentAt,
-    metadata: { customer_id: customerId, sent_by_team_member_id: workspace.access?.user_id ?? null, attachments: attachmentMetadata },
+    metadata: { customer_id: customerId, sent_by_team_member_id: workspace.access?.user_id ?? null, attachments: attachmentMetadata, cc_recipients: ccRecipients, used_bcc: bccRecipients.length > 0 },
   });
 
   await Promise.all([

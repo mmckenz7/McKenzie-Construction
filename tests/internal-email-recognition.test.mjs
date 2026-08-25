@@ -60,8 +60,8 @@ test("internal conversations remain unassigned and never enter the CRM matcher",
   assert.match(inbox, /Needs review before matching/);
   assert.match(threadPage, /Internal · \{internalMember\.name\} · Unassigned/);
   assert.match(threadPage, /Vendor · \{vendor\.name\} · Unassigned/);
-  assert.match(threadPage, /Recognized from an exact active supplier email/);
   assert.match(threadPage, /Kept in the company inbox without creating an assignment or CRM record/);
-  assert.match(threadPage, /does not create or attach to a CRM record/);
-  assert.match(threadPage, /internalMember \? <section/);
+  assert.match(threadPage, /Reply to \$\{internalMember\.name\} without assigning this internal conversation/);
+  assert.match(threadPage, /Reply to \$\{vendor\.name\} without assigning this vendor conversation/);
+  assert.match(threadPage, /without forcing a lead, customer, or project assignment/);
 });

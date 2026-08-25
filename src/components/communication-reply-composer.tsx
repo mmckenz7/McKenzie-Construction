@@ -8,6 +8,7 @@ import {
   MAX_OUTBOUND_ATTACHMENT_BYTES,
   outboundAttachmentError,
 } from "@/lib/communications/outbound-attachment-core";
+import { prepareSecondaryEmailRecipients } from "@/lib/communications/email-recipients";
 
 type CommunicationReplyComposerProps = {
   recipient: string | null;
@@ -36,6 +37,10 @@ export function CommunicationReplyComposer({
   const [subject, setSubject] = useState(replySubject(initialSubject));
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
+  const [showCc, setShowCc] = useState(false);
+  const [showBcc, setShowBcc] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const dark = tone === "dark";
@@ -50,12 +55,16 @@ export function CommunicationReplyComposer({
     try {
       const validationError = outboundAttachmentError(attachments);
       if (validationError) throw new Error(validationError);
+      const preparedRecipients = prepareSecondaryEmailRecipients(recipient, cc, bcc);
+      if (preparedRecipients.error) throw new Error(preparedRecipients.error);
       const form = new FormData();
       if (threadId) form.set("threadId", threadId);
       if (leadId) form.set("leadId", leadId);
       if (customerId) form.set("customerId", customerId);
       form.set("subject", subject);
       form.set("body", body);
+      form.set("ccRecipients", cc);
+      form.set("bccRecipients", bcc);
       attachments.forEach((file) => form.append("attachments", file));
       const response = await fetch("/api/communications/replies", {
         method: "POST",
@@ -67,6 +76,8 @@ export function CommunicationReplyComposer({
       }
       setBody("");
       setAttachments([]);
+      setCc("");
+      setBcc("");
       if (fileInputRef.current) fileInputRef.current.value = "";
       setNotice({ kind: "success", text: "Reply sent and added to this conversation." });
       router.refresh();
@@ -86,9 +97,13 @@ export function CommunicationReplyComposer({
 
   return <form onSubmit={submitReply} className="space-y-4">
     <div>
-      <p className={`text-xs font-bold uppercase tracking-widest ${dark ? "text-slate-500" : "text-slate-500"}`}>To</p>
-      <p className={`mt-1 break-all text-sm font-semibold ${dark ? "text-slate-300" : "text-slate-800"}`}>{recipient || "No customer email address is available"}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><p className={`text-xs font-bold uppercase tracking-widest ${dark ? "text-slate-500" : "text-slate-500"}`}>To</p><p className={`mt-1 break-all text-sm font-semibold ${dark ? "text-slate-300" : "text-slate-800"}`}>{recipient || "No email recipient is available"}</p></div>
+        <div className="flex gap-2"><button type="button" onClick={() => setShowCc(true)} className={`text-xs font-bold ${dark ? "text-blue-400" : "text-blue-700"}`}>Cc</button><button type="button" onClick={() => setShowBcc(true)} className={`text-xs font-bold ${dark ? "text-blue-400" : "text-blue-700"}`}>Bcc</button></div>
+      </div>
     </div>
+    {showCc ? <label className="block"><span className={`mb-1 block text-xs font-bold uppercase tracking-widest ${dark ? "text-slate-500" : "text-slate-500"}`}>Cc</span><input className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-blue-500 ${inputClass}`} value={cc} onChange={(event) => setCc(event.target.value)} placeholder="name@example.com, another@example.com" disabled={!recipient || submitting} /></label> : null}
+    {showBcc ? <label className="block"><span className={`mb-1 block text-xs font-bold uppercase tracking-widest ${dark ? "text-slate-500" : "text-slate-500"}`}>Bcc</span><input className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-blue-500 ${inputClass}`} value={bcc} onChange={(event) => setBcc(event.target.value)} placeholder="private-copy@example.com" disabled={!recipient || submitting} /><span className={`mt-1 block text-xs ${dark ? "text-slate-600" : "text-slate-500"}`}>Bcc recipients are hidden from everyone else on the email.</span></label> : null}
     <label className="block">
       <span className={`mb-1 block text-xs font-bold uppercase tracking-widest ${dark ? "text-slate-500" : "text-slate-500"}`}>Subject</span>
       <input className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-blue-500 read-only:cursor-not-allowed read-only:opacity-75 ${inputClass}`} value={subject} onChange={(event) => setSubject(event.target.value)} maxLength={300} required readOnly={Boolean(threadId)} disabled={!recipient || submitting} />

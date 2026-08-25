@@ -166,6 +166,7 @@ export async function POST(request: Request) {
       sender,
       replyTo: null,
       ccRecipients: [],
+      bccRecipients: [],
       subject: null,
       body,
       idempotencyKey,

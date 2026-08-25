@@ -14,6 +14,7 @@ import {
   threadCounterpartyAddresses,
   type VendorParticipant,
 } from "@/lib/communications/thread-classification";
+import { emailRecipientsFromMetadata } from "@/lib/communications/email-recipients";
 
 export const dynamic = "force-dynamic";
 
@@ -66,12 +67,13 @@ export default async function CommunicationThreadPage({ params }: ThreadPageProp
 
   const matchedRecord = customerResult.data ?? leadResult.data;
   const isTextThread = threadResult.data.provider === "twilio";
-  const recipient = isTextThread
-    ? matchedRecord?.phone ?? threadResult.data.participant_addresses.at(-1) ?? null
-    : matchedRecord?.email ?? threadResult.data.participant_addresses[0] ?? null;
   const activeTeam = (teamResult.data ?? []).map((member) => ({ id: String(member.id), name: String(member.name), email: String(member.email ?? "") }));
   const teamMembers = activeTeam.map((member) => ({ id: member.id, name: member.name }));
   const latestMessage = messagesResult.data?.[0];
+  const counterparties = threadCounterpartyAddresses(latestMessage);
+  const recipient = isTextThread
+    ? matchedRecord?.phone ?? threadResult.data.participant_addresses.at(-1) ?? null
+    : matchedRecord?.email ?? counterparties[0] ?? null;
   const internalMember = !matchedRecord
     ? findInternalThreadParticipant(threadCounterpartyAddresses(latestMessage), activeTeam, [mailboxResult.data?.address])
     : null;
@@ -99,6 +101,7 @@ export default async function CommunicationThreadPage({ params }: ThreadPageProp
     hasAttachments: Boolean(message.has_attachments),
     occurredAt: String(message.received_at ?? message.sent_at ?? message.created_at),
     sentAttachments: message.direction === "outbound" && message.has_attachments ? sentAttachments(message.metadata) : [],
+    ccRecipients: message.direction === "outbound" ? emailRecipientsFromMetadata(message.metadata, "cc_recipients") : [],
   }));
   const matchLeads = (matchLeadsResult.data ?? []).map((lead) => ({
     id: String(lead.id),
@@ -118,7 +121,7 @@ export default async function CommunicationThreadPage({ params }: ThreadPageProp
 
     <CommunicationThreadMessages messages={messages} />
 
-    {matchedRecord ? <section id="reply" className="mt-7 scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-slate-950">Reply from Mission Control</h2><p className="mt-1 text-sm text-slate-500">This reply stays attached to the customer record and conversation history.</p><div className="mt-5">{isTextThread ? <TextMessageComposer recipient={recipient} threadId={threadId} leadId={threadResult.data.lead_id} customerId={threadResult.data.customer_id} /> : <CommunicationReplyComposer recipient={recipient} threadId={threadId} leadId={threadResult.data.lead_id} customerId={threadResult.data.customer_id} initialSubject={threadResult.data.subject} />}</div></section> : internalMember ? <section className="mt-7 rounded-2xl border border-blue-200 bg-blue-50 p-5"><h2 className="font-semibold text-slate-950">Internal team conversation</h2><p className="mt-1 text-sm text-slate-700">Recognized from the verified email for {internalMember.name}. It stays unassigned and does not create or attach to a CRM record.</p></section> : vendor ? <section className="mt-7 rounded-2xl border border-violet-200 bg-violet-50 p-5"><h2 className="font-semibold text-slate-950">Vendor conversation</h2><p className="mt-1 text-sm text-slate-700">Recognized from an exact active supplier email for {vendor.name}. It stays unassigned and does not attach to a CRM record.</p></section> : automated ? <section className="mt-7 rounded-2xl border border-slate-200 bg-slate-100 p-5"><h2 className="font-semibold text-slate-950">{automated}</h2><p className="mt-1 text-sm text-slate-700">Kept in the company inbox without creating an assignment or CRM record.</p></section> : <CommunicationThreadMatch threadId={threadId} leads={matchLeads} customers={matchCustomers} />}
+    {matchedRecord ? <section id="reply" className="mt-7 scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-slate-950">Reply from Company Inbox</h2><p className="mt-1 text-sm text-slate-500">This reply stays attached to the customer record and conversation history.</p><div className="mt-5">{isTextThread ? <TextMessageComposer recipient={recipient} threadId={threadId} leadId={threadResult.data.lead_id} customerId={threadResult.data.customer_id} /> : <CommunicationReplyComposer recipient={recipient} threadId={threadId} leadId={threadResult.data.lead_id} customerId={threadResult.data.customer_id} initialSubject={threadResult.data.subject} />}</div></section> : automated ? <section className="mt-7 rounded-2xl border border-slate-200 bg-slate-100 p-5"><h2 className="font-semibold text-slate-950">{automated}</h2><p className="mt-1 text-sm text-slate-700">Kept in the company inbox without creating an assignment or CRM record. Automated notifications are not replyable here.</p></section> : !isTextThread && recipient ? <><section id="reply" className="mt-7 scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-slate-950">Reply from Company Inbox</h2><p className="mt-1 text-sm text-slate-500">{internalMember ? `Reply to ${internalMember.name} without assigning this internal conversation.` : vendor ? `Reply to ${vendor.name} without assigning this vendor conversation.` : "Reply now without forcing a lead, customer, or project assignment."}</p><div className="mt-5"><CommunicationReplyComposer recipient={recipient} threadId={threadId} initialSubject={threadResult.data.subject} /></div></section>{!internalMember && !vendor ? <CommunicationThreadMatch threadId={threadId} leads={matchLeads} customers={matchCustomers} /> : null}</> : <CommunicationThreadMatch threadId={threadId} leads={matchLeads} customers={matchCustomers} />}
     <div id="thread-bottom" className="flex justify-end py-5"><a href="#thread-messages-top" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-950">↑ Back to top</a></div>
     </div>
   </main>;

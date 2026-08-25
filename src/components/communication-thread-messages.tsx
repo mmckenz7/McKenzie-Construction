@@ -20,6 +20,7 @@ export type CommunicationThreadMessage = {
   hasAttachments: boolean;
   occurredAt: string;
   sentAttachments: SentAttachment[];
+  ccRecipients: string[];
 };
 
 function timestamp(value: string) {
@@ -73,7 +74,7 @@ export function CommunicationThreadMessages({ messages }: { messages: Communicat
       const inbound = message.direction === "inbound";
       return <article key={message.id} className={`max-w-4xl rounded-2xl border p-5 shadow-sm ${inbound ? "mr-auto border-slate-200 bg-white" : "ml-auto border-slate-300 bg-slate-100"}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><p className="text-sm font-semibold text-slate-950">{inbound ? message.sender : message.recipient}</p><p className="mt-1 text-xs text-slate-500">{inbound ? "Customer reply" : "McKenzie Construction"}</p></div>
+          <div><p className="text-sm font-semibold text-slate-950">{inbound ? message.sender : `To: ${message.recipient}`}</p><p className="mt-1 text-xs text-slate-500">{inbound ? "Incoming message" : "McKenzie Construction"}</p>{!inbound && message.ccRecipients.length ? <p className="mt-1 text-xs text-slate-500">Cc: {message.ccRecipients.join(", ")}</p> : null}</div>
           <div className="text-right"><p className="text-xs text-slate-500">{timestamp(message.occurredAt)}</p>{inbound && !message.isRead ? <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-blue-700">Unread</p> : null}</div>
         </div>
         <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{message.body}</p>

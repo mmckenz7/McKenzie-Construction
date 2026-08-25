@@ -72,6 +72,7 @@ export async function processCommunicationOutbox(
 
   const outcomes: Array<{ status: "sent" | "queued" | "failed" | "canceled" }> = [];
   for (const candidate of (candidates.data ?? []) as OutboxRecord[]) {
+    const deliveryDestinations = [candidate.recipient, ...(candidate.cc_recipients ?? [])];
     const attemptCount = candidate.attempt_count + 1;
     const claimed = await supabase
       .from("communication_outbox")
@@ -88,13 +89,13 @@ export async function processCommunicationOutbox(
 
     if (
       safety.data.communication_sandbox_mode &&
-      !allowedDestinations.has(comparableDestination(candidate.recipient))
+      deliveryDestinations.some((recipient) => !allowedDestinations.has(comparableDestination(recipient)))
     ) {
       await supabase.from("communication_outbox").update({
         status: "canceled",
         processing_started_at: null,
         last_error_code: "sandbox_recipient_blocked",
-        last_error_message: "Delivery was canceled because the recipient is not on the communication sandbox allowlist.",
+        last_error_message: "Delivery was canceled because one or more recipients are not on the communication sandbox allowlist.",
       }).eq("id", candidate.id);
       outcomes.push({ status: "canceled" });
       continue;
@@ -126,6 +127,7 @@ export async function processCommunicationOutbox(
           ? candidate.metadata.reply_to_email
           : null,
         ccRecipients: candidate.cc_recipients ?? [],
+        bccRecipients: [],
         subject: candidate.subject,
         body: candidate.body,
         idempotencyKey: candidate.idempotency_key,

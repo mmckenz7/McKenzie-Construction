@@ -21,7 +21,7 @@ test("Mission Control sends attachments without persisting file contents", () =>
   const threadMessages = readFileSync("src/components/communication-thread-messages.tsx", "utf8");
   assert.match(route, /request\.formData\(\)/);
   assert.match(route, /Buffer\.from\(await file\.arrayBuffer\(\)\)\.toString\("base64"\)/);
-  assert.match(route, /status: attachments\.length \? "failed" : "queued"/);
+  assert.match(route, /status: attachments\.length \|\| bccRecipients\.length \? "failed" : "queued"/);
   assert.match(route, /has_attachments: attachments\.length > 0/);
   assert.match(provider, /attachments: message\.attachments/);
   assert.match(composer, /type="file"/);

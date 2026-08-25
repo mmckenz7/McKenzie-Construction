@@ -7,6 +7,7 @@ export type OutboundCommunication = Readonly<{
   sender: string;
   replyTo: string | null;
   ccRecipients: readonly string[];
+  bccRecipients: readonly string[];
   subject: string | null;
   body: string;
   idempotencyKey: string;
@@ -59,6 +60,7 @@ async function sendWithResend(message: OutboundCommunication): Promise<DeliveryR
       reply_to: message.replyTo || undefined,
       to: [message.recipient],
       cc: message.ccRecipients,
+      bcc: message.bccRecipients,
       subject: message.subject,
       text: message.body,
       headers: message.headers,
