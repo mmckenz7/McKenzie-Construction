@@ -1,5 +1,14 @@
 # Browser QA record
 
+## 2026-08-25 keyboard photo-trace stair positioning
+
+- The focusable stair handle in the measured photo-reference tracer now accepts arrow keys with the same prototype-local edge-axis helper used by the authored v5 plan. Its accessible name reports the current offset, six-inch trace snap, and pointer/keyboard instructions, with a visible focus treatment.
+- Pointer/touch placement now calls the existing exact center-projection helper instead of retaining a duplicate inline calculation. Focused tests prove pointer/keyboard parity at the same snapped position, horizontal/vertical directions, reversed authored edges, perpendicular-key rejection, and exact bounds.
+- The callback still updates temporary photo-intake state only. Existing confirmation coverage proves the chosen exact edge, offset, and width enter authoritative geometry only after **Start from confirmed outline**; photos remain local visual references and never become geometry authority.
+- Desktop QA used a zero-photo non-standard trace, placed temporary stairs on the lower 20-foot side, and moved their exact start from 8 to 8.5 feet with one arrow press. The underlying authoritative design remained revision 8 while the temporary field and accessible handle updated together.
+- At 390 by 844, the handle, exact 8.5-foot position, 4-foot width, and reference-only warning remained reachable while the authoritative revision stayed unchanged. The temporary viewport override was reset afterward.
+- Full validation passed 266 tests, isolation, production-equivalent type checking, build, golden fixtures, and bundle budgets at 86.5 KiB initial / 121.7 KiB largest / 239.8 KiB total gzip.
+
 ## 2026-08-25 keyboard stair positioning
 
 - The currently unlocked authored stair system's plan handle now accepts arrow keys as well as pointer and touch dragging. Horizontal or vertical keys follow the exact attached-edge direction, use the active plan snap, and clamp at zero or the edge length minus stair width without overshoot.

@@ -32,6 +32,8 @@ Before a traced polygon becomes DeckDesign v3, the dialog owns a bounded local u
 
 Photo-tracer segment handles keep stable render identities during a drag. A white square translates both endpoints of its segment as one unit; the neighboring edges remain attached and their dimensions are recalculated from the resulting polygon.
 
+The temporary photo-trace stair handle shares one prototype-local, pure edge-axis keyboard offset helper with the authored v5 plan handle. Pointer and touch placement use the existing center projection helper; arrows use the tracer's fixed six-inch snap, exact selected-edge direction, and the same zero-to-edge-minus-width bounds. The trace callback updates only temporary confirmed-outline state. No DeckDesign revision, JSON, geometry projection, or quantity changes until the user completes the normal confirmation step, which remains covered by exact-offset migration tests.
+
 The tracer's touch-first viewport remains presentation state: pinch gestures and the zoom/Fit controls change only the local SVG view and never design coordinates. Dimension labels are selectable. An exact segment-length edit keeps the segment start fixed, moves its end and the following side together, then passes the result through the same polygon and house-line validation before acceptance.
 
 This tracer is not photogrammetry and performs no image analysis or AI calls: images help the user recognize the shape, while only their plan edits record corners. Future perspective calibration, multi-view reconstruction, or AI suggestions must remain reviewable proposals until user confirmation and must not alter this authority boundary.

@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 import { normalizePolygonRegion } from "./polygonRegion";
 import { addBumpoutOnEdge, movePolygonCorner, movePolygonSegment } from "./polygonEditorV3";
 import { centeredStairOffset, derivePhotoTraceStairPreview, validateStairWidth } from "./photoTraceStairs";
+import { stairOffsetFromPoint } from "./editor";
+import { stairKeyboardMove } from "./stairKeyboard";
 
 type ReferencePhoto = Readonly<{ name: string; url: string }>;
 type TraceSelection = Readonly<{ kind: "corner" | "segment"; index: number }> | null;
@@ -263,11 +265,13 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
     const point = pointFromClient(clientX, clientY);
     const edge = stairEdgeId ? edges.find((candidate) => candidate.id === stairEdgeId) : null;
     if (!point || !edge) return;
-    const alongX = (edge.end.x - edge.start.x) / edge.length;
-    const alongZ = (edge.end.z - edge.start.z) / edge.length;
-    const projectedCenter = (point.x - edge.start.x) * alongX + (point.z - edge.start.z) * alongZ;
-    const offset = Math.min(edge.length - stairWidth, Math.max(0, snap(projectedCenter - stairWidth / 2)));
-    onStairPlacementChange(edge.id, offset);
+    onStairPlacementChange(edge.id, stairOffsetFromPoint(edge, stairWidth, point, snapIncrement));
+  };
+  const nudgeStair = (edge: (typeof edges)[number], currentOffset: number, event: KeyboardEvent<SVGCircleElement>) => {
+    const move = stairKeyboardMove({ locked: false, offset: currentOffset, width: stairWidth }, edge, event.key, snapIncrement);
+    if (!move.handled) return;
+    event.preventDefault();
+    if (move.offset !== currentOffset) onStairPlacementChange(edge.id, move.offset);
   };
   const segmentDescription = (edge: (typeof edges)[number]) => {
     const horizontal = Math.abs(edge.end.x - edge.start.x) >= Math.abs(edge.end.z - edge.start.z);
@@ -336,7 +340,7 @@ export function PhotoOutlineTracer({ width, projection, photos, outer, stairEdge
         <polygon points={outer.map((point) => `${x(point.x)},${y(point.z)}`).join(" ")} className="trace-platform" />
         {stairPreview?.treads.map((tread, index) => <polygon key={`trace-stair-${index}`} points={tread.map((point) => `${x(point.x)},${y(point.z)}`).join(" ")} className="trace-stair-preview" />)}
         {stairPreview && (() => { const last = stairPreview.treads[stairPreview.treads.length - 1]; const center = last.reduce((sum, point) => ({ x: sum.x + point.x / last.length, z: sum.z + point.z / last.length }), { x: 0, z: 0 }); return <text x={x(center.x)} y={y(center.z)} className="trace-stair-label">STAIRS</text>; })()}
-        {stairPreview && (() => { const edge = edges.find((candidate) => candidate.id === stairPreview.edgeId)!; const alongX = (edge.end.x - edge.start.x) / edge.length; const alongZ = (edge.end.z - edge.start.z) / edge.length; const center = { x: edge.start.x + alongX * (stairPreview.offset + stairPreview.width / 2), z: edge.start.z + alongZ * (stairPreview.offset + stairPreview.width / 2) }; const dragProps = { onPointerDown: (event: PointerEvent<SVGCircleElement>) => { stairDragActive.current = true; event.currentTarget.setPointerCapture(event.pointerId); setActive("stairs"); moveStairFromPointer(event.clientX, event.clientY); }, onPointerMove: (event: PointerEvent<SVGCircleElement>) => { if (stairDragActive.current) moveStairFromPointer(event.clientX, event.clientY); }, onPointerUp: (event: PointerEvent<SVGCircleElement>) => { if (stairDragActive.current) moveStairFromPointer(event.clientX, event.clientY); stairDragActive.current = false; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }, onPointerCancel: () => { stairDragActive.current = false; setActive(null); } }; return <><circle cx={x(center.x)} cy={y(center.z)} r="28" className="trace-stair-touch-target" role="button" tabIndex={0} aria-label="Move stairs along selected segment" {...dragProps} /><circle cx={x(center.x)} cy={y(center.z)} r="10" className={`trace-stair-handle${active === "stairs" ? " active" : ""}`} aria-hidden="true" /></>; })()}
+        {stairPreview && (() => { const edge = edges.find((candidate) => candidate.id === stairPreview.edgeId)!; const alongX = (edge.end.x - edge.start.x) / edge.length; const alongZ = (edge.end.z - edge.start.z) / edge.length; const center = { x: edge.start.x + alongX * (stairPreview.offset + stairPreview.width / 2), z: edge.start.z + alongZ * (stairPreview.offset + stairPreview.width / 2) }; const dragProps = { onPointerDown: (event: PointerEvent<SVGCircleElement>) => { stairDragActive.current = true; event.currentTarget.setPointerCapture(event.pointerId); setActive("stairs"); moveStairFromPointer(event.clientX, event.clientY); }, onPointerMove: (event: PointerEvent<SVGCircleElement>) => { if (stairDragActive.current) moveStairFromPointer(event.clientX, event.clientY); }, onPointerUp: (event: PointerEvent<SVGCircleElement>) => { if (stairDragActive.current) moveStairFromPointer(event.clientX, event.clientY); stairDragActive.current = false; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setActive(null); }, onPointerCancel: () => { stairDragActive.current = false; setActive(null); } }; return <><circle cx={x(center.x)} cy={y(center.z)} r="28" className="trace-stair-touch-target" role="button" tabIndex={0} aria-label={`Move temporary stairs, currently ${formatLength(stairPreview.offset)} from the start of the selected segment; drag or use arrow keys; snaps to ${formatLength(snapIncrement)}`} onKeyDown={(event) => nudgeStair(edge, stairPreview.offset, event)} {...dragProps} /><circle cx={x(center.x)} cy={y(center.z)} r="10" className={`trace-stair-handle${active === "stairs" ? " active" : ""}`} aria-hidden="true" /></>; })()}
         {edges.map((edge, index) => {
           const midpoint = Object.freeze({ x: (edge.start.x + edge.end.x) / 2, z: (edge.start.z + edge.end.z) / 2 });
           const labelX = midpoint.x + edge.outward.x * 24;

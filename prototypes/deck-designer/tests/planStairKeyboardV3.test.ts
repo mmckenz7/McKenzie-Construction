@@ -3,8 +3,9 @@ import { describe, expect, it } from "vitest";
 import { createHistoryV5, designHistoryReducerV5 } from "../src/historyV5";
 import { DEFAULT_DESIGN } from "../src/model";
 import { migrateDeckDesignToV5, normalizeDeckDesignV5 } from "../src/modelV5";
-import { stairKeyboardMove } from "../src/PlanViewV3";
+import { stairKeyboardMove } from "../src/stairKeyboard";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
+import { stairOffsetFromPoint } from "../src/editor";
 
 const unlocked = { locked: false, offset: 24, width: 48 } as const;
 
@@ -34,6 +35,14 @@ describe("v5 plan stair keyboard movement", () => {
     expect(stairKeyboardMove({ ...unlocked, offset: 2 }, edge, "ArrowLeft", 6)).toEqual({ handled: true, offset: 0 });
     expect(stairKeyboardMove({ ...unlocked, offset: 70 }, edge, "ArrowRight", 6)).toEqual({ handled: true, offset: 72 });
     expect(stairKeyboardMove({ ...unlocked, offset: 72 }, edge, "ArrowRight", 6)).toEqual({ handled: true, offset: 72 });
+  });
+
+  it("matches pointer projection for the same snapped temporary stair position", () => {
+    const edge = { start: { x: 0, z: 0 }, end: { x: 144, z: 0 }, length: 144 };
+    const keyboard = stairKeyboardMove(unlocked, edge, "ArrowRight", 6);
+    const pointerAtSameCenter = { x: keyboard.offset + unlocked.width / 2, z: 36 };
+    expect(stairOffsetFromPoint(edge, unlocked.width, pointerAtSameCenter, 6)).toBe(keyboard.offset);
+    expect(keyboard).toEqual({ handled: true, offset: 30 });
   });
 
   it("does not offer movement for locked stairs", () => {

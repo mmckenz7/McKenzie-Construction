@@ -8,6 +8,7 @@ import { moveRectangularHole, resizeRectangularHole } from "./holeEditorV3";
 import { deriveCornerAlignmentGuides } from "./polygonEditorV3";
 import { beamInsetFromPointV3, effectiveBeamInsetV3 } from "./framingEditorV3";
 import type { EdgeFinishGeometryV5 } from "./edgeFinishProjectionV5";
+import { stairKeyboardMove } from "./stairKeyboard";
 
 type Point = Readonly<{ x: number; z: number }>;
 type ContextPlatform = Readonly<{ id: string; elevation: number; footprint: readonly Point[] }>;
@@ -47,30 +48,6 @@ type Props = {
 };
 
 const snap = (value: number, increment: number) => Math.round(value / increment) * increment;
-
-export type StairKeyboardMove = Readonly<{ handled: boolean; offset: number }>;
-
-export function stairKeyboardMove(
-  stair: Pick<StairSystemV3, "locked" | "offset" | "width">,
-  edge: Readonly<{ start: Point; end: Point; length: number }>,
-  key: string,
-  snapIncrement: number,
-): StairKeyboardMove {
-  if (stair.locked || !Number.isFinite(snapIncrement) || snapIncrement <= 0 || !Number.isFinite(edge.length) || edge.length < stair.width) {
-    return Object.freeze({ handled: false, offset: stair.offset });
-  }
-  const dx = edge.end.x - edge.start.x, dz = edge.end.z - edge.start.z;
-  const horizontal = Math.abs(dx) >= Math.abs(dz);
-  const negativeKey = horizontal ? "ArrowLeft" : "ArrowUp";
-  const positiveKey = horizontal ? "ArrowRight" : "ArrowDown";
-  if (key !== negativeKey && key !== positiveKey) return Object.freeze({ handled: false, offset: stair.offset });
-  const axisDirection = horizontal ? Math.sign(dx) : Math.sign(dz);
-  if (axisDirection === 0) return Object.freeze({ handled: false, offset: stair.offset });
-  const visualDirection = key === positiveKey ? 1 : -1;
-  const maximum = edge.length - stair.width;
-  const offset = Math.min(maximum, Math.max(0, stair.offset + visualDirection * axisDirection * snapIncrement));
-  return Object.freeze({ handled: true, offset });
-}
 
 const openingHitCorners = (start: Point, end: Point, width = 18): readonly Point[] => {
   const length = Math.hypot(end.x - start.x, end.z - start.z) || 1;
