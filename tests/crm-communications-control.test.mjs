@@ -65,7 +65,7 @@ test("the customer communication UI is channel-first and restrained", () => {
   assert.match(panel, /TextMessageComposer/);
   assert.match(panel, /rounded-lg bg-slate-100 p-1/);
   assert.match(inbox, /Email and text conversations/);
-  assert.match(inbox, /thread\.provider === "twilio" \? "Text" : "Email"/);
+  assert.match(inbox, /groupChannel === "sms" \? "Text" : "Email"/);
   assert.doesNotMatch(inbox, /Customer email conversations matched/);
 });
 

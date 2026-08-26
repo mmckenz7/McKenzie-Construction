@@ -128,7 +128,7 @@ test("the shared channel-first composer is available from inbox, lead, and custo
   assert.match(customerPage, /CustomerCommunicationPanel/);
   assert.match(customerCommunicationPanel, /CommunicationReplyComposer/);
   assert.match(customerCommunicationPanel, /TextMessageComposer/);
-  assert.match(inbox, /#reply/);
+  assert.match(inbox, /Open hub/);
   assert.match(replyComposer, /readOnly=\{Boolean\(threadId\)\}/);
   assert.match(replyRoute, /canonicalSubject = threadResult\.data\.subject/);
 });

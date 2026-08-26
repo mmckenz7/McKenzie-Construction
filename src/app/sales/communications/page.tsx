@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CommunicationAutomationControls } from "@/components/communication-automation-controls";
 import { CommunicationPushControls } from "@/components/communication-push-controls";
 import { CommunicationThreadControls } from "@/components/communication-thread-controls";
+import { groupCustomerHubThreads } from "@/lib/communications/customer-hub";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import {
   automatedConversationLabel,
@@ -339,8 +340,10 @@ export default async function CommunicationsPage({
   for (const message of messages) {
     if (message.thread_id && !latestByThread.has(message.thread_id)) latestByThread.set(message.thread_id, message);
   }
-  const unread = threads.reduce((total, thread) => total + thread.unread_count, 0);
-  const openConversations = threads.filter((thread) => thread.status === "open" || thread.status === "waiting").length;
+  const conversationGroups = groupCustomerHubThreads(threads);
+  const unread = conversationGroups.reduce((total, group) => total + group.unreadCount, 0);
+  const openConversations = conversationGroups.filter((group) =>
+    group.threads.some((thread) => thread.status === "open" || thread.status === "waiting")).length;
   const matchedRecords = new Set(
     threads.flatMap((thread) => thread.lead_id
       ? [`lead:${thread.lead_id}`]
@@ -417,8 +420,9 @@ export default async function CommunicationsPage({
 
     <section className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 px-5 py-4"><h2 className="font-semibold text-slate-950">Conversations</h2></div>
-      {threads.length === 0 ? <div className="p-10 text-center"><p className="font-semibold text-slate-900">No conversations in this view</p><p className="mt-2 text-sm text-slate-500">New email and text conversations will appear here.</p></div> : <div className="divide-y divide-slate-200">
-        {threads.map((thread) => {
+      {conversationGroups.length === 0 ? <div className="p-10 text-center"><p className="font-semibold text-slate-900">No conversations in this view</p><p className="mt-2 text-sm text-slate-500">New email and text conversations will appear here.</p></div> : <div className="divide-y divide-slate-200">
+        {conversationGroups.map((group) => {
+          const thread = group.representative;
           const latest = latestByThread.get(thread.id);
           const lead = thread.lead_id ? leads.get(thread.lead_id) : null;
           const customer = thread.customer_id ? customers.get(thread.customer_id) : null;
@@ -428,10 +432,10 @@ export default async function CommunicationsPage({
           const automated = triage?.automated ?? null;
           const phone = lead?.phone ?? customer?.phone ?? null;
           const matchedName = customer?.customer_name ?? lead?.name ?? internalMember?.name ?? vendor?.name ?? latest?.sender ?? thread.participant_addresses[0] ?? "Conversation";
-          return <article key={thread.id} className="grid gap-3 px-5 py-5 transition hover:bg-slate-50 lg:grid-cols-[170px_1fr_280px]">
-            <div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">{thread.provider === "twilio" ? "Text" : "Email"}</span><span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{thread.department}</span>{thread.unread_count ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">{thread.unread_count} new</span> : null}</div><p className="mt-2 text-xs text-slate-500">{timestamp(thread.last_message_at)}</p>{thread.assigned_to_id ? <p className="mt-1 text-xs text-slate-500">{teamById.get(thread.assigned_to_id) ?? "Assigned"}</p> : null}</div>
-            <div className="min-w-0"><Link href={`/communications/${thread.id}`} className="truncate font-semibold text-slate-950 hover:text-blue-700">{thread.subject || "Conversation"}</Link><p className="mt-1 text-sm text-slate-600">{matchedName}</p>{internalMember ? <p className="mt-1 text-xs font-semibold text-blue-700">Internal team conversation</p> : vendor ? <p className="mt-1 text-xs font-semibold text-violet-700">Vendor conversation</p> : automated ? <p className="mt-1 text-xs font-semibold text-slate-600">{automated}</p> : !lead && !customer ? <p className="mt-1 text-xs font-semibold text-amber-700">Needs review before matching</p> : null}{latest ? <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{latest.body}</p> : null}</div>
-            <div className="flex flex-wrap items-start justify-end gap-2">{phone ? <a href={`tel:${phone}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Device call</a> : null}<Link href={`/communications/${thread.id}${lead || customer ? "#reply" : ""}`} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white">{lead || customer ? "Reply" : "Open"}</Link><CommunicationThreadControls compact mailboxOnly={!lead && !customer} threadId={thread.id} status={thread.status} unreadCount={thread.unread_count} assignedToId={thread.assigned_to_id} teamMembers={teamMembers} /></div>
+          return <article key={group.key} className="grid gap-3 px-5 py-4 transition hover:bg-slate-50 lg:grid-cols-[170px_1fr_280px]">
+            <div><div className="flex flex-wrap items-center gap-2">{group.channels.map((groupChannel) => <span key={groupChannel} className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">{groupChannel === "sms" ? "Text" : "Email"}</span>)}<span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{thread.department}</span>{group.unreadCount ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">{group.unreadCount} new</span> : null}</div><p className="mt-2 text-xs text-slate-500">{timestamp(thread.last_message_at)}</p>{thread.assigned_to_id ? <p className="mt-1 text-xs text-slate-500">{teamById.get(thread.assigned_to_id) ?? "Assigned"}</p> : null}</div>
+            <div className="min-w-0"><Link href={`/communications/${thread.id}`} className="block truncate font-semibold text-slate-950 hover:text-blue-700">{matchedName}</Link><p className="mt-1 truncate text-sm text-slate-600">{thread.subject || (group.channels.length > 1 ? "Email and text history" : "Conversation")}</p>{internalMember ? <p className="mt-1 text-xs font-semibold text-blue-700">Internal team conversation</p> : vendor ? <p className="mt-1 text-xs font-semibold text-violet-700">Vendor conversation</p> : automated ? <p className="mt-1 text-xs font-semibold text-slate-600">{automated}</p> : !lead && !customer ? <p className="mt-1 text-xs font-semibold text-amber-700">Needs review before matching</p> : null}{latest ? <p className="mt-2 line-clamp-1 text-sm leading-6 text-slate-500">{latest.body}</p> : null}</div>
+            <div className="flex flex-wrap items-start justify-end gap-2">{phone ? <a href={`tel:${phone}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Device call</a> : null}<Link href={`/communications/${thread.id}`} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white">{lead || customer ? "Open hub" : "Open"}</Link>{group.threads.length === 1 ? <CommunicationThreadControls compact mailboxOnly={!lead && !customer} threadId={thread.id} status={thread.status} unreadCount={thread.unread_count} assignedToId={thread.assigned_to_id} teamMembers={teamMembers} /> : null}</div>
           </article>;
         })}
       </div>}

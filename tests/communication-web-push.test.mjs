@@ -14,9 +14,9 @@ const refreshControls = readFileSync("src/components/communication-automation-co
 const inbox = readFileSync("src/app/sales/communications/page.tsx", "utf8");
 const baseline = readFileSync("supabase/migrations/20260801095000_current_public_schema_through_090000.sql", "utf8");
 
-test("the Company Inbox is installable and push clicks open the text-only inbox", () => {
+test("the installed Company Inbox opens the unified inbox while push clicks open text alerts", () => {
   assert.match(manifest, /display: "standalone"/);
-  assert.match(manifest, /start_url: "\/communications\?channel=sms"/);
+  assert.match(manifest, /start_url: "\/communications"/);
   assert.match(serviceWorker, /showNotification/);
   assert.match(serviceWorker, /const destination = "\/communications\?channel=sms"/);
   assert.doesNotMatch(serviceWorker, /payload\.url|threadId|providerMessageId/);

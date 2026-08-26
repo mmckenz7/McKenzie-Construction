@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "McKenzie Construction Company Inbox",
     short_name: "McKenzie Inbox",
     description: "Secure employee access to McKenzie Construction communications.",
-    start_url: "/communications?channel=sms",
+    start_url: "/communications",
     scope: "/",
     display: "standalone",
     background_color: "#f8fafc",

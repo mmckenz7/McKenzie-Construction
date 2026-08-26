@@ -16,6 +16,7 @@ export type CommunicationThreadMessage = {
   recipient: string;
   body: string;
   provider: string;
+  channel: "email" | "sms";
   isRead: boolean;
   hasAttachments: boolean;
   occurredAt: string;
@@ -41,19 +42,22 @@ function attachmentSize(bytes: number) {
 
 export function CommunicationThreadMessages({ messages }: { messages: CommunicationThreadMessage[] }) {
   const [order, setOrder] = useState<"newest" | "oldest">("newest");
+  const [channel, setChannel] = useState<"all" | "email" | "sms">("all");
   const newestMessages = useMemo(
     () => [...messages].sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime()),
     [messages],
   );
-  const orderedMessages = order === "newest" ? newestMessages : [...newestMessages].reverse();
+  const visibleMessages = channel === "all" ? newestMessages : newestMessages.filter((message) => message.channel === channel);
+  const orderedMessages = order === "newest" ? visibleMessages : [...visibleMessages].reverse();
 
   return <section id="thread-messages-top" className="mt-7 scroll-mt-24">
     <div className="sticky top-3 z-10 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur">
       <div>
         <p className="text-sm font-semibold text-slate-950">Conversation</p>
-        <p className="mt-0.5 text-xs text-slate-500">{messages.length} {messages.length === 1 ? "message" : "messages"} · {order === "newest" ? "Newest first" : "Oldest first"}</p>
+        <p className="mt-0.5 text-xs text-slate-500">{visibleMessages.length} of {messages.length} {messages.length === 1 ? "message" : "messages"} · {order === "newest" ? "Newest first" : "Oldest first"}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        <div aria-label="Message channel" className="flex rounded-lg border border-slate-300 bg-slate-50 p-1">{(["all", "email", "sms"] as const).map((value) => <button key={value} type="button" aria-pressed={channel === value} onClick={() => setChannel(value)} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold ${channel === value ? "bg-slate-950 text-white" : "text-slate-600"}`}>{value === "all" ? "All" : value === "sms" ? "Text" : "Email"}</button>)}</div>
         <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">
           <span>Message order</span>
           <select
@@ -74,7 +78,7 @@ export function CommunicationThreadMessages({ messages }: { messages: Communicat
       const inbound = message.direction === "inbound";
       return <article key={message.id} className={`max-w-4xl rounded-2xl border p-5 shadow-sm ${inbound ? "mr-auto border-slate-200 bg-white" : "ml-auto border-slate-300 bg-slate-100"}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><p className="text-sm font-semibold text-slate-950">{inbound ? message.sender : `To: ${message.recipient}`}</p><p className="mt-1 text-xs text-slate-500">{inbound ? "Incoming message" : "McKenzie Construction"}</p>{!inbound && message.ccRecipients.length ? <p className="mt-1 text-xs text-slate-500">Cc: {message.ccRecipients.join(", ")}</p> : null}</div>
+          <div><div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold uppercase text-white">{message.channel === "sms" ? "Text" : "Email"}</span><p className="text-sm font-semibold text-slate-950">{inbound ? message.sender : `To: ${message.recipient}`}</p></div><p className="mt-1 text-xs text-slate-500">{inbound ? "Incoming message" : "McKenzie Construction"}</p>{!inbound && message.ccRecipients.length ? <p className="mt-1 text-xs text-slate-500">Cc: {message.ccRecipients.join(", ")}</p> : null}</div>
           <div className="text-right"><p className="text-xs text-slate-500">{timestamp(message.occurredAt)}</p>{inbound && !message.isRead ? <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-blue-700">Unread</p> : null}</div>
         </div>
         <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{message.body}</p>
