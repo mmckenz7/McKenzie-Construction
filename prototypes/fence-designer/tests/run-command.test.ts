@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseRunCommand, runEndpoint } from "../src/run-command";
+import { EMPTY_DESIGN, addPoint, feetAndInchesToMm, setSegmentKind } from "../src/model";
+import { parseRunCommand, quickGateTarget, runEndpoint } from "../src/run-command";
 
 describe("precision run commands", () => {
   it("parses absolute first runs with feet and inches", () => {
@@ -32,5 +33,15 @@ describe("precision run commands", () => {
   it("rejects missing and out-of-range lengths", () => {
     expect(() => parseRunCommand("south", null)).toThrow(/include a run length/i);
     expect(() => parseRunCommand("south 0 ft", null)).toThrow(/1 inch through 1,000 feet/i);
+  });
+
+  it("targets a selected fence run or the fence run entering the active endpoint for gate placement", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: feetAndInchesToMm(24, 0), yMm: 0 }, "segment-1");
+    design = addPoint(design, { id: "point-3", xMm: feetAndInchesToMm(24, 0), yMm: feetAndInchesToMm(12, 0) }, "segment-2");
+    expect(quickGateTarget(design, null, "point-3")?.id).toBe("segment-2");
+    expect(quickGateTarget(design, "segment-1", "point-3")?.id).toBe("segment-1");
+    const withGate = setSegmentKind(design, "segment-2", "gate", "single");
+    expect(quickGateTarget(withGate, "segment-2", "point-3")).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { MM_PER_FOOT, MM_PER_INCH } from "./model";
+import { MM_PER_FOOT, MM_PER_INCH, type FenceDesign, type Segment } from "./model";
 
 export type RunDirection = "north" | "east" | "south" | "west" | "straight" | "left" | "right";
 
@@ -71,4 +71,15 @@ export function runEndpoint(anchor: Readonly<{ xMm: number; yMm: number }>, comm
     xMm: Math.round(anchor.xMm + Math.cos(command.bearingRadians) * command.lengthMm),
     yMm: Math.round(anchor.yMm + Math.sin(command.bearingRadians) * command.lengthMm),
   });
+}
+
+export function quickGateTarget(
+  design: Pick<FenceDesign, "segments">,
+  selectedSegmentId: string | null,
+  anchorPointId: string | null,
+): Segment | null {
+  const selected = selectedSegmentId ? design.segments.find(({ id }) => id === selectedSegmentId) ?? null : null;
+  if (selected?.kind === "fence") return selected;
+  if (!anchorPointId) return null;
+  return [...design.segments].reverse().find(({ kind, toPointId }) => kind === "fence" && toPointId === anchorPointId) ?? null;
 }

@@ -11,7 +11,7 @@ import {
 import { acquireBestGps, formatGpsAccuracy, gpsOriginAt, projectGpsFix, projectGpsLeg, type GpsFix, type GpsOrigin } from "./gps";
 import { propertyReferenceLinks, type PropertyReferenceLinks } from "./property-reference";
 import { captureReferenceDisplay, rasterizeReferenceBlob, readReferenceImageFromClipboard, referenceImageErrorMessage, type RasterizedReferenceImage } from "./reference-image";
-import { parseRunCommand, runEndpoint, type ParsedRunCommand } from "./run-command";
+import { parseRunCommand, quickGateTarget, runEndpoint, type ParsedRunCommand } from "./run-command";
 import { loadLocalDesign, loadLocalReference, saveLocalDesign, saveLocalReference } from "./storage";
 import { calculateBlackAluminumTakeoff, calculateTreatedPinePrivacyTakeoff, formatBlackAluminumTakeoffText, formatTreatedPinePrivacyTakeoffText, takeoffPostReasonLabel, type TakeoffPostReason } from "./takeoff";
 import { panView, placeDimensionLabels, zoomViewAt, type ViewBox } from "./view";
@@ -124,6 +124,7 @@ export default function App() {
   const latestOpenEndpoint = [...design.points].reverse().find(openEndpoint) ?? null;
   const extensionAnchor = selectedOpenEndpoint ?? latestOpenEndpoint;
   const incomingToAnchor = extensionAnchor ? design.segments.find(({ toPointId }) => toPointId === extensionAnchor.id) ?? null : null;
+  const quickGateSegment = quickGateTarget(design, selectedSegment?.id ?? null, extensionAnchor?.id ?? null);
   const incomingBearing = incomingToAnchor && extensionAnchor
     ? (() => { const start = pointById(design, incomingToAnchor.fromPointId); return Math.atan2(extensionAnchor.yMm - start.yMm, extensionAnchor.xMm - start.xMm); })()
     : null;
@@ -184,7 +185,7 @@ export default function App() {
       event.preventDefault();
       if (drag) setHistory((current) => ({ ...current, present: drag.original }));
       gpsRequestId.current += 1;
-      setDrag(null); setMode("select"); setSelection(null); setGateEditorOpen(false); setPreviewPoint(null); setClosurePathPointId(null); setSiteWalkActive(false); setGpsBusy(false); setNextGpsStartsLine(false); setCalibrationPoints([]); setHouseTracePoints([]);
+      setDrag(null); setMode("select"); setSelection(null); setGateEditorOpen(false); setCommandDockOpen(false); setCommandInput(""); setPreviewPoint(null); setClosurePathPointId(null); setSiteWalkActive(false); setGpsBusy(false); setNextGpsStartsLine(false); setCalibrationPoints([]); setHouseTracePoints([]);
       activePointers.current.clear(); navigationGesture.current = null; navigationWasActive.current = false; setIsNavigating(false);
       setNotice("Current tool canceled. Choose Draw, Edit, or Pan when ready.");
     };
@@ -788,7 +789,7 @@ export default function App() {
           </div>
           <div className="command-secondary-actions">
             <button type="button" onClick={() => { setMode("draw"); setNotice(extensionAnchor ? "Tap the plan to eyeball the next point from this endpoint." : "Tap the plan to place the starting point."); }}>＋ Eyeball next point</button>
-            <button type="button" disabled={!selectedSegment || selectedSegment.kind !== "fence"} onClick={() => { setCommandDockOpen(false); setGateEditorOpen(true); setNotice("Gate placement opened for the selected run. Enter its width and distance from the starting post."); }}>＋ Gate on selected run</button>
+            <button type="button" disabled={!quickGateSegment} onClick={() => { if (!quickGateSegment) return; const selectedTarget = selectedSegment?.id === quickGateSegment.id; selectSegment(quickGateSegment.id); setGateEditorOpen(true); setCommandDockOpen(false); setNotice(`Gate placement opened for the ${selectedTarget ? "selected" : "last completed"} run. Enter its width and exact distance from the starting post.`); }}>＋ Gate on {selectedSegment?.kind === "fence" ? "selected" : "last"} run</button>
             <button type="button" disabled={!design.house || !activePath || activePath.segments.length < 2} onClick={() => { setCommandDockOpen(false); setMode("close"); setSelection(null); setClosurePathPointId(extensionAnchor?.id ?? null); setNotice("Tap the intended connection on the house. Measured runs stay fixed while flexible angles close."); }}>⇥ Close to house</button>
           </div>
         </section>}

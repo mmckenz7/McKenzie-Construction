@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/` with one synchronized graphical/exact-command layout workflow and selectable no-pricing **Black Aluminum** and **Treated Pine Privacy** takeoffs. **Quick layout** accepts one deterministic run at a time, previews it on the plan, and applies it from the selected/latest open endpoint through the same geometry and undo history as Draw. Unknown angles can be tapped visually, after which command input resumes from that new point. This adds no AI, CAD import, network, provider, or parallel geometry model. Consumer-phone Site Walk was removed from the primary toolbar after real-world short residential tests proved its direction/distance unreliable; its isolated research code remains without promotion into the recommended workflow. All materials continue to use the same authoritative material-agnostic drawing.
+Created a usable, isolated 2D fence measurement prototype under `prototypes/fence-designer/` with one synchronized graphical/exact-command layout workflow and selectable no-pricing **Black Aluminum** and **Treated Pine Privacy** takeoffs. **Quick layout** accepts one deterministic run at a time, previews it on the plan, and applies it from the selected/latest open endpoint through the same geometry and undo history as Draw. Unknown angles can be tapped visually, after which command input resumes from that new point. The gate shortcut now targets the deliberately selected fence run or, by default, the last fence run entering the active endpoint and opens the existing exact gate editor. This adds no alternate gate geometry, AI, CAD import, network, provider, or parallel measurement model. Consumer-phone Site Walk remains removed from the primary toolbar.
 
 ## Files and ownership
 
@@ -47,11 +47,11 @@ Created a usable, isolated 2D fence measurement prototype under `prototypes/fenc
 
 ## Validation
 
-- 111 deterministic tests passed, including five exact-command parser/projection tests, fifteen Black Aluminum tests, five Treated Pine/shared-drawing tests, eleven GPS tests, five local-reference transform tests, twenty-nine geometry/model tests, and thirteen renderer/address/layer/provenance contract tests.
+- 112 deterministic tests passed, including six exact-command/Quick Layout target tests, fifteen Black Aluminum tests, five Treated Pine/shared-drawing tests, eleven GPS tests, five local-reference transform tests, twenty-nine geometry/model tests, and thirteen renderer/address/layer/provenance contract tests.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.
-- Browser QA passed for the full measurement workflow and the Materials audit layer on desktop and phone viewports. At 390 × 844, Quick Layout created an exact 20′–40′–20′ three-run shape, previewed every run, switched to a one-tap graphical angle and back without losing the endpoint, and stayed horizontally contained. Focused Site Walk was previously verified at 375 × 667, 390 × 844, and 844 × 390, but real-world phone testing established that consumer GPS is not adequate for the short-run residential workflow and it is now hidden from the primary toolbar. Previous-segment-relative angle assistance, inline gate placement, the independent grid toggle, live takeoff recalculation, overlay/revision isolation, accessible summary/markers, and console cleanliness were also confirmed.
+- Browser QA passed for the full measurement workflow and the Materials audit layer on desktop and phone viewports. At 390 × 844, the Quick Layout gate shortcut placed a 4′ single gate after 8′ on an exact 24′ run, kept the line total and bearing unchanged, survived undo/redo, and produced the expected deterministic Black Aluminum panels, posts, and hardware. The page stayed horizontally contained and browser warnings/errors remained empty. Escape now cancels the transient Quick Layout dock and unfinished text. Consumer GPS remains hidden from the primary workflow.
 - The protected OS route redirects signed-out visitors to login with the exact fence-route return path, and its designer styles are scoped to prevent changes elsewhere in OS.
 - Repository lint passed with no errors (pre-existing warnings remain), and the production build passed with the supported webpack builder, including the `/sales/fence-designer` route.
 
