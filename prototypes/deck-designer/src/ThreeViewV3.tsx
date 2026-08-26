@@ -16,7 +16,7 @@ import { DISPLAYED_STAIR_LANDING_CENTER_OFFSET, DISPLAYED_STAIR_LANDING_HEIGHT, 
 type FinishGeometry = Partial<EdgeFinishGeometryV5>;
 type Point2 = Readonly<{ x: number; z: number }>;
 type Point3 = Readonly<{ x: number; y: number; z: number }>;
-type Member = Readonly<{ start: Point2; end: Point2 }>;
+type Member = Readonly<{ id?: string; start: Point2; end: Point2 }>;
 type Post = Readonly<{ x: number; z: number; top: number }>;
 export type ThreeViewPlatform = Readonly<{ id: string; elevation: number; construction: Readonly<{ decking: Readonly<{ boardWidth: number }>; railing: Readonly<{ height: number }> }> }>;
 export type ThreeViewGeometry = Readonly<{
@@ -38,10 +38,12 @@ export type ThreeViewGeometry = Readonly<{
 type PlatformView = Readonly<{ platform: ThreeViewPlatform; geometry: ThreeViewGeometry }>;
 export type RenderPalette = "cedar" | "brown" | "gray";
 export const RENDER_PALETTES = Object.freeze({
-  cedar: Object.freeze({ deck: 0x9b633f, fascia: 0x6a432d, skirting: 0x7b563c }),
-  brown: Object.freeze({ deck: 0x684630, fascia: 0x4a3023, skirting: 0x59402f }),
-  gray: Object.freeze({ deck: 0x817b72, fascia: 0x5d5953, skirting: 0x6b6760 }),
+  cedar: Object.freeze({ deck: 0x9b633f, border: 0x74462e, fascia: 0x6a432d, skirting: 0x7b563c }),
+  brown: Object.freeze({ deck: 0x684630, border: 0x493023, fascia: 0x4a3023, skirting: 0x59402f }),
+  gray: Object.freeze({ deck: 0x817b72, border: 0x5d5953, fascia: 0x5d5953, skirting: 0x6b6760 }),
 });
+export const isPictureFrameBorderMember = (member: Readonly<{ id?: string }>): boolean =>
+  member.id?.startsWith("picture-frame-border-") === true || member.id?.startsWith("picture-frame-hole-") === true;
 type Props = { platform: ThreeViewPlatform; geometry: ThreeViewGeometry; contextPlatforms?: readonly PlatformView[]; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality; palette?: RenderPalette };
 const EMPTY_CONTEXT_PLATFORMS: readonly PlatformView[] = Object.freeze([]);
 
@@ -86,6 +88,7 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTE
     const member = (value: Member, y: number, height: number, depth: number, material: Material) => { const dx = value.end.x - value.start.x, dz = value.end.z - value.start.z; const mesh = box(Math.hypot(dx, dz), height, depth, material); mesh.position.set((value.start.x + value.end.x) / 2, y, (value.start.z + value.end.z) / 2); mesh.rotation.y = -Math.atan2(dz, dx); mesh.receiveShadow = true; };
     const slopedMember = (value: Readonly<{ start: Point3; end: Point3 }>, thickness: number, material: Material) => { const direction = new Vector3(value.end.x - value.start.x, value.end.y - value.start.y, value.end.z - value.start.z); const mesh = box(direction.length(), thickness, thickness, material); mesh.position.set((value.start.x + value.end.x) / 2, (value.start.y + value.end.y) / 2, (value.start.z + value.end.z) / 2); mesh.quaternion.setFromUnitVectors(new Vector3(1, 0, 0), direction.normalize()); mesh.receiveShadow = true; };
     const deck = new MeshStandardMaterial({ color: colors.deck, roughness: .7 });
+    const deckBorder = new MeshStandardMaterial({ color: colors.border, roughness: .68 });
     const frame = new MeshStandardMaterial({ color: 0x76563d, roughness: .86 });
     const rail = new MeshStandardMaterial({ color: 0x25332e, roughness: .55 });
     const fascia = new MeshStandardMaterial({ color: colors.fascia, roughness: .75 });
@@ -94,7 +97,7 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTE
     for (const panel of houseGeometry.houseWallPanels) member(panel, panel.baseElevation + panel.height / 2, panel.height, 8, house);
     for (const view of platformViews) {
       const itemPlatform = view.platform, itemGeometry = view.geometry;
-      for (const board of itemGeometry.surfaceBoards) member(board, itemPlatform.elevation, 1, itemPlatform.construction.decking.boardWidth, deck);
+      for (const board of itemGeometry.surfaceBoards) member(board, itemPlatform.elevation, 1, itemPlatform.construction.decking.boardWidth, isPictureFrameBorderMember(board) ? deckBorder : deck);
       if (showFraming) {
         for (const joist of itemGeometry.joists) member(joist, itemPlatform.elevation - CONCEPTUAL_JOIST_CENTER_OFFSET, CONCEPTUAL_JOIST_HEIGHT, 1.5, frame);
         for (const beam of itemGeometry.beams) member(beam, itemPlatform.elevation - CONCEPTUAL_BEAM_CENTER_OFFSET, CONCEPTUAL_BEAM_HEIGHT, 4.5, frame);

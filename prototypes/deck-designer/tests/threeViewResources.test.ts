@@ -1,12 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { disposeSceneResources, RENDER_PALETTES } from "../src/ThreeViewV3";
+import { disposeSceneResources, isPictureFrameBorderMember, RENDER_PALETTES } from "../src/ThreeViewV3";
 
 describe("3D scene resource cleanup", () => {
   it("keeps generic presentation palettes immutable and distinct", () => {
     expect(Object.isFrozen(RENDER_PALETTES)).toBe(true);
     expect(Object.values(RENDER_PALETTES).every(Object.isFrozen)).toBe(true);
     expect(new Set(Object.values(RENDER_PALETTES).map((palette) => palette.deck)).size).toBe(3);
+    expect(Object.values(RENDER_PALETTES).every((palette) => new Set([palette.border, palette.deck]).size === 2)).toBe(true);
+  });
+
+  it("identifies only authoritative outer and opening picture-frame board IDs", () => {
+    expect(isPictureFrameBorderMember({ id: "picture-frame-border-1" })).toBe(true);
+    expect(isPictureFrameBorderMember({ id: "picture-frame-hole-2-border-3" })).toBe(true);
+    expect(isPictureFrameBorderMember({ id: "picture-frame-field-surface-board-1" })).toBe(false);
+    expect(isPictureFrameBorderMember({ id: "surface-board-1" })).toBe(false);
+    expect(isPictureFrameBorderMember({})).toBe(false);
   });
 
   it("disposes shared and unique geometry/material resources exactly once", () => {

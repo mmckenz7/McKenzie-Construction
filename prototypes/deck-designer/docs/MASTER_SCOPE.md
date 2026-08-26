@@ -100,6 +100,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Lean generic 3D presentation baseline with shared scene geometry, warm neutral materials, ground context, and full-deck shadow coverage
 - [x] Production-only dependency-warning elimination restoring measured bundle headroom without raising ceilings
 - [x] Transient generic cedar, brown, and gray 3D color choices without catalog or design-document coupling
+- [x] Authoritative-ID-driven 3D color distinction for outer and opening picture-frame courses
 - [ ] Additional borders and decorative inlays
 - [x] Versioned v5 exact-edge fascia/skirting intent, stair-opening-aware geometry, generic quantities, and fail-closed region remapping foundation
 - [x] Activate a separate uncluttered Finishes stage with fascia/skirting 2D/3D controls after v4/v5 equivalence gates
