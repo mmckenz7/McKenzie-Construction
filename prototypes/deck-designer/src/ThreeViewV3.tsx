@@ -36,7 +36,13 @@ export type ThreeViewGeometry = Readonly<{
   landingSupportPosts: readonly Post[];
 }> & FinishGeometry;
 type PlatformView = Readonly<{ platform: ThreeViewPlatform; geometry: ThreeViewGeometry }>;
-type Props = { platform: ThreeViewPlatform; geometry: ThreeViewGeometry; contextPlatforms?: readonly PlatformView[]; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality };
+export type RenderPalette = "cedar" | "brown" | "gray";
+export const RENDER_PALETTES = Object.freeze({
+  cedar: Object.freeze({ deck: 0x9b633f, fascia: 0x6a432d, skirting: 0x7b563c }),
+  brown: Object.freeze({ deck: 0x684630, fascia: 0x4a3023, skirting: 0x59402f }),
+  gray: Object.freeze({ deck: 0x817b72, fascia: 0x5d5953, skirting: 0x6b6760 }),
+});
+type Props = { platform: ThreeViewPlatform; geometry: ThreeViewGeometry; contextPlatforms?: readonly PlatformView[]; houseGeometry: HouseContextGeometry; gradeElevation: number; preset: CameraPreset; presetRequest: number; showFraming: boolean; quality: RenderQuality; palette?: RenderPalette };
 const EMPTY_CONTEXT_PLATFORMS: readonly PlatformView[] = Object.freeze([]);
 
 export function disposeSceneResources(root: Object3D): Readonly<{ geometries: number; materials: number }> {
@@ -53,7 +59,7 @@ export function disposeSceneResources(root: Object3D): Readonly<{ geometries: nu
   return Object.freeze({ geometries: geometries.size, materials: materials.size });
 }
 
-export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTEXT_PLATFORMS, houseGeometry, gradeElevation, preset, presetRequest, showFraming, quality }: Props) {
+export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTEXT_PLATFORMS, houseGeometry, gradeElevation, preset, presetRequest, showFraming, quality, palette = "cedar" }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -74,15 +80,16 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTE
     const sun = new DirectionalLight(0xfff0d2, 2.5); sun.position.set(-220, 360, 160); sun.castShadow = true; sun.shadow.mapSize.set(policy.shadowMapSize, policy.shadowMapSize); Object.assign(sun.shadow.camera, { left: -500, right: 500, top: 500, bottom: -500, far: 1200 }); sun.shadow.camera.updateProjectionMatrix(); scene.add(sun);
     const ground = new Mesh(new PlaneGeometry(3000, 3000), new MeshStandardMaterial({ color: 0x718866, roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.position.y = gradeElevation; ground.receiveShadow = true; scene.add(ground);
     const model = new Group();
+    const colors = RENDER_PALETTES[palette];
     const unitBox = new BoxGeometry(1, 1, 1);
     const box = (width: number, height: number, depth: number, material: Material) => { const mesh = new Mesh(unitBox, material); mesh.scale.set(width, height, depth); mesh.castShadow = true; model.add(mesh); return mesh; };
     const member = (value: Member, y: number, height: number, depth: number, material: Material) => { const dx = value.end.x - value.start.x, dz = value.end.z - value.start.z; const mesh = box(Math.hypot(dx, dz), height, depth, material); mesh.position.set((value.start.x + value.end.x) / 2, y, (value.start.z + value.end.z) / 2); mesh.rotation.y = -Math.atan2(dz, dx); mesh.receiveShadow = true; };
     const slopedMember = (value: Readonly<{ start: Point3; end: Point3 }>, thickness: number, material: Material) => { const direction = new Vector3(value.end.x - value.start.x, value.end.y - value.start.y, value.end.z - value.start.z); const mesh = box(direction.length(), thickness, thickness, material); mesh.position.set((value.start.x + value.end.x) / 2, (value.start.y + value.end.y) / 2, (value.start.z + value.end.z) / 2); mesh.quaternion.setFromUnitVectors(new Vector3(1, 0, 0), direction.normalize()); mesh.receiveShadow = true; };
-    const deck = new MeshStandardMaterial({ color: 0x9b633f, roughness: .7 });
+    const deck = new MeshStandardMaterial({ color: colors.deck, roughness: .7 });
     const frame = new MeshStandardMaterial({ color: 0x76563d, roughness: .86 });
     const rail = new MeshStandardMaterial({ color: 0x25332e, roughness: .55 });
-    const fascia = new MeshStandardMaterial({ color: 0x6a432d, roughness: .75 });
-    const skirting = new MeshStandardMaterial({ color: 0x7b563c, roughness: .9 });
+    const fascia = new MeshStandardMaterial({ color: colors.fascia, roughness: .75 });
+    const skirting = new MeshStandardMaterial({ color: colors.skirting, roughness: .9 });
     const house = new MeshStandardMaterial({ color: 0xd8d2c4, roughness: .92 });
     for (const panel of houseGeometry.houseWallPanels) member(panel, panel.baseElevation + panel.height / 2, panel.height, 8, house);
     for (const view of platformViews) {
@@ -116,7 +123,7 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTE
       if (cameraRef.current === camera) cameraRef.current = null;
       if (controlsRef.current === controls) controlsRef.current = null;
     };
-  }, [platform, geometry, contextPlatforms, houseGeometry, gradeElevation, quality, showFraming, centerX, centerZ, span]);
+  }, [platform, geometry, contextPlatforms, houseGeometry, gradeElevation, quality, showFraming, palette, centerX, centerZ, span]);
 
   useEffect(() => {
     const camera = cameraRef.current, controls = controlsRef.current; if (!camera || !controls) return;
@@ -125,6 +132,6 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTE
     if (preset === "front") camera.position.set(centerX, platform.elevation + 45, maxZ + span * 1.4);
     if (preset === "perspective") camera.position.set(centerX + span, platform.elevation + span, centerZ + span);
     camera.lookAt(center); controls.update();
-  }, [preset, presetRequest, centerX, centerZ, maxZ, span, platform.elevation, geometry, contextPlatforms, houseGeometry, gradeElevation, quality, showFraming]);
+  }, [preset, presetRequest, centerX, centerZ, maxZ, span, platform.elevation, geometry, contextPlatforms, houseGeometry, gradeElevation, quality, showFraming, palette]);
   return <div className="three-mount" ref={mountRef} aria-label="Interactive polygon deck model" />;
 }

@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { disposeSceneResources } from "../src/ThreeViewV3";
+import { disposeSceneResources, RENDER_PALETTES } from "../src/ThreeViewV3";
 
 describe("3D scene resource cleanup", () => {
+  it("keeps generic presentation palettes immutable and distinct", () => {
+    expect(Object.isFrozen(RENDER_PALETTES)).toBe(true);
+    expect(Object.values(RENDER_PALETTES).every(Object.isFrozen)).toBe(true);
+    expect(new Set(Object.values(RENDER_PALETTES).map((palette) => palette.deck)).size).toBe(3);
+  });
+
   it("disposes shared and unique geometry/material resources exactly once", () => {
     const scene = new THREE.Scene();
     const sharedGeometry = new THREE.BoxGeometry(1, 1, 1);

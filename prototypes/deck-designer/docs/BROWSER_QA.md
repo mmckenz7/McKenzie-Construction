@@ -1,5 +1,12 @@
 # Browser QA record
 
+## 2026-08-26 generic 3D color choices
+
+- The v5 model toolbar exposes Cedar, Brown, and Gray through a labelled native select. Changing the selection rebuilds the same one-canvas renderer with a generic deck/fascia/skirting palette while the measured plan, revision, quantities, camera, and framing facts remain unchanged.
+- Desktop browser QA selected Gray and confirmed the visual update, one canvas, stable plan and quantities, and no warning/error logs. The existing narrow-screen toolbar rule stacks its native selects above the camera controls rather than widening the model card.
+- Focused tests confirm the three renderer palettes are frozen and distinct. The measured build remains below unchanged ceilings at 83.6 KiB initial / 120.5 KiB largest / 243.8 KiB total JavaScript gzip.
+- These are visualization colors, not products, manufacturer colors, availability, prices, or saved design selections.
+
 ## 2026-08-26 production bundle headroom
 
 - The existing startup, deferred-control, and Three.js chunk boundaries remain unchanged. Production builds now omit dependency `console.warn` calls; prototype source contains none, development/tests retain warnings, and production errors remain available.
