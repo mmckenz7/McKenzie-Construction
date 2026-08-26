@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "migration:check": "node scripts/check-migration-ledger.mjs",
     "sandbox:prepare": "node scripts/prepare-local-sandbox.mjs",
     "sandbox:start": "supabase --workdir .local-sandbox start",
     "sandbox:reset": "supabase --workdir .local-sandbox db reset",
