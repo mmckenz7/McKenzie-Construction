@@ -12,6 +12,7 @@ import {
   resolveLeadOwner,
   type CompanyAssignmentSettings,
 } from "@/lib/crm/assignment";
+import { isConsultationTimeAllowed } from "@/lib/consultation-hours";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 const allowedLeadStatuses = [
@@ -216,7 +217,8 @@ export async function POST(
           require_project_manager,
           default_lead_owner_id,
           default_estimator_id,
-          default_project_manager_id
+          default_project_manager_id,
+          end_of_business_time
         `,
       )
       .limit(1)
@@ -238,6 +240,20 @@ export async function POST(
 
     const assignmentSettings =
       settingsData as CompanyAssignmentSettings;
+
+    const consultationHours = {
+      start: "08:00",
+      end: settingsData.end_of_business_time ?? "17:00",
+    };
+
+    if (
+      (requestedTime &&
+        !isConsultationTimeAllowed(requestedTime, consultationHours)) ||
+      (alternateTime &&
+        !isConsultationTimeAllowed(alternateTime, consultationHours))
+    ) {
+      return redirectTo("/contact?error=consultation-time");
+    }
 
     let responsiblePersonId:
       | string

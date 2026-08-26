@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 import { ProjectRequestForm } from "@/components/project-request-form";
 import type { ProjectRequestType } from "@/components/project-request-form";
 import { TrackedPhoneLink } from "@/components/tracked-phone-link";
+import { createAdminServerClient } from "@/lib/supabase/admin-server";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Request a Construction Consultation in Knoxville",
@@ -42,9 +45,29 @@ function readProjectType(value: string | string[] | undefined) {
 export default async function ContactPage({
   searchParams,
 }: {
-  searchParams: Promise<{ projectType?: string | string[] }>;
+  searchParams: Promise<{
+    error?: string | string[];
+    projectType?: string | string[];
+  }>;
 }) {
-  const defaultProjectType = readProjectType((await searchParams).projectType);
+  const params = await searchParams;
+  const defaultProjectType = readProjectType(params.projectType);
+  const errorMessage =
+    params.error === "consultation-time"
+      ? "That consultation time is no longer available. Please choose one of the listed times and submit the request again."
+      : params.error === "submission"
+        ? "We could not submit your request right now. Please try again or call us at 865-433-3325."
+        : null;
+  const supabase = createAdminServerClient();
+  const { data: settings } = await supabase
+    .from("company_settings")
+    .select("end_of_business_time")
+    .limit(1)
+    .maybeSingle();
+  const consultationHours = {
+    start: "08:00",
+    end: settings?.end_of_business_time ?? "17:00",
+  };
 
   return (
     <main className="bg-white text-zinc-950">
@@ -73,13 +96,24 @@ export default async function ContactPage({
 
       <section className="bg-white">
         <div className="mx-auto max-w-5xl px-6 py-12 lg:px-8 lg:py-16">
+          {errorMessage ? (
+            <div
+              role="alert"
+              className="mb-6 border border-red-300 bg-red-50 px-5 py-4 text-sm font-semibold leading-6 text-red-800"
+            >
+              {errorMessage}
+            </div>
+          ) : null}
           {defaultProjectType ? (
             <div className="mb-6 border border-lime-300 bg-lime-50 px-5 py-4 text-sm leading-6 text-slate-800">
               We started the form with <strong>{defaultProjectType}</strong>{" "}
               based on the service you were viewing. You can change it below.
             </div>
           ) : null}
-          <ProjectRequestForm defaultProjectType={defaultProjectType} />
+          <ProjectRequestForm
+            consultationHours={consultationHours}
+            defaultProjectType={defaultProjectType}
+          />
         </div>
       </section>
 
