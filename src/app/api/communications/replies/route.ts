@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { safeAttachmentFilename } from "@/lib/communications/microsoft-attachment-core";
 import { prepareSecondaryEmailRecipients } from "@/lib/communications/email-recipients";
+import { composeSignedEmail } from "@/lib/communications/email-signature";
+import { loadCompanyEmailSignature } from "@/lib/communications/email-signature-server";
 import { outboundAttachmentError } from "@/lib/communications/outbound-attachment-core";
 import { deliverCommunication } from "@/lib/communications/provider";
 import { communicationWorkspaceMatchesSingletonCompany } from "@/lib/communications/workspace-company";
@@ -198,6 +200,27 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: `${blockedRecipient} is not on the communication sandbox allowlist.` }, { status: 409 });
   }
 
+  let signedEmail;
+  try {
+    const signature = await loadCompanyEmailSignature(
+      supabase,
+      workspace.user.id,
+    );
+    signedEmail = composeSignedEmail(
+      body,
+      signature.layout,
+      signature.facts,
+    );
+  } catch {
+    return Response.json(
+      { success: false, error: "The automatic company email signature could not be prepared." },
+      { status: 500 },
+    );
+  }
+  const signatureMetadata = signedEmail.signature
+    ? { email_signature: signedEmail.signature }
+    : {};
+
   const sentAt = new Date().toISOString();
   const replyingToExistingThread = Boolean(threadId);
   if (!threadId) {
@@ -231,7 +254,7 @@ export async function POST(request: Request) {
     sender,
     cc_recipients: ccRecipients,
     subject: outboundSubject,
-    body,
+    body: signedEmail.text,
     status: "processing",
     provider: "resend",
     source_type: replyingToExistingThread ? "inbox_reply" : "inbox_compose",
@@ -248,6 +271,7 @@ export async function POST(request: Request) {
       in_reply_to: inReplyTo,
       attachments: attachmentMetadata,
       cc_recipients: ccRecipients,
+      ...signatureMetadata,
     },
   }).select("id").single();
   if (outboxResult.error || !outboxResult.data) {
@@ -265,7 +289,8 @@ export async function POST(request: Request) {
       ccRecipients,
       bccRecipients,
       subject: outboundSubject,
-      body,
+      body: signedEmail.text,
+      html: signedEmail.html,
       idempotencyKey: outboxIdempotencyKey,
       provider: "resend",
       headers: inReplyTo ? { "In-Reply-To": inReplyTo, References: inReplyTo } : {},
@@ -302,6 +327,7 @@ export async function POST(request: Request) {
       provider_accepted_status: delivery.acceptedStatus,
       attachments: attachmentMetadata,
       cc_recipients: ccRecipients,
+      ...signatureMetadata,
     },
   }).eq("id", outboxResult.data.id);
 
@@ -311,7 +337,7 @@ export async function POST(request: Request) {
     sender,
     recipient,
     subject: outboundSubject,
-    body,
+    body: signedEmail.text,
     status: "sent",
     provider: "resend",
     provider_message_id: delivery.providerMessageId,
@@ -323,7 +349,7 @@ export async function POST(request: Request) {
     has_attachments: attachments.length > 0,
     department,
     sent_at: sentAt,
-    metadata: { customer_id: customerId, sent_by_team_member_id: workspace.access?.user_id ?? null, attachments: attachmentMetadata, cc_recipients: ccRecipients, used_bcc: bccRecipients.length > 0 },
+    metadata: { customer_id: customerId, sent_by_team_member_id: workspace.access?.user_id ?? null, attachments: attachmentMetadata, cc_recipients: ccRecipients, used_bcc: bccRecipients.length > 0, ...signatureMetadata },
     security_disposition: "normal",
   });
 

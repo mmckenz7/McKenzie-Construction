@@ -7,6 +7,7 @@ import {
   CommunicationConfigurationError,
   deliverCommunication,
 } from "@/lib/communications/provider";
+import { plainTextEmailHtml } from "@/lib/communications/email-signature";
 
 type OutboxRecord = {
   id: string;
@@ -130,6 +131,9 @@ export async function processCommunicationOutbox(
         bccRecipients: [],
         subject: candidate.subject,
         body: candidate.body,
+        html: candidate.channel === "email"
+          ? plainTextEmailHtml(candidate.body)
+          : undefined,
         idempotencyKey: candidate.idempotency_key,
         provider: candidate.provider,
       });

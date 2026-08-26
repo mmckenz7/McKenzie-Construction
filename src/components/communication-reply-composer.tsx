@@ -1,7 +1,9 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- The automatic signature uses the validated company HTTPS logo reference. */
+
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   MAX_OUTBOUND_ATTACHMENTS,
@@ -18,6 +20,13 @@ type CommunicationReplyComposerProps = {
   initialSubject?: string | null;
   tone?: "light" | "dark";
   editableRecipient?: boolean;
+};
+
+type SignaturePreview = {
+  layout: "off" | "compact" | "branded";
+  label: string;
+  lines: readonly string[];
+  logoUrl: string | null;
 };
 
 function replySubject(subject: string | null | undefined) {
@@ -46,8 +55,28 @@ export function CommunicationReplyComposer({
   const [showBcc, setShowBcc] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [signaturePreview, setSignaturePreview] = useState<SignaturePreview | null>(null);
   const dark = tone === "dark";
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch(
+          "/api/communications/signature-preview",
+          { cache: "no-store" },
+        );
+        const result = await response.json() as {
+          preview?: SignaturePreview;
+        };
+        if (response.ok && result.preview) {
+          setSignaturePreview(result.preview);
+        }
+      } catch {
+        setSignaturePreview(null);
+      }
+    })();
+  }, []);
 
   async function submitReply(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -153,6 +182,15 @@ export function CommunicationReplyComposer({
       <span className={`mb-1 block text-xs font-bold uppercase tracking-widest ${dark ? "text-slate-500" : "text-slate-500"}`}>Message</span>
       <textarea className={`min-h-36 w-full resize-y rounded-lg border px-3 py-3 text-sm leading-6 outline-none focus:border-blue-500 ${inputClass}`} value={body} onChange={(event) => setBody(event.target.value)} maxLength={20000} placeholder={editableRecipient ? "Write your email…" : "Write your reply…"} required disabled={!effectiveRecipient || submitting} />
     </label>
+    <aside aria-label="Automatic company email signature" className={`rounded-lg border px-4 py-3 text-sm ${dark ? "border-slate-800 bg-slate-950/60 text-slate-400" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
+      <p className="font-bold">Automatic company signature</p>
+      {!signaturePreview ? <p className="mt-1 text-xs">The server will add the current company signature when the email is sent.</p> : signaturePreview.layout === "off" ? <p className="mt-1 text-xs">Off in Company Settings. Nothing will be added to this message.</p> : <div className="mt-3 border-t-2 pt-3">
+        {signaturePreview.logoUrl ? <img src={signaturePreview.logoUrl} alt="Company logo" className="mb-2 max-h-12 max-w-[10rem] object-contain object-left" /> : null}
+        <p className="sr-only">{signaturePreview.label}</p>
+        {signaturePreview.lines.map((line, index) => <p key={`${index}:${line}`} className={index === 0 ? "font-bold" : "mt-0.5"}>{line}</p>)}
+      </div>}
+      <p className="mt-2 text-xs">This preview is not editable here. Company Settings controls the layout, and your employee profile supplies the contact facts.</p>
+    </aside>
     {notice ? <p role="status" className={`rounded-lg border px-3 py-2 text-sm font-semibold ${notice.kind === "success" ? "border-emerald-700/40 bg-emerald-950/30 text-emerald-500" : "border-red-700/40 bg-red-950/30 text-red-500"}`}>{notice.text}</p> : null}
     <div className="flex flex-wrap items-center gap-3">
       <button type="submit" disabled={!effectiveRecipient || submitting} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{submitting ? "Sending…" : editableRecipient ? "Send email" : "Send reply"}</button>
