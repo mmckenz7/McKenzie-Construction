@@ -12,6 +12,7 @@ export type GeometryWarningV5 = GeometryWarningV4;
 
 const EPSILON = .01;
 const compareGeometryIds = (left: string, right: string): number => left.localeCompare(right, undefined, { numeric: true });
+const roundedTenth = (value: number): number => Math.round(value * 10) / 10;
 export function usesPrototypeReviewThresholdV5(warning: GeometryWarningV5): boolean {
   return warning.id.includes("clearance-") || warning.id.startsWith("beam-short-segment-") || warning.id.startsWith("stair-edge-remainder-");
 }
@@ -80,6 +81,25 @@ function supportPostFootprint(post: ConceptualSupportPost): readonly PolygonPoin
   ];
 }
 
+type DisplayedStairElement = Readonly<{ id: string; c: readonly PolygonPoint[]; b: number; t: number }>;
+
+function displayedStairElements(route: ReturnType<typeof deriveStairRouteGeometryV3>): readonly DisplayedStairElement[] {
+  return [
+    ...route.treads.map((tread) => ({
+      id: tread.id,
+      c: tread.corners,
+      b: tread.y,
+      t: tread.y + Math.max(DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT, tread.rise),
+    })),
+    ...route.landings.map((landing) => ({
+      id: landing.id,
+      c: landing.corners,
+      b: landing.y + DISPLAYED_STAIR_LANDING_CENTER_OFFSET - DISPLAYED_STAIR_LANDING_HEIGHT / 2,
+      t: landing.y + DISPLAYED_STAIR_LANDING_CENTER_OFFSET + DISPLAYED_STAIR_LANDING_HEIGHT / 2,
+    })),
+  ];
+}
+
 function interruptedJoistIds(design: DeckDesignV5, platformId: string, holeIndex: number): readonly string[] {
   const platform = design.platforms.find((candidate) => candidate.id === platformId)!;
   const holeRegion = { outer: platform.region.holes[holeIndex], holes: [] };
@@ -113,7 +133,8 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
   const normalized = normalizeDeckDesignV5(design);
   const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
   if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
-  const warnings = [...deriveGeometryWarningsV4(deckDesignV5ToV4Compatibility(normalized), platformId)];
+  const warnings = deriveGeometryWarningsV4(deckDesignV5ToV4Compatibility(normalized), platformId)
+    .filter((warning) => !warning.id.startsWith("stair-route-collision-"));
   const edges = deriveGeometricPolygonEdges(platform.region.outer);
   const stairRoutes = platform.construction.stairSystems.map((system, systemIndex) => deriveStairRouteGeometryV3({
     system,
@@ -124,6 +145,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     namespaceIds: platform.construction.stairSystems.length > 1 || systemIndex > 0,
     targetPlatformElevations: Object.fromEntries(normalized.platforms.map((item) => [item.id, item.elevation])),
   }));
+  const displayedStairRoutes = stairRoutes.map(displayedStairElements);
   platform.construction.stairSystems.forEach((system, systemIndex) => {
     const edge = edges.find((candidate) => candidate.id === system.edgeId)!;
     const remainders = [
@@ -136,7 +158,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
       const endLabel = Math.abs(remainder.point.x - other.x) >= Math.abs(remainder.point.z - other.z)
         ? remainder.point.x < other.x ? "left" : "right"
         : remainder.point.z < other.z ? "top" : "bottom";
-      const measured = Math.round(remainder.distance * 10) / 10;
+      const measured = roundedTenth(remainder.distance);
       warnings.push(Object.freeze({
         id: `stair-edge-remainder-${system.id}-${remainderIndex + 1}`,
         severity: "clearance",
@@ -155,14 +177,11 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
   platform.construction.framing.beamLines.forEach((line) => {
     const posts = beamProjectionByLineId.get(line.id)!.supportPosts;
     platform.construction.stairSystems.forEach((system, systemIndex) => {
-      const route = stairRoutes[systemIndex];
+      const elements = displayedStairRoutes[systemIndex];
       const collisions = posts.flatMap((post) => {
         const postTop = conceptualSupportPostTop(post.top, normalized.siteContext.gradeElevation);
-        const overlaps = (corners: readonly PolygonPoint[], base: number, top: number) => normalized.siteContext.gradeElevation < top - EPSILON && postTop > base + EPSILON && convexPolygonsOverlap(supportPostFootprint(post), corners);
-        return [
-          ...route.treads.filter((tread) => overlaps(tread.corners, tread.y, tread.y + Math.max(DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT, tread.rise))),
-          ...route.landings.filter((landing) => overlaps(landing.corners, landing.y + DISPLAYED_STAIR_LANDING_CENTER_OFFSET - DISPLAYED_STAIR_LANDING_HEIGHT / 2, landing.y + DISPLAYED_STAIR_LANDING_CENTER_OFFSET + DISPLAYED_STAIR_LANDING_HEIGHT / 2)),
-        ].map((element) => [post.id, element.id] as const);
+        return elements.filter((element) => normalized.siteContext.gradeElevation < element.t - EPSILON && postTop > element.b + EPSILON && convexPolygonsOverlap(supportPostFootprint(post), element.c))
+          .map((element) => [post.id, element.id] as const);
       });
       if (!collisions.length) return;
       warnings.push(Object.freeze({
@@ -170,6 +189,40 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
         severity: "collision",
         geometryIds: Object.freeze([line.id, system.id, ...[...new Set(collisions.map(([postId]) => postId))].sort(compareGeometryIds), ...[...new Set(collisions.map(([, elementId]) => elementId))].sort(compareGeometryIds)]),
         message: "The current conceptual layout places a displayed support post inside the displayed stair route. Move/review the beam or stair before continuing. Reviewed structural post placement may change.",
+      }));
+    });
+  });
+  displayedStairRoutes.forEach((first, firstIndex) => {
+    displayedStairRoutes.slice(firstIndex + 1).forEach((second, relativeIndex) => {
+      const secondIndex = firstIndex + relativeIndex + 1;
+      const planOverlaps = first.flatMap((firstElement) => second
+        .filter((secondElement) => convexPolygonsOverlap(firstElement.c, secondElement.c))
+        .map((secondElement) => [firstElement, secondElement] as const));
+      const firstSystem = platform.construction.stairSystems[firstIndex];
+      const secondSystem = platform.construction.stairSystems[secondIndex];
+      const collisions = planOverlaps.filter(([firstElement, secondElement]) => Math.max(firstElement.b, secondElement.b) < Math.min(firstElement.t, secondElement.t) - EPSILON);
+      if (collisions.length) {
+        warnings.push(Object.freeze({
+          id: `stair-route-collision-${firstSystem.id}-${secondSystem.id}`,
+          severity: "collision",
+          geometryIds: Object.freeze([firstSystem.id, secondSystem.id, ...[...new Set(collisions.flatMap((pair) => pair.map((element) => element.id)))].sort(compareGeometryIds)]),
+          message: `Displayed stairs ${firstIndex + 1}/${secondIndex + 1} intersect. Move or reroute.`,
+        }));
+        return;
+      }
+      const crossesInPlan = !!planOverlaps.length;
+      const clearance = crossesInPlan
+        ? Math.min(...planOverlaps.map(([firstElement, secondElement]) => Math.max(firstElement.b, secondElement.b) - Math.min(firstElement.t, secondElement.t)))
+        : Math.min(...first.flatMap((firstElement) => second.map((secondElement) => polygonDistance(firstElement.c, secondElement.c))));
+      if (clearance <= EPSILON || clearance >= 12 - EPSILON) return;
+      const measured = roundedTenth(clearance);
+      warnings.push(Object.freeze({
+        id: `stair-route-clearance-${firstSystem.id}-${secondSystem.id}`,
+        severity: "clearance",
+        geometryIds: Object.freeze([firstSystem.id, secondSystem.id]),
+        message: crossesInPlan
+          ? `Stairs ${firstIndex + 1} and ${secondIndex + 1} cross in plan with ${measured} inches vertical separation; review route.`
+          : `Stairs ${firstIndex + 1} and ${secondIndex + 1} are ${measured} inches apart in plan; review route.`,
       }));
     });
   });
@@ -242,15 +295,14 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     });
   });
   platform.construction.stairSystems.forEach((system, systemIndex) => {
-    const route = stairRoutes[systemIndex];
-    const footprints = [...route.treads.map((tread) => tread.corners), ...route.landings.map((landing) => landing.corners)];
+    const footprints = displayedStairRoutes[systemIndex].map((element) => element.c);
     normalized.siteContext.houseWalls.forEach((wall) => {
       if (warnings.some((warning) => warning.id === `stair-route-house-collision-${system.id}-${wall.id}`)) return;
       const panels = house.houseWallPanels.filter((panel) => panel.wallId === wall.id);
       if (!panels.length || !footprints.length) return;
       const clearance = Math.min(...panels.flatMap((panel) => footprints.map((footprint) => segmentToPolygonDistance(panel.start, panel.end, footprint))));
       if (clearance <= EPSILON || clearance >= 12 - EPSILON) return;
-      const measured = Math.round(clearance * 10) / 10;
+      const measured = roundedTenth(clearance);
       warnings.push(Object.freeze({
         id: `stair-house-clearance-${system.id}-${wall.id}`,
         severity: "clearance",
@@ -259,28 +311,11 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
       }));
     });
   });
-  stairRoutes.forEach((first, firstIndex) => {
-    stairRoutes.slice(firstIndex + 1).forEach((second, relativeIndex) => {
-      if (warnings.some((warning) => warning.id === `stair-route-collision-${first.systemId}-${second.systemId}`)) return;
-      const firstFootprints = [...first.treads.map((tread) => tread.corners), ...first.landings.map((landing) => landing.corners)];
-      const secondFootprints = [...second.treads.map((tread) => tread.corners), ...second.landings.map((landing) => landing.corners)];
-      if (!firstFootprints.length || !secondFootprints.length) return;
-      const clearance = Math.min(...firstFootprints.flatMap((firstFootprint) => secondFootprints.map((secondFootprint) => polygonDistance(firstFootprint, secondFootprint))));
-      if (clearance <= EPSILON || clearance >= 12 - EPSILON) return;
-      const measured = Math.round(clearance * 10) / 10;
-      warnings.push(Object.freeze({
-        id: `stair-route-clearance-${first.systemId}-${second.systemId}`,
-        severity: "clearance",
-        geometryIds: Object.freeze([first.systemId, second.systemId]),
-        message: `Stair systems ${firstIndex + 1} and ${firstIndex + relativeIndex + 2} pass ${measured} inches apart in plan; verify the intended route clearance.`,
-      }));
-    });
-  });
   platform.construction.framing.beamLines.forEach((line, lineIndex) => {
     platform.construction.framing.beamLines.slice(lineIndex + 1).forEach((otherLine, otherIndex) => {
       const clearance = Math.abs(otherLine.offsetFromOutside - line.offsetFromOutside);
       if (clearance >= 12 - EPSILON) return;
-      const measured = Math.round(clearance * 10) / 10;
+      const measured = roundedTenth(clearance);
       warnings.push(Object.freeze({
         id: `beam-line-clearance-${line.id}-${otherLine.id}`,
         severity: "clearance",
@@ -294,7 +329,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     beams.forEach((beam) => {
       const length = Math.hypot(beam.end.x - beam.start.x, beam.end.z - beam.start.z);
       if (length >= 12 - EPSILON) return;
-      const measured = Math.round(length * 10) / 10;
+      const measured = roundedTenth(length);
       warnings.push(Object.freeze({
         id: `beam-short-segment-${beam.id}`,
         severity: "clearance",
@@ -306,7 +341,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
       if (warnings.some((warning) => warning.id === `beam-cutout-interruption-${line.id}-${holeIndex + 1}`)) return;
       const clearance = beamToHoleDistance(beams, hole);
       if (clearance >= 12 - EPSILON) return;
-      const measured = Math.round(clearance * 10) / 10;
+      const measured = roundedTenth(clearance);
       warnings.push(Object.freeze({
         id: `beam-cutout-clearance-${line.id}-${holeIndex + 1}`,
         severity: "clearance",
@@ -328,7 +363,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
   platform.region.holes.forEach((_, holeIndex) => {
     const adjacent = adjacentJoistClearance(normalized, platformId, holeIndex, projectedJoists);
     if (!adjacent.ids.length) return;
-    const measured = Math.round(adjacent.clearance * 10) / 10;
+    const measured = roundedTenth(adjacent.clearance);
     warnings.push(Object.freeze({
       id: `joist-cutout-clearance-${holeIndex + 1}`,
       severity: "clearance",

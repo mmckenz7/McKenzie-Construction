@@ -22,6 +22,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 
 - [x] Deterministic one-level layout review gate before the dedicated railing stage
 - [x] Explainable stair-route collision blockers and cutout-clearance review notices
+- [x] Exact displayed tread/landing volume collision blockers with vertically separated plan crossings retained as review-only
 - [x] Explainable stair-route collision checks against the selected deck footprint and recorded house-wall context
 - [x] Visible corner-alignment guides with deterministic attached-side snap priority
 - [x] Optional keep-square corner constraint that moves both attached sides together

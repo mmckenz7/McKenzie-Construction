@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-26 displayed stair-volume collision review
+
+- V5 now replaces the inherited plan-only stair-pair blocker with strict positive overlap between the actual displayed tread/landing plan polygons and vertical ranges. Exact plan or vertical contact remains allowed; v1-v4 behavior, authored geometry, history, JSON, and quantities are unchanged.
+- Deterministic regressions cover true tread/tread and landing/tread intersections, a valid adjacent-side plan crossing whose displayed elements remain 6.9 inches apart vertically, exact vertical contact, plan boundary contact, canonical authored-system ordering, sorted transient element IDs, locator behavior, and replay.
+- Desktop QA loaded the valid crossing through the normal JSON control. Review reported **0 collisions · 1 clearance note**, described the measured 6.9-inch vertical separation, enabled **Lock layout & continue**, and advanced to Railings. **Show in plan** selected the exact first authored stair system and its source edge.
+- At 390 × 844 the ready state, note, locator, and fixed continuation actions remained legible; one 3D canvas remained mounted and browser warning/error logs were empty.
+- Full validation passed 351/351 tests, isolation, typecheck, build, and unchanged golden fixtures. Bundle ceilings remain unchanged and pass at 83.5 KiB initial / 121.7 KiB largest / 245.0 KiB total JavaScript gzip.
+
 ## 2026-08-25 displayed support-post/stair-route collision
 
 - The one-level layout review now blocks only the transition to Railings when an actual displayed conceptual beam support post occupies positive plan area and vertical volume with an actual displayed stair tread or landing. Exact boundary and vertical contact remain allowed.

@@ -444,7 +444,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     expect(deriveGeometryWarningsV5(design, platform.id)).toEqual(deriveGeometryWarningsV5(design, platform.id));
   });
 
-  it("keeps stair overlap blocking while reporting distinct measured spacing between nearby routes", () => {
+  it("uses displayed stair volumes for blockers while retaining measured non-blocking route spacing", () => {
     const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
     const platform = base.platforms[0];
     const lowerEdge = deriveGeometricPolygonEdges(platform.region.outer).find((edge) => edge.outward.z > 0)!;
@@ -457,7 +457,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     expect(deriveGeometryWarningsV5(nearby, platform.id)).toContainEqual(expect.objectContaining({
       id: "stair-route-clearance-stair-system-left-stair-system-right",
       geometryIds: ["stair-system-left", "stair-system-right"],
-      message: "Stair systems 1 and 2 pass 6 inches apart in plan; verify the intended route clearance.",
+      message: "Stairs 1 and 2 are 6 inches apart in plan; review route.",
     }));
 
     const edges = deriveGeometricPolygonEdges(platform.region.outer);
@@ -469,11 +469,66 @@ describe("DeckDesign v5 explainable framing warnings", () => {
       turnedSystem("stair-system-left", edges[1].id, 96, "right"), turnedSystem("stair-system-right", edges[2].id, 0, "left"),
     ] } }] });
     const overlapWarnings = deriveGeometryWarningsV5(overlapping, platform.id);
-    expect(overlapWarnings).toContainEqual(expect.objectContaining({
+    const overlapWarning = overlapWarnings.find((warning) => warning.id === "stair-route-collision-stair-system-left-stair-system-right")!;
+    expect(overlapWarning).toEqual({
       id: "stair-route-collision-stair-system-left-stair-system-right",
       severity: "collision",
-    }));
+      geometryIds: [
+        "stair-system-left", "stair-system-right",
+        "stair-system-left-stair-tread-1", "stair-system-left-stair-tread-2", "stair-system-left-stair-tread-3", "stair-system-left-stair-tread-4", "stair-system-left-stair-tread-5",
+        "stair-system-right-stair-tread-1", "stair-system-right-stair-tread-2", "stair-system-right-stair-tread-3", "stair-system-right-stair-tread-4", "stair-system-right-stair-tread-5",
+      ],
+      message: "Displayed stairs 1/2 intersect. Move or reroute.",
+    });
+    expect(deriveLayoutReviewV5(overlapping, platform.id).readyToContinue).toBe(false);
+    expect(deriveWarningSelectionV5(overlapping.platforms[0], overlapWarning)).toEqual({ holeIndex: null, beamLineId: null, stairSystemId: "stair-system-left", edgeId: edges[1].id });
     expect(overlapWarnings.some((warning) => warning.id.startsWith("stair-route-clearance"))).toBe(false);
+
+    const verticallySeparated = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, framing: {
+      ...platform.construction.framing,
+      beamLines: [{ ...platform.construction.framing.beamLines[0], offsetFromOutside: 72 }],
+    }, stairSystems: [
+      turnedSystem("stair-system-left", edges[1].id, 36, "right"), turnedSystem("stair-system-right", edges[2].id, 0, "left"),
+    ] } }] });
+    const separatedWarnings = deriveGeometryWarningsV5(verticallySeparated, platform.id);
+    expect(separatedWarnings.some((warning) => warning.id.startsWith("stair-route-collision"))).toBe(false);
+    expect(separatedWarnings).toContainEqual({
+      id: "stair-route-clearance-stair-system-left-stair-system-right",
+      severity: "clearance",
+      geometryIds: ["stair-system-left", "stair-system-right"],
+      message: "Stairs 1 and 2 cross in plan with 6.9 inches vertical separation; review route.",
+    });
+    expect(deriveLayoutReviewV5(verticallySeparated, platform.id).readyToContinue).toBe(true);
+    expect(deriveGeometryWarningsV5(verticallySeparated, platform.id)).toEqual(separatedWarnings);
+
+    const landingIntersection = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [
+      {
+        id: "stair-system-left", locked: true, edgeId: edges[1].id, offset: 60, width: 48, treadDepth: 10, maxRiserHeight: 7.75,
+        landings: [{ id: "stair-system-left-landing-1", locked: true, afterRiser: 4, width: 96, depth: 48, turn: "switchback", connections: [] }],
+      },
+      turnedSystem("stair-system-right", edges[2].id, 0, "left"),
+    ] } }] });
+    expect(deriveGeometryWarningsV5(landingIntersection, platform.id)).toContainEqual({
+      id: "stair-route-collision-stair-system-left-stair-system-right",
+      severity: "collision",
+      geometryIds: ["stair-system-left", "stair-system-right", "stair-system-left-stair-landing-1", "stair-system-right-stair-tread-5"],
+      message: "Displayed stairs 1/2 intersect. Move or reroute.",
+    });
+
+    const verticalContact = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, framing: {
+      ...platform.construction.framing,
+      beamLines: [{ ...platform.construction.framing.beamLines[0], offsetFromOutside: 96 }],
+    }, stairSystems: [
+      {
+        id: "stair-system-left", locked: true, edgeId: edges[1].id, offset: 72, width: 48, treadDepth: 10, maxRiserHeight: 7.75,
+        landings: [{ id: "stair-system-left-landing-1", locked: true, afterRiser: 4, width: 96, depth: 48, turn: "switchback", connections: [] }],
+      },
+      {
+        id: "stair-system-right", locked: true, edgeId: edges[2].id, offset: 0, width: 48, treadDepth: 10, maxRiserHeight: 7.75,
+        landings: [{ id: "stair-system-right-landing-1", locked: true, afterRiser: 2, width: 48, depth: 48, turn: "left", connections: [] }],
+      },
+    ] } }] });
+    expect(deriveGeometryWarningsV5(verticalContact, platform.id).filter((warning) => warning.id.startsWith("stair-route-"))).toEqual([]);
 
     const touching = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [
       stairSystem("stair-system-left", 24), stairSystem("stair-system-right", 72),
