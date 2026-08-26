@@ -67,6 +67,14 @@ export const metadata: Metadata = {
 
   applicationName: "McKenzie Construction",
 
+  icons: {
+    apple: [{
+      url: "/branding/mckenzie-apple-touch-icon.png",
+      sizes: "180x180",
+      type: "image/png",
+    }],
+  },
+
   authors: [
     {
       name: "McKenzie Construction",

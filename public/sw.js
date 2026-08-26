@@ -10,8 +10,8 @@ self.addEventListener("push", (event) => {
     typeof payload.title === "string" ? payload.title : "McKenzie Company Inbox",
     {
       body: typeof payload.body === "string" ? payload.body : "A new message arrived.",
-      icon: "/branding/MCM_positive_square.jpg",
-      badge: "/branding/MCM_positive_square.jpg",
+      icon: "/branding/mckenzie-app-icon-512.png",
+      badge: "/branding/mckenzie-app-icon-512.png",
       tag: "mckenzie-inbound-text",
       renotify: true,
       data: { url: "/communications?channel=sms" },

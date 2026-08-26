@@ -11,9 +11,9 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#f8fafc",
     theme_color: "#0f172a",
     icons: [{
-      src: "/branding/MCM_positive_square.jpg",
-      sizes: "800x800",
-      type: "image/jpeg",
+      src: "/branding/mckenzie-app-icon-512.png",
+      sizes: "512x512",
+      type: "image/png",
       purpose: "any",
     }],
   };

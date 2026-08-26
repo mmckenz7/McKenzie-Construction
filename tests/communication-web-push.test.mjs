@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const manifest = readFileSync("src/app/manifest.ts", "utf8");
+const layout = readFileSync("src/app/layout.tsx", "utf8");
 const serviceWorker = readFileSync("public/sw.js", "utf8");
 const pushServer = readFileSync("src/lib/communications/web-push.ts", "utf8");
 const pushRoute = readFileSync("src/app/api/communications/push-subscription/route.ts", "utf8");
@@ -19,6 +20,14 @@ test("the Company Inbox is installable and push clicks open the text-only inbox"
   assert.match(serviceWorker, /showNotification/);
   assert.match(serviceWorker, /const destination = "\/communications\?channel=sms"/);
   assert.doesNotMatch(serviceWorker, /payload\.url|threadId|providerMessageId/);
+});
+
+test("the installed app and push notification use the square McKenzie PNG logo", () => {
+  assert.match(manifest, /src: "\/branding\/mckenzie-app-icon-512\.png"/);
+  assert.match(manifest, /type: "image\/png"/);
+  assert.match(serviceWorker, /icon: "\/branding\/mckenzie-app-icon-512\.png"/);
+  assert.match(serviceWorker, /badge: "\/branding\/mckenzie-app-icon-512\.png"/);
+  assert.match(layout, /url: "\/branding\/mckenzie-apple-touch-icon\.png"/);
 });
 
 test("push delivery is restricted to the info account and contains no customer facts", () => {
