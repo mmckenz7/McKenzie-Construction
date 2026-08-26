@@ -81,6 +81,13 @@ export function Footer() {
           </Link>
 
           <Link
+            href="/login"
+            className="transition hover:text-brand-green"
+          >
+            Employee Login
+          </Link>
+
+          <Link
             href="/privacy"
             className="transition hover:text-brand-green"
           >

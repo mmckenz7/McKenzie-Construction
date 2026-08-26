@@ -40,3 +40,13 @@ test("lead and phone conversions are recorded without personal information", () 
   assert.match(thankYou, /<LeadConversionTracker \/>/);
   assert.doesNotMatch(phone + lead + analytics, /email|phone_number|customer_name/i);
 });
+
+test("public footers provide one understated employee login link", () => {
+  const sharedFooter = read("src/components/footer.tsx");
+  const homepage = read("src/app/page.tsx");
+
+  for (const source of [sharedFooter, homepage]) {
+    assert.equal((source.match(/href="\/login"/g) ?? []).length, 1);
+    assert.match(source, />\s*Employee Login\s*<\/Link>/);
+  }
+});

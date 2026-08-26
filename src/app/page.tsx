@@ -736,6 +736,7 @@ export default function HomePage() {
             rights reserved.
           </p>
           <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link className="hover:text-white" href="/login">Employee Login</Link>
             <Link className="hover:text-white" href="/privacy">Privacy</Link>
             <Link className="hover:text-white" href="/sms-terms">SMS Terms</Link>
             <Link className="hover:text-white" href="/sms-consent">SMS Consent</Link>
