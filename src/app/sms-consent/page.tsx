@@ -35,6 +35,28 @@ export default function SmsConsentPage() {
         </p>
       </LegalSection>
 
+      <LegalSection title="Start text messages now">
+        <div className="rounded-2xl border border-lime-300 bg-lime-50 p-5 sm:p-6">
+          <p className="font-semibold text-slate-950">
+            Text START to 865-433-3325 to consent to messages from McKenzie
+            Construction about your inquiry, estimate, appointments, project
+            updates, invoices, and customer-service requests.
+          </p>
+          <p className="text-sm leading-7 text-slate-700">
+            Message frequency varies. Message and data rates may apply. Reply
+            STOP to opt out or HELP for assistance. Consent is not a condition
+            of purchase.
+          </p>
+          <a
+            href="sms:+18654333325?body=START"
+            className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-slate-950 px-6 py-3 text-center text-sm font-bold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-lime-300 sm:w-auto"
+            aria-label="Send START by text message to McKenzie Construction at 865-433-3325"
+          >
+            Send START to 865-433-3325
+          </a>
+        </div>
+      </LegalSection>
+
       <LegalSection title="Website contact preferences are separate">
         <p>
           Choosing a preferred contact method on our existing website form is
