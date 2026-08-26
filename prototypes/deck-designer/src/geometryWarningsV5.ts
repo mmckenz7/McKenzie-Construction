@@ -1,12 +1,13 @@
 import { deriveGeometryWarningsV4, type GeometryWarningV4 } from "./geometryWarningsV4";
 import { CONCEPTUAL_SUPPORT_POST_SIZE, conceptualBeamVerticalRange, conceptualSupportPostTop, deriveConceptualBeamProjection, type ConceptualSupportPost } from "./beamProjection";
-import { convexPolygonsOverlap, positiveRegionOverlapArea, segmentCrossesConvexInterior } from "./geometryWarningsV3";
+import { convexPolygonsOverlap, positiveRegionOverlapArea, positiveTriangulatedRegionOverlapArea, segmentCrossesConvexInterior } from "./geometryWarningsV3";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
-import { conceptualJoistVerticalRange, deriveJoistPathAxes, derivePolygonMembers, type ProjectedMember } from "./polygonProjection";
+import { conceptualJoistVerticalRange, deriveJoistPathAxes, derivePolygonMembers, triangulatePolygon, type ProjectedMember } from "./polygonProjection";
 import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
 import { deriveStairRouteGeometryV3, DISPLAYED_STAIR_LANDING_CENTER_OFFSET, DISPLAYED_STAIR_LANDING_HEIGHT, DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT } from "./stairRouteGeometryV3";
+import { displayedVolumeIntersectsDeckSurface } from "./displayedDeckSurface";
 
 export type GeometryWarningV5 = GeometryWarningV4;
 
@@ -134,7 +135,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
   const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
   if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
   const warnings = deriveGeometryWarningsV4(deckDesignV5ToV4Compatibility(normalized), platformId)
-    .filter((warning) => !warning.id.startsWith("stair-route-collision-"));
+    .filter((warning) => !warning.id.startsWith("stair-route-collision-") && !warning.id.startsWith("stair-route-deck-collision-"));
   const edges = deriveGeometricPolygonEdges(platform.region.outer);
   const stairRoutes = platform.construction.stairSystems.map((system, systemIndex) => deriveStairRouteGeometryV3({
     system,
@@ -146,6 +147,22 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     targetPlatformElevations: Object.fromEntries(normalized.platforms.map((item) => [item.id, item.elevation])),
   }));
   const displayedStairRoutes = stairRoutes.map(displayedStairElements);
+  const platformOuterTriangles = displayedStairRoutes.length ? triangulatePolygon(platform.region.outer) : [];
+  const platformHoleTriangles = displayedStairRoutes.length ? platform.region.holes.flatMap((hole) => triangulatePolygon(hole)) : [];
+  platform.construction.stairSystems.forEach((system, systemIndex) => {
+    const intersectingElementIds = displayedStairRoutes[systemIndex]
+      .filter((element) => displayedVolumeIntersectsDeckSurface(element.b, element.t, platform.elevation, EPSILON) &&
+        positiveTriangulatedRegionOverlapArea(element.c, platformOuterTriangles, platformHoleTriangles) > EPSILON)
+      .map((element) => element.id)
+      .sort(compareGeometryIds);
+    if (!intersectingElementIds.length) return;
+    warnings.push(Object.freeze({
+      id: `stair-route-deck-collision-${system.id}`,
+      severity: "collision",
+      geometryIds: Object.freeze([system.id, `${platform.id}:outer`, ...intersectingElementIds]),
+      message: `Displayed stair system ${systemIndex + 1} intersects the displayed deck surface. Move or reroute it before continuing. This checks only the current conceptual layout, not structural or code adequacy.`,
+    }));
+  });
   platform.construction.stairSystems.forEach((system, systemIndex) => {
     const edge = edges.find((candidate) => candidate.id === system.edgeId)!;
     const remainders = [

@@ -23,7 +23,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Deterministic one-level layout review gate before the dedicated railing stage
 - [x] Explainable stair-route collision blockers and cutout-clearance review notices
 - [x] Exact displayed tread/landing volume collision blockers with vertically separated plan crossings retained as review-only
-- [x] Explainable stair-route collision checks against the selected deck footprint and recorded house-wall context
+- [x] Exact displayed stair-volume collision checks against the selected deck-surface volume, plus recorded house-wall context checks
 - [x] Visible corner-alignment guides with deterministic attached-side snap priority
 - [x] Optional keep-square corner constraint that moves both attached sides together
 - [x] Direct measured-plan selection for exact stair systems, landings, and cutouts
@@ -126,7 +126,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Exact displayed beam-support footprint review against recorded cutout voids with transient post traceability
 - [x] Exact displayed beam-support footprint review against recorded house-wall panels with shared display height and transient post traceability
 - [x] Distinct stair-route overlap blockers and measured nearby-route field-review notes
-- [x] Exact positive-area stair-route intersection against the normalized deck region, preserving boundary and cutout-void semantics
+- [x] Exact displayed stair-volume intersection against the normalized deck surface (outer minus cutouts), preserving plan/vertical boundary contact and under-deck separation
 - [x] Exact displayed support-post versus tread/landing volume blocker with authored beam/stair traceability
 - [ ] Broader explainable framing clash/constraint warnings beyond recorded cutout interruptions
 - [ ] PBR material library, licensed asset pipeline, GLB metadata, LOD/compression

@@ -7,12 +7,64 @@ import { deriveGeometricPolygonEdges } from "../src/polygon";
 import { conceptualSupportPostTop } from "../src/beamProjection";
 import { DISPLAYED_STAIR_LANDING_CENTER_OFFSET, DISPLAYED_STAIR_LANDING_HEIGHT, DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT } from "../src/stairRouteGeometryV3";
 import { deriveWarningSelectionV5 } from "../src/warningLocatorV5";
+import { DISPLAYED_DECK_SURFACE_HEIGHT, displayedDeckSurfaceVerticalRange, displayedVolumeIntersectsDeckSurface } from "../src/displayedDeckSurface";
+import { positiveRegionOverlapArea, positiveTriangulatedRegionOverlapArea } from "../src/geometryWarningsV3";
+import { triangulatePolygon } from "../src/polygonProjection";
 
 describe("DeckDesign v5 explainable framing warnings", () => {
-  it("shares the renderer's exact displayed support-post vertical range", () => {
+  it("shares the renderer's exact displayed vertical constants", () => {
     expect(conceptualSupportPostTop(40, 0)).toBe(40);
     expect(conceptualSupportPostTop(0, 0)).toBe(1);
     expect([DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT, DISPLAYED_STAIR_LANDING_HEIGHT, DISPLAYED_STAIR_LANDING_CENTER_OFFSET]).toEqual([1.5, 5.5, -2.25]);
+    expect(DISPLAYED_DECK_SURFACE_HEIGHT).toBe(1);
+    expect(displayedDeckSurfaceVerticalRange(48)).toEqual({ base: 47.5, top: 48.5 });
+    expect(displayedVolumeIntersectsDeckSurface(40, 47.5, 48)).toBe(false);
+    expect(displayedVolumeIntersectsDeckSurface(48.5, 52, 48)).toBe(false);
+    expect(displayedVolumeIntersectsDeckSurface(47.4, 47.6, 48)).toBe(true);
+  });
+
+  it("blocks only displayed stair volumes that enter the displayed deck-surface volume", () => {
+    const base = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, platform: { ...DEFAULT_DESIGN.platform, kind: "l-shape", width: 240, projection: 180, cutoutWidth: 72, cutoutDepth: 60 } });
+    const platform = base.platforms[0];
+    const edge = deriveGeometricPolygonEdges(platform.region.outer).find((candidate) => candidate.start.z === 120 && candidate.end.z === 120)!;
+    const atElevation = (elevation: number, landingWidth: number) => normalizeDeckDesignV5({ ...base, platforms: [{
+      ...platform,
+      elevation,
+      construction: { ...platform.construction, framing: { ...platform.construction.framing, beamLines: [{ id: "beam-line-1", offsetFromOutside: 90, maxSupportSpacing: 120 }] }, stairSystems: [{
+        id: "stair-system-deck-volume", locked: true, edgeId: edge.id, offset: 12, width: 48, treadDepth: 10, maxRiserHeight: 7.75,
+        landings: [{ id: "landing-1", locked: true, afterRiser: 0, width: landingWidth, depth: 48, turn: "right" as const, connections: [] }],
+      }] },
+    }] });
+
+    const underDeck = atElevation(48, 48);
+    const underDeckWarnings = deriveGeometryWarningsV5(underDeck, platform.id);
+    expect(underDeckWarnings.some((warning) => warning.id === "stair-route-deck-collision-stair-system-deck-volume")).toBe(false);
+    expect(deriveLayoutReviewV5(underDeck, platform.id).readyToContinue).toBe(true);
+
+    const intersecting = atElevation(48, 120);
+    const warning = deriveGeometryWarningsV5(intersecting, platform.id).find((item) => item.id === "stair-route-deck-collision-stair-system-deck-volume")!;
+    expect(warning).toEqual({
+      id: "stair-route-deck-collision-stair-system-deck-volume",
+      severity: "collision",
+      geometryIds: ["stair-system-deck-volume", `${platform.id}:outer`, "stair-landing", "stair-tread-1"],
+      message: "Displayed stair system 1 intersects the displayed deck surface. Move or reroute it before continuing. This checks only the current conceptual layout, not structural or code adequacy.",
+    });
+    expect(deriveLayoutReviewV5(intersecting, platform.id).readyToContinue).toBe(false);
+    expect(deriveWarningSelectionV5(intersecting.platforms[0], warning)).toEqual({ holeIndex: null, beamLineId: null, stairSystemId: "stair-system-deck-volume", edgeId: edge.id });
+    expect(deriveGeometryWarningsV5(intersecting, platform.id)).toEqual(deriveGeometryWarningsV5(intersecting, platform.id));
+
+    const invalid = { ...intersecting, platforms: [{ ...intersecting.platforms[0], region: { ...intersecting.platforms[0].region, outer: [] } }] };
+    expect(() => deriveGeometryWarningsV5(invalid as typeof intersecting, platform.id)).toThrow();
+  });
+
+  it("uses strict outer-minus-holes area for deck-surface contact", () => {
+    const outer = [{ x: 0, z: 0 }, { x: 100, z: 0 }, { x: 100, z: 100 }, { x: 0, z: 100 }];
+    const hole = [{ x: 20, z: 20 }, { x: 80, z: 20 }, { x: 80, z: 80 }, { x: 20, z: 80 }];
+    const insideHole = [{ x: 30, z: 30 }, { x: 70, z: 30 }, { x: 70, z: 70 }, { x: 30, z: 70 }];
+    expect(positiveRegionOverlapArea(insideHole, outer, [hole])).toBe(0);
+    expect(positiveTriangulatedRegionOverlapArea(insideHole, triangulatePolygon(outer), triangulatePolygon(hole))).toBe(0);
+    expect(positiveRegionOverlapArea([{ x: 100, z: 20 }, { x: 120, z: 20 }, { x: 120, z: 40 }, { x: 100, z: 40 }], outer, [hole])).toBe(0);
+    expect(positiveRegionOverlapArea([{ x: 90, z: 20 }, { x: 110, z: 20 }, { x: 110, z: 40 }, { x: 90, z: 40 }], outer, [hole])).toBe(200);
   });
 
   it("blocks an exact displayed support-post and stair-tread volume collision with traceable sources", () => {

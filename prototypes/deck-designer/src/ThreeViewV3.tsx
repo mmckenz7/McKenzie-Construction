@@ -12,6 +12,7 @@ import type { CameraPreset } from "./ThreeView";
 import type { HouseContextGeometry } from "./houseContextGeometry";
 import type { EdgeFinishGeometryV5 } from "./edgeFinishProjectionV5";
 import { DISPLAYED_STAIR_LANDING_CENTER_OFFSET, DISPLAYED_STAIR_LANDING_HEIGHT, DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT } from "./stairRouteGeometryV3";
+import { DISPLAYED_DECK_SURFACE_HEIGHT } from "./displayedDeckSurface";
 
 type FinishGeometry = Partial<EdgeFinishGeometryV5>;
 type Point2 = Readonly<{ x: number; z: number }>;
@@ -97,7 +98,7 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTE
     for (const panel of houseGeometry.houseWallPanels) member(panel, panel.baseElevation + panel.height / 2, panel.height, 8, house);
     for (const view of platformViews) {
       const itemPlatform = view.platform, itemGeometry = view.geometry;
-      for (const board of itemGeometry.surfaceBoards) member(board, itemPlatform.elevation, 1, itemPlatform.construction.decking.boardWidth, isPictureFrameBorderMember(board) ? deckBorder : deck);
+      for (const board of itemGeometry.surfaceBoards) member(board, itemPlatform.elevation, DISPLAYED_DECK_SURFACE_HEIGHT, itemPlatform.construction.decking.boardWidth, isPictureFrameBorderMember(board) ? deckBorder : deck);
       if (showFraming) {
         for (const joist of itemGeometry.joists) member(joist, itemPlatform.elevation - CONCEPTUAL_JOIST_CENTER_OFFSET, CONCEPTUAL_JOIST_HEIGHT, 1.5, frame);
         for (const beam of itemGeometry.beams) member(beam, itemPlatform.elevation - CONCEPTUAL_BEAM_CENTER_OFFSET, CONCEPTUAL_BEAM_HEIGHT, 4.5, frame);

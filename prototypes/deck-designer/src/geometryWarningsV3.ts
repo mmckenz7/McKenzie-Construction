@@ -156,7 +156,7 @@ function normalizedPositiveFootprint(footprint: readonly PolygonPoint[]): readon
   return footprintArea > 0 ? footprint : [...footprint].reverse();
 }
 
-function positiveTriangulatedRegionOverlapArea(
+export function positiveTriangulatedRegionOverlapArea(
   footprint: readonly PolygonPoint[],
   outerTriangles: readonly PolygonTriangle[],
   holeTriangles: readonly PolygonTriangle[],
