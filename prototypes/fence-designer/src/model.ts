@@ -5,6 +5,7 @@ export const MM_PER_INCH = 25.4;
 export type Point = Readonly<{ id: string; xMm: number; yMm: number }>;
 export type SegmentKind = "fence" | "gate";
 export type GateType = "single" | "double";
+export type GateReferencePost = "post-a" | "post-b";
 export type Segment = Readonly<{
   id: string;
   fromPointId: string;
@@ -304,6 +305,25 @@ export function insertGateOnSegment(
     kind: "fence",
   }));
   return revise(design, { segments: [...design.segments.slice(0, segmentIndex), ...replacement, ...design.segments.slice(segmentIndex + 1)], points });
+}
+
+export function gateOffsetFromReferenceMm(
+  runLengthMm: number,
+  gateWidthMm: number,
+  distanceFromReferenceMm: number,
+  referencePost: GateReferencePost,
+): number {
+  if (!Number.isSafeInteger(runLengthMm) || runLengthMm < 25) throw new RangeError("The selected fence run needs a valid length.");
+  if (!Number.isSafeInteger(gateWidthMm) || gateWidthMm < 25) throw new RangeError("Enter a valid total gate width.");
+  if (!Number.isSafeInteger(distanceFromReferenceMm) || distanceFromReferenceMm < 0) throw new RangeError("Gate distance must be zero or greater.");
+  if (referencePost !== "post-a" && referencePost !== "post-b") throw new TypeError("Choose Post A or Post B as the gate reference.");
+  const offsetFromStartMm = referencePost === "post-a"
+    ? distanceFromReferenceMm
+    : runLengthMm - distanceFromReferenceMm - gateWidthMm;
+  if (!Number.isSafeInteger(offsetFromStartMm) || offsetFromStartMm < 0 || offsetFromStartMm + gateWidthMm > runLengthMm) {
+    throw new RangeError("Gate distance and width must fit within the selected fence run.");
+  }
+  return offsetFromStartMm;
 }
 
 export function addPoint(design: FenceDesign, point: Point, segmentId?: string, fromPointId: string | null = design.points.at(-1)?.id ?? null): FenceDesign {

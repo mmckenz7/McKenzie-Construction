@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
 import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform, straightenBackgroundFromHouseCorners, type PlanPosition, type ReferenceBackground } from "./background";
 import {
-  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, insertGateOnSegment, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
+  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, gateOffsetFromReferenceMm, insertGateOnSegment, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
   pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setHouseReferenceAt, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm,
-  type FenceDesign, type GateType,
+  type FenceDesign, type GateReferencePost, type GateType,
 } from "./model";
 import { acquireBestGps, formatGpsAccuracy, gpsOriginAt, projectGpsFix, projectGpsLeg, type GpsFix, type GpsOrigin } from "./gps";
 import { propertyReferenceLinks, type PropertyReferenceLinks } from "./property-reference";
@@ -67,6 +67,7 @@ export default function App() {
   const [gateInches, setGateInches] = useState("0");
   const [gateOffsetFeet, setGateOffsetFeet] = useState("0");
   const [gateOffsetInches, setGateOffsetInches] = useState("0");
+  const [gateReferencePost, setGateReferencePost] = useState<GateReferencePost>("post-a");
   const [snapEnabled, setSnapEnabled] = useState(false);
   const [lengthLockEnabled, setLengthLockEnabled] = useState(true);
   const [previewPoint, setPreviewPoint] = useState<Readonly<{ xMm: number; yMm: number }> | null>(null);
@@ -379,10 +380,14 @@ export default function App() {
     const dx = end.xMm - start.xMm; const dy = end.yMm - start.yMm;
     const squaredLength = dx ** 2 + dy ** 2;
     const ratio = selectedAt && squaredLength > 0 ? ((selectedAt.xMm - start.xMm) * dx + (selectedAt.yMm - start.yMm) * dy) / squaredLength : 0.5;
-    const gateOffsetInchesFromStart = Math.round(segmentLengthMm(design, segment) * Math.max(0, Math.min(1, ratio)) / 25.4);
-    setGateOffsetFeet(String(Math.floor(gateOffsetInchesFromStart / 12)));
-    setGateOffsetInches(String(gateOffsetInchesFromStart % 12));
-    const totalInches = Math.round(segmentLengthMm(design, segment) / 25.4);
+    const runLength = segmentLengthMm(design, segment);
+    const distanceFromPostA = runLength * Math.max(0, Math.min(1, ratio));
+    const referencePost: GateReferencePost = distanceFromPostA <= runLength / 2 ? "post-a" : "post-b";
+    const gateOffsetInchesFromReference = Math.round((referencePost === "post-a" ? distanceFromPostA : runLength - distanceFromPostA) / 25.4);
+    setGateReferencePost(referencePost);
+    setGateOffsetFeet(String(Math.floor(gateOffsetInchesFromReference / 12)));
+    setGateOffsetInches(String(gateOffsetInchesFromReference % 12));
+    const totalInches = Math.round(runLength / 25.4);
     setFeet(String(Math.floor(totalInches / 12)));
     setInches(String(totalInches % 12));
     setGateEditorOpen(false); setSelection({ type: "segment", id }); setMode("select"); setNotice("Span selected. Enter an exact length or edit its gate intent.");
@@ -437,14 +442,14 @@ export default function App() {
     try {
       const width = feetAndInchesToMm(Number(gateFeet), Number(gateInches));
       const runLength = segmentLengthMm(design, selectedSegment);
-      const offsetFromStart = feetAndInchesToMm(Number(gateOffsetFeet), Number(gateOffsetInches));
-      if (offsetFromStart + width > runLength) throw new RangeError(`Fence before gate plus gate width must fit within the selected ${formatFeetInches(runLength)} run.`);
+      const distanceFromReference = feetAndInchesToMm(Number(gateOffsetFeet), Number(gateOffsetInches));
+      const offsetFromStart = gateOffsetFromReferenceMm(runLength, width, distanceFromReference, gateReferencePost);
       const id = nextId.current; const gateSegmentId = `segment-${id + 2}`;
       const next = insertGateOnSegment(design, selectedSegment.id, width, offsetFromStart, gateType, `point-${id}`, `point-${id + 1}`, gateSegmentId, `segment-${id + 3}`);
       nextId.current += 4;
       const gate = next.segments.find(({ id: segmentId }) => segmentId === gateSegmentId)
         ?? next.segments.find(({ kind, fromPointId, toPointId }) => kind === "gate" && (fromPointId === selectedSegment.fromPointId || toPointId === selectedSegment.toPointId));
-      commit(next, `${gateType === "double" ? "Double" : "Single"} gate placed inside the selected run with a total opening of ${formatFeetInches(width)}. The fence line stayed straight.`);
+      commit(next, `${gateType === "double" ? "Double" : "Single"} gate placed ${formatFeetInches(distanceFromReference)} from ${gateReferencePost === "post-a" ? "Post A" : "Post B"}. The fence line stayed straight.`);
       const totalInches = Math.round(width / 25.4);
       setFeet(String(Math.floor(totalInches / 12))); setInches(String(totalInches % 12));
       setGateFeet(""); setGateInches("0"); setGateEditorOpen(false); setSelection(gate ? { type: "segment", id: gate.id } : null);
@@ -789,7 +794,7 @@ export default function App() {
           </div>
           <div className="command-secondary-actions">
             <button type="button" onClick={() => { setMode("draw"); setNotice(extensionAnchor ? "Tap the plan to eyeball the next point from this endpoint." : "Tap the plan to place the starting point."); }}>＋ Eyeball next point</button>
-            <button type="button" disabled={!quickGateSegment} onClick={() => { if (!quickGateSegment) return; const selectedTarget = selectedSegment?.id === quickGateSegment.id; selectSegment(quickGateSegment.id); setGateEditorOpen(true); setCommandDockOpen(false); setNotice(`Gate placement opened for the ${selectedTarget ? "selected" : "last completed"} run. Enter its width and exact distance from the starting post.`); }}>＋ Gate on {selectedSegment?.kind === "fence" ? "selected" : "last"} run</button>
+            <button type="button" disabled={!quickGateSegment} onClick={() => { if (!quickGateSegment) return; const selectedTarget = selectedSegment?.id === quickGateSegment.id; selectSegment(quickGateSegment.id); setGateEditorOpen(true); setCommandDockOpen(false); setNotice(`Gate placement opened for the ${selectedTarget ? "selected" : "last completed"} run. Enter its width and exact distance from marked Post A or Post B.`); }}>＋ Gate on {selectedSegment?.kind === "fence" ? "selected" : "last"} run</button>
             <button type="button" disabled={!design.house || !activePath || activePath.segments.length < 2} onClick={() => { setCommandDockOpen(false); setMode("close"); setSelection(null); setClosurePathPointId(extensionAnchor?.id ?? null); setNotice("Tap the intended connection on the house. Measured runs stay fixed while flexible angles close."); }}>⇥ Close to house</button>
           </div>
         </section>}
@@ -820,6 +825,10 @@ export default function App() {
             return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode === "select" && !event.metaKey) { event.stopPropagation(); selectSegment(segment.id, toPlanRaw(event.clientX, event.clientY)); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode === "select" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
               <line className="segment-hit" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <line className="segment-line" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
+              {selected && segment.kind === "fence" && gateEditorOpen && <g className="gate-reference-posts" pointerEvents="none" aria-label="Gate reference posts">
+                <g transform={`translate(${start.xMm} ${start.yMm})`}><circle r={330 * dimensionScale} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: 300 * dimensionScale }}>A</text></g>
+                <g transform={`translate(${end.xMm} ${end.yMm})`}><circle r={330 * dimensionScale} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: 300 * dimensionScale }}>B</text></g>
+              </g>}
               {layers.dimensions && <g className="dimension"><line className="dimension-leader" x1={midX} y1={midY} x2={dimensionPosition.xMm} y2={dimensionPosition.yMm} style={{ strokeWidth: 26 * dimensionScale }} /><g transform={`translate(${dimensionPosition.xMm} ${dimensionPosition.yMm})`}><rect x={-dimensionWidth / 2} y={-260 * dimensionScale} width={dimensionWidth} height={520 * dimensionScale} rx={180 * dimensionScale} style={{ strokeWidth: 28 * dimensionScale }} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: (segment.kind === "gate" ? 270 : 310) * dimensionScale }}>{dimensionText}</text></g></g>}
             </g>;
           })}
@@ -888,10 +897,11 @@ export default function App() {
               <label><span>Gate style</span><select aria-label="Gate style" value={gateType} onChange={(event) => setGateTypeChoice(event.target.value as GateType)}><option value="single">Single gate</option><option value="double">Double gate</option></select></label>
               <h3 className="field-heading">Total gate width</h3>
               <div className="exact-grid"><label><span>Feet</span><input aria-label="Gate width feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={gateFeet} onChange={(event) => setGateFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Gate width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateInches} onChange={(event) => setGateInches(event.target.value)} /></label></div>
-              <h3 className="field-heading">Fence length before gate</h3>
-              <div className="exact-grid"><label><span>Feet</span><input aria-label="Fence length before gate feet" inputMode="numeric" type="number" min="0" max="1000" value={gateOffsetFeet} onChange={(event) => setGateOffsetFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Fence length before gate inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateOffsetInches} onChange={(event) => setGateOffsetInches(event.target.value)} /></label></div>
+              <fieldset className="gate-reference-selector"><legend>Measure gate location from</legend><button type="button" aria-pressed={gateReferencePost === "post-a"} className={gateReferencePost === "post-a" ? "active" : ""} onClick={() => setGateReferencePost("post-a")}>Post A</button><button type="button" aria-pressed={gateReferencePost === "post-b"} className={gateReferencePost === "post-b" ? "active" : ""} onClick={() => setGateReferencePost("post-b")}>Post B</button></fieldset>
+              <h3 className="field-heading">Distance from {gateReferencePost === "post-a" ? "Post A" : "Post B"} to nearest gate edge</h3>
+              <div className="exact-grid"><label><span>Feet</span><input aria-label={`Distance from ${gateReferencePost === "post-a" ? "Post A" : "Post B"} feet`} inputMode="numeric" type="number" min="0" max="1000" value={gateOffsetFeet} onChange={(event) => setGateOffsetFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label={`Distance from ${gateReferencePost === "post-a" ? "Post A" : "Post B"} inches`} inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateOffsetInches} onChange={(event) => setGateOffsetInches(event.target.value)} /></label></div>
               <button className="primary wide" onClick={addGate}>Place gate on this run</button>
-              <small>This is the exact distance from the selected run&apos;s starting post to the near side of the gate. Clicking the run supplies the starting value. The total width is the full opening.</small>
+              <small>Post A and Post B are marked on the plan. Measure from the selected post to the nearest gate edge. Switching posts changes only how this draft measurement is interpreted; the fence changes only after you place the gate.</small>
             </div>}
           </>}
           <button className="wide" onClick={() => { setDimensionSideOverrides((current) => ({ ...current, [selectedSegment.id]: current[selectedSegment.id] === -1 ? 1 : -1 })); setNotice("Dimension label flipped to the other side of its run."); }}>↔ Flip dimension side</button>

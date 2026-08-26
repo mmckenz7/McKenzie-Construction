@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createHistory, pushHistory, redo, undo } from "../src/history";
+import { EMPTY_DESIGN, addPoint, feetAndInchesToMm, gateOffsetFromReferenceMm, insertGateOnSegment } from "../src/model";
 
 describe("undo and redo", () => {
   it("restores deterministic whole-document states and clears redo after a new edit", () => {
@@ -13,5 +14,15 @@ describe("undo and redo", () => {
     const branched = pushHistory(undone, { revision: 3, value: "different span" });
     expect(branched.future).toEqual([]);
     expect(redo(branched)).toBe(branched);
+  });
+
+  it("undoes and redoes a gate placed from Post B as one canonical geometry revision", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: feetAndInchesToMm(20, 0), yMm: 0 }, "segment-1");
+    const width = feetAndInchesToMm(4, 0);
+    const placed = insertGateOnSegment(design, "segment-1", width, gateOffsetFromReferenceMm(feetAndInchesToMm(20, 0), width, feetAndInchesToMm(2, 0), "post-b"), "single", "point-3", "point-4", "segment-2", "segment-3");
+    const history = pushHistory(createHistory(design), placed);
+    expect(undo(history).present).toBe(design);
+    expect(redo(undo(history)).present).toBe(placed);
   });
 });

@@ -127,3 +127,11 @@ Repository validation note: the supported webpack production build completed suc
 114. Placed a 4′ 0″ single gate after exactly 8′ 0″ of fence. The plan remained collinear at 8′ fence + 4′ gate + 12′ fence, the combined total stayed 24′ 0″, and the selected gate reported 8′ 0″ from the previous post.
 115. Undid and redid that gate insertion. Undo restored the original 24′ fence run; redo restored the exact gate. Confirmed Black Aluminum takeoff then reported 20′ fence, three fence panels, one gate-fabrication panel, four end posts, one run post, two hinges, and one latch.
 116. At 390 × 844, the direct gate flow remained horizontally contained (`scrollWidth` 375 within a 390-pixel viewport) with no browser warnings or errors. Escape closed Quick Layout and cleared an unfinished command without changing geometry.
+
+## Gate measurement-origin QA — 2026-08-26
+
+117. Created an exact 24′ 0″ Quick Layout run and opened **Gate on last run** at 390 × 844. The selected run displayed matched **A** and **B** endpoint markers on the plan and the editor exposed native **Post A** / **Post B** pressed-state buttons.
+118. Selected Post B and confirmed the heading changed to **Distance from Post B to nearest gate edge** while the design remained at revision 2. Switching back and forth changed only transient editor state and did not move or revise the fence.
+119. Entered a 4′ 0″ single gate exactly 3′ 0″ from Post B. The committed plan remained collinear at 17′ 0″ fence + 4′ 0″ gate + 3′ 0″ fence, retained the exact 24′ 0″ total, and advanced exactly once to revision 3.
+120. Undid and redid the gate insertion, then saved it locally, undid it, and loaded the saved design. Each path restored the same canonical gate geometry without persisting a Post A/Post B editor choice.
+121. At 390 × 844, both reference buttons measured 145 × 46 px, both endpoint markers remained visible, document width stayed at 375 px with no horizontal overflow, and browser warnings/errors remained empty. The selector is a native fieldset with native buttons, visible pressed state, explicit input labels, and normal keyboard semantics.

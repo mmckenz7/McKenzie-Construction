@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, insertGateAtPoint, insertGateOnSegment, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
-  normalizeDesign, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine,
+  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, gateOffsetFromReferenceMm, insertGateAtPoint, insertGateOnSegment, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
+  normalizeDesign, pointById, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine,
   stableDesignJson, totalLengthMm,
 } from "../src/model";
 
@@ -227,6 +227,60 @@ describe("deterministic fence geometry", () => {
     ]);
     expect(edited.points.every(({ yMm }) => yMm === 0)).toBe(true);
     expect(segmentLengthMm(edited, edited.segments[1])).toBe(feetAndInchesToMm(4, 0));
+    expect(totalLengthMm(edited)).toBe(totalLengthMm(design));
+  });
+
+  it("converts Post B field measurements to the canonical offset from Post A", () => {
+    const runLength = feetAndInchesToMm(20, 0);
+    const gateWidth = feetAndInchesToMm(4, 0);
+    expect(gateOffsetFromReferenceMm(runLength, gateWidth, feetAndInchesToMm(10, 0), "post-b")).toBe(feetAndInchesToMm(6, 0));
+    expect(gateOffsetFromReferenceMm(runLength, gateWidth, feetAndInchesToMm(6, 0), "post-a")).toBe(feetAndInchesToMm(6, 0));
+  });
+
+  it("produces identical saved geometry from equivalent Post A and Post B facts", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: feetAndInchesToMm(20, 0), yMm: 0 }, "segment-1");
+    const width = feetAndInchesToMm(4, 0);
+    const fromA = insertGateOnSegment(design, "segment-1", width, gateOffsetFromReferenceMm(feetAndInchesToMm(20, 0), width, feetAndInchesToMm(6, 0), "post-a"), "single", "point-3", "point-4", "segment-2", "segment-3");
+    const fromB = insertGateOnSegment(design, "segment-1", width, gateOffsetFromReferenceMm(feetAndInchesToMm(20, 0), width, feetAndInchesToMm(10, 0), "post-b"), "single", "point-3", "point-4", "segment-2", "segment-3");
+    expect(stableDesignJson(fromB)).toBe(stableDesignJson(fromA));
+  });
+
+  it("holds Post B distance when gate width changes and fails closed outside the run", () => {
+    const runLength = feetAndInchesToMm(20, 0);
+    const fourFeet = feetAndInchesToMm(4, 0); const sixFeet = feetAndInchesToMm(6, 0); const threeFeet = feetAndInchesToMm(3, 0);
+    expect(gateOffsetFromReferenceMm(runLength, fourFeet, threeFeet, "post-b")).toBe(runLength - threeFeet - fourFeet);
+    expect(gateOffsetFromReferenceMm(runLength, sixFeet, threeFeet, "post-b")).toBe(runLength - threeFeet - sixFeet);
+    expect(() => gateOffsetFromReferenceMm(runLength, feetAndInchesToMm(6, 0), feetAndInchesToMm(15, 0), "post-b")).toThrow(/must fit/);
+    expect(() => gateOffsetFromReferenceMm(runLength, feetAndInchesToMm(6, 0), -1, "post-a")).toThrow(/zero or greater/);
+  });
+
+  it("supports exact contact with either physical reference post", () => {
+    const runLength = feetAndInchesToMm(20, 0);
+    const width = feetAndInchesToMm(4, 0);
+    expect(gateOffsetFromReferenceMm(runLength, width, 0, "post-a")).toBe(0);
+    expect(gateOffsetFromReferenceMm(runLength, width, 0, "post-b")).toBe(feetAndInchesToMm(16, 0));
+  });
+
+  it("places from Post B correctly when the segment coordinate direction is reversed", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: feetAndInchesToMm(20, 0), yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: 0, yMm: 0 }, "segment-1");
+    const width = feetAndInchesToMm(4, 0); const runLength = segmentLengthMm(design, design.segments[0]);
+    const edited = insertGateOnSegment(design, "segment-1", width, gateOffsetFromReferenceMm(runLength, width, feetAndInchesToMm(2, 0), "post-b"), "single", "point-3", "point-4", "segment-2", "segment-3");
+    const gate = edited.segments.find(({ kind }) => kind === "gate")!;
+    expect(pointById(edited, gate.toPointId).xMm).toBe(0 + feetAndInchesToMm(2, 0));
+    expect(segmentLengthMm(edited, gate)).toBe(width);
+    expect(totalLengthMm(edited)).toBe(totalLengthMm(design));
+  });
+
+  it("supports a second gate on a remaining fence run using its marked Post B", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: feetAndInchesToMm(30, 0), yMm: 0 }, "segment-1");
+    design = insertGateOnSegment(design, "segment-1", feetAndInchesToMm(4, 0), feetAndInchesToMm(5, 0), "single", "point-3", "point-4", "segment-2", "segment-3");
+    const remainder = design.segments.find(({ id }) => id === "segment-3")!;
+    const remainderLength = segmentLengthMm(design, remainder); const width = feetAndInchesToMm(6, 0);
+    const edited = insertGateOnSegment(design, remainder.id, width, gateOffsetFromReferenceMm(remainderLength, width, feetAndInchesToMm(3, 0), "post-b"), "double", "point-5", "point-6", "segment-4", "segment-5");
+    expect(edited.segments.filter(({ kind }) => kind === "gate")).toHaveLength(2);
     expect(totalLengthMm(edited)).toBe(totalLengthMm(design));
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_DESIGN, addPoint } from "../src/model";
-import { LEGACY_STORAGE_KEY, loadLocalDesign, loadLocalReference, PREVIOUS_STORAGE_KEY, REFERENCE_STORAGE_KEY, saveLocalDesign, saveLocalReference } from "../src/storage";
+import { EMPTY_DESIGN, addPoint, feetAndInchesToMm, gateOffsetFromReferenceMm, insertGateOnSegment } from "../src/model";
+import { LEGACY_STORAGE_KEY, loadLocalDesign, loadLocalReference, PREVIOUS_STORAGE_KEY, REFERENCE_STORAGE_KEY, saveLocalDesign, saveLocalReference, STORAGE_KEY } from "../src/storage";
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -15,6 +15,17 @@ describe("local persistence", () => {
     const design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 305, yMm: 610 });
     saveLocalDesign(storage, design);
     expect(loadLocalDesign(storage)).toEqual(design);
+  });
+
+  it("persists only canonical gate geometry, not the transient reference-post choice", () => {
+    const storage = new MemoryStorage();
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: feetAndInchesToMm(20, 0), yMm: 0 }, "segment-1");
+    const width = feetAndInchesToMm(4, 0);
+    design = insertGateOnSegment(design, "segment-1", width, gateOffsetFromReferenceMm(feetAndInchesToMm(20, 0), width, feetAndInchesToMm(2, 0), "post-b"), "single", "point-3", "point-4", "segment-2", "segment-3");
+    saveLocalDesign(storage, design);
+    expect(loadLocalDesign(storage)).toEqual(design);
+    expect(storage.values.get(STORAGE_KEY)).not.toMatch(/post-a|post-b|referencePost/);
   });
 
   it("returns null when no local design exists", () => {

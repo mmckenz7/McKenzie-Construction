@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_DESIGN, addPoint, feetAndInchesToMm, insertGateOnSegment, setGateType, setSegmentKind, startFenceLine, type FenceDesign } from "../src/model";
+import { EMPTY_DESIGN, addPoint, feetAndInchesToMm, gateOffsetFromReferenceMm, insertGateOnSegment, setGateType, setSegmentKind, startFenceLine, type FenceDesign } from "../src/model";
 import { calculateBlackAluminumTakeoff, calculateTreatedPinePrivacyTakeoff, formatBlackAluminumTakeoffText, formatTreatedPinePrivacyTakeoffText } from "../src/takeoff";
 
 function line(lengthsFeet: readonly number[]): FenceDesign {
@@ -134,6 +134,15 @@ describe("black aluminum material takeoff", () => {
     const afterSevenFeet = insertGateOnSegment(base, "segment-1", feetAndInchesToMm(4, 0), feetAndInchesToMm(7, 0), "single", "point-3", "point-4", "segment-2", "segment-3");
     expect(calculateBlackAluminumTakeoff(afterEightFeet)).toMatchObject({ fenceLengthMm: feetAndInchesToMm(16, 0), fencePanelCount: 2, gatePanelCount: 1, panelCount: 3 });
     expect(calculateBlackAluminumTakeoff(afterSevenFeet)).toMatchObject({ fenceLengthMm: feetAndInchesToMm(16, 0), fencePanelCount: 3, gatePanelCount: 1, panelCount: 4 });
+  });
+
+  it("keeps panel and post rounding identical for equivalent Post A and Post B measurements", () => {
+    const base = line([20]);
+    const width = feetAndInchesToMm(4, 0);
+    const fromA = insertGateOnSegment(base, "segment-1", width, gateOffsetFromReferenceMm(feetAndInchesToMm(20, 0), width, feetAndInchesToMm(7, 0), "post-a"), "single", "point-3", "point-4", "segment-2", "segment-3");
+    const fromB = insertGateOnSegment(base, "segment-1", width, gateOffsetFromReferenceMm(feetAndInchesToMm(20, 0), width, feetAndInchesToMm(9, 0), "post-b"), "single", "point-3", "point-4", "segment-2", "segment-3");
+    expect(calculateBlackAluminumTakeoff(fromB)).toEqual(calculateBlackAluminumTakeoff(fromA));
+    expect(calculateTreatedPinePrivacyTakeoff(fromB)).toEqual(calculateTreatedPinePrivacyTakeoff(fromA));
   });
 
   it("flags gate widths that exceed the approved usable fabrication capacity", () => {
