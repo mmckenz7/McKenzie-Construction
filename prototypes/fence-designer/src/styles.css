@@ -40,6 +40,21 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .walk-length-editor > div:first-child { display: grid; gap: 3px; }
 .walk-length-editor > div:first-child span { color: #67756d; font-size: .8rem; }
 .walk-status { margin-top: 9px; padding: 8px 10px; border-left: 4px solid #779383; border-radius: 7px; background: #eef3ee; color: #43564c; font-size: .78rem; line-height: 1.35; }
+.command-dock { position: absolute; z-index: 8; left: 14px; bottom: 14px; width: min(720px, calc(100% - 28px)); display: grid; gap: 9px; padding: 14px; border: 1px solid #b9c8bd; border-radius: 14px; background: rgb(255 255 255 / .97); box-shadow: 0 12px 32px rgb(23 45 37 / .2); }
+.command-dock-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.command-dock-heading > div { display: grid; gap: 2px; }
+.command-dock-heading strong { color: #173f31; font: 550 1rem Georgia, serif; }
+.command-dock-heading > button { min-width: 40px; min-height: 40px; padding: 0; font-size: 1.3rem; }
+.command-log { display: flex; gap: 6px; margin: 0; padding: 0; overflow-x: auto; list-style: none; }
+.command-log li { flex: none; padding: 5px 8px; border-radius: 999px; background: #edf3ef; color: #3f5b4d; font-size: .7rem; font-weight: 800; }
+.command-entry { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 8px; align-items: end; }
+.command-entry label { display: grid; gap: 4px; color: #58685f; font-size: .72rem; font-weight: 800; }
+.command-entry input { width: 100%; min-height: 48px; padding: 9px 11px; border: 1px solid #aebcb2; border-radius: 9px; background: #fff; color: #1e3228; }
+.command-suggestions, .command-secondary-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.command-suggestions button { min-height: 36px; padding: 0 10px; color: #385648; font-size: .72rem; }
+.command-preview-message { min-height: 36px; padding: 8px 10px; border-left: 4px solid #5e8a73; border-radius: 7px; background: #edf4ef; color: #3c5549; font-size: .76rem; line-height: 1.35; }
+.command-preview-message.error { border-left-color: #c66f26; background: #fff3e5; color: #824716; }
+.command-secondary-actions button { min-height: 40px; font-size: .76rem; }
 .property-lookup { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 10px; align-items: end; }
 .property-lookup label { display: grid; gap: 5px; color: #59675f; font-size: .76rem; font-weight: 800; }
 .property-lookup input { min-height: 46px; border: 1px solid #bfc8c0; border-radius: 8px; padding: 8px 10px; color: #22342c; background: #fff; }
@@ -157,6 +172,8 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .takeoff-post.corner text { fill: #263e60; }
 .run-preview > line { stroke: #e4922d; stroke-width: 145; stroke-linecap: round; stroke-dasharray: 360 230; }
 .run-preview > circle { fill: #fff7ea; stroke: #e4922d; stroke-width: 90; }
+.command-run-preview > line { stroke: #df8127; stroke-width: 150; stroke-linecap: round; stroke-dasharray: 330 180; }
+.command-run-preview > circle { fill: #fff4df; stroke: #df8127; stroke-width: 90; }
 .reference-image { filter: saturate(.85) contrast(.96); }
 .calibration-point circle { fill: #fff4dd; stroke: #d97720; stroke-width: 90; }
 .calibration-point line { stroke: #d97720; stroke-width: 85; }
@@ -230,6 +247,11 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
   .reference-upload { align-items: stretch; flex-direction: column; }
   .live-measurement { top: auto; right: 10px; bottom: 10px; min-width: 155px; }
   .mark-location { min-width: 0; min-height: 58px; font-size: 1.05rem; }
+  .command-dock { left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); width: auto; max-height: 44dvh; overflow-y: auto; padding: 9px; gap: 6px; }
+  .command-entry { grid-template-columns: minmax(0, 1fr) auto; }
+  .command-entry button { min-height: 48px; padding-inline: 14px; }
+  .command-suggestions, .command-secondary-actions { flex-wrap: nowrap; overflow-x: auto; }
+  .command-suggestions button, .command-secondary-actions button { flex: none; }
   .app-footer { flex-direction: column; gap: 3px; padding: 8px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
 
   :scope.site-walk-active { min-height: 100dvh; }

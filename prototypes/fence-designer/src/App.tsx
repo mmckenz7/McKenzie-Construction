@@ -11,6 +11,7 @@ import {
 import { acquireBestGps, formatGpsAccuracy, gpsOriginAt, projectGpsFix, projectGpsLeg, type GpsFix, type GpsOrigin } from "./gps";
 import { propertyReferenceLinks, type PropertyReferenceLinks } from "./property-reference";
 import { captureReferenceDisplay, rasterizeReferenceBlob, readReferenceImageFromClipboard, referenceImageErrorMessage, type RasterizedReferenceImage } from "./reference-image";
+import { parseRunCommand, runEndpoint, type ParsedRunCommand } from "./run-command";
 import { loadLocalDesign, loadLocalReference, saveLocalDesign, saveLocalReference } from "./storage";
 import { calculateBlackAluminumTakeoff, calculateTreatedPinePrivacyTakeoff, formatBlackAluminumTakeoffText, formatTreatedPinePrivacyTakeoffText, takeoffPostReasonLabel, type TakeoffPostReason } from "./takeoff";
 import { panView, placeDimensionLabels, zoomViewAt, type ViewBox } from "./view";
@@ -81,6 +82,9 @@ export default function App() {
   const [walkFeet, setWalkFeet] = useState("");
   const [walkInches, setWalkInches] = useState("0");
   const [walkLengthConfirmed, setWalkLengthConfirmed] = useState(true);
+  const [commandDockOpen, setCommandDockOpen] = useState(false);
+  const [commandInput, setCommandInput] = useState("");
+  const [commandLog, setCommandLog] = useState<readonly string[]>([]);
   const [propertyPanelOpen, setPropertyPanelOpen] = useState(false);
   const [takeoffPanelOpen, setTakeoffPanelOpen] = useState(false);
   const [takeoffViewEnabled, setTakeoffViewEnabled] = useState(false);
@@ -115,6 +119,21 @@ export default function App() {
   const selectedGateOffsetMm = selectedGatePreviousFence ? segmentLengthMm(design, selectedGatePreviousFence) : 0;
   const selectedPoint = selection?.type === "point" ? design.points.find(({ id }) => id === selection.id) ?? null : null;
   const selectedPointPath = selectedPoint ? fencePathForPoint(design, selectedPoint.id) : null;
+  const openEndpoint = (point: Readonly<{ id: string }>) => !design.segments.some(({ fromPointId }) => fromPointId === point.id);
+  const selectedOpenEndpoint = selectedPoint && openEndpoint(selectedPoint) ? selectedPoint : null;
+  const latestOpenEndpoint = [...design.points].reverse().find(openEndpoint) ?? null;
+  const extensionAnchor = selectedOpenEndpoint ?? latestOpenEndpoint;
+  const incomingToAnchor = extensionAnchor ? design.segments.find(({ toPointId }) => toPointId === extensionAnchor.id) ?? null : null;
+  const incomingBearing = incomingToAnchor && extensionAnchor
+    ? (() => { const start = pointById(design, incomingToAnchor.fromPointId); return Math.atan2(extensionAnchor.yMm - start.yMm, extensionAnchor.xMm - start.xMm); })()
+    : null;
+  const commandPreview: Readonly<{ command: ParsedRunCommand; endpoint: Readonly<{ xMm: number; yMm: number }> }> | Readonly<{ error: string }> | null = (() => {
+    if (!commandInput.trim() || !extensionAnchor) return null;
+    try {
+      const command = parseRunCommand(commandInput, incomingBearing);
+      return Object.freeze({ command, endpoint: runEndpoint(extensionAnchor, command) });
+    } catch (error) { return Object.freeze({ error: error instanceof Error ? error.message : "That run instruction was not understood." }); }
+  })();
   const houseSelected = selection?.type === "house";
   const totals = useMemo(() => ({ all: totalLengthMm(design), gate: design.segments.filter(({ kind }) => kind === "gate").reduce((sum, item) => sum + segmentLengthMm(design, item), 0) }), [design]);
   const blackAluminumTakeoff = useMemo(() => calculateBlackAluminumTakeoff(design), [design]);
@@ -130,9 +149,9 @@ export default function App() {
     activeTakeoffLayout.posts.forEach(({ reason }) => counts.set(reason, (counts.get(reason) ?? 0) + 1));
     return [...counts.entries()];
   }, [activeTakeoffLayout]);
-  const activePath = design.points.length ? fencePathForPoint(design, design.points.at(-1)!.id) : null;
-  const liveRunLengthMm = mode === "draw" && previewPoint && design.points.at(-1)
-    ? Math.round(Math.hypot(previewPoint.xMm - design.points.at(-1)!.xMm, previewPoint.yMm - design.points.at(-1)!.yMm))
+  const activePath = extensionAnchor ? fencePathForPoint(design, extensionAnchor.id) : null;
+  const liveRunLengthMm = mode === "draw" && previewPoint && extensionAnchor
+    ? Math.round(Math.hypot(previewPoint.xMm - extensionAnchor.xMm, previewPoint.yMm - extensionAnchor.yMm))
     : null;
   const dimensionScale = view.width / DEFAULT_VIEW.width;
   const dimensionPositions = useMemo(() => new Map(placeDimensionLabels(design.segments.map((segment) => {
@@ -193,7 +212,7 @@ export default function App() {
     return { point: snapPlanPosition(raw.xMm, raw.yMm, snapEnabled, null, GRID_MM), connection: null };
   };
   const nextPointAt = (clientX: number, clientY: number) => {
-    const anchor = design.points.at(-1);
+    const anchor = extensionAnchor;
     const raw = toPlanRaw(clientX, clientY);
     const houseConnection = snapToHouseEdge(raw.xMm, raw.yMm, design.house);
     if (houseConnection) return houseConnection;
@@ -252,12 +271,30 @@ export default function App() {
     }
     if (mode !== "draw") return;
     const point = nextPointAt(event.clientX, event.clientY);
-    const anchor = design.points.at(-1);
+    const anchor = extensionAnchor;
     if (anchor && point.xMm === anchor.xMm && point.yMm === anchor.yMm) { setNotice("Choose a different location for the next fence point."); return; }
     const id = nextId.current++;
-    const next = addPoint(design, { id: `point-${id}`, ...point }, `segment-${id}`);
+    const next = addPoint(design, { id: `point-${id}`, ...point }, `segment-${id}`, anchor?.id ?? null);
     commit(next, next.points.length === 1 ? "Start point placed. Add another point to create a measured span." : "Measured span added.");
-    setPreviewPoint(point);
+    setSelection({ type: "point", id: `point-${id}` }); setPreviewPoint(point);
+    if (commandDockOpen) window.setTimeout(() => setMode("select"), 250);
+  };
+
+  const applyRunCommand = () => {
+    if (!extensionAnchor) {
+      setMode("draw"); setSelection(null); setNotice("Tap the plan once to place the starting point, then enter the first precise run."); return;
+    }
+    if (!commandPreview || "error" in commandPreview) {
+      setNotice(commandPreview && "error" in commandPreview ? commandPreview.error : "Describe the next run before applying it."); return;
+    }
+    try {
+      const id = nextId.current++;
+      const pointId = `point-${id}`;
+      const next = addPoint(design, { id: pointId, ...commandPreview.endpoint }, `segment-${id}`, extensionAnchor.id);
+      commit(next, `Precise run added: ${commandPreview.command.summary}.`);
+      setCommandLog((current) => Object.freeze([...current.slice(-3), commandPreview.command.summary]));
+      setCommandInput(""); setSelection({ type: "point", id: pointId }); setMode("select"); setPreviewPoint(null); setView(fittedView(next));
+    } catch (error) { setNotice(error instanceof Error ? error.message : "The precise run could not be added."); }
   };
   const closeAt = (event: ReactPointerEvent<SVGElement>) => {
     if (mode !== "close") return;
@@ -633,18 +670,18 @@ export default function App() {
     </header>
 
     <nav className="toolbar" aria-label="Drawing controls">
-      <div className="segmented"><button className={mode === "draw" ? "active" : ""} onClick={() => { setMode("draw"); setSelection(null); setClosurePathPointId(null); setNotice("Draw continues from the last point. Use Start separate line to begin somewhere else."); }}>＋ Draw</button><button className={mode === "select" ? "active" : ""} onClick={() => setMode("select")}>↖ Edit</button><button className={mode === "pan" ? "active" : ""} onClick={() => { setMode("pan"); setSelection(null); setNotice("Drag the plan to move around. Pinch with two fingers to zoom."); }}>✋ Pan</button></div>
+      <div className="segmented"><button className={mode === "draw" ? "active" : ""} onClick={() => { setMode("draw"); if (!selectedOpenEndpoint) setSelection(null); setClosurePathPointId(null); setNotice(selectedOpenEndpoint ? "Draw continues from the selected endpoint. Tap an odd-angle location, then return to Quick layout for the next exact run." : "Draw continues from the latest open endpoint. Use Start separate line to begin somewhere else."); }}>＋ Draw</button><button className={mode === "select" ? "active" : ""} onClick={() => setMode("select")}>↖ Edit</button><button className={mode === "pan" ? "active" : ""} onClick={() => { setMode("pan"); setSelection(null); setNotice("Drag the plan to move around. Pinch with two fingers to zoom."); }}>✋ Pan</button></div>
       <button className={mode === "new-line" ? "active-tool" : ""} onClick={() => { setMode("new-line"); setSelection(null); setClosurePathPointId(null); setPreviewPoint(null); setNotice("Tap anywhere to start a separate fence line. Tap near an existing run to connect partway along it."); }}>＋ Separate line</button>
       <button disabled={history.past.length === 0} onClick={() => { setHistory(undo); setSelection(null); setNotice("Undid the last change."); }}>↶ Undo</button>
       <button disabled={history.future.length === 0} onClick={() => { setHistory(redo); setSelection(null); setNotice("Redid the change."); }}>↷ Redo</button>
       <div className="zoom-controls" aria-label="Plan zoom"><button aria-label="Zoom out" onClick={() => zoomAt(1.25)}>−</button><span>{Math.round(DEFAULT_VIEW.width / view.width * 100)}%</span><button aria-label="Zoom in" onClick={() => zoomAt(0.8)}>＋</button></div>
       <button onClick={() => setView(fittedView(design))}>Fit plan</button>
       <button className={houseSelected ? "active-tool" : ""} onClick={selectHouse}>{design.house ? "⌂ House" : "＋ House"}</button>
-      <button disabled={!design.house || !activePath || activePath.segments.length < 2} className={mode === "close" ? "active-tool" : ""} onClick={() => { setMode("close"); setSelection(null); setClosurePathPointId(design.points.at(-1)?.id ?? null); setPreviewPoint(null); setNotice("Tap the second connection on the house. Closure will keep this line's measured runs fixed and redistribute only its angles."); }}>⇥ Close to house</button>
+      <button disabled={!design.house || !activePath || activePath.segments.length < 2} className={mode === "close" ? "active-tool" : ""} onClick={() => { setMode("close"); setSelection(null); setClosurePathPointId(extensionAnchor?.id ?? null); setPreviewPoint(null); setNotice("Tap the second connection on the house. Closure will keep this line's measured runs fixed and redistribute only its angles."); }}>⇥ Close to house</button>
       <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setPreviewPoint(null); setNotice(snapEnabled ? "Free angle is on. Runs now follow the measured geometry without angle assumptions." : "45°/90° angle assist is on and uses the previous fence segment as its reference."); }}>{snapEnabled ? "⌁ Relative 45°/90°" : "◌ Free angle"}</button>
       <button aria-pressed={layers.grid} className={layers.grid ? "active-tool" : ""} onClick={() => { setLayers((current) => ({ ...current, grid: !current.grid })); setNotice(layers.grid ? "Plan grid hidden." : "Plan grid shown."); }}>{layers.grid ? "▦ Grid on" : "▦ Grid off"}</button>
       <button aria-pressed={lengthLockEnabled} className={lengthLockEnabled ? "active-tool" : ""} onClick={() => { setLengthLockEnabled((current) => !current); setNotice(lengthLockEnabled ? "Length lock is off. Dragging a point can now change connected measurements." : "Length lock is on. Dragging adjusts the angle while preserving the incoming and following measurements."); }}>{lengthLockEnabled ? "🔒 Lengths" : "🔓 Lengths"}</button>
-      <button aria-pressed={siteWalkActive} className={`site-walk-toggle${siteWalkActive ? " active-tool" : ""}`} onClick={toggleSiteWalk}>{siteWalkActive ? "✓ Finish walk" : "📍 Site walk"}</button>
+      <button aria-pressed={commandDockOpen} className={commandDockOpen ? "active-tool" : ""} onClick={() => { setCommandDockOpen((current) => !current); setMode("select"); setPreviewPoint(null); setNotice(commandDockOpen ? "Quick layout closed." : "Quick layout uses the selected open endpoint. Type an exact run or tap Draw for an odd angle."); }}>⌨ Quick layout</button>
       <button aria-pressed={propertyPanelOpen} className={propertyPanelOpen ? "active-tool" : ""} onClick={() => setPropertyPanelOpen((current) => !current)}>⌖ Property</button>
       <button aria-pressed={takeoffPanelOpen} className={takeoffPanelOpen ? "active-tool" : ""} onClick={() => setTakeoffPanelOpen((current) => !current)}>▦ Materials</button>
       <span className="toolbar-spacer" />
@@ -736,6 +773,25 @@ export default function App() {
 
     <section className="workspace">
       <div className="canvas-shell">
+        {commandDockOpen && mode !== "draw" && <section className="command-dock" aria-label="Quick layout command dock">
+          <div className="command-dock-heading"><div><p className="eyebrow">Quick layout</p><strong>{extensionAnchor ? selectedOpenEndpoint ? "Continuing from selected endpoint" : "Continuing from latest endpoint" : "Place a starting point"}</strong></div><button aria-label="Close Quick layout" onClick={() => setCommandDockOpen(false)}>×</button></div>
+          {commandLog.length > 0 && <ol className="command-log" aria-label="Applied run commands">{commandLog.map((entry, index) => <li key={`${entry}-${index}`}>{entry}</li>)}</ol>}
+          <form className="command-entry" onSubmit={(event) => { event.preventDefault(); applyRunCommand(); }}>
+            <label><span>Describe the next run</span><input aria-label="Describe the next run" value={commandInput} onChange={(event) => setCommandInput(event.target.value)} placeholder={incomingBearing === null ? "Example: south 20 ft" : "Example: right 90, 40 ft"} /></label>
+            <button className="primary" type="submit">{extensionAnchor ? "Add run" : "Tap start"}</button>
+          </form>
+          <div className="command-suggestions" aria-label="Run command examples">
+            {(incomingBearing === null ? ["South 20 ft", "East 20 ft"] : ["Straight 20 ft", "Right 90, 20 ft", "Left 90, 20 ft"]).map((example) => <button type="button" key={example} onClick={() => setCommandInput(example)}>{example}</button>)}
+          </div>
+          <div className={`command-preview-message${commandPreview && "error" in commandPreview ? " error" : ""}`} role="status">
+            {!extensionAnchor ? "Tap Draw and place the start on the plan. Quick layout will continue from it." : !commandInput.trim() ? "Type a run, or tap Draw to eyeball an odd angle. Selecting another open endpoint changes where commands continue." : commandPreview && "error" in commandPreview ? commandPreview.error : commandPreview ? `Preview: ${commandPreview.command.summary}` : ""}
+          </div>
+          <div className="command-secondary-actions">
+            <button type="button" onClick={() => { setMode("draw"); setNotice(extensionAnchor ? "Tap the plan to eyeball the next point from this endpoint." : "Tap the plan to place the starting point."); }}>＋ Eyeball next point</button>
+            <button type="button" disabled={!selectedSegment || selectedSegment.kind !== "fence"} onClick={() => { setCommandDockOpen(false); setGateEditorOpen(true); setNotice("Gate placement opened for the selected run. Enter its width and distance from the starting post."); }}>＋ Gate on selected run</button>
+            <button type="button" disabled={!design.house || !activePath || activePath.segments.length < 2} onClick={() => { setCommandDockOpen(false); setMode("close"); setSelection(null); setClosurePathPointId(extensionAnchor?.id ?? null); setNotice("Tap the intended connection on the house. Measured runs stay fixed while flexible angles close."); }}>⇥ Close to house</button>
+          </div>
+        </section>}
         <div className="canvas-key"><span><i className="key-dot endpoint" /> Open endpoint</span><span><i className="key-dot attached" /> Connected endpoint</span><span><i className="key-dot corner" /> Corner</span><span><i className="key-line preview" /> Live run</span><span><i className="key-line gate" /> Gate intent</span>{takeoffReady && takeoffViewEnabled && <><span><i className="key-post end" /> End post</span><span><i className="key-post corner" /> Corner post</span><span><i className="key-post line" /> Run post</span><span><i className="key-panel cut" /> Cut panel</span></>}</div>
         {takeoffReady && takeoffViewEnabled && <div className="sr-only" role="status" aria-live="polite">{takeoffMaterial === "black-aluminum" ? "Black Aluminum" : "Treated Pine Privacy"} takeoff view. {activeTakeoffLayout.panels.length} material bays and {activeTakeoffLayout.posts.length} installed posts shown.</div>}
         {liveRunLengthMm !== null && liveRunLengthMm > 0 && <div className="live-measurement" role="status" aria-live="polite"><span>Current run</span><strong>{formatFeetInches(liveRunLengthMm)}</strong><small>{snapEnabled ? "45°/90° assist" : "Free angle"} · click to place</small></div>}
@@ -766,6 +822,10 @@ export default function App() {
               {layers.dimensions && <g className="dimension"><line className="dimension-leader" x1={midX} y1={midY} x2={dimensionPosition.xMm} y2={dimensionPosition.yMm} style={{ strokeWidth: 26 * dimensionScale }} /><g transform={`translate(${dimensionPosition.xMm} ${dimensionPosition.yMm})`}><rect x={-dimensionWidth / 2} y={-260 * dimensionScale} width={dimensionWidth} height={520 * dimensionScale} rx={180 * dimensionScale} style={{ strokeWidth: 28 * dimensionScale }} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: (segment.kind === "gate" ? 270 : 310) * dimensionScale }}>{dimensionText}</text></g></g>}
             </g>;
           })}
+          {commandDockOpen && commandPreview && !("error" in commandPreview) && extensionAnchor && <g className="command-run-preview" pointerEvents="none" role="img" aria-label={`Precise run preview ${commandPreview.command.summary}`}>
+            <line x1={extensionAnchor.xMm} y1={extensionAnchor.yMm} x2={commandPreview.endpoint.xMm} y2={commandPreview.endpoint.yMm} />
+            <circle cx={commandPreview.endpoint.xMm} cy={commandPreview.endpoint.yMm} r={175 * dimensionScale} />
+          </g>}
           {takeoffReady && takeoffViewEnabled && <g className="takeoff-plan" pointerEvents="none" aria-label={`${takeoffMaterial === "black-aluminum" ? "Black Aluminum" : "Treated Pine Privacy"} takeoff markers`}>
             {activeTakeoffLayout.panels.map((panel) => {
               const midX = (panel.start.xMm + panel.end.xMm) / 2; const midY = (panel.start.yMm + panel.end.yMm) / 2;
@@ -787,8 +847,8 @@ export default function App() {
               </g>;
             })}
           </g>}
-          {mode === "draw" && previewPoint && design.points.at(-1) && (() => {
-            const start = design.points.at(-1)!;
+          {mode === "draw" && previewPoint && extensionAnchor && (() => {
+            const start = extensionAnchor;
             const length = Math.round(Math.hypot(previewPoint.xMm - start.xMm, previewPoint.yMm - start.yMm));
             return <g className="run-preview" pointerEvents="none" role="img" aria-label={`Live run ${formatFeetInches(length)}${snapEnabled ? ", snap on" : ", snap off"}`}>
               <line x1={start.xMm} y1={start.yMm} x2={previewPoint.xMm} y2={previewPoint.yMm} />
