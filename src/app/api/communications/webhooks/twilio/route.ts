@@ -1,6 +1,9 @@
+import { after } from "next/server";
+
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import { e164UsPhone, normalizedPhone } from "@/lib/communications/phone";
 import { validateTwilioWebhook } from "@/lib/communications/twilio-webhook";
+import { sendInboundTextPush } from "@/lib/communications/web-push";
 
 export const runtime = "nodejs";
 
@@ -88,6 +91,10 @@ export async function POST(request: Request) {
     }, { onConflict: "provider,provider_message_id,direction", ignoreDuplicates: true }).select("id").maybeSingle();
     if (message.error) return xml(500);
     if (!message.data) return xml();
+
+    // The provider receives only an encrypted generic alert. Customer identity,
+    // phone number, message body, and thread identifiers never enter the push payload.
+    after(() => sendInboundTextPush());
 
     if (optOutType === "STOP" || optOutType === "START") {
       await supabase.from("communication_preferences").upsert({

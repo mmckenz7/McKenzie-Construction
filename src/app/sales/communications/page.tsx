@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CommunicationAutomationControls } from "@/components/communication-automation-controls";
+import { CommunicationPushControls } from "@/components/communication-push-controls";
 import { CommunicationThreadControls } from "@/components/communication-thread-controls";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import {
@@ -101,6 +102,7 @@ function inboxHref({
 
 function timestamp(value: string) {
   return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -409,6 +411,7 @@ export default async function CommunicationsPage({
         <article className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-semibold uppercase text-slate-500">Scheduler</p><p className={`mt-2 text-sm font-semibold ${schedulerSecretReady ? "text-emerald-700" : "text-amber-700"}`}>{schedulerSecretReady ? "Ready" : "Secret missing"}</p><p className="mt-1 text-xs text-slate-500">Unattended processing</p></article>
       </div>
       <div className="mt-4 border-t border-slate-200 pt-4"><CommunicationAutomationControls enabled /></div>
+      <div className="mt-4"><CommunicationPushControls /></div>
       </section>
     </details>
 

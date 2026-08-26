@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-const OPEN_INBOX_REFRESH_MS = 2 * 60 * 1000;
+const OPEN_INBOX_REFRESH_MS = 15 * 1000;
 
 type AutomationResult = {
   success?: boolean;
@@ -47,17 +47,23 @@ export function CommunicationAutomationControls({ enabled }: { enabled: boolean 
   }
 
   useEffect(() => {
-    if (!enabled || !autoRefresh) return;
-    const timer = window.setInterval(() => void runAutomation(false), OPEN_INBOX_REFRESH_MS);
-    return () => window.clearInterval(timer);
-  // runAutomation intentionally uses current component state and the interval is recreated when the toggle changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRefresh, enabled]);
+    if (!autoRefresh) return;
+    const refresh = () => router.refresh();
+    const timer = window.setInterval(refresh, OPEN_INBOX_REFRESH_MS);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [autoRefresh, router]);
 
   return <div className="flex flex-wrap items-center justify-between gap-3">
     <label className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-      <input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} disabled={!enabled} />
-      Refresh every 2 minutes while this inbox is open
+      <input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} />
+      Show new messages automatically while this inbox is open
     </label>
     <button type="button" onClick={() => void runAutomation(true)} disabled={!enabled || running} className="rounded-lg border border-blue-800 bg-blue-950/40 px-3 py-2 text-xs font-bold text-blue-300 disabled:cursor-not-allowed disabled:opacity-50">{running ? "Updating…" : "Update now"}</button>
     {notice ? <p role="status" className="w-full text-xs text-slate-400">{notice}</p> : null}
