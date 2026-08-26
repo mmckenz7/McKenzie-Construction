@@ -75,6 +75,22 @@ test("one-time authentication codes are quarantined without sender assumptions",
     subject: "A message",
     body: "Temporary security PIN: 84027155",
   }));
+  assert.ok(classificationFor({
+    sender: "unknown@example.test",
+    subject: "Your sign-in code",
+    body: "Your code is 483920.",
+  }));
+  assert.ok(classificationFor({
+    sender: "unknown@example.test",
+    subject: "Email verification code",
+    body: "483920",
+  }));
+  assert.ok(classificationFor({
+    sender: "unknown@example.test",
+    subject: "Account recovery",
+    body: null,
+    bodyPreview: "Use code 483920 to continue.",
+  }));
 });
 
 test("sender and subject alone never classify a message", () => {
@@ -93,6 +109,14 @@ test("benign high-entropy business URLs and ordinary numbers remain visible", ()
   assert.equal(classificationFor({
     subject: "Project reference",
     body: `Reference https://projects.example.test/items?code=${syntheticToken}`,
+  }), null);
+  assert.equal(classificationFor({
+    subject: "Order confirmation",
+    body: "Reference code: 483920",
+  }), null);
+  assert.equal(classificationFor({
+    subject: "Security notice",
+    body: "Project code: 483920",
   }), null);
 });
 
@@ -135,6 +159,37 @@ test("quarantine records retain only placeholders and non-secret audit fields", 
   ]);
 });
 
+test("quarantine audit keys are deterministic for idempotent provider resync", () => {
+  const classification = classificationFor({
+    body: `https://accounts.example.test/recovery?token=${syntheticToken}`,
+  });
+  assert.ok(classification);
+  const audit = {
+    provider: "provider_test",
+    providerMessageId: "provider-message-idempotent",
+    providerConversationId: "provider-conversation-idempotent",
+    internetMessageId: "<idempotent@example.test>",
+    mailboxId: "mailbox-idempotent",
+    receivedAt: "2026-08-25T18:00:00.000Z",
+  };
+  const first = quarantinedCommunicationRecords(
+    audit,
+    classification,
+    "2026-08-25T18:00:01.000Z",
+  );
+  const replay = quarantinedCommunicationRecords(
+    audit,
+    classification,
+    "2026-08-25T18:00:02.000Z",
+  );
+
+  assert.equal(first.thread.provider_thread_id, replay.thread.provider_thread_id);
+  assert.equal(first.message.provider_message_id, replay.message.provider_message_id);
+  assert.equal(first.message.provider_conversation_id, replay.message.provider_conversation_id);
+  assert.equal(first.message.content_redacted_at, "2026-08-25T18:00:01.000Z");
+  assert.equal(replay.message.content_redacted_at, "2026-08-25T18:00:02.000Z");
+});
+
 test("Graph quarantine happens before associations, visible threads, or body persistence", () => {
   const graph = readFileSync("src/lib/communications/microsoft-graph.ts", "utf8");
   const security = readFileSync("src/lib/communications/security.ts", "utf8");
@@ -143,10 +198,21 @@ test("Graph quarantine happens before associations, visible threads, or body per
   assert.ok(storeBody.indexOf("classifySecretBearingAuthenticationMail") < storeBody.indexOf("findRelatedRecords"));
   assert.ok(storeBody.indexOf("storeQuarantinedMessage") < storeBody.indexOf("findRelatedRecords"));
   assert.match(graph, /existingMessage[\s\S]*?provider_message_id[\s\S]*?if \(existingMessage\.data\) return false/);
+  assert.match(graph, /messageResult\.error\?\.code === "23505"\) return false/);
   assert.match(graph, /quarantinedCommunicationRecords/);
   assert.match(security, /security_disposition: "quarantined"/);
   assert.match(graph, /security_disposition: "normal"/);
   assert.doesNotMatch(graph.slice(graph.indexOf("async function storeQuarantinedMessage"), storeStart), /rawMessage/);
+});
+
+test("classifier and Graph quarantine paths never log message or secret-bearing input", () => {
+  const graph = readFileSync("src/lib/communications/microsoft-graph.ts", "utf8");
+  const security = readFileSync("src/lib/communications/security.ts", "utf8");
+
+  assert.doesNotMatch(security, /console\.(?:debug|error|info|log|warn)/u);
+  assert.doesNotMatch(graph, /console\.(?:debug|error|info|log|warn)/u);
+  assert.doesNotMatch(graph, /JSON\.stringify\(rawMessage\)/u);
+  assert.doesNotMatch(graph, /throw new Error\([^)]*(?:rawMessage|bodyPreview|classification)/u);
 });
 
 test("list, count, search, and related-record projections fail closed", () => {

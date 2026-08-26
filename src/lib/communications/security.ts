@@ -7,7 +7,7 @@ export type CommunicationSecurityDisposition =
   (typeof COMMUNICATION_SECURITY_DISPOSITIONS)[number];
 
 export const AUTH_MAIL_DETECTOR_VERSION =
-  "secret-bearing-auth-mail-v1";
+  "secret-bearing-auth-mail-v2";
 
 export const QUARANTINED_AUTH_MAIL_REASON =
   "secret_bearing_authentication_content";
@@ -46,6 +46,12 @@ type AuthenticationMailInput = Readonly<{
 const URL_CANDIDATE = /https?:\/\/[^\s<>"']+/giu;
 const OTP_CONTEXT =
   /\b(?:one[ -]?time|single[ -]?use|temporary|verification|authentication|security|sign[ -]?in|login|password reset|recovery|invitation)\s+(?:passcode|password|pin|code)\b[^\d]{0,40}\b\d{6,8}\b/iu;
+const HEADER_AUTHENTICATION_CONTEXT =
+  /\b(?:authentication|email verification|login|one[ -]?time|otp|password reset|recover|recovery|sign[ -]?in|verification)\b/iu;
+const OTP_LABEL = /\b(?:code|otp|passcode|pin)\b/iu;
+const LABELED_OTP_VALUE =
+  /\b(?:code|otp|passcode|pin)\b[^\d]{0,40}\b\d{6,8}\b/iu;
+const OTP_VALUE = /\b\d{6,8}\b/u;
 const JWT_VALUE = /^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/u;
 const TOKEN_VALUE = /^[A-Za-z0-9%._~+/=-]+$/u;
 const AUTHENTICATION_PATH =
@@ -137,13 +143,20 @@ export function classifySecretBearingAuthenticationMail(
   const body = input.body ?? "";
   const bodyPreview = input.bodyPreview ?? "";
   const content = `${body}\n${bodyPreview}`;
-  const inputContext = `${input.sender ?? ""}\n${input.subject ?? ""}\n${content}`;
+  const headerContext = `${input.sender ?? ""}\n${input.subject ?? ""}`;
+  const inputContext = `${headerContext}\n${content}`;
 
   const urls = content.match(URL_CANDIDATE) ?? [];
+  const headerBackedOtp =
+    HEADER_AUTHENTICATION_CONTEXT.test(headerContext) &&
+    (
+      LABELED_OTP_VALUE.test(content) ||
+      (OTP_LABEL.test(headerContext) && OTP_VALUE.test(content))
+    );
   const containsSecret =
     urls.some((url) =>
       urlContainsAuthenticationSecret(url, inputContext),
-    ) || OTP_CONTEXT.test(content);
+    ) || OTP_CONTEXT.test(content) || headerBackedOtp;
 
   if (!containsSecret) return null;
   return {
