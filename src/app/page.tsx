@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { HomeNavigation } from "@/components/home-navigation";
+import { TrackedPhoneLink } from "@/components/tracked-phone-link";
 
 const brandGreen = "#8CC63F";
 
@@ -11,7 +12,7 @@ const services = [
     description:
       "Purpose-built wood and composite decks designed around your home, property, and the way you want to use the space.",
     image:
-      "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1200&q=85",
+      "/projects/knoxville-trex-deck/finished-deck-wide.jpg",
     href: "/knoxville-deck-builder",
     linkLabel: "Explore deck services",
   },
@@ -20,18 +21,41 @@ const services = [
     description:
       "Comfortable, protected spaces for entertaining, relaxing, and enjoying East Tennessee throughout more of the year.",
     image:
-      "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=85",
-    href: "/services",
-    linkLabel: "Explore our services",
+      "/projects/tellico-village-screened-porch/full-rear-elevation.jpg",
+    href: "/covered-decks-knoxville",
+    linkLabel: "Explore covered decks",
   },
   {
     title: "Screened Porches",
     description:
       "Open-air living without the insects, built to feel like a natural extension of your home.",
     image:
-      "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=1200&q=85",
+      "/projects/tellico-village-screened-porch/screened-living-space.jpg",
     href: "/services",
     linkLabel: "Explore our services",
+  },
+];
+
+const additionalFeaturedProjects = [
+  {
+    title: "East Tennessee Elevated Covered Deck",
+    location: "East Tennessee",
+    description:
+      "A roofed wood deck with a finished ceiling, ceiling fan, furnished living area, and full stair run.",
+    image:
+      "/projects/east-tennessee-elevated-covered-deck/full-rear-elevation.jpg",
+    imageAlt: "Completed elevated covered wood deck in East Tennessee",
+    href: "/projects/east-tennessee-elevated-covered-deck",
+  },
+  {
+    title: "Tellico Village Screened Porch & Deck",
+    location: "Tellico Village, Tennessee",
+    description:
+      "An elevated screened room with an adjoining open deck, grill area, composite surface, and stairs.",
+    image:
+      "/projects/tellico-village-screened-porch/full-rear-elevation.jpg",
+    imageAlt: "Completed screened porch and adjoining elevated deck",
+    href: "/projects/tellico-village-screened-porch",
   },
 ];
 
@@ -109,13 +133,11 @@ export default function HomePage() {
             />
 
             <p className="mb-5 text-sm font-bold uppercase tracking-[0.25em] text-zinc-300">
-              Knoxville &amp; East Tennessee
+              McKenzie Construction · Knoxville, Tennessee
             </p>
 
-            <h1 className="text-5xl font-black leading-[0.95] tracking-[-0.04em] sm:text-6xl lg:text-8xl">
-              McKenzie
-              <br />
-              Construction
+            <h1 className="max-w-4xl text-5xl font-black leading-[0.95] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
+              Knoxville Deck Builder &amp; Outdoor Living Contractor
             </h1>
 
             <h2
@@ -124,7 +146,7 @@ export default function HomePage() {
                 color: brandGreen,
               }}
             >
-              Crafted Around the Way You Live.
+              Crafted around the way you live.
             </h2>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-200 sm:text-xl">
@@ -141,7 +163,7 @@ export default function HomePage() {
                   backgroundColor: brandGreen,
                 }}
               >
-                START YOUR PROJECT
+                REQUEST A CONSULTATION
                 <span className="ml-3 text-lg">→</span>
               </Link>
 
@@ -154,12 +176,12 @@ export default function HomePage() {
             </div>
 
             <div className="mt-6">
-              <a
-                href="tel:+18652633811"
+              <TrackedPhoneLink
+                location="homepage_hero"
                 className="text-sm font-bold text-zinc-200 transition hover:text-white"
               >
-                Call 865-263-3811
-              </a>
+                Call or text 865-433-3325
+              </TrackedPhoneLink>
             </div>
           </div>
         </div>
@@ -370,14 +392,14 @@ export default function HomePage() {
           </div>
 
           <Link
-            href="/projects/island-ford"
+            href="/projects/knoxville-trex-deck-replacement"
             className="group relative mt-12 block min-h-[520px] overflow-hidden bg-zinc-950 text-white"
           >
             <div
               className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105"
               style={{
                 backgroundImage:
-                  "url('/projects/island-ford/08F626F4-F8F9-4B55-B3E5-723253E28102_1_105_c.jpeg')",
+                  "url('/projects/knoxville-trex-deck/finished-deck-wide.jpg')",
               }}
             />
 
@@ -392,18 +414,17 @@ export default function HomePage() {
                     color: brandGreen,
                   }}
                 >
-                  Lake City, Tennessee
+                  Knoxville, Tennessee
                 </p>
 
                 <h3 className="mt-3 text-3xl font-black sm:text-4xl">
-                  Island Ford Modular Home &amp; Outdoor Living
+                  Knoxville Trex Deck Replacement
                 </h3>
 
                 <p className="mt-4 max-w-xl text-base leading-7 text-zinc-200">
-                  Complete modular-home installation with exterior
-                  finish work, custom entry decks, a large rear wood
-                  deck, stairs, landscaping, gravel access, and site
-                  improvements.
+                  A weathered two-level deck replaced with one connected
+                  outdoor space using Trex decking, black aluminum railing,
+                  and a new stair run.
                 </p>
 
                 <p className="mt-6 inline-flex items-center text-sm font-black uppercase tracking-wider">
@@ -420,6 +441,43 @@ export default function HomePage() {
               </div>
             </div>
           </Link>
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            {additionalFeaturedProjects.map((project) => (
+              <Link
+                key={project.href}
+                href={project.href}
+                className="group grid overflow-hidden border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lime-500 sm:grid-cols-[0.9fr_1.1fr]"
+              >
+                <div className="relative min-h-64 overflow-hidden bg-zinc-200">
+                  <Image
+                    src={project.image}
+                    alt={project.imageAlt}
+                    fill
+                    sizes="(min-width: 1024px) 25vw, 100vw"
+                    className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                  />
+                </div>
+                <div className="flex flex-col justify-center p-7">
+                  <p
+                    className="text-xs font-black uppercase tracking-[0.18em]"
+                    style={{ color: brandGreen }}
+                  >
+                    {project.location}
+                  </p>
+                  <h3 className="mt-3 text-2xl font-black leading-tight">
+                    {project.title}
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-zinc-600">
+                    {project.description}
+                  </p>
+                  <p className="mt-5 text-sm font-black uppercase tracking-wider">
+                    Explore project <span style={{ color: brandGreen }}>→</span>
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
 
           <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -544,9 +602,9 @@ export default function HomePage() {
             </p>
 
             <div className="mt-7 flex flex-col gap-3 text-sm font-semibold sm:flex-row sm:gap-8">
-              <a href="tel:+18652633811">
-                Call: 865-263-3811
-              </a>
+              <TrackedPhoneLink location="homepage_project_cta">
+                Call or text: 865-433-3325
+              </TrackedPhoneLink>
 
               <a href="mailto:info@mckenzie-builds.com">
                 Email: info@mckenzie-builds.com
@@ -649,9 +707,9 @@ export default function HomePage() {
               <div className="mt-4 space-y-3 text-zinc-400">
                 <a
                   className="block hover:text-white"
-                  href="tel:+18652633811"
+                  href="tel:+18654333325"
                 >
-                  865-263-3811
+                  865-433-3325
                 </a>
 
                 <a
@@ -672,16 +730,24 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="mx-auto mt-10 max-w-7xl border-t border-white/10 px-5 pt-6 text-xs text-zinc-500 sm:px-8">
-          © {new Date().getFullYear()} McKenzie Construction. All
-          rights reserved.
+        <div className="mx-auto mt-10 flex max-w-7xl flex-col gap-4 border-t border-white/10 px-5 pt-6 text-xs text-zinc-500 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
+          <p>
+            © {new Date().getFullYear()} McKenzie Construction. All
+            rights reserved.
+          </p>
+          <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link className="hover:text-white" href="/login">Employee Login</Link>
+            <Link className="hover:text-white" href="/privacy">Privacy</Link>
+            <Link className="hover:text-white" href="/sms-terms">SMS Terms</Link>
+            <Link className="hover:text-white" href="/sms-consent">SMS Consent</Link>
+          </nav>
         </div>
       </footer>
 
       {/* MOBILE STICKY CTA */}
       <div className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-2 border-t border-zinc-300 bg-white p-2 shadow-2xl sm:hidden">
         <a
-          href="tel:+18652633811"
+          href="tel:+18654333325"
           className="flex min-h-12 items-center justify-center text-sm font-black"
         >
           CALL NOW

@@ -1,8 +1,12 @@
+import { LeadConversionTracker } from "@/components/lead-conversion-tracker";
+import { TrackedPhoneLink } from "@/components/tracked-phone-link";
+
 const brandGreen = "#8CC63F";
 
 export default function ThankYouPage() {
   return (
     <main className="min-h-screen bg-zinc-950 px-5 py-24 text-white sm:px-8">
+      <LeadConversionTracker />
       <div className="mx-auto flex min-h-[70vh] max-w-3xl items-center">
         <div>
           <div
@@ -36,12 +40,12 @@ export default function ThankYouPage() {
               RETURN HOME
             </a>
 
-            <a
-              href="tel:+18652633811"
+            <TrackedPhoneLink
+              location="thank_you_page"
               className="inline-flex min-h-14 items-center justify-center border border-white/30 px-7 text-sm font-black text-white transition hover:bg-white hover:text-black"
             >
-              CALL 865-263-3811
-            </a>
+              CALL 865-433-3325
+            </TrackedPhoneLink>
           </div>
         </div>
       </div>

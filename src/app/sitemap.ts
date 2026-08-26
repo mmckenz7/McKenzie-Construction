@@ -24,6 +24,48 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
+      url: `${baseUrl}/deck-replacement-knoxville`,
+      lastModified: new Date("2026-08-19"),
+      changeFrequency: "monthly",
+      priority: 0.85,
+    },
+    {
+      url: `${baseUrl}/composite-decks-knoxville`,
+      lastModified: new Date("2026-08-19"),
+      changeFrequency: "monthly",
+      priority: 0.85,
+    },
+    {
+      url: `${baseUrl}/covered-decks-knoxville`,
+      lastModified: new Date("2026-08-19"),
+      changeFrequency: "monthly",
+      priority: 0.85,
+    },
+    {
+      url: `${baseUrl}/service-areas`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/deck-builder-farragut-tn`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/deck-builder-maryville-tn`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/deck-builder-tellico-village-tn`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
       url: `${baseUrl}/projects`,
       lastModified: new Date(),
       changeFrequency: "monthly",
@@ -32,6 +74,36 @@ export default function sitemap(): MetadataRoute.Sitemap {
     {
       url: `${baseUrl}/projects/island-ford`,
       lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/projects/knoxville-trex-deck-replacement`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
+    {
+      url: `${baseUrl}/projects/tellico-village-screened-porch`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.85,
+    },
+    {
+      url: `${baseUrl}/projects/east-tennessee-elevated-covered-deck`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.85,
+    },
+    {
+      url: `${baseUrl}/projects/east-tennessee-ranch-renovation`,
+      lastModified: new Date("2026-08-20"),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/projects/east-tennessee-cottage-renovation`,
+      lastModified: new Date("2026-08-20"),
       changeFrequency: "monthly",
       priority: 0.8,
     },
@@ -58,6 +130,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: new Date(),
       changeFrequency: "yearly",
       priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/privacy`,
+      lastModified: new Date("2026-08-19"),
+      changeFrequency: "yearly",
+      priority: 0.4,
+    },
+    {
+      url: `${baseUrl}/sms-terms`,
+      lastModified: new Date("2026-08-19"),
+      changeFrequency: "yearly",
+      priority: 0.4,
+    },
+    {
+      url: `${baseUrl}/sms-consent`,
+      lastModified: new Date("2026-08-19"),
+      changeFrequency: "yearly",
+      priority: 0.4,
     },
   ];
 }

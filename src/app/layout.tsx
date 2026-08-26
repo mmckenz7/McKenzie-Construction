@@ -16,7 +16,7 @@ const localBusinessSchema = {
   "@type": "HomeAndConstructionBusiness",
   name: "McKenzie Construction",
   url: siteUrl,
-  telephone: "+1-865-263-3811",
+  telephone: "+1-865-433-3325",
   email: "info@mckenzie-builds.com",
   description:
     "McKenzie Construction provides custom decks, covered outdoor living spaces, screened porches, renovations, and residential construction in Knoxville and East Tennessee.",

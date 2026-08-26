@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { Footer } from "@/components/footer";
 import { Navigation } from "@/components/navigation";
+import { TrackedPhoneLink } from "@/components/tracked-phone-link";
 
 export const metadata: Metadata = {
   title: "Deck Builder in Knoxville, TN",
@@ -102,9 +103,76 @@ const serviceAreas = [
   "Anderson County",
 ];
 
+const frequentlyAskedQuestions = [
+  {
+    question: "Do you build both wood and composite decks?",
+    answer:
+      "Yes. McKenzie Construction builds pressure-treated wood and composite decks. Material recommendations depend on the project goals, maintenance preferences, and budget.",
+  },
+  {
+    question: "Can you replace an existing deck?",
+    answer:
+      "Yes. Deck-replacement projects can include demolition, framing replacement or repair, new decking, stairs, and railings. The existing conditions are reviewed at the property before the final scope is prepared.",
+  },
+  {
+    question: "Do you build deck stairs and railings?",
+    answer:
+      "Yes. New-deck and replacement projects can include stairs, landings, wood railings, and aluminum railing options based on the approved project scope.",
+  },
+  {
+    question: "Where do you build decks?",
+    answer:
+      "McKenzie Construction serves Knoxville and nearby East Tennessee communities. Availability depends on the project location, scope, and schedule.",
+  },
+  {
+    question: "How do I start a deck project?",
+    answer:
+      "Submit a project request or call McKenzie Construction. We review the project goals and property information, then confirm the appropriate next step and consultation timing.",
+  },
+];
+
+const deckServiceSchema = {
+  "@context": "https://schema.org",
+  "@type": "Service",
+  name: "Custom deck construction in Knoxville, Tennessee",
+  serviceType: "Custom deck construction and deck replacement",
+  provider: {
+    "@type": "HomeAndConstructionBusiness",
+    name: "McKenzie Construction",
+    url: "https://www.mckenzie-builds.com",
+    telephone: "+1-865-433-3325",
+  },
+  areaServed: serviceAreas.map((name) => ({
+    "@type": "Place",
+    name,
+  })),
+  url: "https://www.mckenzie-builds.com/knoxville-deck-builder",
+};
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: frequentlyAskedQuestions.map((item) => ({
+    "@type": "Question",
+    name: item.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.answer,
+    },
+  })),
+};
+
 export default function KnoxvilleDeckBuilderPage() {
   return (
     <div className="min-h-screen bg-white text-slate-950">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(deckServiceSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
       <Navigation />
 
       <main>
@@ -144,12 +212,12 @@ export default function KnoxvilleDeckBuilderPage() {
                   Request a Consultation
                 </Link>
 
-                <a
-                  href="tel:8652633811"
+                <TrackedPhoneLink
+                  location="knoxville_deck_builder_hero"
                   className="inline-flex items-center justify-center rounded-lg border border-white/30 bg-white/10 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/20"
                 >
-                  Call (865) 263-3811
-                </a>
+                  Call or Text (865) 433-3325
+                </TrackedPhoneLink>
               </div>
             </div>
           </div>
@@ -228,6 +296,44 @@ export default function KnoxvilleDeckBuilderPage() {
                 alt="Large pressure-treated wood deck near Knoxville"
                 className="aspect-[4/3] h-full w-full object-cover"
               />
+            </div>
+          </div>
+        </section>
+
+        <section className="border-y border-slate-200 bg-slate-50">
+          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-8 lg:px-10">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-950">
+              Explore the right deck project for your home
+            </h2>
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {[
+                {
+                  href: "/deck-replacement-knoxville",
+                  title: "Deck Replacement",
+                  description: "Replace an aging deck or revise the existing layout.",
+                },
+                {
+                  href: "/composite-decks-knoxville",
+                  title: "Composite Decks",
+                  description: "Compare lower-maintenance finishes and coordinated details.",
+                },
+                {
+                  href: "/covered-decks-knoxville",
+                  title: "Covered Decks",
+                  description: "Plan shade and weather protection as part of the complete space.",
+                },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="rounded-xl border border-slate-200 bg-white p-5 transition hover:border-lime-600"
+                >
+                  <span className="font-bold text-slate-950">{item.title}</span>
+                  <span className="mt-2 block text-sm leading-6 text-slate-600">
+                    {item.description}
+                  </span>
+                </Link>
+              ))}
             </div>
           </div>
         </section>
@@ -337,6 +443,34 @@ export default function KnoxvilleDeckBuilderPage() {
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-5xl px-6 py-20 sm:px-8 lg:px-10">
+          <div className="max-w-3xl">
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-lime-700">
+              Deck Project Questions
+            </p>
+
+            <h2 className="mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+              Common questions from Knoxville homeowners
+            </h2>
+          </div>
+
+          <div className="mt-10 divide-y divide-slate-200 border-y border-slate-200">
+            {frequentlyAskedQuestions.map((item) => (
+              <details key={item.question} className="group py-5">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-5 text-lg font-bold text-slate-950">
+                  {item.question}
+                  <span aria-hidden="true" className="text-lime-700">
+                    +
+                  </span>
+                </summary>
+                <p className="max-w-3xl pb-2 pr-10 text-base leading-8 text-slate-700">
+                  {item.answer}
+                </p>
+              </details>
+            ))}
           </div>
         </section>
 

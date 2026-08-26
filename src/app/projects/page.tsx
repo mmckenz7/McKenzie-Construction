@@ -9,6 +9,39 @@ import {
 
 const projects = [
   {
+    title: "Knoxville Trex Deck Replacement",
+    location: "Knoxville, Tennessee",
+    blurb:
+      "A two-level deck transformed into one connected Trex deck with aluminum railing and new stairs.",
+    imageSrc:
+      "/projects/knoxville-trex-deck/finished-deck-wide.jpg",
+    imageAlt:
+      "Completed Knoxville Trex deck with black aluminum railing",
+    href: "/projects/knoxville-trex-deck-replacement",
+  },
+  {
+    title: "Tellico Village Screened Porch & Deck",
+    location: "Tellico Village, Tennessee",
+    blurb:
+      "An elevated screened outdoor room with an adjoining open deck and grill area.",
+    imageSrc:
+      "/projects/tellico-village-screened-porch/full-rear-elevation.jpg",
+    imageAlt:
+      "Completed elevated screened porch and deck in Tellico Village",
+    href: "/projects/tellico-village-screened-porch",
+  },
+  {
+    title: "East Tennessee Elevated Covered Deck",
+    location: "East Tennessee",
+    blurb:
+      "An elevated wood deck with a finished roof ceiling, ceiling fan, open railing, furnished living space, and a full stair run.",
+    imageSrc:
+      "/projects/east-tennessee-elevated-covered-deck/full-rear-elevation.jpg",
+    imageAlt:
+      "Completed elevated covered wood deck in East Tennessee",
+    href: "/projects/east-tennessee-elevated-covered-deck",
+  },
+  {
     title:
       "Island Ford Modular Home & Outdoor Living",
     location: "Lake City, Tennessee",
@@ -19,6 +52,28 @@ const projects = [
     imageAlt:
       "Rear wood deck and stairs at the Island Ford modular home project",
     href: "/projects/island-ford",
+  },
+  {
+    title: "East Tennessee Ranch Home Renovation",
+    location: "East Tennessee",
+    blurb:
+      "A photo-backed look at a refreshed exterior, updated kitchen, and bright finished sunroom.",
+    imageSrc:
+      "/projects/completed-renovations/renovation-one-exterior.jpg",
+    imageAlt:
+      "Completed single-story East Tennessee home exterior",
+    href: "/projects/east-tennessee-ranch-renovation",
+  },
+  {
+    title: "East Tennessee Cottage Renovation",
+    location: "East Tennessee",
+    blurb:
+      "Completed cottage exterior, living-room, hardwood-floor, fireplace, and kitchen finishes.",
+    imageSrc:
+      "/projects/completed-renovations/renovation-two-exterior.jpg",
+    imageAlt:
+      "Completed East Tennessee cottage exterior and entry",
+    href: "/projects/east-tennessee-cottage-renovation",
   },
 ];
 
@@ -34,7 +89,7 @@ export default function ProjectsPage() {
           description="Explore selected construction, deck, outdoor-living, and residential projects with complete project details and photo galleries."
         />
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
+        <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
             <ProjectCard
               key={project.title}

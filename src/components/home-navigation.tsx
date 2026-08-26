@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
+import { TrackedPhoneLink } from "@/components/tracked-phone-link";
+
 const brandGreen = "#8CC63F";
 
 const navigationLinks = [
@@ -150,13 +152,13 @@ export function HomeNavigation() {
             START YOUR PROJECT
           </Link>
 
-          <a
-            href="tel:+18652633811"
+          <TrackedPhoneLink
+            location="mobile_navigation"
             onClick={closeMenu}
             className="mt-4 inline-flex min-h-12 items-center justify-center border border-white/30 px-5 text-sm font-black text-white transition hover:border-white hover:bg-white hover:text-black"
           >
-            CALL 865-263-3811
-          </a>
+            CALL OR TEXT 865-433-3325
+          </TrackedPhoneLink>
         </nav>
       </div>
     </header>

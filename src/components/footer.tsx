@@ -32,6 +32,27 @@ export function Footer() {
           </Link>
 
           <Link
+            href="/deck-replacement-knoxville"
+            className="transition hover:text-brand-green"
+          >
+            Deck Replacement
+          </Link>
+
+          <Link
+            href="/composite-decks-knoxville"
+            className="transition hover:text-brand-green"
+          >
+            Composite Decks
+          </Link>
+
+          <Link
+            href="/covered-decks-knoxville"
+            className="transition hover:text-brand-green"
+          >
+            Covered Decks
+          </Link>
+
+          <Link
             href="/projects"
             className="transition hover:text-brand-green"
           >
@@ -46,10 +67,45 @@ export function Footer() {
           </Link>
 
           <Link
+            href="/service-areas"
+            className="transition hover:text-brand-green"
+          >
+            Service Areas
+          </Link>
+
+          <Link
             href="/contact"
             className="transition hover:text-brand-green"
           >
             Contact
+          </Link>
+
+          <Link
+            href="/login"
+            className="transition hover:text-brand-green"
+          >
+            Employee Login
+          </Link>
+
+          <Link
+            href="/privacy"
+            className="transition hover:text-brand-green"
+          >
+            Privacy
+          </Link>
+
+          <Link
+            href="/sms-terms"
+            className="transition hover:text-brand-green"
+          >
+            SMS Terms
+          </Link>
+
+          <Link
+            href="/sms-consent"
+            className="transition hover:text-brand-green"
+          >
+            SMS Consent
           </Link>
         </div>
       </div>

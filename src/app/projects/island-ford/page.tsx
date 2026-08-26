@@ -1,8 +1,30 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 
 import { Footer } from "@/components/footer";
 import { Navigation } from "@/components/navigation";
+import { RelatedProjects } from "@/components/related-projects";
+
+export const metadata: Metadata = {
+  title: "Island Ford Deck & Outdoor Living Project",
+  description:
+    "See McKenzie Construction's completed Island Ford project in Lake City, Tennessee, including a rear wood deck, stairs, entry decks, landscaping, and site improvements.",
+  alternates: { canonical: "/projects/island-ford" },
+  openGraph: {
+    title: "Island Ford Deck & Outdoor Living Project",
+    description:
+      "A completed residential construction, deck, stair, landscaping, and site-improvement project by McKenzie Construction.",
+    url: "/projects/island-ford",
+    type: "article",
+    images: [
+      {
+        url: "/projects/island-ford/08F626F4-F8F9-4B55-B3E5-723253E28102_1_105_c.jpeg",
+        alt: "Rear wood deck and stairs at the Island Ford project",
+      },
+    ],
+  },
+};
 
 const galleryImages = [
   {
@@ -25,11 +47,55 @@ const galleryImages = [
     src: "/projects/island-ford/432C12B6-148C-48E7-A14C-7F94FD5B350F_1_105_c.jpeg",
     alt: "Side entry stairs and landscaped walkway",
   },
+  {
+    src: "/projects/island-ford/1D22BCAB-16C5-4167-8076-73E5900433C6_1_105_c.jpeg",
+    alt: "Finished side entry deck and steps at the home",
+  },
+  {
+    src: "/projects/island-ford/215A71BC-A4BC-4ECF-A5E8-228721BD697D_1_105_c.jpeg",
+    alt: "Side view of the entry deck beside the completed exterior",
+  },
+  {
+    src: "/projects/island-ford/71752E31-41DF-4906-9A61-CDA95EBB3A8C_1_105_c.jpeg",
+    alt: "Wide site view of the rear deck, stairs, and gravel access",
+  },
+  {
+    src: "/projects/island-ford/9A27566E-1D13-446F-9846-66366E957DF9_1_105_c.jpeg",
+    alt: "Finished wood deck surface and guard railing",
+  },
+  {
+    src: "/projects/island-ford/9A535F40-1AA8-48E2-BC0F-DB17AEC2B07C_1_105_c.jpeg",
+    alt: "View from the rear deck toward the stairs and landscaped yard",
+  },
 ];
 
 export default function IslandFordProjectPage() {
+  const projectSchema = {
+    "@context": "https://schema.org",
+    "@type": "CreativeWork",
+    name: "Island Ford Modular Home & Outdoor Living",
+    description:
+      "Completed modular-home installation, exterior work, entry decks, rear wood deck, stairs, landscaping, gravel access, and site improvements in Lake City, Tennessee.",
+    url: "https://www.mckenzie-builds.com/projects/island-ford",
+    image:
+      "https://www.mckenzie-builds.com/projects/island-ford/08F626F4-F8F9-4B55-B3E5-723253E28102_1_105_c.jpeg",
+    creator: {
+      "@type": "HomeAndConstructionBusiness",
+      name: "McKenzie Construction",
+      url: "https://www.mckenzie-builds.com",
+    },
+    contentLocation: {
+      "@type": "Place",
+      name: "Lake City, Tennessee",
+    },
+  };
+
   return (
     <div className="min-h-screen bg-brand-gray text-brand-charcoal">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(projectSchema) }}
+      />
       <Navigation />
 
       <main>
@@ -180,6 +246,26 @@ export default function IslandFordProjectPage() {
             </div>
           </div>
         </section>
+
+        <RelatedProjects
+          projects={[
+            {
+              title: "Knoxville Trex Deck Replacement",
+              location: "Knoxville, Tennessee",
+              imageSrc: "/projects/knoxville-trex-deck/finished-deck-wide.jpg",
+              imageAlt: "Completed Knoxville Trex deck",
+              href: "/projects/knoxville-trex-deck-replacement",
+            },
+            {
+              title: "East Tennessee Elevated Covered Deck",
+              location: "East Tennessee",
+              imageSrc:
+                "/projects/east-tennessee-elevated-covered-deck/full-rear-elevation.jpg",
+              imageAlt: "Completed elevated covered wood deck",
+              href: "/projects/east-tennessee-elevated-covered-deck",
+            },
+          ]}
+        />
 
         <section className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
           <div className="rounded-[2rem] bg-brand-charcoal px-7 py-10 text-white sm:px-10 lg:flex lg:items-center lg:justify-between">

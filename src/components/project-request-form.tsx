@@ -6,8 +6,28 @@ const inputClass =
 const labelClass =
   "mb-2 block text-xs font-black uppercase tracking-[0.14em] text-zinc-950";
 
-export function ProjectRequestForm({ consultationHours }: { consultationHours?: Partial<ConsultationHours> }) {
+const projectTypes = [
+  "New Deck",
+  "Deck Replacement",
+  "Covered Outdoor Living",
+  "Screened Porch",
+  "Railing or Stairs",
+  "Pergola",
+  "Exterior Residential Project",
+  "Other",
+] as const;
+
+export type ProjectRequestType = (typeof projectTypes)[number];
+
+export function ProjectRequestForm({
+  consultationHours,
+  defaultProjectType = "",
+}: {
+  consultationHours?: Partial<ConsultationHours>;
+  defaultProjectType?: ProjectRequestType | "";
+}) {
   const timeOptions = consultationTimeOptions(consultationHours);
+
   return (
     <form
       action="/api/leads"
@@ -93,24 +113,17 @@ export function ProjectRequestForm({ consultationHours }: { consultationHours?: 
         <select
           required
           name="projectType"
-          defaultValue=""
+          defaultValue={defaultProjectType}
           className={inputClass}
         >
           <option value="" disabled>
             Select a project type
           </option>
-          <option value="New Deck">New deck</option>
-          <option value="Deck Replacement">Deck replacement</option>
-          <option value="Covered Outdoor Living">
-            Covered outdoor living
-          </option>
-          <option value="Screened Porch">Screened porch</option>
-          <option value="Railing or Stairs">Railing or stairs</option>
-          <option value="Pergola">Pergola</option>
-          <option value="Exterior Residential Project">
-            Exterior residential project
-          </option>
-          <option value="Other">Other or not sure</option>
+          {projectTypes.map((projectType) => (
+            <option key={projectType} value={projectType}>
+              {projectType === "Other" ? "Other or not sure" : projectType}
+            </option>
+          ))}
         </select>
       </label>
 

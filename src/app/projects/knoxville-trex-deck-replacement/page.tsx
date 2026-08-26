@@ -1,0 +1,98 @@
+import type { Metadata } from "next";
+
+import { DeckProjectPage } from "@/components/deck-project-page";
+
+export const metadata: Metadata = {
+  title: "Knoxville Trex Deck Replacement Project",
+  description:
+    "See a completed Knoxville deck transformation with Trex decking, aluminum railing, a single-level layout, and new stairs.",
+  alternates: { canonical: "/projects/knoxville-trex-deck-replacement" },
+  openGraph: {
+    title: "Knoxville Trex Deck Replacement | McKenzie Construction",
+    description:
+      "A completed two-level-to-one deck transformation with Trex decking and aluminum railing.",
+    url: "/projects/knoxville-trex-deck-replacement",
+    type: "article",
+    images: [
+      {
+        url: "/projects/knoxville-trex-deck/finished-deck-wide.jpg",
+        alt: "Completed Knoxville Trex deck with black aluminum railing",
+      },
+    ],
+  },
+};
+
+const images = [
+  {
+    src: "/projects/knoxville-trex-deck/finished-deck-wide.jpg",
+    alt: "Completed single-level Trex deck with black aluminum railing in Knoxville",
+    caption: "Completed single-level deck transformation",
+  },
+  {
+    src: "/projects/knoxville-trex-deck/deck-surface-railing.jpg",
+    alt: "Trex deck surface with coordinated black aluminum railing",
+    caption: "Trex decking and aluminum railing system",
+  },
+  {
+    src: "/projects/knoxville-trex-deck/deck-stairs.jpg",
+    alt: "New deck stairs with black aluminum handrails",
+    caption: "New stairs and coordinated handrails",
+  },
+  {
+    src: "/projects/knoxville-trex-deck/deck-layout.jpg",
+    alt: "Single-level deck layout viewed from the house",
+    caption: "Open single-level layout",
+  },
+  {
+    src: "/projects/knoxville-trex-deck/front-elevation.jpg",
+    alt: "Wide front view of the completed Trex deck and stair landing",
+    caption: "Finished deck, stairs, and yard connection",
+  },
+  {
+    src: "/projects/knoxville-trex-deck/corner-railing-view.jpg",
+    alt: "Angled view of the Trex deck corner and black aluminum railing",
+    caption: "Deck corner and coordinated railing",
+  },
+  {
+    src: "/projects/knoxville-trex-deck/deck-surface-from-house.jpg",
+    alt: "Trex deck surface and railing viewed from the house",
+    caption: "Finished deck surface from the house",
+  },
+];
+
+export default function KnoxvilleTrexDeckReplacementPage() {
+  return (
+    <DeckProjectPage
+      title="Knoxville Trex Deck Replacement"
+      location="Knoxville, Tennessee"
+      summary="This project replaced a weathered two-level deck with one more usable single-level outdoor space, finished with Trex decking, black aluminum railing, and a new stair run."
+      projectType="Deck%20Replacement"
+      highlights={[
+        "Two-level layout replaced with one connected deck surface",
+        "Trex composite deck boards",
+        "Coordinated black aluminum guard and stair railing",
+        "New stair run connecting the deck to the yard",
+      ]}
+      images={images}
+      canonicalPath="/projects/knoxville-trex-deck-replacement"
+      relatedProjects={[
+        {
+          title: "East Tennessee Elevated Covered Deck",
+          location: "East Tennessee",
+          imageSrc:
+            "/projects/east-tennessee-elevated-covered-deck/full-rear-elevation.jpg",
+          imageAlt: "Completed elevated covered wood deck",
+          href: "/projects/east-tennessee-elevated-covered-deck",
+        },
+        {
+          title: "Tellico Village Screened Porch & Deck",
+          location: "Tellico Village, Tennessee",
+          imageSrc:
+            "/projects/tellico-village-screened-porch/full-rear-elevation.jpg",
+          imageAlt: "Completed screened porch and adjoining deck",
+          href: "/projects/tellico-village-screened-porch",
+        },
+      ]}
+    />
+  );
+}

@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { Footer } from "@/components/footer";
 import { Navigation } from "@/components/navigation";
+import { TrackedPhoneLink } from "@/components/tracked-phone-link";
 
 export const metadata: Metadata = {
   title: "Construction and Deck Services",
@@ -32,6 +33,7 @@ export const metadata: Metadata = {
 const primaryServices = [
   {
     title: "Custom Deck Construction",
+    href: "/knoxville-deck-builder",
     description:
       "Custom pressure-treated wood and composite decks planned around the home, property, budget, and intended use.",
     details: [
@@ -43,6 +45,7 @@ const primaryServices = [
   },
   {
     title: "Deck Replacement and Remodeling",
+    href: "/deck-replacement-knoxville",
     description:
       "Removal and replacement of aging, damaged, undersized, or poorly configured decks.",
     details: [
@@ -54,6 +57,7 @@ const primaryServices = [
   },
   {
     title: "Covered Outdoor Living",
+    href: "/covered-decks-knoxville",
     description:
       "Covered decks and outdoor spaces designed to provide shade, weather protection, and more comfortable everyday use.",
     details: [
@@ -65,6 +69,7 @@ const primaryServices = [
   },
   {
     title: "Screened Porches",
+    href: null,
     description:
       "New screened porches and conversions that create a more usable outdoor space with protection from insects and weather.",
     details: [
@@ -76,6 +81,7 @@ const primaryServices = [
   },
   {
     title: "Deck Stairs and Railings",
+    href: null,
     description:
       "Safe, practical stairs, landings, and railing systems for new or existing outdoor spaces.",
     details: [
@@ -87,6 +93,7 @@ const primaryServices = [
   },
   {
     title: "Pergolas and Patio Improvements",
+    href: null,
     description:
       "Outdoor structures and improvements that help define and enhance patios, grilling areas, and gathering spaces.",
     details: [
@@ -197,12 +204,12 @@ export default function ServicesPage() {
                   Request a Consultation
                 </Link>
 
-                <a
-                  href="tel:8652633811"
+                <TrackedPhoneLink
+                  location="services_hero"
                   className="inline-flex items-center justify-center rounded-lg border border-white/25 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/10"
                 >
-                  Call (865) 263-3811
-                </a>
+                  Call or Text 865-433-3325
+                </TrackedPhoneLink>
               </div>
             </div>
           </div>
@@ -249,17 +256,34 @@ export default function ServicesPage() {
                     </li>
                   ))}
                 </ul>
+
+                {service.href ? (
+                  <Link
+                    href={service.href}
+                    className="mt-6 inline-flex text-sm font-bold text-slate-950 underline decoration-lime-500 decoration-2 underline-offset-4"
+                  >
+                    Learn more →
+                  </Link>
+                ) : null}
               </article>
             ))}
           </div>
 
           <div className="mt-10">
-            <Link
-              href="/knoxville-deck-builder"
-              className="inline-flex items-center rounded-lg bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
-            >
-              Explore Knoxville Deck Services →
-            </Link>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/knoxville-deck-builder"
+                className="inline-flex items-center justify-center rounded-lg bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+              >
+                Explore Knoxville Deck Services →
+              </Link>
+              <Link
+                href="/service-areas"
+                className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-950 transition hover:border-slate-500"
+              >
+                View East Tennessee Service Areas →
+              </Link>
+            </div>
           </div>
         </section>
 
