@@ -217,13 +217,20 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .gate-reference-selector legend { grid-column: 1 / -1; margin-bottom: 6px; padding: 0; font-size: .76rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #59675f; }
 .gate-reference-selector button { min-height: 46px; border: 1px solid #aebbb2; border-radius: 8px; background: #fff; color: #27463a; font-weight: 800; }
 .gate-reference-selector button.active { border-color: #174f3d; background: #174f3d; color: #fff; box-shadow: inset 0 0 0 2px #174f3d; }
-.gate-reference-posts circle { fill: #fff8e9; stroke: #d47b25; stroke-width: 90; }
+.gate-reference-posts .halo { fill: #fff; fill-opacity: .92; stroke: #fff; stroke-width: 130; }
+.gate-reference-posts .badge { fill: #fff8e9; stroke: #d47b25; stroke-width: 100; }
 .gate-reference-posts text { fill: #7c3e0d; font-weight: 900; }
+.gate-reference-posts .active .halo { fill: #fff4dd; stroke: #fff; }
+.gate-reference-posts .active .badge { fill: #d97720; stroke: #8a4513; stroke-width: 125; }
+.gate-reference-posts .active text { fill: #fff; }
 .calibration-status { display: grid; gap: 3px; padding: 11px 13px; border: 1px solid #ddbd8f; border-radius: 9px; background: #fff8e9; color: #6f481d; }
 .calibration-status.complete { border-color: #9dbdac; background: #edf6f1; color: #174f3d; }
 .calibration-status span { font-size: .82rem; line-height: 1.35; }
-.gate-position-readout { display: grid; gap: 3px; margin: 12px 0; padding: 10px 12px; border: 1px solid #d6ddd6; border-radius: 8px; background: #f6f8f5; }
+.gate-position-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.gate-position-readout button { display: grid; gap: 3px; margin: 0; padding: 10px 12px; text-align: left; border: 2px solid #d6ddd6; border-radius: 8px; background: #f6f8f5; }
+.gate-position-readout button.active { border-color: #d97720; background: #fff4dd; box-shadow: inset 0 0 0 1px #d97720; }
 .gate-position-readout span { color: #68766e; font-size: .73rem; font-weight: 800; }
+.gate-position-readout button.active span { color: #8a4513; }
 .gate-position-readout strong { color: #173f31; font: 550 1.25rem Georgia, serif; }
 .wide { width: 100%; }
 .notice { margin-top: 24px; border-radius: 9px; background: #eef3ee; border-left: 4px solid #779383; padding: 12px; color: #43564c; font-size: .82rem; line-height: 1.45; }
