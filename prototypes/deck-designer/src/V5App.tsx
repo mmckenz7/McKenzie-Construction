@@ -32,6 +32,7 @@ const FinishMobileActions = lazy(async () => ({ default: (await import("./Finish
 const LandingConnectionsEditor = lazy(async () => ({ default: (await import("./LandingConnectionsEditor")).LandingConnectionsEditor }));
 const LevelCutoutControls = lazy(async () => ({ default: (await import("./LevelCutoutControls")).LevelCutoutControls }));
 type Point = Readonly<{ x: number; z: number }>;
+const CHANGE_REJECTED = "Change rejected.";
 
 function revisePlatform(design: DeckDesignV5, platform: DeckPlatformV5): DeckDesignV5 {
   return normalizeDeckDesignV5({ ...design, platforms: design.platforms.map((item) => item.id === platform.id ? platform : item), metadata: { ...design.metadata, revision: design.metadata.revision + 1 } });
@@ -93,8 +94,9 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const visibleGeometry = useMemo(() => workflowStage === "layout"
     ? { ...geometry, railSegments: [], railPosts: [], fasciaSpans: [], skirtingPanels: [] }
     : workflowStage === "railings" ? { ...geometry, fasciaSpans: [], skirtingPanels: [] } : geometry, [geometry, workflowStage]);
+  const clearPlanSelection = () => { setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); };
   const apply = (next: DeckDesignV5, nextMessage: string) => { setPreview(null); dispatch({ type: "apply", design: next }); setMessage(nextMessage); };
-  const changeHistory = (type: "undo" | "redo") => { setPreview(null); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); dispatch({ type }); setMessage(type === "undo" ? "Last change undone." : "Change restored."); };
+  const changeHistory = (type: "undo" | "redo") => { setPreview(null); clearPlanSelection(); dispatch({ type }); setMessage(type === "undo" ? "Undone." : "Restored."); };
   const replaceRegion = (outer: readonly Point[], commit: boolean, holes = platform.region.holes): boolean => {
     if (outer === platform.region.outer && holes === platform.region.holes) return false;
     try {
@@ -106,7 +108,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       if (error instanceof PolygonEdgeReviewRequiredErrorV5) {
         const affected = [...new Set(error.plan.impacts.flatMap((impact) => impact.usages))].join(", ");
         setMessage(`Outline paused: ${affected} linked items.`);
-      } else setMessage(error instanceof Error ? error.message : "Outline rejected.");
+      } else setMessage(error instanceof Error ? error.message : CHANGE_REJECTED);
       return false;
     }
   };
@@ -115,10 +117,10 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       const outer = keepCornersSquare
         ? moveOrthogonalPolygonCorner(platform.region.outer, index, point, commit, magnetic ? snapIncrement : 0)
         : movePolygonCorner(platform.region.outer, index, point, commit, magnetic ? snapIncrement : 0);
-      if (replaceRegion(outer, commit) && commit) setMessage(keepCornersSquare ? "Corner moved; attached sides stayed square." : "Corner moved freely.");
+      if (replaceRegion(outer, commit) && commit) setMessage(keepCornersSquare ? "Corner updated; sides stayed square." : "Corner updated.");
     } catch (error) {
       setPreview(null);
-      setMessage(error instanceof Error ? error.message : "Corner move rejected.");
+      setMessage(error instanceof Error ? error.message : CHANGE_REJECTED);
     }
   };
   const addCorner = (edgeIndex: number, point: Point) => {
@@ -126,10 +128,10 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       const outer = addBumpoutOnEdge(platform.region.outer, edgeIndex, point, snapIncrement);
       if (replaceRegion(outer, true)) {
         setSelectedEdgeId(null);
-        setMessage("Bumpout added. Drag its handles to refine it.");
+        setMessage("Bumpout added.");
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Corner rejected.");
+      setMessage(error instanceof Error ? error.message : CHANGE_REJECTED);
     }
   };
   const moveSegment = (edgeIndex: number, distance: number, commit: boolean) => {
@@ -138,11 +140,11 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       const outer = movePolygonSegment(current.region.outer, edgeIndex, distance, snapIncrement, commit);
       if (replaceRegion(outer, commit) && commit) {
         setSelectedEdgeId(deriveGeometricPolygonEdges(outer)[edgeIndex]?.id ?? null);
-        setMessage("Selected side moved with its corners.");
+        setMessage("Side updated.");
       }
     } catch (error) {
       setPreview(null);
-      setMessage(error instanceof Error ? error.message : "Segment move rejected.");
+      setMessage(error instanceof Error ? error.message : CHANGE_REJECTED);
     }
   };
   const updateSegmentLength = (edgeId: string, length: number) => {
@@ -153,10 +155,10 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       const nextOuter = resizePolygonEdge(current.region.outer, edgeIndex, length, snapIncrement);
       if (replaceRegion(nextOuter, true)) {
         setSelectedEdgeId(deriveGeometricPolygonEdges(nextOuter)[edgeIndex]?.id ?? null);
-        setMessage(`Selected side changed to ${formatFeetInches(length)}.`);
+        setMessage(`Side is ${formatFeetInches(length)}.`);
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Side length rejected.");
+      setMessage(error instanceof Error ? error.message : CHANGE_REJECTED);
     }
   };
   const updateSegmentAngle = (edgeId: string, degrees: number) => {
@@ -168,10 +170,10 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       if (replaceRegion(nextOuter, true)) {
         setSelectedEdgeId(deriveGeometricPolygonEdges(nextOuter)[edgeIndex]?.id ?? null);
         const normalizedDegrees = ((degrees % 360) + 360) % 360;
-        setMessage(`Selected side changed to ${Math.round(normalizedDegrees * 100) / 100}°.`);
+        setMessage(`Side angle is ${Math.round(normalizedDegrees * 100) / 100}°.`);
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Side angle rejected.");
+      setMessage(error instanceof Error ? error.message : CHANGE_REJECTED);
     }
   };
   const updatePlatform = (update: Partial<DeckPlatformV5>, nextMessage: string) => {
@@ -188,7 +190,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       const next = updateBeamLineV5(history.present, current.id, { ...beam, offsetFromOutside: inset }).design;
       if (previewOnly) setPreview(next);
       else apply(next, inset === requestedInset ? `Conceptual beam set ${formatFeetInches(inset)} from the outside edge.` : `Conceptual beam limited to ${formatFeetInches(inset)} from the outside edge for this deck.`);
-    } catch (error) { setPreview(null); setMessage(error instanceof Error ? error.message : "Beam placement rejected."); }
+    } catch (error) { setPreview(null); setMessage(error instanceof Error ? error.message : CHANGE_REJECTED); }
   };
   const platformBounds = platform.region.outer.reduce((bounds, point) => ({ minX: Math.min(bounds.minX, point.x), maxX: Math.max(bounds.maxX, point.x), minZ: Math.min(bounds.minZ, point.z), maxZ: Math.max(bounds.maxZ, point.z) }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
   const keepSelectedLevelOnly = () => {
@@ -197,11 +199,11 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     const kept = { ...current, construction: { ...current.construction, stairSystems } };
     const next = normalizeDeckDesignV5({ ...history.present, platforms: [kept], metadata: { ...history.present.metadata, revision: history.present.metadata.revision + 1 } });
     apply(next, "Single-level workflow restored. Multi-level stair references were removed.");
-    setSelectedPlatformId(kept.id); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null);
+    setSelectedPlatformId(kept.id); clearPlanSelection();
   };
   const setPlatformElevation = (valueFeet: number) => {
     try { updatePlatform({ elevation: valueFeet * 12 }, `Selected level set to ${valueFeet} feet above grade.`); }
-    catch (error) { setMessage(error instanceof Error ? `Height rejected: ${error.message}` : "Height rejected."); }
+    catch (error) { setMessage(error instanceof Error ? error.message : CHANGE_REJECTED); }
   };
   const rectangleHole = (centerX: number, centerZ: number, width: number, depth: number): readonly Point[] => Object.freeze([{ x: centerX - width / 2, z: centerZ - depth / 2 }, { x: centerX + width / 2, z: centerZ - depth / 2 }, { x: centerX + width / 2, z: centerZ + depth / 2 }, { x: centerX - width / 2, z: centerZ + depth / 2 }].map((point) => Object.freeze(point)));
   const addCutout = () => {
@@ -210,15 +212,15 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       if (width < 12 || depth < 12) throw new RangeError("This level is too small for a safe rectangular cutout.");
       const hole = rectangleHole((platformBounds.minX + platformBounds.maxX) / 2, (platformBounds.minZ + platformBounds.maxZ) / 2, width, depth);
       const holes = [...platform.region.holes, hole];
-      if (replaceRegion(platform.region.outer, true, holes)) { setSelectedHoleIndex(holes.length - 1); setMessage("Cutout added. Set its exact center and size in feet."); }
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Cutout rejected."); }
+      if (replaceRegion(platform.region.outer, true, holes)) { setSelectedHoleIndex(holes.length - 1); setMessage("Cutout added."); }
+    } catch (error) { setMessage(error instanceof Error ? error.message : CHANGE_REJECTED); }
   };
   const updateCutout = (index: number, update: Partial<{ centerX: number; centerZ: number; width: number; depth: number }>) => {
     const current = platform.region.holes[index]; if (!current) return;
     const bounds = current.reduce((result, point) => ({ minX: Math.min(result.minX, point.x), maxX: Math.max(result.maxX, point.x), minZ: Math.min(result.minZ, point.z), maxZ: Math.max(result.maxZ, point.z) }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
     const next = rectangleHole(update.centerX ?? (bounds.minX + bounds.maxX) / 2, update.centerZ ?? (bounds.minZ + bounds.maxZ) / 2, update.width ?? bounds.maxX - bounds.minX, update.depth ?? bounds.maxZ - bounds.minZ);
     const holes = platform.region.holes.map((hole, holeIndex) => holeIndex === index ? next : hole);
-    if (replaceRegion(platform.region.outer, true, holes)) setMessage("Cutout updated exactly.");
+    if (replaceRegion(platform.region.outer, true, holes)) setMessage("Cutout updated.");
   };
   const removeCutout = (index: number) => {
     if (replaceRegion(platform.region.outer, true, platform.region.holes.filter((_, holeIndex) => holeIndex !== index))) { setSelectedHoleIndex(null); setMessage("Cutout removed."); }
@@ -226,7 +228,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const moveCutout = (index: number, hole: readonly Point[], commit: boolean) => {
     const current = history.present.platforms.find((item) => item.id === platform.id)!;
     const holes = current.region.holes.map((item, holeIndex) => holeIndex === index ? hole : item);
-    if (replaceRegion(current.region.outer, commit, holes) && commit) setMessage("Cutout position and size updated.");
+    if (replaceRegion(current.region.outer, commit, holes) && commit) setMessage("Cutout updated.");
   };
   const unlockOutline = () => {
     const current = history.present.platforms.find((item) => item.id === platform.id)!;
@@ -284,21 +286,22 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   };
-  const enterRailingStage = () => { if (!layoutReview?.readyToContinue) return; setLayoutReviewOpen(false); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setWorkflowStage("railings"); setMessage("Layout reviewed and locked. Tap railing sides."); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const returnToLayoutStage = () => { setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setWorkflowStage("layout"); setMessage("Layout reopened; attachments stay protected."); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const enterFinishStage = () => { setSelectedEdgeId(null); setWorkflowStage("finishes"); setMessage("Railings retained. Tap one deck side to choose fascia or skirting."); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const returnToRailingStage = () => { setSelectedEdgeId(null); setWorkflowStage("railings"); setMessage("Finish choices retained. Railing workspace reopened."); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+  const enterRailingStage = () => { if (!layoutReview?.readyToContinue) return; setLayoutReviewOpen(false); clearPlanSelection(); setWorkflowStage("railings"); setMessage("Layout locked. Tap railing sides."); scrollToTop(); };
+  const returnToLayoutStage = () => { clearPlanSelection(); setWorkflowStage("layout"); setMessage("Layout reopened."); scrollToTop(); };
+  const enterFinishStage = () => { setSelectedEdgeId(null); setWorkflowStage("finishes"); setMessage("Tap a side for finishes."); scrollToTop(); };
+  const returnToRailingStage = () => { setSelectedEdgeId(null); setWorkflowStage("railings"); setMessage("Railings reopened."); scrollToTop(); };
   const applyFinish = (edgeId: string, update: Readonly<{ fasciaEnabled: boolean; skirtingEnabled: boolean }>) => {
     try {
       apply(setEdgeFinishIntentV5(history.present, platform.id, edgeId, update), `Selected side: fascia ${update.fasciaEnabled ? "on" : "off"}, skirting ${update.skirtingEnabled ? "on" : "off"}.`);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Finish selection rejected."); }
+    } catch (error) { setMessage(error instanceof Error ? error.message : CHANGE_REJECTED); }
   };
   const replaceStairSystems = (systems: readonly StairSystemV3[], nextMessage: string, previewOnly = false) => {
     try {
       const current = history.present.platforms.find((item) => item.id === platform.id)!;
       const next = revisePlatform(history.present, { ...current, construction: { ...current.construction, stairSystems: systems } });
       if (previewOnly) setPreview(next); else apply(next, nextMessage);
-    } catch (error) { setPreview(null); setMessage(error instanceof Error ? error.message : "Stair update rejected."); }
+    } catch (error) { setPreview(null); setMessage(error instanceof Error ? error.message : CHANGE_REJECTED); }
   };
   const updateStairSystem = (update: Partial<StairSystemV3>, nextMessage: string, previewOnly = false) => {
     if (!activeStairSystem) { setMessage("Choose or add stairs first."); return; }
@@ -397,8 +400,8 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     window.requestAnimationFrame(() => planActionTray.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   };
   const selectHouseOpening = (openingId: string) => {
-    setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null);
-    setMessage(`${openingId.replaceAll("-", " ")} selected. Edit its measured door facts in House connection.`);
+    clearPlanSelection();
+    setMessage(`${openingId.replaceAll("-", " ")} selected.`);
     window.requestAnimationFrame(() => document.getElementById("house-connection")?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   };
   const locateReviewWarning = (warning: GeometryWarningV5) => {
@@ -416,15 +419,15 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       setSelectedEdgeId(selection.edgeId);
     }
     setLayoutReviewOpen(false);
-    setMessage(`Located review note: ${warning.message}`);
+    setMessage(warning.message);
     window.requestAnimationFrame(() => document.getElementById("design-views")?.scrollIntoView({ block: "start", behavior: "smooth" }));
   };
-  const updateHouseConnection = (next: DeckDesignV5, attachment: "unknown" | "ledger" | "non-ledger") => apply(next, attachment === "unknown" ? "House updated; connection needs field review." : "House connection updated.");
+  const updateHouseConnection = (next: DeckDesignV5, attachment: "unknown" | "ledger" | "non-ledger") => apply(next, attachment === "unknown" ? "House connection needs review." : "House updated.");
   const download = () => { const url = URL.createObjectURL(new Blob([stableDeckDesignV5Json(design)], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = "deck-design-v5.json"; link.click(); URL.revokeObjectURL(url); };
   const applyTemplate = (kind: "rectangle" | "l-shape") => {
     const legacy = updateDesign(DEFAULT_DESIGN, kind === "rectangle" ? { kind } : { kind, cutoutWidth: 48, cutoutDepth: 48 });
     const next = migrateDeckDesignToV5({ ...legacy, id: design.id, name: design.name, metadata: { ...legacy.metadata, revision: design.metadata.revision + 1 } });
-    apply(next, `${kind === "rectangle" ? "Rectangle" : "L-shape"} template applied in v5.`); setSelectedPlatformId(next.platforms[0].id); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setWorkflowStage("layout");
+    apply(next, `${kind === "rectangle" ? "Rectangle" : "L-shape"} template applied in v5.`); setSelectedPlatformId(next.platforms[0].id); clearPlanSelection(); setWorkflowStage("layout");
   };
   const photoBounds = platform.region.outer.reduce((bounds, point) => ({
     minX: Math.min(bounds.minX, point.x), maxX: Math.max(bounds.maxX, point.x),
@@ -446,10 +449,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     setPreview(null);
     dispatch({ type: "reset", design: next });
     setSelectedPlatformId(next.platforms[0].id);
-    setSelectedEdgeId(null);
-    setSelectedStairSystemId(null);
-    setSelectedLandingId(null);
-    setSelectedHoleIndex(null);
+    clearPlanSelection();
     setWorkflowStage("layout");
     setPhotoStartSummary(Object.freeze({ photoCount, review }));
     setPhotoIntakeOpen(false);
@@ -470,7 +470,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       </div>
       <footer><button onClick={closeLayoutReview}>Back to layout</button><button className="primary" disabled={!layoutReview.readyToContinue} onClick={enterRailingStage}>Lock layout &amp; continue</button></footer>
     </section></div>}
-    <header className="topbar"><div className="brand-mark">M</div><div><p className="eyebrow">McKenzie Construction · isolated R&amp;D</p><h1>Deck Designer</h1></div><div className="header-actions"><button className="quiet" onClick={openPhotoIntake}>Start with photos</button><button className="quiet" onClick={() => { saveDeckDesignV5(localStorage, design); setMessage(`Saved v5 locally at revision ${design.metadata.revision}.`); }}>Save locally</button><button className="quiet" onClick={download}>Download JSON</button><button className="primary" onClick={() => fileInput.current?.click()}>Load JSON</button><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const next = migrateDeckDesignToV5(JSON.parse(await file.text())); dispatch({ type: "reset", design: next }); setSelectedPlatformId(next.platforms[0].id); setWorkflowStage("layout"); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setSelectedHoleIndex(null); setMessage(`Loaded v5 design “${next.name}”.`); } catch (error) { setMessage(error instanceof Error ? `Load rejected: ${error.message}` : "Load rejected."); } event.target.value = ""; }} /></div></header>
+    <header className="topbar"><div className="brand-mark">M</div><div><p className="eyebrow">McKenzie Construction · isolated R&amp;D</p><h1>Deck Designer</h1></div><div className="header-actions"><button className="quiet" onClick={openPhotoIntake}>Start with photos</button><button className="quiet" onClick={() => { saveDeckDesignV5(localStorage, design); setMessage("Saved locally."); }}>Save locally</button><button className="quiet" onClick={download}>Download JSON</button><button className="primary" onClick={() => fileInput.current?.click()}>Load JSON</button><input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const next = migrateDeckDesignToV5(JSON.parse(await file.text())); dispatch({ type: "reset", design: next }); setSelectedPlatformId(next.platforms[0].id); setWorkflowStage("layout"); clearPlanSelection(); setMessage("Design loaded."); } catch (error) { setMessage(error instanceof Error ? `Load rejected: ${error.message}` : "Load rejected."); } event.target.value = ""; }} /></div></header>
     <section className="warning"><strong>Conceptual — not for construction.</strong> Field and qualified review required.</section>
     <nav className="designer-stage-nav" aria-label="Deck design stages"><button className={workflowStage === "layout" ? "active" : "complete"} aria-pressed={workflowStage === "layout"} onClick={returnToLayoutStage}><span>1</span> Deck layout</button><button className={workflowStage === "railings" ? "active" : workflowStage === "finishes" ? "complete" : ""} aria-pressed={workflowStage === "railings"} onClick={workflowStage === "layout" ? requestRailingStage : returnToRailingStage}><span>2</span> Railings</button><button className={workflowStage === "finishes" ? "active" : ""} aria-pressed={workflowStage === "layout" ? undefined : workflowStage === "finishes"} disabled={workflowStage === "layout"} onClick={enterFinishStage}><span>3</span> Finishes</button><span className="stage-coming-soon">Materials come next</span></nav>
     {workflowStage === "layout" ? <nav className="mobile-workspace-nav" aria-label="Mobile designer sections"><a href="#design-views">Plan &amp; 3D</a><a href="#design-controls">Setup</a><a href="#house-connection">House</a></nav> : workflowStage === "railings" ? <nav className="mobile-workspace-nav railing-mobile-nav" aria-label="Mobile railing sections"><a href="#design-views">Railing plan</a><a href="#railing-controls">Railing controls</a></nav> : <nav className="mobile-workspace-nav railing-mobile-nav" aria-label="Mobile finish sections"><a href="#design-views">Finish plan</a><a href="#finish-controls">Finish controls</a></nav>}
@@ -483,15 +483,15 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       <Suspense fallback={<div className="house-editor-loading" role="status">Preparing deck controls…</div>}><LevelCutoutControls platforms={compatibilityDesign.platforms} platform={compatibilityPlatform} selectedHoleIndex={selectedHoleIndex} onKeepSelectedLevel={keepSelectedLevelOnly} onSetElevation={setPlatformElevation} onAddCutout={addCutout} onSelectCutout={setSelectedHoleIndex} onUpdateCutout={updateCutout} onRemoveCutout={removeCutout} /></Suspense>
       <label className="field full"><span>Drag step</span><select value={snapIncrement} onChange={(event) => setSnapIncrement(Number(event.target.value))}><option value="1">1 inch · fine</option><option value="6">6 inches · standard</option><option value="12">12 inches · coarse</option></select></label>
       <label className="check-row"><input type="checkbox" checked={keepCornersSquare} onChange={(event) => setKeepCornersSquare(event.target.checked)} />Keep attached sides square</label>
-      <section className="surface-direction-controls"><div><strong>Deck board direction</strong><small>Sets both the visible boards and the perpendicular conceptual joists.</small></div><div className="toggle-grid two"><button type="button" className={`toggle${platform.construction.decking.direction === "left_right" ? " active" : ""}`} aria-pressed={platform.construction.decking.direction === "left_right"} onClick={() => updateConstruction({ ...platform.construction, decking: { ...platform.construction.decking, direction: "left_right" } }, "Deck boards now run left to right.")}>Left to right</button><button type="button" className={`toggle${platform.construction.decking.direction === "house_yard" ? " active" : ""}`} aria-pressed={platform.construction.decking.direction === "house_yard"} onClick={() => updateConstruction({ ...platform.construction, decking: { ...platform.construction.decking, direction: "house_yard" } }, "Deck boards now run from house to yard.")}>House to yard</button></div><small>Conceptual layout only; final span, fastening, and product requirements need qualified review.</small></section>
+      <section className="surface-direction-controls"><div><strong>Deck board direction</strong><small>Sets boards and perpendicular conceptual joists.</small></div><div className="toggle-grid two"><button type="button" className={`toggle${platform.construction.decking.direction === "left_right" ? " active" : ""}`} aria-pressed={platform.construction.decking.direction === "left_right"} onClick={() => updateConstruction({ ...platform.construction, decking: { ...platform.construction.decking, direction: "left_right" } }, "Boards run left to right.")}>Left to right</button><button type="button" className={`toggle${platform.construction.decking.direction === "house_yard" ? " active" : ""}`} aria-pressed={platform.construction.decking.direction === "house_yard"} onClick={() => updateConstruction({ ...platform.construction, decking: { ...platform.construction.decking, direction: "house_yard" } }, "Boards run house to yard.")}>House to yard</button></div><small>Conceptual only; final framing needs qualified review.</small></section>
       <section className="surface-direction-controls"><div><strong>Deck board pattern</strong><small>Picture frame adds one border course around the deck and recorded cutouts.</small></div><div className="toggle-grid two"><button type="button" className={`toggle${platform.construction.decking.pattern === "standard" ? " active" : ""}`} aria-pressed={platform.construction.decking.pattern === "standard"} onClick={() => updateConstruction({ ...platform.construction, decking: { ...platform.construction.decking, pattern: "standard" } }, "Standard deck-board pattern selected.")}>Standard</button><button type="button" className={`toggle${platform.construction.decking.pattern === "picture_frame" ? " active" : ""}`} aria-pressed={platform.construction.decking.pattern === "picture_frame"} onClick={() => updateConstruction({ ...platform.construction, decking: { ...platform.construction.decking, pattern: "picture_frame" } }, "One-course picture-frame pattern selected.")}>Picture frame</button></div><small>Geometry and conceptual quantities update together; product details and waste remain undetermined.</small></section>
       <V3NumberField label="Joist spacing (in)" value={platform.construction.framing.joistSpacing} onCommit={(value) => updateConstruction({ ...platform.construction, framing: { ...platform.construction.framing, joistSpacing: value } }, "Joist layout spacing updated.")} />
-      <section className="selected-edge-card"><strong>Conceptual beams</strong><p>Select one beam, then drag its plan handle or enter exact values.</p><div className="toggle-grid two">{platform.construction.framing.beamLines.map((line, index) => <button type="button" key={line.id} className={`toggle${line.id === selectedBeamLineId ? " active" : ""}`} aria-pressed={line.id === selectedBeamLineId} onClick={() => setSelectedBeamLineId(line.id)}>Beam {index + 1}</button>)}</div>{(() => { const beam = platform.construction.framing.beamLines.find((line) => line.id === selectedBeamLineId) ?? platform.construction.framing.beamLines[0]; return <><div className="field-grid"><V3NumberField label="From outside edge (feet)" value={Math.round(beam.offsetFromOutside / 12 * 100) / 100} step={.5} onCommit={(value) => moveBeam(value * 12)} /><V3NumberField label="Max support spacing (feet)" value={Math.round(beam.maxSupportSpacing / 12 * 100) / 100} step={.5} onCommit={(value) => { try { apply(updateBeamLineV5(history.present, platform.id, { ...beam, maxSupportSpacing: value * 12 }).design, "Selected beam support spacing updated."); } catch (error) { setMessage(error instanceof Error ? error.message : "Support spacing rejected."); } }} /></div><div className="plan-action-buttons"><button disabled={platform.construction.framing.beamLines.length >= 6} onClick={() => { try { const suffix = Math.max(0, ...platform.construction.framing.beamLines.map((line) => Number(line.id.match(/\d+$/)?.[0] ?? 0))) + 1; const values = platform.region.outer.map((point) => platform.construction.decking.direction === "left_right" ? point.z : point.x); const span = Math.max(...values) - Math.min(...values); const occupied = new Set(platform.construction.framing.beamLines.map((line) => line.offsetFromOutside)); const offset = Array.from({ length: Math.floor((span - 12) / 6) }, (_, index) => 6 + index * 6).find((value) => !occupied.has(value)) ?? span - 6; const result = addBeamLineV5(history.present, platform.id, { id: `beam-line-${suffix}`, offsetFromOutside: offset, maxSupportSpacing: beam.maxSupportSpacing }); setSelectedBeamLineId(result.beamLineId); apply(result.design, "Conceptual beam added."); } catch (error) { setMessage(error instanceof Error ? error.message : "Beam could not be added."); } }}>Add beam</button><button disabled={platform.construction.framing.beamLines.length === 1} onClick={() => { try { const result = removeBeamLineV5(history.present, platform.id, beam.id); setSelectedBeamLineId(result.design.platforms.find((item) => item.id === platform.id)!.construction.framing.beamLines[0].id); apply(result.design, "Selected conceptual beam removed."); } catch (error) { setMessage(error instanceof Error ? error.message : "Beam could not be removed."); } }}>Remove selected</button></div></>; })()}</section>
+      <section className="selected-edge-card"><strong>Conceptual beams</strong><p>Select a beam to drag or enter exact values.</p><div className="toggle-grid two">{platform.construction.framing.beamLines.map((line, index) => <button type="button" key={line.id} className={`toggle${line.id === selectedBeamLineId ? " active" : ""}`} aria-pressed={line.id === selectedBeamLineId} onClick={() => setSelectedBeamLineId(line.id)}>Beam {index + 1}</button>)}</div>{(() => { const beam = platform.construction.framing.beamLines.find((line) => line.id === selectedBeamLineId) ?? platform.construction.framing.beamLines[0]; return <><div className="field-grid"><V3NumberField label="From outside edge (feet)" value={Math.round(beam.offsetFromOutside / 12 * 100) / 100} step={.5} onCommit={(value) => moveBeam(value * 12)} /><V3NumberField label="Max support spacing (feet)" value={Math.round(beam.maxSupportSpacing / 12 * 100) / 100} step={.5} onCommit={(value) => { try { apply(updateBeamLineV5(history.present, platform.id, { ...beam, maxSupportSpacing: value * 12 }).design, "Support spacing updated."); } catch (error) { setMessage(error instanceof Error ? error.message : CHANGE_REJECTED); } }} /></div><div className="plan-action-buttons"><button disabled={platform.construction.framing.beamLines.length >= 6} onClick={() => { try { const suffix = Math.max(0, ...platform.construction.framing.beamLines.map((line) => Number(line.id.match(/\d+$/)?.[0] ?? 0))) + 1; const values = platform.region.outer.map((point) => platform.construction.decking.direction === "left_right" ? point.z : point.x); const span = Math.max(...values) - Math.min(...values); const occupied = new Set(platform.construction.framing.beamLines.map((line) => line.offsetFromOutside)); const offset = Array.from({ length: Math.floor((span - 12) / 6) }, (_, index) => 6 + index * 6).find((value) => !occupied.has(value)) ?? span - 6; const result = addBeamLineV5(history.present, platform.id, { id: `beam-line-${suffix}`, offsetFromOutside: offset, maxSupportSpacing: beam.maxSupportSpacing }); setSelectedBeamLineId(result.beamLineId); apply(result.design, "Beam added."); } catch (error) { setMessage(error instanceof Error ? error.message : CHANGE_REJECTED); } }}>Add beam</button><button disabled={platform.construction.framing.beamLines.length === 1} onClick={() => { try { const result = removeBeamLineV5(history.present, platform.id, beam.id); setSelectedBeamLineId(result.design.platforms.find((item) => item.id === platform.id)!.construction.framing.beamLines[0].id); apply(result.design, "Beam removed."); } catch (error) { setMessage(error instanceof Error ? error.message : CHANGE_REJECTED); } }}>Remove selected</button></div></>; })()}</section>
       <p className="level-height-note">Support locations are visualization quantities only—not footing, span, or structural approval.</p>
       {hasEdgeReferences && <section className="selected-edge-card review-card"><strong>Edit deck outline</strong><p>Clear side options before reshaping.</p><button className="primary" onClick={unlockOutline}>Edit deck outline</button><small>Reattach side options afterward.</small></section>}
       <p className="outline-edit-feedback">{message}</p>
       <Suspense fallback={<div className="house-editor-loading" role="status">Preparing house connection…</div>}><HouseConnectionEditor design={compatibilityDesign} platform={compatibilityPlatform} onApply={(next, attachment) => updateHouseConnection(restoreV5Authority(history.present, next), attachment)} onError={setMessage} /></Suspense>
-      <section className="stage-continue-card"><span>Layout ready?</span><strong>Review it before railings.</strong><button className="primary" onClick={requestRailingStage}>Review deck layout</button><small>Checks outline, height, house side, stairs, landings, and cutouts.</small></section>
+      <section className="stage-continue-card"><span>Layout ready?</span><strong>Review before railings.</strong><button className="primary" onClick={requestRailingStage}>Review deck layout</button><small>Checks the recorded geometry.</small></section>
       </> : workflowStage === "railings" ? <><Suspense fallback={<div className="house-editor-loading" role="status">Preparing railing workspace…</div>}><RailingStageControls platform={compatibilityPlatform} geometry={geometry} selectedEdgeId={selectedEdgeId} onRailingChange={applyRailing} onHeight={(height) => updateConstruction({ ...platform.construction, railing: { ...platform.construction.railing, height } }, "Railing height updated exactly.")} onBack={returnToLayoutStage} /></Suspense><section className="stage-continue-card"><span>Railings ready?</span><strong>Choose exposed edge finishes next.</strong><button className="primary" onClick={enterFinishStage}>Continue to finishes</button><small>Fascia and skirting stay separate from products and pricing.</small></section></> : <Suspense fallback={<div className="house-editor-loading" role="status">Preparing finish workspace…</div>}><FinishStageControls platform={platform} geometry={geometry} selectedEdgeId={selectedEdgeId} gradeElevation={design.siteContext.gradeElevation} onChange={applyFinish} onBack={returnToRailingStage} /></Suspense>}
       <div className="history-actions"><button disabled={!history.past.length} onClick={() => changeHistory("undo")}>Undo</button><button disabled={!history.future.length} onClick={() => changeHistory("redo")}>Redo</button></div>
       <div className="design-facts"><div><span>Schema</span><strong>DeckDesign v5</strong></div><div><span>Revision</span><strong>{design.metadata.revision}</strong></div><div><span>Fingerprint</span><code>{designFingerprint}</code></div></div><p className="status-message" aria-live="polite">{message}</p>

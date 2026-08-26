@@ -1,31 +1,19 @@
 import { deriveGeometryWarningsV4, type GeometryWarningV4 } from "./geometryWarningsV4";
 import { CONCEPTUAL_SUPPORT_POST_SIZE, conceptualBeamVerticalRange, conceptualSupportPostTop, deriveConceptualBeamProjection, type ConceptualSupportPost } from "./beamProjection";
-import { positiveRegionOverlapArea, segmentCrossesConvexInterior } from "./geometryWarningsV3";
+import { convexPolygonsOverlap, positiveRegionOverlapArea, segmentCrossesConvexInterior } from "./geometryWarningsV3";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
 import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
 import { conceptualJoistVerticalRange, deriveJoistPathAxes, derivePolygonMembers, type ProjectedMember } from "./polygonProjection";
 import { horizontalRegionIntervalsAt, verticalRegionIntervalsAt } from "./polygonRegion";
-import { deriveStairRouteGeometryV3 } from "./stairRouteGeometryV3";
+import { deriveStairRouteGeometryV3, DISPLAYED_STAIR_LANDING_CENTER_OFFSET, DISPLAYED_STAIR_LANDING_HEIGHT, DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT } from "./stairRouteGeometryV3";
 
 export type GeometryWarningV5 = GeometryWarningV4;
 
 const EPSILON = .01;
 const compareGeometryIds = (left: string, right: string): number => left.localeCompare(right, undefined, { numeric: true });
-const PROTOTYPE_REVIEW_THRESHOLD_PREFIXES = Object.freeze([
-  "beam-cutout-clearance-",
-  "beam-line-clearance-",
-  "beam-short-segment-",
-  "cutout-clearance-",
-  "cutout-edge-clearance-",
-  "joist-cutout-clearance-",
-  "stair-edge-remainder-",
-  "stair-house-clearance-",
-  "stair-route-clearance-",
-]);
-
 export function usesPrototypeReviewThresholdV5(warning: GeometryWarningV5): boolean {
-  return PROTOTYPE_REVIEW_THRESHOLD_PREFIXES.some((prefix) => warning.id.startsWith(prefix));
+  return warning.id.includes("clearance-") || warning.id.startsWith("beam-short-segment-") || warning.id.startsWith("stair-edge-remainder-");
 }
 
 function pointSegmentDistance(point: PolygonPoint, start: PolygonPoint, end: PolygonPoint): number {
@@ -164,6 +152,27 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     platformElevation: platform.elevation,
     beamLines: [line],
   })] as const));
+  platform.construction.framing.beamLines.forEach((line) => {
+    const posts = beamProjectionByLineId.get(line.id)!.supportPosts;
+    platform.construction.stairSystems.forEach((system, systemIndex) => {
+      const route = stairRoutes[systemIndex];
+      const collisions = posts.flatMap((post) => {
+        const postTop = conceptualSupportPostTop(post.top, normalized.siteContext.gradeElevation);
+        const overlaps = (corners: readonly PolygonPoint[], base: number, top: number) => normalized.siteContext.gradeElevation < top - EPSILON && postTop > base + EPSILON && convexPolygonsOverlap(supportPostFootprint(post), corners);
+        return [
+          ...route.treads.filter((tread) => overlaps(tread.corners, tread.y, tread.y + Math.max(DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT, tread.rise))),
+          ...route.landings.filter((landing) => overlaps(landing.corners, landing.y + DISPLAYED_STAIR_LANDING_CENTER_OFFSET - DISPLAYED_STAIR_LANDING_HEIGHT / 2, landing.y + DISPLAYED_STAIR_LANDING_CENTER_OFFSET + DISPLAYED_STAIR_LANDING_HEIGHT / 2)),
+        ].map((element) => [post.id, element.id] as const);
+      });
+      if (!collisions.length) return;
+      warnings.push(Object.freeze({
+        id: `beam-support-stair-collision-${line.id}-${system.id}`,
+        severity: "collision",
+        geometryIds: Object.freeze([line.id, system.id, ...[...new Set(collisions.map(([postId]) => postId))].sort(compareGeometryIds), ...[...new Set(collisions.map(([, elementId]) => elementId))].sort(compareGeometryIds)]),
+        message: "The current conceptual layout places a displayed support post inside the displayed stair route. Move/review the beam or stair before continuing. Reviewed structural post placement may change.",
+      }));
+    });
+  });
   const projectedJoists = derivePolygonMembers(platform.region, {
     boardWidth: platform.construction.decking.boardWidth,
     gap: platform.construction.decking.gap,

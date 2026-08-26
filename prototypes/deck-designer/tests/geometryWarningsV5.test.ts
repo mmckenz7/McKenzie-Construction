@@ -1,15 +1,79 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DESIGN } from "../src/model";
+import { DEFAULT_DESIGN, updateDesign } from "../src/model";
 import { deriveGeometryWarningsV5, usesPrototypeReviewThresholdV5, type GeometryWarningV5 } from "../src/geometryWarningsV5";
 import { deriveLayoutReviewV5 } from "../src/layoutReviewV5";
 import { migrateDeckDesignToV5, normalizeDeckDesignV5 } from "../src/modelV5";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
 import { conceptualSupportPostTop } from "../src/beamProjection";
+import { DISPLAYED_STAIR_LANDING_CENTER_OFFSET, DISPLAYED_STAIR_LANDING_HEIGHT, DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT } from "../src/stairRouteGeometryV3";
+import { deriveWarningSelectionV5 } from "../src/warningLocatorV5";
 
 describe("DeckDesign v5 explainable framing warnings", () => {
   it("shares the renderer's exact displayed support-post vertical range", () => {
     expect(conceptualSupportPostTop(40, 0)).toBe(40);
     expect(conceptualSupportPostTop(0, 0)).toBe(1);
+    expect([DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT, DISPLAYED_STAIR_LANDING_HEIGHT, DISPLAYED_STAIR_LANDING_CENTER_OFFSET]).toEqual([1.5, 5.5, -2.25]);
+  });
+
+  it("blocks an exact displayed support-post and stair-tread volume collision with traceable sources", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const edge = deriveGeometricPolygonEdges(platform.region.outer).find((candidate) => candidate.outward.x > 0)!;
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: {
+      ...platform.construction,
+      framing: { ...platform.construction.framing, beamLines: [{ id: "beam-line-test", offsetFromOutside: 6, maxSupportSpacing: 24 }] },
+      stairSystems: [{ id: "stair-system-test", locked: true, edgeId: edge.id, offset: 48, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [{ id: "landing-1", locked: true, afterRiser: 0, width: 48, depth: 48, turn: "right", connections: [] }] }],
+    } }] });
+    const warning = deriveGeometryWarningsV5(design, platform.id).find((item) => item.id === "beam-support-stair-collision-beam-line-test-stair-system-test")!;
+    expect(warning).toEqual({
+      id: "beam-support-stair-collision-beam-line-test-stair-system-test",
+      severity: "collision",
+      geometryIds: ["beam-line-test", "stair-system-test", "beam-line-test-segment-1-support-9", "stair-tread-4", "stair-tread-5"],
+      message: "The current conceptual layout places a displayed support post inside the displayed stair route. Move/review the beam or stair before continuing. Reviewed structural post placement may change.",
+    });
+    expect(deriveGeometryWarningsV5(design, platform.id)).toEqual(deriveGeometryWarningsV5(design, platform.id));
+    const review = deriveLayoutReviewV5(design, platform.id);
+    expect(review.readyToContinue).toBe(false);
+    expect(review.blockers).toContain(warning.message);
+    expect(deriveWarningSelectionV5(design.platforms[0], warning)).toEqual({ holeIndex: null, beamLineId: "beam-line-test", stairSystemId: "stair-system-test", edgeId: edge.id });
+    const clipped = normalizeDeckDesignV5({ ...design, platforms: [{ ...design.platforms[0], region: { ...design.platforms[0].region, holes: [[
+      { x: 72, z: 128 }, { x: 120, z: 128 }, { x: 120, z: 140 }, { x: 72, z: 140 },
+    ]] } }] });
+    expect(deriveGeometryWarningsV5(clipped, platform.id).find((item) => item.id === warning.id)?.geometryIds).toEqual([
+      "beam-line-test", "stair-system-test", "beam-line-test-segment-2-support-4", "stair-tread-4", "stair-tread-5",
+    ]);
+  });
+
+  it("detects a displayed landing collision on valid concave geometry and deduplicates clipped-post sources", () => {
+    const base = migrateDeckDesignToV5(updateDesign(DEFAULT_DESIGN, { kind: "l-shape", cutoutWidth: 72, cutoutDepth: 60 }));
+    const platform = base.platforms[0];
+    const edge = deriveGeometricPolygonEdges(platform.region.outer).find((candidate) => candidate.start.z === 84 && candidate.end.z === 84)!;
+    const design = normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: {
+      ...platform.construction,
+      framing: { ...platform.construction.framing, beamLines: [{ id: "beam-line-test", offsetFromOutside: 6, maxSupportSpacing: 24 }] },
+      stairSystems: [{ id: "stair-system-test", locked: true, edgeId: edge.id, offset: 24, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [{ id: "landing-1", locked: true, afterRiser: 1, width: 48, depth: 48, turn: "right", connections: [] }] }],
+    } }] });
+    const warning = deriveGeometryWarningsV5(design, platform.id).find((item) => item.id === "beam-support-stair-collision-beam-line-test-stair-system-test")!;
+    expect(warning.geometryIds).toEqual([
+      "beam-line-test", "stair-system-test",
+      "beam-line-test-segment-1-support-4", "beam-line-test-segment-1-support-5", "beam-line-test-segment-1-support-6",
+      "stair-landing", "stair-tread-2", "stair-tread-4", "stair-tread-6", "stair-tread-7",
+    ]);
+    expect(new Set(warning.geometryIds).size).toBe(warning.geometryIds.length);
+  });
+
+  it("allows exact displayed plan and vertical contact plus clear separation", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const edge = deriveGeometricPolygonEdges(platform.region.outer).find((candidate) => candidate.outward.x > 0)!;
+    const withStair = (maxRiserHeight: number, beamOffset: number) => normalizeDeckDesignV5({ ...base, platforms: [{ ...platform, construction: {
+      ...platform.construction,
+      framing: { ...platform.construction.framing, beamLines: [{ id: "beam-line-test", offsetFromOutside: beamOffset, maxSupportSpacing: 24 }] },
+      stairSystems: [{ id: "stair-system-test", locked: true, edgeId: edge.id, offset: 48, width: 48, treadDepth: 10, maxRiserHeight, landings: [] }],
+    } }] });
+    for (const design of [withStair(8, 6), withStair(7.75, 48)]) {
+      expect(deriveGeometryWarningsV5(design, platform.id).some((item) => item.id.startsWith("beam-support-stair-collision-"))).toBe(false);
+    }
   });
 
   it("identifies every prototype-threshold note without classifying collisions or interruptions", () => {

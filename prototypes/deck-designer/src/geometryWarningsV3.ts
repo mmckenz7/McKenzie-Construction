@@ -28,7 +28,7 @@ function axes(points: readonly PolygonPoint[]): readonly PolygonPoint[] {
   });
 }
 
-function convexPolygonsOverlap(first: readonly PolygonPoint[], second: readonly PolygonPoint[]): boolean {
+export function convexPolygonsOverlap(first: readonly PolygonPoint[], second: readonly PolygonPoint[]): boolean {
   return [...axes(first), ...axes(second)].every((axis) => {
     const firstProjection = first.map((point) => point.x * axis.x + point.z * axis.z);
     const secondProjection = second.map((point) => point.x * axis.x + point.z * axis.z);

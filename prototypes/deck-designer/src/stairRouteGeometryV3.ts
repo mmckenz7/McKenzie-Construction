@@ -20,6 +20,10 @@ export type StairRouteGeometryV3 = Readonly<{
   rise: number;
 }>;
 
+export const DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT = 1.5;
+export const DISPLAYED_STAIR_LANDING_HEIGHT = 5.5;
+export const DISPLAYED_STAIR_LANDING_CENTER_OFFSET = -2.25;
+
 const point = (x: number, z: number): PolygonPoint => Object.freeze({ x, z });
 const point3 = (x: number, y: number, z: number): StairPoint3V3 => Object.freeze({ x, y, z });
 const rotate = (direction: PolygonPoint, turn: "straight" | "left" | "right" | "switchback"): PolygonPoint => turn === "left"

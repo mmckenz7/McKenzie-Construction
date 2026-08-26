@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-25 displayed support-post/stair-route collision
+
+- The one-level layout review now blocks only the transition to Railings when an actual displayed conceptual beam support post occupies positive plan area and vertical volume with an actual displayed stair tread or landing. Exact boundary and vertical contact remain allowed.
+- Deterministic tests cover rectangular tread overlap, concave landing overlap, exact contact, separation, cutout-clipped beam spans, warning deduplication/order/replay, exact transient post and stair-element traceability, and the existing authored beam/stair locator.
+- Desktop QA reproduced the collision from normal controls, showed one blocker, disabled **Lock layout & continue**, kept **Save locally** and **Download JSON** available, and selected the exact authored beam and stair/edge through **Show in plan**. At 390 × 844 the warning and fixed review actions remained legible, the transition stayed disabled, and browser warning/error logs were empty.
+- Full validation passed 351/351 tests, isolation, typecheck, build, and unchanged golden fixtures. Bundle ceilings remain unchanged and pass at 83.4 KiB initial / 121.7 KiB largest / 245.0 KiB total JavaScript gzip.
+- This is an internal conceptual-layout consistency check only. It does not claim that the displayed post is structurally required or unbuildable, and reviewed structural post placement may change. Saving/export remain available.
+
 ## 2026-08-25 picture-frame opening-border presentation
 
 - The measured plan now draws the existing authoritative outer `picture-frame-border-*` and opening `picture-frame-hole-*` members at their recorded full board width. A subtle generic grain cadence follows each member's exact direction, while field boards retain their lighter line treatment and terminate at the projection's existing inside-border clearance.
