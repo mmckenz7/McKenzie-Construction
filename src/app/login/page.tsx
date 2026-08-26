@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { LoginForm } from "./login-form";
+import { getSafeInternalRedirectPath } from "@/lib/auth/redirect";
 import { createAuthenticatedServerClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -21,29 +22,11 @@ type LoginPageProps = {
   }>;
 };
 
-function getSafeRedirectPath(value: string | undefined) {
-  if (!value) {
-    return "/admin";
-  }
-
-  const path = value.trim();
-
-  if (
-    !path.startsWith("/") ||
-    path.startsWith("//") ||
-    path.includes("://")
-  ) {
-    return "/admin";
-  }
-
-  return path;
-}
-
 export default async function LoginPage({
   searchParams,
 }: LoginPageProps) {
   const params = await searchParams;
-  const nextPath = getSafeRedirectPath(params.next);
+  const nextPath = getSafeInternalRedirectPath(params.next);
 
   const supabase = await createAuthenticatedServerClient();
 

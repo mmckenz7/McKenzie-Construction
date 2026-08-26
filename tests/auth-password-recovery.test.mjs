@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { getRecoveryCallbackUrl } from "../src/lib/auth/recovery.ts";
+import {
+  getRecoveryCallbackUrl,
+  getRecoveryErrorMessage,
+} from "../src/lib/auth/recovery.ts";
+import { getSafeInternalRedirectPath } from "../src/lib/auth/redirect.ts";
 
 const callbackRoute = readFileSync("src/app/auth/callback/route.ts", "utf8");
 const recoveryAction = readFileSync("src/app/forgot-password/actions.ts", "utf8");
@@ -28,6 +32,22 @@ test("recovery callback URLs keep local and Production same-origin semantics", (
     "https://app.example.com/auth/callback",
   );
   assert.equal(getRecoveryCallbackUrl("javascript:alert(1)", {}), null);
+});
+
+test("login destinations remain same-origin after URL normalization", () => {
+  assert.equal(getSafeInternalRedirectPath("/sales?view=open"), "/sales?view=open");
+  assert.equal(getSafeInternalRedirectPath("/sales/../portal"), "/portal");
+  assert.equal(getSafeInternalRedirectPath("https://attacker.example"), "/admin");
+  assert.equal(getSafeInternalRedirectPath("//attacker.example"), "/admin");
+  assert.equal(getSafeInternalRedirectPath("/\\attacker.example"), "/admin");
+  assert.equal(getSafeInternalRedirectPath("/\\\\attacker.example"), "/admin");
+  assert.equal(getSafeInternalRedirectPath("/%5c%5cattacker.example"), "/admin");
+  assert.equal(getSafeInternalRedirectPath("/%2f%2fattacker.example"), "/admin");
+  assert.equal(getSafeInternalRedirectPath("/%255c%255cattacker.example"), "/admin");
+  assert.equal(getSafeInternalRedirectPath("/%252f%252fattacker.example"), "/admin");
+  assert.equal(getSafeInternalRedirectPath("/portal\n"), "/admin");
+  assert.equal(getSafeInternalRedirectPath("/%0aportal"), "/admin");
+  assert.equal(getSafeInternalRedirectPath("/%zz"), "/admin");
 });
 
 test("the stable Vercel branch URL wins for Preview recovery callbacks", () => {
@@ -113,7 +133,23 @@ test("recovered passwords require only eight characters", () => {
 });
 
 test("invalid and expired links have a safe recovery path", () => {
-  assert.match(resetPage, /This recovery link is invalid or has expired/);
+  assert.match(redirectPolicy, /This recovery link is invalid or has expired/);
   assert.match(resetPage, /href="\/forgot-password"/);
   assert.match(resetPage, /Request another recovery email/);
+  assert.equal(
+    getRecoveryErrorMessage("too-short", false),
+    "This recovery link is invalid or has expired.",
+  );
+  assert.equal(
+    getRecoveryErrorMessage("mismatch", false),
+    "This recovery link is invalid or has expired.",
+  );
+  assert.equal(
+    getRecoveryErrorMessage("update-failed", false),
+    "This recovery link is invalid or has expired.",
+  );
+  assert.equal(
+    getRecoveryErrorMessage("too-short", true),
+    "Use at least 8 characters for your new password.",
+  );
 });

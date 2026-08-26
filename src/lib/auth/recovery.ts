@@ -2,6 +2,29 @@ const RECOVERY_PATH = "/auth/callback";
 
 export const recoverySessionCookie = "mckenzie-password-recovery";
 
+export function getRecoveryErrorMessage(
+  error: string | undefined,
+  canResetPassword: boolean,
+) {
+  if (!canResetPassword || error === "invalid-link") {
+    return "This recovery link is invalid or has expired.";
+  }
+
+  if (error === "too-short") {
+    return "Use at least 8 characters for your new password.";
+  }
+
+  if (error === "mismatch") {
+    return "The passwords do not match.";
+  }
+
+  if (error === "update-failed") {
+    return "We could not update your password. Try again or request a new link.";
+  }
+
+  return null;
+}
+
 type RecoveryEnvironment = {
   VERCEL_ENV?: string;
   VERCEL_BRANCH_URL?: string;

@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 
-import { recoverySessionCookie } from "@/lib/auth/recovery";
+import {
+  getRecoveryErrorMessage,
+  recoverySessionCookie,
+} from "@/lib/auth/recovery";
 import { createAuthenticatedServerClient } from "@/lib/supabase/server";
 
 import { updateRecoveredPassword } from "./actions";
@@ -37,16 +40,10 @@ export default async function ResetPasswordPage({
     ? await supabase.auth.getUser()
     : { data: { user: null } };
   const canResetPassword = Boolean(hasRecoveryMarker && user);
-  const errorMessage =
-    params.error === "too-short"
-      ? "Use at least 8 characters for your new password."
-      : params.error === "mismatch"
-        ? "The passwords do not match."
-        : params.error === "update-failed"
-          ? "We could not update your password. Try again or request a new link."
-          : params.error === "invalid-link" || !canResetPassword
-            ? "This recovery link is invalid or has expired."
-            : null;
+  const errorMessage = getRecoveryErrorMessage(
+    params.error,
+    canResetPassword,
+  );
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-5 py-12">
