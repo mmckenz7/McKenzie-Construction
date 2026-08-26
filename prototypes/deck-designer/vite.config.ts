@@ -3,8 +3,11 @@ import { defineConfig } from "vite";
 // @ts-ignore The production root intentionally does not install this isolated prototype package's build tooling.
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
+  esbuild: command === "build" ? {
+    pure: ["console.warn"],
+  } : undefined,
   base: "./",
   build: {
     rollupOptions: {
@@ -18,4 +21,4 @@ export default defineConfig({
   test: {
     environment: "node",
   },
-});
+}));

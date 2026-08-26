@@ -1,5 +1,11 @@
 # Browser QA record
 
+## 2026-08-26 production bundle headroom
+
+- The existing startup, deferred-control, and Three.js chunk boundaries remain unchanged. Production builds now omit dependency `console.warn` calls; prototype source contains none, development/tests retain warnings, and production errors remain available.
+- The measured bundle moved from 83.5 / 121.7 / 245.0 KiB to 83.5 KiB initial / 120.3 KiB largest / 243.6 KiB total JavaScript gzip without raising the 90 / 130 / 245 KiB ceilings.
+- This is build output only: geometry, UI, history, JSON, quantities, lazy-loading behavior, catalogs, estimating, and shared adapters are unchanged.
+
 ## 2026-08-26 generic customer-rendering baseline
 
 - The 3D consumer now scales one scene-local unit box geometry across projected boards, framing, posts, rails, stairs, landings, fascia, skirting, and house panels. Existing dispose-once coverage confirms shared geometry/material cleanup remains safe; no projected coordinates or authored facts changed.
