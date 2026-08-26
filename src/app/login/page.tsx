@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { LoginForm } from "./login-form";
+import { getSafeInternalRedirectPath } from "@/lib/auth/redirect";
 import { createAuthenticatedServerClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -16,32 +18,15 @@ type LoginPageProps = {
   searchParams: Promise<{
     error?: string;
     next?: string;
+    notice?: string;
   }>;
 };
-
-function getSafeRedirectPath(value: string | undefined) {
-  if (!value) {
-    return "/admin";
-  }
-
-  const path = value.trim();
-
-  if (
-    !path.startsWith("/") ||
-    path.startsWith("//") ||
-    path.includes("://")
-  ) {
-    return "/admin";
-  }
-
-  return path;
-}
 
 export default async function LoginPage({
   searchParams,
 }: LoginPageProps) {
   const params = await searchParams;
-  const nextPath = getSafeRedirectPath(params.next);
+  const nextPath = getSafeInternalRedirectPath(params.next);
 
   const supabase = await createAuthenticatedServerClient();
 
@@ -59,6 +44,10 @@ export default async function LoginPage({
       : params.error === "invalid-login"
         ? "The email address or password is incorrect."
         : null;
+  const noticeMessage =
+    params.notice === "password-updated"
+      ? "Your password was updated. Sign in with your new password."
+      : null;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-5 py-12">
@@ -82,6 +71,22 @@ export default async function LoginPage({
           errorMessage={errorMessage}
           nextPath={nextPath}
         />
+
+        {noticeMessage ? (
+          <div
+            role="status"
+            className="mt-6 rounded-lg border border-lime-200 bg-lime-50 px-4 py-3 text-sm font-semibold text-lime-900"
+          >
+            {noticeMessage}
+          </div>
+        ) : null}
+
+        <Link
+          href="/forgot-password"
+          className="mt-5 flex min-h-11 items-center justify-center text-sm font-bold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-950"
+        >
+          Forgot your password?
+        </Link>
 
         <p className="mt-6 text-center text-xs leading-5 text-slate-500">
           Authorized company users only.

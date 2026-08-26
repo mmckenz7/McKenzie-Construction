@@ -3,25 +3,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { getSafeInternalRedirectPath } from "@/lib/auth/redirect";
 import { createAuthenticatedServerClient } from "@/lib/supabase/server";
-
-function getSafeRedirectPath(value: FormDataEntryValue | null) {
-  if (typeof value !== "string") {
-    return "/admin";
-  }
-
-  const path = value.trim();
-
-  if (
-    !path.startsWith("/") ||
-    path.startsWith("//") ||
-    path.includes("://")
-  ) {
-    return "/admin";
-  }
-
-  return path;
-}
 
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "")
@@ -30,7 +13,7 @@ export async function login(formData: FormData) {
 
   const password = String(formData.get("password") ?? "");
   const trustDevice = formData.get("trustDevice") === "on";
-  const nextPath = getSafeRedirectPath(formData.get("next"));
+  const nextPath = getSafeInternalRedirectPath(formData.get("next"));
 
   if (!email || !password) {
     redirect(
