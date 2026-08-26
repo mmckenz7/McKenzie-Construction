@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-26 generic customer-rendering baseline
+
+- The 3D consumer now scales one scene-local unit box geometry across projected boards, framing, posts, rails, stairs, landings, fascia, skirting, and house panels. Existing dispose-once coverage confirms shared geometry/material cleanup remains safe; no projected coordinates or authored facts changed.
+- The default generic presentation uses a cleaner sky/ground/wood palette, warm ambient fill, directional light, and an expanded shadow camera so the complete deck casts readable shadows. These are non-product visual materials with no catalog, price, texture-license, or structural meaning.
+- Desktop QA showed the full one-level deck, stairs, rails, framing, house, ground, and shadows with one canvas and no browser warnings/errors. At 390 × 844, the plan and model remained legible with no horizontal overflow.
+- QA also found and corrected a renderer-rebuild mismatch: after choosing **Top**, changing quality or framing visibility now reapplies Top to the rebuilt camera instead of silently displaying Perspective under a pressed Top button. Balanced and Detailed rebuilds retained one canvas and produced no logs.
+- Full validation passed 351/351 tests, isolation, typecheck, build, and unchanged golden fixtures. Bundle ceilings remain unchanged and pass at 83.5 KiB initial / 121.7 KiB largest / 245.0 KiB total JavaScript gzip.
+
 ## 2026-08-26 displayed stair-volume collision review
 
 - V5 now replaces the inherited plan-only stair-pair blocker with strict positive overlap between the actual displayed tread/landing plan polygons and vertical ranges. Exact plan or vertical contact remains allowed; v1-v4 behavior, authored geometry, history, JSON, and quantities are unchanged.
