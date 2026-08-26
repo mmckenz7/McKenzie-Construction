@@ -13,6 +13,15 @@ export async function POST() {
   }
   const result = await sendPushTestToUser(workspace.user.id, email);
   if (!result.configured) return Response.json({ success: false, error: "Phone notifications are not configured on this deployment." }, { status: 503 });
-  if (result.delivered < 1) return Response.json({ success: false, error: "No active phone notification subscription was found." }, { status: 409 });
+  if (result.attempted < 1) return Response.json({ success: false, error: "No active phone notification subscription was found." }, { status: 409 });
+  if (result.delivered < 1) {
+    const providerStatus = result.rejectedStatusCodes.filter(Boolean).join(", ");
+    return Response.json({
+      success: false,
+      error: providerStatus
+        ? `The phone push service rejected the test (status ${providerStatus}). Re-enable notifications on this device, then try once more.`
+        : "The phone push service rejected the test. Re-enable notifications on this device, then try once more.",
+    }, { status: 502 });
+  }
   return Response.json({ success: true });
 }

@@ -19,6 +19,7 @@ export type WebPushDeliverySummary = {
   attempted: number;
   delivered: number;
   removed: number;
+  rejectedStatusCodes: number[];
 };
 
 function configuration() {
@@ -60,13 +61,14 @@ function stalePushSubscription(error: unknown) {
 async function deliver(rows: StoredSubscription[]): Promise<WebPushDeliverySummary> {
   const config = configuration();
   if (!config.publicKey || !config.privateKey) {
-    return { configured: false, attempted: 0, delivered: 0, removed: 0 };
+    return { configured: false, attempted: 0, delivered: 0, removed: 0, rejectedStatusCodes: [] };
   }
 
   webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
   const supabase = createAdminServerClient();
   let delivered = 0;
   let removed = 0;
+  const rejectedStatusCodes = new Set<number>();
   const payload = JSON.stringify({
     title: "New customer text",
     body: "A new text arrived in Company Inbox.",
@@ -80,18 +82,21 @@ async function deliver(rows: StoredSubscription[]): Promise<WebPushDeliverySumma
     try {
       await webpush.sendNotification(subscription, payload, {
         TTL: 60,
-        urgency: "high",
-        topic: "mckenzie-inbound-text",
       });
       delivered += 1;
     } catch (error) {
       if (stalePushSubscription(error)) {
         const result = await supabase.from("push_subscriptions").delete().eq("id", row.id);
         if (!result.error) removed += 1;
+      } else {
+        const statusCode = typeof error === "object" && error !== null && "statusCode" in error
+          ? Number((error as { statusCode?: unknown }).statusCode)
+          : 0;
+        rejectedStatusCodes.add(Number.isFinite(statusCode) ? statusCode : 0);
       }
     }
   }
-  return { configured: true, attempted: rows.length, delivered, removed };
+  return { configured: true, attempted: rows.length, delivered, removed, rejectedStatusCodes: [...rejectedStatusCodes].sort((a, b) => a - b) };
 }
 
 async function internalRecipientAuthUserId() {
@@ -108,7 +113,7 @@ async function internalRecipientAuthUserId() {
 
 export async function sendInboundTextPush() {
   const userId = await internalRecipientAuthUserId();
-  if (!userId) return { configured: Boolean(webPushPublicKey()), attempted: 0, delivered: 0, removed: 0 };
+  if (!userId) return { configured: Boolean(webPushPublicKey()), attempted: 0, delivered: 0, removed: 0, rejectedStatusCodes: [] };
   return sendPushToUser(userId);
 }
 
@@ -119,14 +124,14 @@ async function sendPushToUser(userId: string) {
     .select("id,user_id,endpoint,p256dh,auth")
     .eq("user_id", userId);
   if (subscriptions.error) {
-    return { configured: Boolean(webPushPublicKey()), attempted: 0, delivered: 0, removed: 0 };
+    return { configured: Boolean(webPushPublicKey()), attempted: 0, delivered: 0, removed: 0, rejectedStatusCodes: [] };
   }
   return deliver((subscriptions.data ?? []) as StoredSubscription[]);
 }
 
 export async function sendPushTestToUser(userId: string, email: string | null | undefined) {
   if (!isInternalPushRecipient(email)) {
-    return { configured: Boolean(webPushPublicKey()), attempted: 0, delivered: 0, removed: 0 };
+    return { configured: Boolean(webPushPublicKey()), attempted: 0, delivered: 0, removed: 0, rejectedStatusCodes: [] };
   }
   return sendPushToUser(userId);
 }

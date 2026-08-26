@@ -42,6 +42,14 @@ test("subscriptions require signed-in Sales access and strict encrypted endpoint
   assert.match(pushRoute, /\.delete\(\)\.eq\("user_id", access\.workspace\.user!\.id\)/);
 });
 
+test("push rejection is distinguishable from a missing subscription without logging subscription facts", () => {
+  assert.match(pushServer, /rejectedStatusCodes/);
+  assert.match(pushTestRoute, /result\.attempted < 1/);
+  assert.match(pushTestRoute, /phone push service rejected the test/);
+  assert.doesNotMatch(pushTestRoute, /endpoint|p256dh|authKey/);
+  assert.doesNotMatch(pushServer, /console\.(?:log|warn|error)/);
+});
+
 test("Twilio stores a unique inbound message before scheduling a nonblocking alert", () => {
   const duplicateGuard = twilioWebhook.indexOf("if (!message.data) return xml();");
   const pushSchedule = twilioWebhook.indexOf("after(() => sendInboundTextPush())");
