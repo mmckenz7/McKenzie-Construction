@@ -51,7 +51,7 @@ describe("v5 contextual warning locator", () => {
     const warning: GeometryWarningV5 = Object.freeze({
       id: "stair-route-house-collision-stair-system-1-house-wall-2",
       severity: "collision",
-      geometryIds: Object.freeze(["stair-system-1", "house-wall-2"]),
+      geometryIds: Object.freeze(["stair-system-1", "stair-tread-4", "house-wall-2"]),
       message: "Stair crosses recorded wall.",
     });
     expect(warning.geometryIds).toContain("house-wall-2");

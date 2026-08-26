@@ -5,7 +5,7 @@ import { deriveLayoutReviewV5 } from "../src/layoutReviewV5";
 import { migrateDeckDesignToV5, normalizeDeckDesignV5 } from "../src/modelV5";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
 import { conceptualSupportPostTop } from "../src/beamProjection";
-import { DISPLAYED_STAIR_LANDING_CENTER_OFFSET, DISPLAYED_STAIR_LANDING_HEIGHT, DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT } from "../src/stairRouteGeometryV3";
+import { deriveStairRouteGeometryV3, DISPLAYED_STAIR_LANDING_CENTER_OFFSET, DISPLAYED_STAIR_LANDING_HEIGHT, DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT } from "../src/stairRouteGeometryV3";
 import { deriveWarningSelectionV5 } from "../src/warningLocatorV5";
 import { DISPLAYED_DECK_SURFACE_HEIGHT, displayedDeckSurfaceVerticalRange, displayedVolumeIntersectsDeckSurface } from "../src/displayedDeckSurface";
 import { positiveRegionOverlapArea, positiveTriangulatedRegionOverlapArea } from "../src/geometryWarningsV3";
@@ -376,9 +376,73 @@ describe("DeckDesign v5 explainable framing warnings", () => {
       id: "stair-system-1", locked: true, edgeId: lowerEdge.id, offset: 72, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [],
     }] } }] });
     expect(deriveGeometryWarningsV5(design, platform.id).filter((warning) => warning.id.startsWith("stair-route-house-collision-"))).toEqual([
-      expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-far", geometryIds: ["stair-system-1", "house-wall-far"] }),
-      expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-near", geometryIds: ["stair-system-1", "house-wall-near"] }),
+      expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-far", geometryIds: ["stair-system-1", "stair-tread-6", "house-wall-far"] }),
+      expect.objectContaining({ id: "stair-route-house-collision-stair-system-1-house-wall-near", geometryIds: ["stair-system-1", "stair-tread-4", "house-wall-near"] }),
     ]);
+    expect(deriveGeometryWarningsV5(design, platform.id)).toEqual(deriveGeometryWarningsV5(design, platform.id));
+  });
+
+  it("uses displayed stair and post-opening wall volumes for crossings, contact, and separation", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const lowerEdge = deriveGeometricPolygonEdges(platform.region.outer).find((edge) => edge.outward.z > 0)!;
+    const stairSystem = { id: "stair-system-volume", locked: true, edgeId: lowerEdge.id, offset: 72, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [] };
+    const route = deriveStairRouteGeometryV3({
+      system: stairSystem,
+      edge: lowerEdge,
+      platformElevation: platform.elevation,
+      gradeElevation: base.siteContext.gradeElevation,
+      railingHeight: platform.construction.railing.height,
+      namespaceIds: false,
+    });
+    const crossedTread = route.treads.find((tread) => tread.id === "stair-tread-4")!;
+    const exactTreadTop = crossedTread.y + Math.max(DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT, crossedTread.rise);
+    const walls = [
+      { id: "wall-above", start: { x: 60, z: 180 }, end: { x: 132, z: 180 }, baseElevation: 100, height: 48, attachment: "unknown" as const, openings: [] },
+      { id: "wall-vertical-contact", start: { x: 60, z: 180 }, end: { x: 132, z: 180 }, baseElevation: exactTreadTop, height: 48, attachment: "unknown" as const, openings: [] },
+      { id: "wall-plan-contact", start: { x: 60, z: 144 }, end: { x: 132, z: 144 }, baseElevation: 0, height: 120, attachment: "unknown" as const, openings: [] },
+      { id: "wall-endpoint-contact", start: { x: 24, z: 180 }, end: { x: 72, z: 180 }, baseElevation: 0, height: 120, attachment: "unknown" as const, openings: [] },
+      {
+        id: "wall-opening", start: { x: 0, z: 180 }, end: { x: 192, z: 180 }, baseElevation: 0, height: 120, attachment: "unknown" as const,
+        openings: [{ id: "opening-over-stair", kind: "door" as const, offset: 60, width: 72, sillHeight: 0, height: 120 }],
+      },
+    ];
+    const design = normalizeDeckDesignV5({
+      ...base,
+      siteContext: { ...base.siteContext, houseWalls: walls },
+      platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [stairSystem] } }],
+    });
+    const warnings = deriveGeometryWarningsV5(design, platform.id);
+    expect(warnings.filter((warning) => warning.id.startsWith("stair-route-house-collision-"))).toEqual([]);
+    expect(warnings.some((warning) => warning.id.endsWith("wall-above") || warning.id.endsWith("wall-opening"))).toBe(false);
+    expect(deriveLayoutReviewV5(design, platform.id).readyToContinue).toBe(true);
+  });
+
+  it("aggregates a displayed landing crossing across split panels into one authored-wall blocker", () => {
+    const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
+    const platform = base.platforms[0];
+    const lowerEdge = deriveGeometricPolygonEdges(platform.region.outer).find((edge) => edge.outward.z > 0)!;
+    const stairSystem = {
+      id: "stair-system-landing-wall", locked: true, edgeId: lowerEdge.id, offset: 72, width: 48, treadDepth: 10, maxRiserHeight: 7.75,
+      landings: [{ id: "landing-wall", locked: true, afterRiser: 0, width: 48, depth: 48, turn: "straight" as const, connections: [] }],
+    };
+    const wall = {
+      id: "wall-split", start: { x: 48, z: 168 }, end: { x: 144, z: 168 }, baseElevation: 0, height: 120, attachment: "unknown" as const,
+      openings: [{ id: "wall-gap", kind: "door" as const, offset: 42, width: 12, sillHeight: 0, height: 24 }],
+    };
+    const design = normalizeDeckDesignV5({
+      ...base,
+      siteContext: { ...base.siteContext, houseWalls: [wall] },
+      platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [stairSystem] } }],
+    });
+    const warnings = deriveGeometryWarningsV5(design, platform.id).filter((warning) => warning.id.startsWith("stair-route-house-collision-"));
+    expect(warnings).toEqual([{
+      id: "stair-route-house-collision-stair-system-landing-wall-wall-split",
+      severity: "collision",
+      geometryIds: ["stair-system-landing-wall", "stair-landing", "wall-split"],
+      message: "Displayed stair system 1 intersects recorded house-wall context (wall-split). Move or reroute it before continuing. This checks only the current conceptual layout, not code, structural, fire, egress, flashing, or attachment adequacy.",
+    }]);
+    expect(deriveLayoutReviewV5(design, platform.id).readyToContinue).toBe(false);
   });
 
   it("retains provenance-safe wall/platform plan review without blocking layout", () => {

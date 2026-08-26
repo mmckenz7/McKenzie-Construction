@@ -23,7 +23,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Deterministic one-level layout review gate before the dedicated railing stage
 - [x] Explainable stair-route collision blockers and cutout-clearance review notices
 - [x] Exact displayed tread/landing volume collision blockers with vertically separated plan crossings retained as review-only
-- [x] Exact displayed stair-volume collision checks against the selected deck-surface volume, plus recorded house-wall context checks
+- [x] Exact displayed stair-volume collision checks against the selected deck-surface volume and post-opening recorded house-wall panels
 - [x] Visible corner-alignment guides with deterministic attached-side snap priority
 - [x] Optional keep-square corner constraint that moves both attached sides together
 - [x] Direct measured-plan selection for exact stair systems, landings, and cutouts
@@ -118,8 +118,8 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Measured conceptual beam-line proximity notes with exact source traceability
 - [x] Projection-only adjacent joist-to-cutout clearance notes with exact derived path traceability
 - [x] Measured short conceptual beam-fragment notes with authored-line and derived-segment traceability
-- [x] Distinct stair-route wall-crossing blockers and measured near-wall field-review notes
-- [x] One deterministic traceable blocker per distinct authored house wall crossed by a stair route, with split-panel deduplication and exact-contact allowance
+- [x] Distinct displayed stair-volume/house-wall blockers and vertically applicable measured near-wall field-review notes
+- [x] One deterministic traceable blocker per distinct authored house wall intersected by displayed stair volume, with post-opening split-panel deduplication and exact plan/vertical-contact allowance
 - [x] Provenance-safe measured wall-to-platform plan review using vertically applicable projected panels, solid-region subtraction, opening/cutout voids, and authored-wall deduplication
 - [x] Provenance-safe conceptual beam-to-recorded-wall review with strict 3D applicability, opening gaps, and exact authored/derived traceability
 - [x] Provenance-safe conceptual joist-to-recorded-wall review with shared display heights, opening gaps, and transient path traceability

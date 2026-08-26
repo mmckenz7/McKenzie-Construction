@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-26 displayed stair/house-wall volume review
+
+- V5 now replaces the inherited plan-only stair/house blocker with strict positive intersection between renderer-shared tread/landing volumes and actual post-opening wall panels. Exact plan, endpoint, boundary, or vertical contact, opening-only passage, and vertical separation remain nonblocking; v1-v4 behavior and all authored geometry, history, JSON, and quantities are unchanged.
+- Deterministic regressions cover true tread and landing crossings, split-panel deduplication, authored-wall ordering and replay, transient element traceability, vertical separation, exact contact, opening-only passage, locator behavior, and layout-stage gating. Vertically inapplicable wall panels no longer create a near-wall threshold note.
+- Desktop QA opened the live layout review with one canvas and one app mount, no horizontal overflow, and no false geometry warning on the loaded design. At 390 × 844, the review retained its Close, Back, and continuation actions, one canvas, one app mount, and no horizontal overflow. The temporary responsive override and QA tab were reset afterward.
+- Full validation passed 357/357 tests, isolation, production-equivalent type checking, build, and unchanged golden fixtures. Bundle ceilings remain unchanged and pass at 84.0 KiB initial / 120.6 KiB largest / 244.4 KiB total JavaScript gzip.
+- This is a conceptual displayed-volume consistency check only; it does not infer code, fire separation, egress, flashing, attachment, or structural adequacy.
+
 ## 2026-08-26 generic 3D color choices
 
 - The v5 model toolbar exposes Cedar, Brown, and Gray through a labelled native select. Changing the selection rebuilds the same one-canvas renderer with a generic deck/fascia/skirting palette while the measured plan, revision, quantities, camera, and framing facts remain unchanged.

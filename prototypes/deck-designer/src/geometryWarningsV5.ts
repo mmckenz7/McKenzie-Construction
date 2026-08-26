@@ -135,7 +135,9 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
   const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
   if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
   const warnings = deriveGeometryWarningsV4(deckDesignV5ToV4Compatibility(normalized), platformId)
-    .filter((warning) => !warning.id.startsWith("stair-route-collision-") && !warning.id.startsWith("stair-route-deck-collision-"));
+    .filter((warning) => !warning.id.startsWith("stair-route-collision-") &&
+      !warning.id.startsWith("stair-route-deck-collision-") &&
+      !warning.id.startsWith("stair-route-house-collision-"));
   const edges = deriveGeometricPolygonEdges(platform.region.outer);
   const stairRoutes = platform.construction.stairSystems.map((system, systemIndex) => deriveStairRouteGeometryV3({
     system,
@@ -147,6 +149,7 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     targetPlatformElevations: Object.fromEntries(normalized.platforms.map((item) => [item.id, item.elevation])),
   }));
   const displayedStairRoutes = stairRoutes.map(displayedStairElements);
+  const house = deriveHouseContextGeometry(normalized.siteContext);
   const platformOuterTriangles = displayedStairRoutes.length ? triangulatePolygon(platform.region.outer) : [];
   const platformHoleTriangles = displayedStairRoutes.length ? platform.region.holes.flatMap((hole) => triangulatePolygon(hole)) : [];
   platform.construction.stairSystems.forEach((system, systemIndex) => {
@@ -162,6 +165,25 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
       geometryIds: Object.freeze([system.id, `${platform.id}:outer`, ...intersectingElementIds]),
       message: `Displayed stair system ${systemIndex + 1} intersects the displayed deck surface. Move or reroute it before continuing. This checks only the current conceptual layout, not structural or code adequacy.`,
     }));
+  });
+  platform.construction.stairSystems.forEach((system, systemIndex) => {
+    const elements = displayedStairRoutes[systemIndex];
+    normalized.siteContext.houseWalls.forEach((wall) => {
+      const panels = house.houseWallPanels.filter((panel) => panel.wallId === wall.id);
+      const intersectingElementIds = elements.filter((element) => panels.some((panel) =>
+        panel.baseElevation < element.t - EPSILON &&
+        panel.baseElevation + panel.height > element.b + EPSILON &&
+        segmentCrossesConvexInterior(panel.start, panel.end, element.c)))
+        .map((element) => element.id)
+        .sort(compareGeometryIds);
+      if (!intersectingElementIds.length) return;
+      warnings.push(Object.freeze({
+        id: `stair-route-house-collision-${system.id}-${wall.id}`,
+        severity: "collision",
+        geometryIds: Object.freeze([system.id, ...intersectingElementIds, wall.id]),
+        message: `Displayed stair system ${systemIndex + 1} intersects recorded house-wall context (${wall.id}). Move or reroute it before continuing. This checks only the current conceptual layout, not code, structural, fire, egress, flashing, or attachment adequacy.`,
+      }));
+    });
   });
   platform.construction.stairSystems.forEach((system, systemIndex) => {
     const edge = edges.find((candidate) => candidate.id === system.edgeId)!;
@@ -184,7 +206,6 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
       }));
     });
   });
-  const house = deriveHouseContextGeometry(normalized.siteContext);
   const beamProjectionByLineId = new Map(platform.construction.framing.beamLines.map((line) => [line.id, deriveConceptualBeamProjection({
     region: platform.region,
     boardDirection: platform.construction.decking.direction,
@@ -312,12 +333,15 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     });
   });
   platform.construction.stairSystems.forEach((system, systemIndex) => {
-    const footprints = displayedStairRoutes[systemIndex].map((element) => element.c);
+    const elements = displayedStairRoutes[systemIndex];
     normalized.siteContext.houseWalls.forEach((wall) => {
       if (warnings.some((warning) => warning.id === `stair-route-house-collision-${system.id}-${wall.id}`)) return;
       const panels = house.houseWallPanels.filter((panel) => panel.wallId === wall.id);
-      if (!panels.length || !footprints.length) return;
-      const clearance = Math.min(...panels.flatMap((panel) => footprints.map((footprint) => segmentToPolygonDistance(panel.start, panel.end, footprint))));
+      const applicablePairs = panels.flatMap((panel) => elements
+        .filter((element) => panel.baseElevation < element.t - EPSILON && panel.baseElevation + panel.height > element.b + EPSILON)
+        .map((element) => [panel, element] as const));
+      if (!applicablePairs.length) return;
+      const clearance = Math.min(...applicablePairs.map(([panel, element]) => segmentToPolygonDistance(panel.start, panel.end, element.c)));
       if (clearance <= EPSILON || clearance >= 12 - EPSILON) return;
       const measured = roundedTenth(clearance);
       warnings.push(Object.freeze({
