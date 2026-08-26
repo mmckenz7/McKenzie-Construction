@@ -1,5 +1,13 @@
 # Browser QA record
 
+## 2026-08-26 displayed beam-member/stair-route volume review
+
+- V5 now compares each actual clipped displayed beam-member footprint with renderer-shared tread and landing volumes. Strict positive plan and vertical overlap blocks only the Layout-to-Railings transition; exact boundary/endpoint/vertical contact and true separation remain allowed.
+- The reproduced support-post-miss case identifies the exact authored beam and stair system, clipped beam segment, and two crossed tread IDs. Deterministic coverage also includes a true landing overlap, cutout-clipped segment identity, replay, locator behavior, and renderer width parity.
+- Desktop QA retained one canvas and one app mount with Save locally, Download JSON, and Review deck layout available. The review dialog exposed Close, Back, and continuation actions without horizontal overflow. At 390 × 844, the same actions, save/export controls, one canvas, and one app mount remained reachable with no horizontal overflow or warning/error logs.
+- Full validation passed 358/358 tests, isolation, production-equivalent type checking, build, and unchanged golden fixtures. Bundle ceilings remain unchanged and pass at 84.2 KiB initial / 120.6 KiB largest / 244.6 KiB total JavaScript gzip.
+- This is an internal conceptual-display consistency check only. It does not prescribe beams, spans, supports, footings, products, code results, or structural adequacy, and it does not change authored geometry, history, JSON, or quantities.
+
 ## 2026-08-26 displayed stair/house-wall volume review
 
 - V5 now replaces the inherited plan-only stair/house blocker with strict positive intersection between renderer-shared tread/landing volumes and actual post-opening wall panels. Exact plan, endpoint, boundary, or vertical contact, opening-only passage, and vertical separation remain nonblocking; v1-v4 behavior and all authored geometry, history, JSON, and quantities are unchanged.

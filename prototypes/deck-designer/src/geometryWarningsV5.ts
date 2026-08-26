@@ -1,5 +1,5 @@
 import { deriveGeometryWarningsV4, type GeometryWarningV4 } from "./geometryWarningsV4";
-import { CONCEPTUAL_SUPPORT_POST_SIZE, conceptualBeamVerticalRange, conceptualSupportPostTop, deriveConceptualBeamProjection, type ConceptualSupportPost } from "./beamProjection";
+import { CONCEPTUAL_BEAM_WIDTH, CONCEPTUAL_SUPPORT_POST_SIZE, conceptualBeamVerticalRange, conceptualSupportPostTop, deriveConceptualBeamProjection, type ConceptualSupportPost } from "./beamProjection";
 import { convexPolygonsOverlap, positiveRegionOverlapArea, positiveTriangulatedRegionOverlapArea, segmentCrossesConvexInterior } from "./geometryWarningsV3";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { deckDesignV5ToV4Compatibility, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
@@ -80,6 +80,22 @@ function supportPostFootprint(post: ConceptualSupportPost): readonly PolygonPoin
     { x: post.x - half, z: post.z - half }, { x: post.x + half, z: post.z - half },
     { x: post.x + half, z: post.z + half }, { x: post.x - half, z: post.z + half },
   ];
+}
+
+function beamMemberFootprint(member: ProjectedMember): readonly PolygonPoint[] | null {
+  const dx = member.end.x - member.start.x;
+  const dz = member.end.z - member.start.z;
+  const length = Math.hypot(dx, dz);
+  if (!Number.isFinite(length) || length <= EPSILON) return null;
+  const half = CONCEPTUAL_BEAM_WIDTH / 2;
+  const nx = -dz / length * half;
+  const nz = dx / length * half;
+  return Object.freeze([
+    Object.freeze({ x: member.start.x + nx, z: member.start.z + nz }),
+    Object.freeze({ x: member.end.x + nx, z: member.end.z + nz }),
+    Object.freeze({ x: member.end.x - nx, z: member.end.z - nz }),
+    Object.freeze({ x: member.start.x - nx, z: member.start.z - nz }),
+  ]);
 }
 
 type DisplayedStairElement = Readonly<{ id: string; c: readonly PolygonPoint[]; b: number; t: number }>;
@@ -213,9 +229,23 @@ export function deriveGeometryWarningsV5(design: DeckDesignV5, platformId: strin
     beamLines: [line],
   })] as const));
   platform.construction.framing.beamLines.forEach((line) => {
-    const posts = beamProjectionByLineId.get(line.id)!.supportPosts;
+    const projection = beamProjectionByLineId.get(line.id)!;
+    const posts = projection.supportPosts;
     platform.construction.stairSystems.forEach((system, systemIndex) => {
       const elements = displayedStairRoutes[systemIndex];
+      const beamRange = conceptualBeamVerticalRange(platform.elevation);
+      const memberCollisions = projection.beams.flatMap((beam) => {
+        const footprint = beamMemberFootprint(beam);
+        if (!footprint) return [];
+        return elements.filter((element) => beamRange.base < element.t - EPSILON && beamRange.top > element.b + EPSILON && convexPolygonsOverlap(footprint, element.c))
+          .map((element) => [beam.id, element.id] as const);
+      });
+      if (memberCollisions.length) warnings.push(Object.freeze({
+        id: `beam-member-stair-collision-${line.id}-${system.id}`,
+        severity: "collision",
+        geometryIds: Object.freeze([line.id, system.id, ...[...new Set(memberCollisions.map(([beamId]) => beamId))].sort(compareGeometryIds), ...[...new Set(memberCollisions.map(([, elementId]) => elementId))].sort(compareGeometryIds)]),
+        message: "The current conceptual layout places a displayed beam member inside the displayed stair route. Move/review the beam or stair before continuing. This checks only displayed concept geometry, not structural or code adequacy.",
+      }));
       const collisions = posts.flatMap((post) => {
         const postTop = conceptualSupportPostTop(post.top, normalized.siteContext.gradeElevation);
         return elements.filter((element) => normalized.siteContext.gradeElevation < element.t - EPSILON && postTop > element.b + EPSILON && convexPolygonsOverlap(supportPostFootprint(post), element.c))

@@ -128,6 +128,7 @@ North star: a polished McKenzie-owned configurator where a customer or employee 
 - [x] Distinct stair-route overlap blockers and measured nearby-route field-review notes
 - [x] Exact displayed stair-volume intersection against the normalized deck surface (outer minus cutouts), preserving plan/vertical boundary contact and under-deck separation
 - [x] Exact displayed support-post versus tread/landing volume blocker with authored beam/stair traceability
+- [x] Exact displayed clipped beam-member versus tread/landing volume blocker with shared renderer width and authored beam/stair traceability
 - [ ] Broader explainable framing clash/constraint warnings beyond recorded cutout interruptions
 - [ ] PBR material library, licensed asset pipeline, GLB metadata, LOD/compression
 - [x] Enforced initial-entry, largest-chunk, and total JavaScript performance budgets

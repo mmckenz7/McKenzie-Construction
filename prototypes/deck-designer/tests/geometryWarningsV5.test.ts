@@ -4,7 +4,7 @@ import { deriveGeometryWarningsV5, usesPrototypeReviewThresholdV5, type Geometry
 import { deriveLayoutReviewV5 } from "../src/layoutReviewV5";
 import { migrateDeckDesignToV5, normalizeDeckDesignV5 } from "../src/modelV5";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
-import { conceptualSupportPostTop } from "../src/beamProjection";
+import { CONCEPTUAL_BEAM_WIDTH, conceptualSupportPostTop } from "../src/beamProjection";
 import { deriveStairRouteGeometryV3, DISPLAYED_STAIR_LANDING_CENTER_OFFSET, DISPLAYED_STAIR_LANDING_HEIGHT, DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT } from "../src/stairRouteGeometryV3";
 import { deriveWarningSelectionV5 } from "../src/warningLocatorV5";
 import { DISPLAYED_DECK_SURFACE_HEIGHT, displayedDeckSurfaceVerticalRange, displayedVolumeIntersectsDeckSurface } from "../src/displayedDeckSurface";
@@ -15,6 +15,7 @@ describe("DeckDesign v5 explainable framing warnings", () => {
   it("shares the renderer's exact displayed vertical constants", () => {
     expect(conceptualSupportPostTop(40, 0)).toBe(40);
     expect(conceptualSupportPostTop(0, 0)).toBe(1);
+    expect(CONCEPTUAL_BEAM_WIDTH).toBe(4.5);
     expect([DISPLAYED_STAIR_TREAD_MINIMUM_HEIGHT, DISPLAYED_STAIR_LANDING_HEIGHT, DISPLAYED_STAIR_LANDING_CENTER_OFFSET]).toEqual([1.5, 5.5, -2.25]);
     expect(DISPLAYED_DECK_SURFACE_HEIGHT).toBe(1);
     expect(displayedDeckSurfaceVerticalRange(48)).toEqual({ base: 47.5, top: 48.5 });
@@ -94,6 +95,60 @@ describe("DeckDesign v5 explainable framing warnings", () => {
     expect(deriveGeometryWarningsV5(clipped, platform.id).find((item) => item.id === warning.id)?.geometryIds).toEqual([
       "beam-line-test", "stair-system-test", "beam-line-test-segment-2-support-4", "stair-tread-4", "stair-tread-5",
     ]);
+  });
+
+  it("blocks an actual displayed beam member crossing a stair route even when its support posts miss", () => {
+    const base = migrateDeckDesignToV5({ ...DEFAULT_DESIGN, platform: { ...DEFAULT_DESIGN.platform, kind: "l-shape", width: 240, projection: 180, cutoutWidth: 72, cutoutDepth: 60 } });
+    const platform = base.platforms[0];
+    const edge = deriveGeometricPolygonEdges(platform.region.outer).find((candidate) => candidate.start.x === 168 && candidate.end.x === 168)!;
+    const withBeamOffset = (offsetFromOutside: number, holes = platform.region.holes) => normalizeDeckDesignV5({ ...base, platforms: [{
+      ...platform,
+      elevation: 96,
+      region: { ...platform.region, holes },
+      construction: {
+        ...platform.construction,
+        framing: { ...platform.construction.framing, beamLines: [{ id: "beam-member-audit", offsetFromOutside, maxSupportSpacing: 120 }] },
+        stairSystems: [{
+          id: "stair-system-audit", locked: true, edgeId: edge.id, offset: 12, width: 48, treadDepth: 10, maxRiserHeight: 7.75,
+          landings: [{ id: "landing-audit", locked: true, afterRiser: 0, width: 48, depth: 48, turn: "left", connections: [] }],
+        }],
+      },
+    }] });
+
+    const crossing = withBeamOffset(66);
+    const warning = deriveGeometryWarningsV5(crossing, platform.id).find((item) => item.id === "beam-member-stair-collision-beam-member-audit-stair-system-audit")!;
+    expect(warning).toEqual({
+      id: "beam-member-stair-collision-beam-member-audit-stair-system-audit",
+      severity: "collision",
+      geometryIds: ["beam-member-audit", "stair-system-audit", "beam-member-audit-segment-1", "stair-tread-2", "stair-tread-3"],
+      message: "The current conceptual layout places a displayed beam member inside the displayed stair route. Move/review the beam or stair before continuing. This checks only displayed concept geometry, not structural or code adequacy.",
+    });
+    expect(deriveGeometryWarningsV5(crossing, platform.id).some((item) => item.id.startsWith("beam-support-stair-collision-"))).toBe(false);
+    expect(deriveLayoutReviewV5(crossing, platform.id)).toEqual(expect.objectContaining({ readyToContinue: false, blockers: expect.arrayContaining([warning.message]) }));
+    expect(deriveWarningSelectionV5(crossing.platforms[0], warning)).toEqual({ holeIndex: null, beamLineId: "beam-member-audit", stairSystemId: "stair-system-audit", edgeId: edge.id });
+    expect(deriveGeometryWarningsV5(crossing, platform.id)).toEqual(deriveGeometryWarningsV5(crossing, platform.id));
+
+    const crossingPlatform = crossing.platforms[0];
+    const crossingSystem = crossingPlatform.construction.stairSystems[0];
+    const landingCrossing = normalizeDeckDesignV5({ ...crossing, platforms: [{ ...crossingPlatform, construction: {
+      ...crossingPlatform.construction,
+      stairSystems: [{ ...crossingSystem, landings: [{ ...crossingSystem.landings[0], afterRiser: 2, width: 120, turn: "straight" }] }],
+    } }] });
+    expect(deriveGeometryWarningsV5(landingCrossing, platform.id).find((item) => item.id === warning.id)?.geometryIds).toEqual([
+      "beam-member-audit", "stair-system-audit", "beam-member-audit-segment-1", "stair-landing",
+    ]);
+    expect(deriveGeometryWarningsV5(landingCrossing, platform.id).some((item) => item.id.startsWith("beam-support-stair-collision-"))).toBe(false);
+
+    const clipped = withBeamOffset(66, [[{ x: 60, z: 102 }, { x: 100, z: 102 }, { x: 100, z: 118 }, { x: 60, z: 118 }]]);
+    expect(deriveGeometryWarningsV5(clipped, platform.id).find((item) => item.id === warning.id)?.geometryIds).toEqual([
+      "beam-member-audit", "stair-system-audit", "beam-member-audit-segment-2", "stair-tread-2", "stair-tread-3",
+    ]);
+
+    const boundaryContact = withBeamOffset(55.75);
+    const verticallySeparated = withBeamOffset(168);
+    for (const allowed of [boundaryContact, verticallySeparated]) {
+      expect(deriveGeometryWarningsV5(allowed, platform.id).some((item) => item.id.startsWith("beam-member-stair-collision-"))).toBe(false);
+    }
   });
 
   it("detects a displayed landing collision on valid concave geometry and deduplicates clipped-post sources", () => {

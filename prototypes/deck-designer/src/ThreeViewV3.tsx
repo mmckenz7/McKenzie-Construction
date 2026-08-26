@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { AmbientLight, BoxGeometry, Color, DirectionalLight, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, PlaneGeometry, Scene, Vector3, WebGLRenderer } from "three";
 // @ts-ignore Isolated prototype dependency.
 import type { BufferGeometry, Material, Object3D } from "three";
-import { CONCEPTUAL_BEAM_CENTER_OFFSET, CONCEPTUAL_BEAM_HEIGHT, CONCEPTUAL_SUPPORT_POST_SIZE, conceptualSupportPostTop } from "./beamProjection";
+import { CONCEPTUAL_BEAM_CENTER_OFFSET, CONCEPTUAL_BEAM_HEIGHT, CONCEPTUAL_BEAM_WIDTH, CONCEPTUAL_SUPPORT_POST_SIZE, conceptualSupportPostTop } from "./beamProjection";
 // @ts-ignore Isolated prototype dependency.
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RENDER_QUALITY_POLICIES, type RenderQuality } from "./renderQuality";
@@ -101,7 +101,7 @@ export function ThreeViewV3({ platform, geometry, contextPlatforms = EMPTY_CONTE
       for (const board of itemGeometry.surfaceBoards) member(board, itemPlatform.elevation, DISPLAYED_DECK_SURFACE_HEIGHT, itemPlatform.construction.decking.boardWidth, isPictureFrameBorderMember(board) ? deckBorder : deck);
       if (showFraming) {
         for (const joist of itemGeometry.joists) member(joist, itemPlatform.elevation - CONCEPTUAL_JOIST_CENTER_OFFSET, CONCEPTUAL_JOIST_HEIGHT, 1.5, frame);
-        for (const beam of itemGeometry.beams) member(beam, itemPlatform.elevation - CONCEPTUAL_BEAM_CENTER_OFFSET, CONCEPTUAL_BEAM_HEIGHT, 4.5, frame);
+        for (const beam of itemGeometry.beams) member(beam, itemPlatform.elevation - CONCEPTUAL_BEAM_CENTER_OFFSET, CONCEPTUAL_BEAM_HEIGHT, CONCEPTUAL_BEAM_WIDTH, frame);
         for (const post of itemGeometry.supportPosts) { const top = conceptualSupportPostTop(post.top, gradeElevation); const height = top - gradeElevation; const mesh = box(CONCEPTUAL_SUPPORT_POST_SIZE, height, CONCEPTUAL_SUPPORT_POST_SIZE, frame); mesh.position.set(post.x, gradeElevation + height / 2, post.z); }
       }
       for (const span of itemGeometry.fasciaSpans ?? []) member(span, itemPlatform.elevation - 4, 8, 1.5, fascia);
