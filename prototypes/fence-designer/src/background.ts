@@ -14,6 +14,7 @@ export type ReferenceBackground = Readonly<{
   transform: BackgroundTransform;
   opacity: number;
   locked: boolean;
+  calibrated: boolean;
 }>;
 
 export function fittedBackgroundTransform(

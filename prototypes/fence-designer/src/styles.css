@@ -219,6 +219,9 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .gate-reference-selector button.active { border-color: #174f3d; background: #174f3d; color: #fff; box-shadow: inset 0 0 0 2px #174f3d; }
 .gate-reference-posts circle { fill: #fff8e9; stroke: #d47b25; stroke-width: 90; }
 .gate-reference-posts text { fill: #7c3e0d; font-weight: 900; }
+.calibration-status { display: grid; gap: 3px; padding: 11px 13px; border: 1px solid #ddbd8f; border-radius: 9px; background: #fff8e9; color: #6f481d; }
+.calibration-status.complete { border-color: #9dbdac; background: #edf6f1; color: #174f3d; }
+.calibration-status span { font-size: .82rem; line-height: 1.35; }
 .gate-position-readout { display: grid; gap: 3px; margin: 12px 0; padding: 10px 12px; border: 1px solid #d6ddd6; border-radius: 8px; background: #f6f8f5; }
 .gate-position-readout span { color: #68766e; font-size: .73rem; font-weight: 800; }
 .gate-position-readout strong { color: #173f31; font: 550 1.25rem Georgia, serif; }

@@ -6,6 +6,15 @@ export type Point = Readonly<{ id: string; xMm: number; yMm: number }>;
 export type SegmentKind = "fence" | "gate";
 export type GateType = "single" | "double";
 export type GateReferencePost = "post-a" | "post-b";
+export type GateRun = Readonly<{
+  gateSegmentId: string;
+  postA: Point;
+  postB: Point;
+  runLengthMm: number;
+  offsetFromPostAMm: number;
+  leadingFenceSegmentId: string | null;
+  trailingFenceSegmentId: string | null;
+}>;
 export type Segment = Readonly<{
   id: string;
   fromPointId: string;
@@ -324,6 +333,68 @@ export function gateOffsetFromReferenceMm(
     throw new RangeError("Gate distance and width must fit within the selected fence run.");
   }
   return offsetFromStartMm;
+}
+
+export function gateRunForSegment(design: FenceDesign, gateSegmentId: string): GateRun {
+  const gate = design.segments.find(({ id }) => id === gateSegmentId);
+  if (!gate || gate.kind !== "gate") throw new TypeError("Select a gate before editing its placement.");
+  const leading = design.segments.find(({ toPointId, kind }) => toPointId === gate.fromPointId && kind === "fence") ?? null;
+  const trailing = design.segments.find(({ fromPointId, kind }) => fromPointId === gate.toPointId && kind === "fence") ?? null;
+  const postA = pointById(design, leading?.fromPointId ?? gate.fromPointId);
+  const postB = pointById(design, trailing?.toPointId ?? gate.toPointId);
+  const gateStart = pointById(design, gate.fromPointId);
+  const runLengthMm = Math.round(Math.hypot(postB.xMm - postA.xMm, postB.yMm - postA.yMm));
+  const offsetFromPostAMm = Math.round(Math.hypot(gateStart.xMm - postA.xMm, gateStart.yMm - postA.yMm));
+  const distanceFromLine = (point: Point) => runLengthMm === 0 ? Infinity : Math.abs((postB.xMm - postA.xMm) * (point.yMm - postA.yMm) - (postB.yMm - postA.yMm) * (point.xMm - postA.xMm)) / runLengthMm;
+  if (runLengthMm < 25 || distanceFromLine(gateStart) > 2 || distanceFromLine(pointById(design, gate.toPointId)) > 2) throw new RangeError("This gate no longer lies on one straight editable run.");
+  return Object.freeze({ gateSegmentId, postA, postB, runLengthMm, offsetFromPostAMm, leadingFenceSegmentId: leading?.id ?? null, trailingFenceSegmentId: trailing?.id ?? null });
+}
+
+export function updateGateOnRun(
+  design: FenceDesign,
+  gateSegmentId: string,
+  widthMm: number,
+  offsetFromPostAMm: number,
+  gateType: GateType,
+  newStartPointId: string,
+  newEndPointId: string,
+  newLeadingSegmentId: string,
+  newTrailingSegmentId: string,
+): FenceDesign {
+  const run = gateRunForSegment(design, gateSegmentId);
+  const gate = design.segments.find(({ id }) => id === gateSegmentId)!;
+  if (!Number.isSafeInteger(widthMm) || widthMm < 25 || widthMm > 304_800) throw new RangeError("Total gate width must be from 1 inch through 1,000 feet.");
+  if (!Number.isSafeInteger(offsetFromPostAMm) || offsetFromPostAMm < 0 || offsetFromPostAMm + widthMm > run.runLengthMm) throw new RangeError("Gate distance and width must fit within the selected fence run.");
+  if (gateType !== "single" && gateType !== "double") throw new TypeError("Choose a single or double gate.");
+  if (segmentLengthMm(design, gate) === widthMm && run.offsetFromPostAMm === offsetFromPostAMm && gate.gateType === gateType) return design;
+
+  const leading = run.leadingFenceSegmentId ? design.segments.find(({ id }) => id === run.leadingFenceSegmentId)! : null;
+  const trailing = run.trailingFenceSegmentId ? design.segments.find(({ id }) => id === run.trailingFenceSegmentId)! : null;
+  const removedSegmentIds = new Set([gate.id, leading?.id, trailing?.id].filter((id): id is string => Boolean(id)));
+  const removedPointIds = new Set([gate.fromPointId === run.postA.id ? null : gate.fromPointId, gate.toPointId === run.postB.id ? null : gate.toPointId].filter((id): id is string => Boolean(id)));
+  const requestedIds = [newStartPointId, newEndPointId, newLeadingSegmentId, newTrailingSegmentId];
+  if (new Set(requestedIds).size !== requestedIds.length) throw new TypeError("Replacement gate IDs must be unique.");
+
+  const rawLength = Math.hypot(run.postB.xMm - run.postA.xMm, run.postB.yMm - run.postA.yMm);
+  const pointAt = (id: string, distanceMm: number): Point => Object.freeze({
+    id,
+    xMm: Math.round(run.postA.xMm + (run.postB.xMm - run.postA.xMm) / rawLength * distanceMm),
+    yMm: Math.round(run.postA.yMm + (run.postB.yMm - run.postA.yMm) / rawLength * distanceMm),
+  });
+  const startsAtA = offsetFromPostAMm === 0; const endsAtB = offsetFromPostAMm + widthMm === run.runLengthMm;
+  const gateStart = startsAtA ? run.postA : pointAt(removedPointIds.has(gate.fromPointId) ? gate.fromPointId : newStartPointId, offsetFromPostAMm);
+  const gateEnd = endsAtB ? run.postB : pointAt(removedPointIds.has(gate.toPointId) ? gate.toPointId : newEndPointId, offsetFromPostAMm + widthMm);
+  const retainedPoints = design.points.filter(({ id }) => !removedPointIds.has(id));
+  const points = [...retainedPoints, ...(startsAtA ? [] : [gateStart]), ...(endsAtB ? [] : [gateEnd])];
+
+  const replacement: Segment[] = [];
+  if (!startsAtA) replacement.push(Object.freeze({ id: leading?.id ?? newLeadingSegmentId, fromPointId: run.postA.id, toPointId: gateStart.id, kind: "fence" }));
+  replacement.push(Object.freeze({ id: gate.id, fromPointId: gateStart.id, toPointId: gateEnd.id, kind: "gate", gateType }));
+  if (!endsAtB) replacement.push(Object.freeze({ id: trailing?.id ?? newTrailingSegmentId, fromPointId: gateEnd.id, toPointId: run.postB.id, kind: "fence" }));
+  const firstIndex = Math.min(...design.segments.map((segment, index) => removedSegmentIds.has(segment.id) ? index : Infinity));
+  const remainingSegments = design.segments.filter(({ id }) => !removedSegmentIds.has(id));
+  const insertionIndex = design.segments.slice(0, firstIndex).filter(({ id }) => !removedSegmentIds.has(id)).length;
+  return revise(design, { points, segments: [...remainingSegments.slice(0, insertionIndex), ...replacement, ...remainingSegments.slice(insertionIndex)] });
 }
 
 export function addPoint(design: FenceDesign, point: Point, segmentId?: string, fromPointId: string | null = design.points.at(-1)?.id ?? null): FenceDesign {

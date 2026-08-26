@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
 import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform, straightenBackgroundFromHouseCorners, type PlanPosition, type ReferenceBackground } from "./background";
 import {
-  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, gateOffsetFromReferenceMm, insertGateOnSegment, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
-  pointById, pointRole, removeHouseReference, segmentLengthMm, setGateType, setHouseReference, setHouseReferenceAt, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm,
+  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, gateOffsetFromReferenceMm, gateRunForSegment, insertGateOnSegment, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
+  pointById, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setHouseReferenceAt, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm, updateGateOnRun,
   type FenceDesign, type GateReferencePost, type GateType,
 } from "./model";
 import { acquireBestGps, formatGpsAccuracy, gpsOriginAt, projectGpsFix, projectGpsLeg, type GpsFix, type GpsOrigin } from "./gps";
@@ -46,6 +46,12 @@ function nextNumericId(design: FenceDesign): number {
   const values = [...design.points.map(({ id }) => id), ...design.segments.map(({ id }) => id)]
     .map((id) => Number(id.match(/(\d+)$/)?.[1] ?? 0));
   return Math.max(0, ...values) + 1;
+}
+
+function measurementFields(mm: number): Readonly<{ feet: string; inches: string }> {
+  const feet = Math.floor(mm / 304.8);
+  const inches = (mm - feet * 304.8) / 25.4;
+  return Object.freeze({ feet: String(feet), inches: inches.toFixed(3).replace(/\.?0+$/, "") || "0" });
 }
 
 export default function App() {
@@ -116,8 +122,10 @@ export default function App() {
   useEffect(() => () => gpsAbortController.current?.abort(), []);
 
   const selectedSegment = selection?.type === "segment" ? design.segments.find(({ id }) => id === selection.id) ?? null : null;
-  const selectedGatePreviousFence = selectedSegment?.kind === "gate" ? design.segments.find(({ toPointId, kind }) => toPointId === selectedSegment.fromPointId && kind === "fence") ?? null : null;
-  const selectedGateOffsetMm = selectedGatePreviousFence ? segmentLengthMm(design, selectedGatePreviousFence) : 0;
+  const selectedGateRun = selectedSegment?.kind === "gate" ? (() => {
+    try { return gateRunForSegment(design, selectedSegment.id); }
+    catch { return null; }
+  })() : null;
   const selectedPoint = selection?.type === "point" ? design.points.find(({ id }) => id === selection.id) ?? null : null;
   const selectedPointPath = selectedPoint ? fencePathForPoint(design, selectedPoint.id) : null;
   const openEndpoint = (point: Readonly<{ id: string }>) => !design.segments.some(({ fromPointId }) => fromPointId === point.id);
@@ -155,6 +163,7 @@ export default function App() {
   const liveRunLengthMm = mode === "draw" && previewPoint && extensionAnchor
     ? Math.round(Math.hypot(previewPoint.xMm - extensionAnchor.xMm, previewPoint.yMm - extensionAnchor.yMm))
     : null;
+  const referenceNeedsCalibration = Boolean(referenceBackground && !referenceBackground.calibrated);
   const dimensionScale = view.width / DEFAULT_VIEW.width;
   const dimensionPositions = useMemo(() => new Map(placeDimensionLabels(design.segments.map((segment) => {
     const start = pointById(design, segment.fromPointId); const end = pointById(design, segment.toPointId);
@@ -195,7 +204,7 @@ export default function App() {
   }, [drag]);
 
   const commit = (next: FenceDesign, message: string) => {
-    setHistory((current) => pushHistory(current, next));
+    setHistory((current) => current.present === next ? current : pushHistory(current, next));
     setNotice(message);
   };
   const toPlanRaw = (clientX: number, clientY: number) => {
@@ -237,7 +246,7 @@ export default function App() {
     try {
       const knownDistanceMm = feetAndInchesToMm(Number(calibrationFeet), Number(calibrationInches));
       const transform = calibrateBackgroundTransform(referenceBackground.transform, calibrationPoints[0], point, knownDistanceMm);
-      setReferenceBackground({ ...referenceBackground, transform });
+      setReferenceBackground({ ...referenceBackground, transform, calibrated: true });
       setCalibrationPoints([]); setMode("select"); setNotice(`Reference image calibrated to ${formatFeetInches(knownDistanceMm)}. Fence measurements were not changed.`);
     } catch (error) { setCalibrationPoints([]); setMode("select"); setNotice(error instanceof Error ? error.message : "The reference image could not be calibrated."); }
   };
@@ -263,6 +272,7 @@ export default function App() {
     if (mode === "trace-house") { traceHouseAt(event); return; }
     if (mode === "calibrate") { calibrateAt(event); return; }
     if (mode === "close") { closeAt(event); return; }
+    if (referenceNeedsCalibration && (mode === "draw" || mode === "new-line")) { setPropertyPanelOpen(true); setMode("select"); setNotice("Calibrate the aerial/reference image with a known distance before drawing fence points."); return; }
     if (mode === "new-line") {
       const point = placementAt(event.clientX, event.clientY).point;
       const id = nextId.current++;
@@ -283,6 +293,7 @@ export default function App() {
   };
 
   const applyRunCommand = () => {
+    if (referenceNeedsCalibration) { setPropertyPanelOpen(true); setCommandDockOpen(false); setNotice("Calibrate the aerial/reference image with a known distance before adding an exact run."); return; }
     if (!extensionAnchor) {
       setMode("draw"); setSelection(null); setNotice("Tap the plan once to place the starting point, then enter the first precise run."); return;
     }
@@ -438,18 +449,20 @@ export default function App() {
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid length."); }
   };
   const addGate = () => {
-    if (!selectedSegment || selectedSegment.kind !== "fence") return;
+    if (!selectedSegment) return;
     try {
       const width = feetAndInchesToMm(Number(gateFeet), Number(gateInches));
-      const runLength = segmentLengthMm(design, selectedSegment);
+      const runLength = selectedSegment.kind === "gate" ? gateRunForSegment(design, selectedSegment.id).runLengthMm : segmentLengthMm(design, selectedSegment);
       const distanceFromReference = feetAndInchesToMm(Number(gateOffsetFeet), Number(gateOffsetInches));
       const offsetFromStart = gateOffsetFromReferenceMm(runLength, width, distanceFromReference, gateReferencePost);
       const id = nextId.current; const gateSegmentId = `segment-${id + 2}`;
-      const next = insertGateOnSegment(design, selectedSegment.id, width, offsetFromStart, gateType, `point-${id}`, `point-${id + 1}`, gateSegmentId, `segment-${id + 3}`);
+      const next = selectedSegment.kind === "gate"
+        ? updateGateOnRun(design, selectedSegment.id, width, offsetFromStart, gateType, `point-${id}`, `point-${id + 1}`, `segment-${id + 2}`, `segment-${id + 3}`)
+        : insertGateOnSegment(design, selectedSegment.id, width, offsetFromStart, gateType, `point-${id}`, `point-${id + 1}`, gateSegmentId, `segment-${id + 3}`);
       nextId.current += 4;
-      const gate = next.segments.find(({ id: segmentId }) => segmentId === gateSegmentId)
+      const gate = next.segments.find(({ id: segmentId }) => segmentId === (selectedSegment.kind === "gate" ? selectedSegment.id : gateSegmentId))
         ?? next.segments.find(({ kind, fromPointId, toPointId }) => kind === "gate" && (fromPointId === selectedSegment.fromPointId || toPointId === selectedSegment.toPointId));
-      commit(next, `${gateType === "double" ? "Double" : "Single"} gate placed ${formatFeetInches(distanceFromReference)} from ${gateReferencePost === "post-a" ? "Post A" : "Post B"}. The fence line stayed straight.`);
+      commit(next, `${gateType === "double" ? "Double" : "Single"} gate ${selectedSegment.kind === "gate" ? "updated" : "placed"} ${formatFeetInches(distanceFromReference)} from ${gateReferencePost === "post-a" ? "Post A" : "Post B"}. The fence line stayed straight.`);
       const totalInches = Math.round(width / 25.4);
       setFeet(String(Math.floor(totalInches / 12))); setInches(String(totalInches % 12));
       setGateFeet(""); setGateInches("0"); setGateEditorOpen(false); setSelection(gate ? { type: "segment", id: gate.id } : null);
@@ -571,7 +584,7 @@ export default function App() {
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid property address."); }
   };
   const applyReferenceImage = (image: RasterizedReferenceImage, name: string, message: string) => {
-    setReferenceBackground({ src: image.src, name, transform: fittedBackgroundTransform(image.widthPx, image.heightPx, view), opacity: 0.58, locked: false });
+    setReferenceBackground({ src: image.src, name, transform: fittedBackgroundTransform(image.widthPx, image.heightPx, view), opacity: 0.58, locked: false, calibrated: false });
     setLayers((current) => ({ ...current, reference: true })); setMode("select"); setCalibrationPoints([]); setNotice(message);
   };
   const loadReferenceImage = async (file: File | undefined) => {
@@ -607,6 +620,7 @@ export default function App() {
   const startHouseTrace = () => {
     if (!referenceBackground) { setNotice("Capture or upload a property image first."); return; }
     if (referenceBackground.locked) { setNotice("Unlock the reference image before tracing the house."); return; }
+    if (!referenceBackground.calibrated) { setNotice("Calibrate the reference image against a known distance before tracing the house."); return; }
     if (design.points.length) { setNotice("Straighten the property image before drawing fence points so existing measurements are never moved out of alignment."); return; }
     setHouseTracePoints([]); setCalibrationPoints([]); setMode("trace-house"); setSelection(null); setPreviewPoint(null);
     setNotice("Tap one house corner, then the adjacent corner along the wall that should become horizontal. Continue around all four corners.");
@@ -676,8 +690,8 @@ export default function App() {
     </header>
 
     <nav className="toolbar" aria-label="Drawing controls">
-      <div className="segmented"><button className={mode === "draw" ? "active" : ""} onClick={() => { setMode("draw"); if (!selectedOpenEndpoint) setSelection(null); setClosurePathPointId(null); setNotice(selectedOpenEndpoint ? "Draw continues from the selected endpoint. Tap an odd-angle location, then return to Quick layout for the next exact run." : "Draw continues from the latest open endpoint. Use Start separate line to begin somewhere else."); }}>＋ Draw</button><button className={mode === "select" ? "active" : ""} onClick={() => setMode("select")}>↖ Edit</button><button className={mode === "pan" ? "active" : ""} onClick={() => { setMode("pan"); setSelection(null); setNotice("Drag the plan to move around. Pinch with two fingers to zoom."); }}>✋ Pan</button></div>
-      <button className={mode === "new-line" ? "active-tool" : ""} onClick={() => { setMode("new-line"); setSelection(null); setClosurePathPointId(null); setPreviewPoint(null); setNotice("Tap anywhere to start a separate fence line. Tap near an existing run to connect partway along it."); }}>＋ Separate line</button>
+      <div className="segmented"><button disabled={referenceNeedsCalibration} className={mode === "draw" ? "active" : ""} onClick={() => { setMode("draw"); if (!selectedOpenEndpoint) setSelection(null); setClosurePathPointId(null); setNotice(selectedOpenEndpoint ? "Draw continues from the selected endpoint. Tap an odd-angle location, then return to Quick layout for the next exact run." : "Draw continues from the latest open endpoint. Use Start separate line to begin somewhere else."); }}>＋ Draw</button><button className={mode === "select" ? "active" : ""} onClick={() => setMode("select")}>↖ Edit</button><button className={mode === "pan" ? "active" : ""} onClick={() => { setMode("pan"); setSelection(null); setNotice("Drag the plan to move around. Pinch with two fingers to zoom."); }}>✋ Pan</button></div>
+      <button disabled={referenceNeedsCalibration} className={mode === "new-line" ? "active-tool" : ""} onClick={() => { setMode("new-line"); setSelection(null); setClosurePathPointId(null); setPreviewPoint(null); setNotice("Tap anywhere to start a separate fence line. Tap near an existing run to connect partway along it."); }}>＋ Separate line</button>
       <button disabled={history.past.length === 0} onClick={() => { setHistory(undo); setSelection(null); setNotice("Undid the last change."); }}>↶ Undo</button>
       <button disabled={history.future.length === 0} onClick={() => { setHistory(redo); setSelection(null); setNotice("Redid the change."); }}>↷ Redo</button>
       <div className="zoom-controls" aria-label="Plan zoom"><button aria-label="Zoom out" onClick={() => zoomAt(1.25)}>−</button><span>{Math.round(DEFAULT_VIEW.width / view.width * 100)}%</span><button aria-label="Zoom in" onClick={() => zoomAt(0.8)}>＋</button></div>
@@ -687,7 +701,7 @@ export default function App() {
       <button aria-pressed={snapEnabled} className={snapEnabled ? "active-tool" : ""} onClick={() => { setSnapEnabled((current) => !current); setPreviewPoint(null); setNotice(snapEnabled ? "Free angle is on. Runs now follow the measured geometry without angle assumptions." : "45°/90° angle assist is on and uses the previous fence segment as its reference."); }}>{snapEnabled ? "⌁ Relative 45°/90°" : "◌ Free angle"}</button>
       <button aria-pressed={layers.grid} className={layers.grid ? "active-tool" : ""} onClick={() => { setLayers((current) => ({ ...current, grid: !current.grid })); setNotice(layers.grid ? "Plan grid hidden." : "Plan grid shown."); }}>{layers.grid ? "▦ Grid on" : "▦ Grid off"}</button>
       <button aria-pressed={lengthLockEnabled} className={lengthLockEnabled ? "active-tool" : ""} onClick={() => { setLengthLockEnabled((current) => !current); setNotice(lengthLockEnabled ? "Length lock is off. Dragging a point can now change connected measurements." : "Length lock is on. Dragging adjusts the angle while preserving the incoming and following measurements."); }}>{lengthLockEnabled ? "🔒 Lengths" : "🔓 Lengths"}</button>
-      <button aria-pressed={commandDockOpen} className={commandDockOpen ? "active-tool" : ""} onClick={() => { setCommandDockOpen((current) => !current); setMode("select"); setPreviewPoint(null); setNotice(commandDockOpen ? "Quick layout closed." : "Quick layout uses the selected open endpoint. Type an exact run or tap Draw for an odd angle."); }}>⌨ Quick layout</button>
+      <button disabled={referenceNeedsCalibration} aria-pressed={commandDockOpen} className={commandDockOpen ? "active-tool" : ""} onClick={() => { setCommandDockOpen((current) => !current); setMode("select"); setPreviewPoint(null); setNotice(commandDockOpen ? "Quick layout closed." : "Quick layout is optional exact text input. Draw remains the default graphical tool."); }}>⌨ Exact input</button>
       <button aria-pressed={propertyPanelOpen} className={propertyPanelOpen ? "active-tool" : ""} onClick={() => setPropertyPanelOpen((current) => !current)}>⌖ Property</button>
       <button aria-pressed={takeoffPanelOpen} className={takeoffPanelOpen ? "active-tool" : ""} onClick={() => setTakeoffPanelOpen((current) => !current)}>▦ Materials</button>
       <span className="toolbar-spacer" />
@@ -726,6 +740,7 @@ export default function App() {
           <div className="capture-help"><strong>Desktop test flow</strong><span><b>Capture map tab:</b> choose the open Acres or KGIS tab in the browser picker.</span><span><b>Paste image:</b> copy a screenshot, return here, and paste it directly. On Mac use Control–Shift–Command–4; on Windows use Windows–Shift–S.</span></div>
           {referenceBackground && <div className="reference-upload"><span title={referenceBackground.name}>Using: {referenceBackground.name}</span></div>}
           {referenceBackground && <>
+            <div className={`calibration-status${referenceBackground.calibrated ? " complete" : " required"}`} role="status"><strong>{referenceBackground.calibrated ? "✓ Scale calibrated" : "Calibration required before drawing"}</strong><span>{referenceBackground.calibrated ? "Fence drawing is unlocked." : "Enter one known real-world distance and mark its two endpoints on the image."}</span></div>
             <div className="layer-controls" aria-label="Visible plan layers">
               <strong>Visible layers</strong>
               {(["reference", "grid", "house", "dimensions"] as const).map((layer) => <label key={layer}><input type="checkbox" checked={layers[layer]} onChange={() => setLayers((current) => ({ ...current, [layer]: !current[layer] }))} /><span>{layer === "reference" ? "Reference image" : layer === "dimensions" ? "Measurements" : `${layer[0].toUpperCase()}${layer.slice(1)}`}</span></label>)}
@@ -742,10 +757,10 @@ export default function App() {
             </div>
             <div className="house-trace-editor">
               <div><strong>Straighten from the house</strong><span>After calibration, mark four house corners. The first wall becomes horizontal and creates the house footprint.</span></div>
-              <button className={mode === "trace-house" ? "active-tool" : "primary"} disabled={referenceBackground.locked || design.points.length > 0} onClick={() => { if (mode === "trace-house") { setHouseTracePoints([]); setMode("select"); setNotice("House tracing canceled."); } else startHouseTrace(); }}>{mode === "trace-house" ? `Cancel tracing · ${houseTracePoints.length}/4` : "Trace 4 house corners"}</button>
+              <button className={mode === "trace-house" ? "active-tool" : "primary"} disabled={referenceBackground.locked || !referenceBackground.calibrated || design.points.length > 0} onClick={() => { if (mode === "trace-house") { setHouseTracePoints([]); setMode("select"); setNotice("House tracing canceled."); } else startHouseTrace(); }}>{mode === "trace-house" ? `Cancel tracing · ${houseTracePoints.length}/4` : "Trace 4 house corners"}</button>
               {design.points.length > 0 && <small>Available before fence points are drawn so straightening cannot misalign existing measurements.</small>}
             </div>
-            <div className="reference-actions"><button disabled={referenceBackground.locked} onClick={fitReference}>Fit image to view</button><button aria-pressed={referenceBackground.locked} className={referenceBackground.locked ? "active-tool" : ""} onClick={() => setReferenceBackground({ ...referenceBackground, locked: !referenceBackground.locked })}>{referenceBackground.locked ? "🔒 Image locked" : "🔓 Lock image"}</button><button className="danger" onClick={() => { setReferenceBackground(null); saveLocalReference(localStorage, null); setCalibrationPoints([]); setHouseTracePoints([]); if (mode === "calibrate" || mode === "trace-house") setMode("select"); setNotice("Local reference image removed. Fence measurements were not changed."); }}>Remove image</button></div>
+            <div className="reference-actions"><button disabled={referenceBackground.locked} onClick={fitReference}>Fit image to view</button><button disabled={!referenceBackground.calibrated} aria-pressed={referenceBackground.locked} className={referenceBackground.locked ? "active-tool" : ""} onClick={() => setReferenceBackground({ ...referenceBackground, locked: !referenceBackground.locked })}>{referenceBackground.locked ? "🔒 Image locked" : "🔓 Lock image"}</button><button className="danger" onClick={() => { setReferenceBackground(null); saveLocalReference(localStorage, null); setCalibrationPoints([]); setHouseTracePoints([]); if (mode === "calibrate" || mode === "trace-house") setMode("select"); setNotice("Local reference image removed. Fence measurements were not changed."); }}>Remove image</button></div>
           </>}
         </div>
         <small>Reference imagery and GIS lines are not a boundary survey. Google stays a separate viewer. Captured images never leave this browser, are compressed for local use, and are saved with Save local so the design can be reopened on this same device. They are never included in fence totals.</small>
@@ -822,12 +837,13 @@ export default function App() {
             const dimensionText = segment.kind === "gate" ? `${segment.gateType === "double" ? "DOUBLE" : "SINGLE"} GATE · ${label}` : label;
             const dimensionPosition = dimensionPositions.get(segment.id) ?? { xMm: midX, yMm: midY };
             const dimensionWidth = Math.max(1_520, dimensionText.length * 180) * dimensionScale;
+            const gateReference = selected && segment.kind === "gate" ? selectedGateRun : selected && gateEditorOpen ? { postA: start, postB: end } : null;
             return <g key={segment.id} className={`segment ${segment.kind}${selected ? " selected" : ""}`} onPointerDown={(event) => { if (mode === "select" && !event.metaKey) { event.stopPropagation(); selectSegment(segment.id, toPlanRaw(event.clientX, event.clientY)); } }} role="button" tabIndex={0} onKeyDown={(event) => { if (mode === "select" && (event.key === "Enter" || event.key === " ")) selectSegment(segment.id); }}>
               <line className="segment-hit" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
               <line className="segment-line" x1={start.xMm} y1={start.yMm} x2={end.xMm} y2={end.yMm} />
-              {selected && segment.kind === "fence" && gateEditorOpen && <g className="gate-reference-posts" pointerEvents="none" aria-label="Gate reference posts">
-                <g transform={`translate(${start.xMm} ${start.yMm})`}><circle r={330 * dimensionScale} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: 300 * dimensionScale }}>A</text></g>
-                <g transform={`translate(${end.xMm} ${end.yMm})`}><circle r={330 * dimensionScale} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: 300 * dimensionScale }}>B</text></g>
+              {gateReference && <g className="gate-reference-posts" pointerEvents="none" aria-label="Editable gate reference posts">
+                <g transform={`translate(${gateReference.postA.xMm} ${gateReference.postA.yMm})`}><circle r={330 * dimensionScale} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: 300 * dimensionScale }}>A</text></g>
+                <g transform={`translate(${gateReference.postB.xMm} ${gateReference.postB.yMm})`}><circle r={330 * dimensionScale} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: 300 * dimensionScale }}>B</text></g>
               </g>}
               {layers.dimensions && <g className="dimension"><line className="dimension-leader" x1={midX} y1={midY} x2={dimensionPosition.xMm} y2={dimensionPosition.yMm} style={{ strokeWidth: 26 * dimensionScale }} /><g transform={`translate(${dimensionPosition.xMm} ${dimensionPosition.yMm})`}><rect x={-dimensionWidth / 2} y={-260 * dimensionScale} width={dimensionWidth} height={520 * dimensionScale} rx={180 * dimensionScale} style={{ strokeWidth: 28 * dimensionScale }} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: (segment.kind === "gate" ? 270 : 310) * dimensionScale }}>{dimensionText}</text></g></g>}
             </g>;
@@ -888,11 +904,9 @@ export default function App() {
         {selectedSegment && <div>
           <h2>{selectedSegment.kind === "gate" ? `${selectedSegment.gateType === "double" ? "Double" : "Single"} gate` : "Fence run"}</h2>
           <div className="length-readout">{formatFeetInches(segmentLengthMm(design, selectedSegment))}</div>
-          {selectedSegment.kind === "gate" && <label className="select-field"><span>Gate style</span><select value={selectedSegment.gateType ?? "single"} onChange={(event) => commit(setGateType(design, selectedSegment.id, event.target.value as GateType), "Gate style updated.")}><option value="single">Single gate</option><option value="double">Double gate</option></select></label>}
-          <div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div>
-          <button className="primary wide" onClick={applyExactLength}>Apply exact length</button>
-          {selectedSegment.kind === "fence" && <>
-            <button className="primary wide" onClick={() => { setGateEditorOpen((current) => !current); setNotice("The gate will stay on this straight run. Choose its details and position."); }}>{gateEditorOpen ? "Cancel add gate" : "＋ Add gate to this run"}</button>
+          {selectedSegment.kind === "fence" && <><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyExactLength}>Apply exact length</button></>}
+          <>
+            <button className="primary wide" onClick={() => { const opening = !gateEditorOpen; if (opening && selectedSegment.kind === "gate") { if (!selectedGateRun) { setNotice("This saved gate is no longer on one straight editable run. Restore it to fence intent, then place the gate again."); return; } const width = measurementFields(segmentLengthMm(design, selectedSegment)); const offset = measurementFields(selectedGateRun.offsetFromPostAMm); setGateTypeChoice(selectedSegment.gateType ?? "single"); setGateFeet(width.feet); setGateInches(width.inches); setGateReferencePost("post-a"); setGateOffsetFeet(offset.feet); setGateOffsetInches(offset.inches); } setGateEditorOpen(opening); setNotice(opening ? "Post A and Post B remain marked while you edit this gate's width and location." : "Gate editing canceled."); }}>{gateEditorOpen ? "Cancel gate editing" : selectedSegment.kind === "gate" ? "✎ Edit gate width and location" : "＋ Add gate to this run"}</button>
             {gateEditorOpen && <div className="gate-editor">
               <label><span>Gate style</span><select aria-label="Gate style" value={gateType} onChange={(event) => setGateTypeChoice(event.target.value as GateType)}><option value="single">Single gate</option><option value="double">Double gate</option></select></label>
               <h3 className="field-heading">Total gate width</h3>
@@ -900,13 +914,13 @@ export default function App() {
               <fieldset className="gate-reference-selector"><legend>Measure gate location from</legend><button type="button" aria-pressed={gateReferencePost === "post-a"} className={gateReferencePost === "post-a" ? "active" : ""} onClick={() => setGateReferencePost("post-a")}>Post A</button><button type="button" aria-pressed={gateReferencePost === "post-b"} className={gateReferencePost === "post-b" ? "active" : ""} onClick={() => setGateReferencePost("post-b")}>Post B</button></fieldset>
               <h3 className="field-heading">Distance from {gateReferencePost === "post-a" ? "Post A" : "Post B"} to nearest gate edge</h3>
               <div className="exact-grid"><label><span>Feet</span><input aria-label={`Distance from ${gateReferencePost === "post-a" ? "Post A" : "Post B"} feet`} inputMode="numeric" type="number" min="0" max="1000" value={gateOffsetFeet} onChange={(event) => setGateOffsetFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label={`Distance from ${gateReferencePost === "post-a" ? "Post A" : "Post B"} inches`} inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={gateOffsetInches} onChange={(event) => setGateOffsetInches(event.target.value)} /></label></div>
-              <button className="primary wide" onClick={addGate}>Place gate on this run</button>
-              <small>Post A and Post B are marked on the plan. Measure from the selected post to the nearest gate edge. Switching posts changes only how this draft measurement is interpreted; the fence changes only after you place the gate.</small>
+              <button className="primary wide" onClick={addGate}>{selectedSegment.kind === "gate" ? "Save gate changes" : "Place gate on this run"}</button>
+              <small>Post A and Post B stay marked on the plan whenever this gate is selected. Measure from the selected post to the nearest gate edge. Switching posts changes only how this draft measurement is interpreted; geometry changes only when you save.</small>
             </div>}
-          </>}
+          </>
           <button className="wide" onClick={() => { setDimensionSideOverrides((current) => ({ ...current, [selectedSegment.id]: current[selectedSegment.id] === -1 ? 1 : -1 })); setNotice("Dimension label flipped to the other side of its run."); }}>↔ Flip dimension side</button>
           {dimensionSideOverrides[selectedSegment.id] !== undefined && <button className="wide" onClick={() => { setDimensionSideOverrides((current) => { const updated = { ...current }; delete updated[selectedSegment.id]; return updated; }); setNotice("Dimension label returned to automatic positioning."); }}>Auto-position dimension</button>}
-          {selectedSegment.kind === "gate" && <><div className="gate-position-readout"><span>Fence from previous post</span><strong>{formatFeetInches(selectedGateOffsetMm)}</strong></div><button className="wide" onClick={() => commit(setSegmentKind(design, selectedSegment.id, "fence"), "Gate opening restored to fence intent.")}>Mark as fence</button></>}
+          {selectedSegment.kind === "gate" && selectedGateRun && <><div className="gate-position-readout"><span>Post A to nearest gate edge</span><strong>{formatFeetInches(selectedGateRun.offsetFromPostAMm)}</strong><span>Post B to nearest gate edge</span><strong>{formatFeetInches(selectedGateRun.runLengthMm - selectedGateRun.offsetFromPostAMm - segmentLengthMm(design, selectedSegment))}</strong></div><button className="wide" onClick={() => commit(setSegmentKind(design, selectedSegment.id, "fence"), "Gate opening restored to fence intent.")}>Mark as fence</button></>}
           <small>Labels space themselves automatically and avoid unrelated runs when space allows. Gate placement never changes the selected run&apos;s bearing or total measured length. Gate intent supplies only the preliminary Black Aluminum opening and hardware counts; it does not choose products, labor, or pricing.</small>
         </div>}
         <div className="notice" role="status">{notice}</div>

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, gateOffsetFromReferenceMm, insertGateAtPoint, insertGateOnSegment, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
+  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, gateOffsetFromReferenceMm, gateRunForSegment, insertGateAtPoint, insertGateOnSegment, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
   normalizeDesign, pointById, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine,
-  stableDesignJson, totalLengthMm,
+  stableDesignJson, totalLengthMm, updateGateOnRun,
 } from "../src/model";
 
 const rectangleCorner = () => {
@@ -282,6 +282,39 @@ describe("deterministic fence geometry", () => {
     const edited = insertGateOnSegment(design, remainder.id, width, gateOffsetFromReferenceMm(remainderLength, width, feetAndInchesToMm(3, 0), "post-b"), "double", "point-5", "point-6", "segment-4", "segment-5");
     expect(edited.segments.filter(({ kind }) => kind === "gate")).toHaveLength(2);
     expect(totalLengthMm(edited)).toBe(totalLengthMm(design));
+  });
+
+  it("keeps Post A and Post B stable while editing an existing gate's width and location", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: feetAndInchesToMm(24, 0), yMm: 0 }, "segment-1");
+    design = insertGateOnSegment(design, "segment-1", feetAndInchesToMm(4, 0), feetAndInchesToMm(8, 0), "single", "point-3", "point-4", "segment-2", "segment-3");
+    const before = gateRunForSegment(design, "segment-2");
+    const edited = updateGateOnRun(design, "segment-2", feetAndInchesToMm(6, 0), feetAndInchesToMm(15, 0), "double", "point-5", "point-6", "segment-4", "segment-5");
+    const after = gateRunForSegment(edited, "segment-2");
+    expect(after.postA).toEqual(before.postA); expect(after.postB).toEqual(before.postB);
+    expect(after.offsetFromPostAMm).toBe(feetAndInchesToMm(15, 0));
+    expect(segmentLengthMm(edited, edited.segments.find(({ id }) => id === "segment-2")!)).toBe(feetAndInchesToMm(6, 0));
+    expect(edited.segments.find(({ id }) => id === "segment-2")).toMatchObject({ gateType: "double" });
+    expect(totalLengthMm(edited)).toBe(totalLengthMm(design));
+    expect(edited.revision).toBe(design.revision + 1);
+  });
+
+  it("does not create a revision when existing gate facts are saved unchanged", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: feetAndInchesToMm(24, 0), yMm: 0 }, "segment-1");
+    design = insertGateOnSegment(design, "segment-1", feetAndInchesToMm(4, 0), feetAndInchesToMm(8, 0), "single", "point-3", "point-4", "segment-2", "segment-3");
+    expect(updateGateOnRun(design, "segment-2", feetAndInchesToMm(4, 0), feetAndInchesToMm(8, 0), "single", "point-5", "point-6", "segment-4", "segment-5")).toBe(design);
+  });
+
+  it("edits an existing gate to exact contact with either labeled post", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: feetAndInchesToMm(20, 0), yMm: 0 }, "segment-1");
+    design = insertGateOnSegment(design, "segment-1", feetAndInchesToMm(4, 0), feetAndInchesToMm(8, 0), "single", "point-3", "point-4", "segment-2", "segment-3");
+    const atA = updateGateOnRun(design, "segment-2", feetAndInchesToMm(4, 0), 0, "single", "point-5", "point-6", "segment-4", "segment-5");
+    expect(gateRunForSegment(atA, "segment-2").offsetFromPostAMm).toBe(0);
+    const atB = updateGateOnRun(design, "segment-2", feetAndInchesToMm(4, 0), feetAndInchesToMm(16, 0), "single", "point-5", "point-6", "segment-4", "segment-5");
+    expect(gateRunForSegment(atB, "segment-2").offsetFromPostAMm).toBe(feetAndInchesToMm(16, 0));
+    expect(() => updateGateOnRun(design, "segment-2", feetAndInchesToMm(6, 0), feetAndInchesToMm(15, 0), "single", "point-5", "point-6", "segment-4", "segment-5")).toThrow(/must fit/);
   });
 
   it("inserts a measured double gate from a selected point and preserves the original total", () => {

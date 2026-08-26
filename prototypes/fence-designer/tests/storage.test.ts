@@ -51,10 +51,17 @@ describe("local persistence", () => {
       name: "Captured map tab",
       opacity: 0.72,
       locked: true,
+      calibrated: true,
       transform: { xMm: 10, yMm: 20, widthMm: 30_000, heightMm: 20_000, rotationDegrees: 4.5 },
     } as const;
     saveLocalReference(storage, reference);
     expect(loadLocalReference(storage)).toEqual(reference);
+  });
+
+  it("loads legacy references as uncalibrated so drawing cannot trust an unknown scale", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(REFERENCE_STORAGE_KEY, JSON.stringify({ schemaVersion: 1, src: "data:image/jpeg;base64,ZmFrZQ==", name: "Old reference", opacity: 0.7, locked: false, transform: { xMm: 0, yMm: 0, widthMm: 10_000, heightMm: 5_000, rotationDegrees: 0 } }));
+    expect(loadLocalReference(storage)).toMatchObject({ calibrated: false, locked: false });
   });
 
   it("removes a saved reference without changing the design key", () => {
