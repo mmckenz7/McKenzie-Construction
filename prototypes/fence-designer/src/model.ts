@@ -532,12 +532,42 @@ export function setSegmentLengthMm(design: FenceDesign, segmentId: string, lengt
   if (!Number.isSafeInteger(lengthMm) || lengthMm < 25 || lengthMm > 304_800) throw new RangeError("Segment length must be from 1 inch through 1,000 feet.");
   const segment = design.segments.find(({ id }) => id === segmentId);
   if (!segment) throw new TypeError("Segment does not exist.");
+  if (segmentLengthMm(design, segment) === lengthMm) return design;
+  const path = fencePathForPoint(design, segment.fromPointId);
+  const segmentIndex = path.segments.findIndex(({ id }) => id === segment.id);
+  if (segmentIndex < 0
+    || path.points[segmentIndex]?.id !== segment.fromPointId
+    || path.points[segmentIndex + 1]?.id !== segment.toPointId) {
+    throw new TypeError("The selected segment is not in a valid authored fence line.");
+  }
+  const followingPoints = path.points.slice(segmentIndex + 1);
+  if (followingPoints.some(({ id }) => isPointAttached(design, id))) {
+    throw new RangeError("This fence line is closed or connected after the selected span. Open that connection before editing its exact length.");
+  }
   const start = pointById(design, segment.fromPointId);
   const end = pointById(design, segment.toPointId);
   const current = Math.hypot(end.xMm - start.xMm, end.yMm - start.yMm);
-  const ux = current === 0 ? 1 : (end.xMm - start.xMm) / current;
-  const uy = current === 0 ? 0 : (end.yMm - start.yMm) / current;
-  return movePoint(design, end.id, Math.round(start.xMm + ux * lengthMm), Math.round(start.yMm + uy * lengthMm));
+  if (current === 0) throw new RangeError("The selected span needs a measurable bearing before setting its exact length.");
+  const idealX = start.xMm + (end.xMm - start.xMm) / current * lengthMm;
+  const idealY = start.yMm + (end.yMm - start.yMm) / current * lengthMm;
+  const candidates: { xMm: number; yMm: number; error: number }[] = [];
+  for (let xOffset = -2; xOffset <= 2; xOffset += 1) {
+    for (let yOffset = -2; yOffset <= 2; yOffset += 1) {
+      const xMm = Math.round(idealX) + xOffset; const yMm = Math.round(idealY) + yOffset;
+      if (Math.round(Math.hypot(xMm - start.xMm, yMm - start.yMm)) !== lengthMm) continue;
+      candidates.push({ xMm, yMm, error: (xMm - idealX) ** 2 + (yMm - idealY) ** 2 });
+    }
+  }
+  const nextEnd = candidates.sort((first, second) => first.error - second.error || first.xMm - second.xMm || first.yMm - second.yMm)[0];
+  if (!nextEnd) throw new RangeError("That exact length cannot be represented on the current whole-millimeter bearing.");
+  const deltaX = nextEnd.xMm - end.xMm; const deltaY = nextEnd.yMm - end.yMm;
+  const followingPointIds = new Set(followingPoints.map(({ id }) => id));
+  const next = revise(design, { points: design.points.map((point) => followingPointIds.has(point.id)
+    ? Object.freeze({ ...point, xMm: point.xMm + deltaX, yMm: point.yMm + deltaY })
+    : point) });
+  const edited = next.segments.find(({ id }) => id === segment.id)!;
+  if (segmentLengthMm(next, edited) !== lengthMm) throw new RangeError("The exact length edit could not be completed without changing later geometry.");
+  return next;
 }
 
 export function setSegmentLengthKeepingEndMm(design: FenceDesign, segmentId: string, lengthMm: number, lockPreviousLength: boolean): FenceDesign {

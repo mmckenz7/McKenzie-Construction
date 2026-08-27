@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_DESIGN, addPoint, feetAndInchesToMm, gateOffsetFromReferenceMm, insertGateOnSegment } from "../src/model";
+import { EMPTY_DESIGN, addPoint, feetAndInchesToMm, gateOffsetFromReferenceMm, insertGateOnSegment, setSegmentLengthMm, stableDesignJson } from "../src/model";
 import { LEGACY_STORAGE_KEY, loadLocalDesign, loadLocalReference, PREVIOUS_STORAGE_KEY, REFERENCE_STORAGE_KEY, saveLocalDesign, saveLocalReference, STORAGE_KEY } from "../src/storage";
 
 class MemoryStorage {
@@ -26,6 +26,20 @@ describe("local persistence", () => {
     saveLocalDesign(storage, design);
     expect(loadLocalDesign(storage)).toEqual(design);
     expect(storage.values.get(STORAGE_KEY)).not.toMatch(/post-a|post-b|referencePost/);
+  });
+
+  it("replays and reloads a translated authored path deterministically", () => {
+    const storage = new MemoryStorage();
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: 6_096, yMm: 0 }, "segment-1");
+    design = addPoint(design, { id: "point-3", xMm: 6_096, yMm: 9_144 }, "segment-2");
+    design = addPoint(design, { id: "point-4", xMm: 12_166, yMm: 9_144 }, "segment-3");
+    const edited = setSegmentLengthMm(design, "segment-2", feetAndInchesToMm(33, 0));
+    const replayed = setSegmentLengthMm(design, "segment-2", feetAndInchesToMm(33, 0));
+    expect(stableDesignJson(replayed)).toBe(stableDesignJson(edited));
+    saveLocalDesign(storage, edited);
+    expect(loadLocalDesign(storage)).toEqual(edited);
+    expect(stableDesignJson(loadLocalDesign(storage)!)).toBe(stableDesignJson(edited));
   });
 
   it("returns null when no local design exists", () => {

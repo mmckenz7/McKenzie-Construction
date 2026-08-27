@@ -11,6 +11,14 @@ const rectangleCorner = () => {
   return addPoint(design, { id: "point-3", xMm: 3_048, yMm: 3_048 }, "segment-2");
 };
 
+const authoredFieldLine = () => {
+  let design = addPoint(EMPTY_DESIGN, { id: "field-1", xMm: 0, yMm: 0 });
+  design = addPoint(design, { id: "field-2", xMm: 6_096, yMm: 0 }, "field-segment-1");
+  design = addPoint(design, { id: "field-3", xMm: 6_096, yMm: 9_144 }, "field-segment-2");
+  design = addPoint(design, { id: "field-4", xMm: 12_166, yMm: 9_144 }, "field-segment-3");
+  return addPoint(design, { id: "field-5", xMm: 12_166, yMm: 12_192 }, "field-segment-4");
+};
+
 describe("deterministic fence geometry", () => {
   it("rounds each Euclidean segment once to integer millimeters and sums those values", () => {
     const design = rectangleCorner();
@@ -20,13 +28,92 @@ describe("deterministic fence geometry", () => {
     expect(formatFeetInches(totalLengthMm(design))).toBe("20′ 0″");
   });
 
-  it("moves the selected segment end along the existing bearing for exact edits", () => {
+  it("keeps the authored start and bearing fixed while translating every later point", () => {
     const design = rectangleCorner();
     const edited = setSegmentLengthMm(design, "segment-1", feetAndInchesToMm(12, 6));
     expect(edited.points[0]).toMatchObject({ xMm: 0, yMm: 0 });
     expect(edited.points[1]).toMatchObject({ xMm: 3_810, yMm: 0 });
+    expect(edited.points[2]).toMatchObject({ xMm: 3_810, yMm: 3_048 });
     expect(segmentLengthMm(edited, edited.segments[0])).toBe(3_810);
-    expect(segmentLengthMm(edited, edited.segments[1])).toBe(Math.round(Math.hypot(762, 3_048)));
+    expect(segmentLengthMm(edited, edited.segments[1])).toBe(3_048);
+    expect(edited.revision).toBe(design.revision + 1);
+  });
+
+  it("edits first, middle, and last authored spans without changing any following span vectors", () => {
+    const design = authoredFieldLine();
+    const first = setSegmentLengthMm(design, "field-segment-1", 7_000);
+    expect(first.points[0]).toEqual(design.points[0]);
+    expect(first.points.slice(1).map((point, index) => ({ x: point.xMm - design.points[index + 1].xMm, y: point.yMm - design.points[index + 1].yMm })))
+      .toEqual(Array(4).fill({ x: 904, y: 0 }));
+    expect(first.segments.slice(1).map((segment) => segmentLengthMm(first, segment)))
+      .toEqual(design.segments.slice(1).map((segment) => segmentLengthMm(design, segment)));
+
+    const middle = setSegmentLengthMm(design, "field-segment-2", feetAndInchesToMm(33, 0));
+    expect(middle.points.slice(0, 2)).toEqual(design.points.slice(0, 2));
+    expect(middle.points.slice(2).map((point, index) => ({ x: point.xMm - design.points[index + 2].xMm, y: point.yMm - design.points[index + 2].yMm })))
+      .toEqual(Array(3).fill({ x: 0, y: 914 }));
+    expect(segmentLengthMm(middle, middle.segments[2])).toBe(segmentLengthMm(design, design.segments[2]));
+    expect(segmentLengthMm(middle, middle.segments[3])).toBe(segmentLengthMm(design, design.segments[3]));
+
+    const last = setSegmentLengthMm(design, "field-segment-4", 4_000);
+    expect(last.points.slice(0, 4)).toEqual(design.points.slice(0, 4));
+    expect(segmentLengthMm(last, last.segments[3])).toBe(4_000);
+  });
+
+  it("preserves two downstream gates, their offsets, and all later geometry", () => {
+    let design = authoredFieldLine();
+    design = insertGateOnSegment(design, "field-segment-2", 1_000, 1_500, "single", "gate-1-start", "gate-1-end", "gate-segment-1", "gate-remainder-1");
+    design = insertGateOnSegment(design, "field-segment-3", 2_000, 2_500, "double", "gate-2-start", "gate-2-end", "gate-segment-2", "gate-remainder-2");
+    const gateFacts = [gateRunForSegment(design, "gate-segment-1"), gateRunForSegment(design, "gate-segment-2")];
+    const pathBefore = fencePathForPoint(design, "field-1");
+    const edited = setSegmentLengthMm(design, "field-segment-1", 7_000);
+    const pathAfter = fencePathForPoint(edited, "field-1");
+
+    expect(pathAfter.segments.slice(1).map((segment) => segmentLengthMm(edited, segment)))
+      .toEqual(pathBefore.segments.slice(1).map((segment) => segmentLengthMm(design, segment)));
+    ["gate-segment-1", "gate-segment-2"].forEach((gateId, index) => {
+      const after = gateRunForSegment(edited, gateId);
+      expect(after.runLengthMm).toBe(gateFacts[index].runLengthMm);
+      expect(after.offsetFromPostAMm).toBe(gateFacts[index].offsetFromPostAMm);
+    });
+    expect(edited.segments.filter(({ kind }) => kind === "gate").map(({ gateType }) => gateType)).toEqual(["single", "double"]);
+  });
+
+  it("isolates separate fence lines and supports reverse-bearing authored edits", () => {
+    let design = authoredFieldLine();
+    design = startFenceLine(design, { id: "other-1", xMm: 20_000, yMm: 20_000 });
+    design = addPoint(design, { id: "other-2", xMm: 15_000, yMm: 20_000 }, "other-segment");
+    const otherBefore = fencePathForPoint(design, "other-1").points;
+    const reverse = setSegmentLengthMm(design, "other-segment", 7_000);
+    expect(pointById(reverse, "other-1")).toMatchObject({ xMm: 20_000, yMm: 20_000 });
+    expect(pointById(reverse, "other-2")).toMatchObject({ xMm: 13_000, yMm: 20_000 });
+    const edited = setSegmentLengthMm(reverse, "field-segment-2", 10_000);
+    expect(fencePathForPoint(edited, "other-1").points).toEqual(fencePathForPoint(reverse, "other-1").points);
+    expect(otherBefore[0]).toEqual(pointById(edited, "other-1"));
+  });
+
+  it("returns the same design for a no-op and fails closed for invalid or connected downstream geometry", () => {
+    const design = authoredFieldLine();
+    expect(setSegmentLengthMm(design, "field-segment-2", 9_144)).toBe(design);
+    expect(() => setSegmentLengthMm(design, "missing", 1_000)).toThrow(/does not exist/);
+    let zero = addPoint(EMPTY_DESIGN, { id: "zero-1", xMm: 0, yMm: 0 });
+    zero = addPoint(zero, { id: "zero-2", xMm: 0, yMm: 0 }, "zero-segment");
+    expect(() => setSegmentLengthMm(zero, "zero-segment", 1_000)).toThrow(/measurable bearing/);
+
+    let closed = setHouseReference(EMPTY_DESIGN, 10_000, 8_000);
+    closed = addPoint(closed, { id: "closed-1", xMm: 0, yMm: 2_000 });
+    closed = addPoint(closed, { id: "closed-2", xMm: -3_000, yMm: 2_000 }, "closed-segment-1");
+    closed = addPoint(closed, { id: "closed-3", xMm: 0, yMm: 6_000 }, "closed-segment-2");
+    expect(() => setSegmentLengthMm(closed, "closed-segment-1", 4_000)).toThrow(/closed or connected/);
+
+    expect(() => normalizeDesign({
+      ...EMPTY_DESIGN,
+      points: [{ id: "cycle-1", xMm: 0, yMm: 0 }, { id: "cycle-2", xMm: 1_000, yMm: 0 }],
+      segments: [
+        { id: "cycle-a", fromPointId: "cycle-1", toPointId: "cycle-2", kind: "fence" },
+        { id: "cycle-b", fromPointId: "cycle-2", toPointId: "cycle-1", kind: "fence" },
+      ],
+    })).toThrow(/ordered paths|cycle/);
   });
 
   it("solves a new angle while keeping a segment end and its preceding length fixed", () => {

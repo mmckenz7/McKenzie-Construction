@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createHistory, pushHistory, redo, undo } from "../src/history";
-import { EMPTY_DESIGN, addPoint, feetAndInchesToMm, gateOffsetFromReferenceMm, insertGateOnSegment } from "../src/model";
+import { EMPTY_DESIGN, addPoint, feetAndInchesToMm, gateOffsetFromReferenceMm, insertGateOnSegment, setSegmentLengthMm } from "../src/model";
 
 describe("undo and redo", () => {
   it("restores deterministic whole-document states and clears redo after a new edit", () => {
@@ -24,5 +24,18 @@ describe("undo and redo", () => {
     const history = pushHistory(createHistory(design), placed);
     expect(undo(history).present).toBe(design);
     expect(redo(undo(history)).present).toBe(placed);
+  });
+
+  it("undoes and redoes an authored exact-length translation as one revision", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: 6_096, yMm: 0 }, "segment-1");
+    design = addPoint(design, { id: "point-3", xMm: 6_096, yMm: 9_144 }, "segment-2");
+    design = addPoint(design, { id: "point-4", xMm: 12_166, yMm: 9_144 }, "segment-3");
+    const edited = setSegmentLengthMm(design, "segment-2", feetAndInchesToMm(33, 0));
+    const history = pushHistory(createHistory(design), edited);
+    expect(history.past).toHaveLength(1);
+    expect(undo(history).present).toBe(design);
+    expect(redo(undo(history)).present).toBe(edited);
+    expect(edited.revision).toBe(design.revision + 1);
   });
 });

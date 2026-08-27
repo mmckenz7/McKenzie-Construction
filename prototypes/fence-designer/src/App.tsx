@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
 import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform, straightenBackgroundFromHouseCorners, type PlanPosition, type ReferenceBackground } from "./background";
 import {
-  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, gateOffsetFromReferenceMm, gateRunForSegment, insertGateOnSegment, isPointAttached, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
-  pointById, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setHouseReferenceAt, setSegmentKind, setSegmentLengthKeepingEndMm, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm, updateGateOnRun,
+  EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, gateOffsetFromReferenceMm, gateRunForSegment, insertGateOnSegment, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
+  pointById, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setHouseReferenceAt, setSegmentKind, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm, updateGateOnRun,
   type FenceDesign, type GateReferencePost, type GateType,
 } from "./model";
 import { acquireBestGps, formatGpsAccuracy, gpsOriginAt, projectGpsFix, projectGpsLeg, type GpsFix, type GpsOrigin } from "./gps";
@@ -443,9 +443,7 @@ export default function App() {
     if (!selectedSegment) return;
     try {
       const result = editSegmentToExactLength(selectedSegment.id, feet, inches);
-      commit(result.next, result.anchoredAtBothEnds
-        ? `Span set to ${formatFeetInches(result.length)}. Both line connections and the other measured runs stayed fixed while the angles adjusted.`
-        : result.endOnFixedConnection ? `Span set to ${formatFeetInches(result.length)} while its connection stayed fixed.` : `Span set to ${formatFeetInches(result.length)}.`);
+      commit(result.next, `Span set to ${formatFeetInches(result.length)}. Its authored start and bearing stayed fixed; every later point on this fence line moved together so following runs and gates kept their geometry.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid length."); }
   };
   const addGate = () => {
@@ -472,14 +470,7 @@ export default function App() {
     const segment = design.segments.find(({ id }) => id === segmentId);
     if (!segment) throw new TypeError("That measured run no longer exists.");
     const length = feetAndInchesToMm(Number(exactFeet), Number(exactInches));
-    const end = pointById(design, segment.toPointId);
-    const path = fencePathForPoint(design, segment.fromPointId);
-    const endOnFixedConnection = isPointAttached(design, end.id);
-    const anchoredAtBothEnds = path.points.length >= 2 && isPointAttached(design, path.points[0].id) && isPointAttached(design, path.points.at(-1)!.id);
-    const next = anchoredAtBothEnds
-      ? solvePathBetweenFixedEndsMm(design, path.points.at(-1)!, { segmentId, lengthMm: length })
-      : endOnFixedConnection ? setSegmentLengthKeepingEndMm(design, segmentId, length, lengthLockEnabled) : setSegmentLengthMm(design, segmentId, length);
-    return { next, length, anchoredAtBothEnds, endOnFixedConnection };
+    return { next: setSegmentLengthMm(design, segmentId, length), length };
   };
   const cancelGpsLock = (message = "GPS lock canceled. Tap again when you are ready.") => {
     gpsRequestId.current += 1;

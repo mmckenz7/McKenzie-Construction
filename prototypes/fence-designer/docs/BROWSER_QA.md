@@ -135,3 +135,11 @@ Repository validation note: the supported webpack production build completed suc
 119. Entered a 4′ 0″ single gate exactly 3′ 0″ from Post B. The committed plan remained collinear at 17′ 0″ fence + 4′ 0″ gate + 3′ 0″ fence, retained the exact 24′ 0″ total, and advanced exactly once to revision 3.
 120. Undid and redid the gate insertion, then saved it locally, undid it, and loaded the saved design. Each path restored the same canonical gate geometry without persisting a Post A/Post B editor choice.
 121. At 390 × 844, both reference buttons measured 145 × 46 px, both endpoint markers remained visible, document width stayed at 375 px with no horizontal overflow, and browser warnings/errors remained empty. The selector is a native fieldset with native buttons, visible pressed state, explicit input labels, and normal keyboard semantics.
+
+## Authored exact-length correction QA — 2026-08-26
+
+122. Reproduced the field-beta layout at 390 × 844 with exact 20′ 0″, 30′ 0″, and 19′ 11″ authored runs. The initial combined total was 69′ 11″.
+123. Selected the middle run with the keyboard-accessible plan control, entered 33′ 0″, and confirmed the selected run retained its authored start and bearing while its endpoint and every later point translated together.
+124. Confirmed the following run remained exactly 19′ 11″ and the combined total became 72′ 11″ instead of corrupting the following angle or length.
+125. Undo restored 69′ 11″ and the 30′ 0″ middle run in one step; Redo restored 72′ 11″ and the 33′ 0″ correction in one step.
+126. At 390 × 844 the document width remained exactly 390 px, primary controls remained 48 px high, the two exact-length fields were 46 px high, and the three span-editor actions were 327 × 44 px. Browser warnings/errors remained empty.
