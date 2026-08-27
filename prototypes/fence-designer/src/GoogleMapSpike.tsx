@@ -56,6 +56,7 @@ export default function GoogleMapSpike({ apiKey, design, startsSeparateLine, onP
   const [addressCandidates, setAddressCandidates] = useState<readonly AddressSearchCandidate[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [addressSearching, setAddressSearching] = useState(false);
+  const [addressStatus, setAddressStatus] = useState("Enter an address, find it, then confirm the matching property before the map moves.");
   const [message, setMessage] = useState("The Google renderer is disposable. Fence measurements remain in McKenzie integer millimeters.");
   const placeRef = useRef(onPlacePoint); const moveRef = useRef(onMovePoint); const sketchRef = useRef(sketchEnabled);
   placeRef.current = onPlacePoint; moveRef.current = onMovePoint; sketchRef.current = sketchEnabled; registrationRef.current = registration;
@@ -101,23 +102,26 @@ export default function GoogleMapSpike({ apiKey, design, startsSeparateLine, onP
   const searchAddress = async () => {
     if (!apiKey) return;
     setAddressSearching(true); setSelectedAddressId(null); setAddressCandidates([]);
+    setAddressStatus("Finding matching addresses…");
     try {
       const candidates = await new GoogleAddressSearchAdapter(apiKey).search(addressQuery);
       setAddressCandidates(candidates);
-      if (!candidates.length) setMessage("Google did not find that address. Try including the city, state, and ZIP code.");
-      else setMessage("Choose the matching address, then confirm before the map moves. The address is not saved in the Fence design.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Address search is unavailable."); }
+      setSelectedAddressId(candidates[0]?.resultId ?? null);
+      if (!candidates.length) setAddressStatus("Google did not find that address. Try including the city, state, and ZIP code.");
+      else setAddressStatus("Best match selected. Check the address, then press Move map to selected address.");
+    } catch (error) { setAddressStatus(error instanceof Error ? error.message : "Address search is unavailable."); }
     finally { setAddressSearching(false); }
   };
 
   const confirmAddress = () => {
     const candidate = addressCandidates.find(({ resultId }) => resultId === selectedAddressId);
     const adapter = adapterRef.current;
-    if (!candidate || !adapter) { setMessage("Choose a matching address after the map is ready."); return; }
+    if (!candidate || !adapter) { setAddressStatus("Choose a matching address after the map is ready."); return; }
     const confirmed = confirmAddressSelection(beginAddressSelection(candidate), candidate.resultId, new Date().toISOString());
     const current = adapter.currentViewport();
     adapter.setViewport({ ...current, center: confirmed.candidate.coordinate, zoom: "19" });
-    setMessage(`Map centered on the confirmed Google result: ${confirmed.candidate.displayLabel}. The address was not saved; place the Fence plan separately when ready.`);
+    setAddressStatus(`Map moved to ${confirmed.candidate.displayLabel}. The address was not saved.`);
+    setAddressCandidates([]); setSelectedAddressId(null);
   };
 
   const importParcel = async (file: File | undefined) => {
@@ -159,12 +163,13 @@ export default function GoogleMapSpike({ apiKey, design, startsSeparateLine, onP
     <p>Google is the live display surface only. Exact McKenzie lengths, gates, history, and takeoff remain authoritative and survive if this map is unavailable.</p>
     {!apiKey ? <div className="calibration-status required" role="status"><strong>Restricted Preview key not configured</strong><span>The adapter is installed but will not contact Google until the approved browser-restricted Maps JavaScript key is available in this non-Production environment.</span></div> : <>
       <form className="google-address-search" onSubmit={(event) => { event.preventDefault(); void searchAddress(); }}>
-        <label><span>Find property address</span><input value={addressQuery} maxLength={200} autoComplete="street-address" inputMode="search" placeholder="Street, city, state, ZIP" onChange={(event) => setAddressQuery(event.target.value)} /></label>
-        <button type="submit" disabled={addressSearching || !addressQuery.trim()}>{addressSearching ? "Searching…" : "Search address"}</button>
+        <label><span>Find property address</span><input value={addressQuery} maxLength={200} autoComplete="street-address" inputMode="search" placeholder="Street, city, state, ZIP" onChange={(event) => { setAddressQuery(event.target.value); setAddressCandidates([]); setSelectedAddressId(null); setAddressStatus("Press Find address, then confirm the matching property before the map moves."); }} /></label>
+        <button type="submit" disabled={addressSearching || !addressQuery.trim()}>{addressSearching ? "Finding…" : "Find address"}</button>
+        <span className="google-address-status" role="status">{addressStatus}</span>
       </form>
       {addressCandidates.length > 0 && <div className="google-address-results" aria-label="Google address matches">
         <fieldset><legend>Confirm the matching property</legend>{addressCandidates.map((candidate) => <label key={candidate.resultId}><input type="radio" name="google-address-result" value={candidate.resultId} checked={selectedAddressId === candidate.resultId} onChange={() => setSelectedAddressId(candidate.resultId)} /><span>{candidate.displayLabel}</span></label>)}</fieldset>
-        <button disabled={!selectedAddressId} onClick={confirmAddress}>Center map on confirmed address</button>
+        <button className="primary" disabled={!selectedAddressId} onClick={confirmAddress}>Move map to selected address</button>
         <small>Search sends the entered address to Google only when you press Search. The query and result are not saved in this design.</small>
       </div>}
       <div className="google-map-controls">

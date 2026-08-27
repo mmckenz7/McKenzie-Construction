@@ -70,6 +70,7 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .google-address-search { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 8px; align-items: end; padding: 12px; border: 1px solid #cbd6ce; border-radius: 10px; background: #fff; }
 .google-address-search label { display: grid; gap: 5px; color: #43564c; font-size: .78rem; font-weight: 800; }
 .google-address-search input { min-height: 48px; width: 100%; border: 1px solid #aebcb2; border-radius: 8px; padding: 9px 11px; color: #1e3228; background: #fff; }
+.google-address-status { grid-column: 1 / -1; color: #53675d; font-size: .78rem; line-height: 1.4; }
 .google-address-results { display: grid; gap: 9px; padding: 12px; border-left: 4px solid #5b826f; border-radius: 8px; background: #eef4ef; }
 .google-address-results fieldset { display: grid; gap: 7px; margin: 0; padding: 0; border: 0; }
 .google-address-results legend { margin-bottom: 6px; color: #294237; font-weight: 850; }
