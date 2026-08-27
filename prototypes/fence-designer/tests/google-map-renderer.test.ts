@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { GoogleMapRendererAdapter, type GoogleMapsRuntime } from "../src/google-map-renderer";
-import { normalizedMapCoordinate, type FenceDraftEditEvent, type FenceMapDisplayProjection } from "../src/map-contract";
+import { FenceGoogleMapRendererAdapter } from "../src/fence-map-renderer";
+import { GoogleReadOnlyMapPresentationAdapter, type GoogleMapsRuntime } from "../src/google-map-renderer";
+import type { FenceDraftEditEvent, FenceMapDisplayProjection } from "../src/map-contract";
+import { normalizedMapCoordinate, type MapPresentationInteraction, type MapPresentationScene } from "../src/map-presentation";
 
 class Listener { removed = false; constructor(readonly callback: (event?: unknown) => void) {} remove() { this.removed = true; } }
 class LatLng { constructor(private readonly latitude: number, private readonly longitude: number) {} lat() { return this.latitude; } lng() { return this.longitude; } }
@@ -32,6 +34,12 @@ class FakePolyline {
   constructor(options: Record<string, unknown>) { this.map = options.map as FakeMap; FakePolyline.instances.push(this); }
   setMap(map: FakeMap | null) { this.map = map; }
 }
+class FakePolygon {
+  static instances: FakePolygon[] = [];
+  map: FakeMap | null;
+  constructor(options: Record<string, unknown>) { this.map = options.map as FakeMap; FakePolygon.instances.push(this); }
+  setMap(map: FakeMap | null) { this.map = map; }
+}
 
 class FakeCircle {
   static instances: FakeCircle[] = [];
@@ -47,42 +55,59 @@ class FakeCircle {
   emit(name: string, event?: unknown) { this.listeners.get(name)?.callback(event); }
 }
 
-const runtime = { Map: FakeMap, Polyline: FakePolyline, Circle: FakeCircle } as unknown as GoogleMapsRuntime;
+const runtime = { Map: FakeMap, Polyline: FakePolyline, Polygon: FakePolygon, Circle: FakeCircle } as unknown as GoogleMapsRuntime;
 const coordinate = normalizedMapCoordinate("-83.9200000", "35.9600000");
 const second = normalizedMapCoordinate("-83.9199000", "35.9601000");
 const projection: FenceMapDisplayProjection = { revision: "fence-1", nodes: [{ id: "a", coordinate, role: "endpoint" }, { id: "b", coordinate: second, role: "corner" }], runs: [{ id: "run", kind: "fence", coordinates: [coordinate, second] }] };
+const style = { strokeColor: "#174f3c", strokeOpacity: 1, strokeWidth: 3, fillColor: "#ffffff", fillOpacity: 0.2 } as const;
+const scene: MapPresentationScene = { revision: "generic-1", points: [{ id: "point", coordinate, radiusMeters: 0.5, draggable: true, style }], polylines: [{ id: "line", coordinates: [coordinate, second], style }], polygons: [{ id: "area", rings: [[coordinate, second, normalizedMapCoordinate("-83.9198000", "35.9600000")]], style }] };
 
-describe("Google candidate renderer adapter", () => {
-  it("mounts, syncs independent layers, emits disposable draft edits, and destroys cleanly", async () => {
-    FakeMap.instances = []; FakePolyline.instances = []; FakeCircle.instances = [];
-    const adapter = new GoogleMapRendererAdapter("restricted-test-key", async () => runtime);
-    const edits: FenceDraftEditEvent[] = []; adapter.onDraftEdit((event) => edits.push(event));
-    adapter.showDomainProjection(projection);
+describe("provider-neutral Google presentation adapter", () => {
+  it("mounts generic immutable overlays, syncs reference/location layers, and destroys cleanly", async () => {
+    FakeMap.instances = []; FakePolyline.instances = []; FakePolygon.instances = []; FakeCircle.instances = [];
+    const adapter = new GoogleReadOnlyMapPresentationAdapter("restricted-test-key", async () => runtime);
+    const interactions: MapPresentationInteraction[] = []; adapter.onPresentationInteraction((event) => interactions.push(event));
+    adapter.showScene(scene);
     await adapter.mount({} as HTMLElement);
     const map = FakeMap.instances[0];
     expect(adapter.availability().status).toBe("ready");
     expect(FakePolyline.instances).toHaveLength(1);
-    expect(FakeCircle.instances).toHaveLength(2);
-    adapter.setMapType("hybrid"); expect(map.mapType).toBe("hybrid");
-    adapter.showParcelGeoJson({ type: "FeatureCollection", features: [{ type: "Feature", properties: { layer: "parcel-reference" }, geometry: { type: "LineString", coordinates: [[-83.92, 35.96], [-83.919, 35.961]] } }] });
+    expect(FakePolygon.instances).toHaveLength(1);
+    expect(FakeCircle.instances).toHaveLength(1);
+    adapter.setBasePresentation("hybrid"); expect(map.mapType).toBe("hybrid");
+    adapter.showReferenceLayer({ type: "FeatureCollection", features: [{ type: "Feature", properties: { layer: "parcel-reference" }, geometry: { type: "LineString", coordinates: [[-83.92, 35.96], [-83.919, 35.961]] } }] });
     expect(map.dataFeatures).toHaveLength(1);
-    adapter.setParcelVisible(false); expect(map.dataFeatures).toHaveLength(0);
+    adapter.setReferenceLayerVisible(false); expect(map.dataFeatures).toHaveLength(0);
     map.emit("click", { latLng: new LatLng(35.961, -83.919) });
     FakeCircle.instances[0].emit("dragend", { latLng: new LatLng(35.962, -83.918) });
-    expect(edits.map(({ type }) => type)).toEqual(["place_node", "move_node"]);
-    adapter.showLiveLocation(second, 8); expect(FakeCircle.instances).toHaveLength(4);
+    expect(interactions.map(({ type }) => type)).toEqual(["map_press", "point_move"]);
+    adapter.showObservationalLocation(second, 8); expect(FakeCircle.instances).toHaveLength(3);
     adapter.destroy();
     expect(adapter.availability().status).toBe("destroyed");
     expect(FakePolyline.instances[0].map).toBeNull();
+    expect(FakePolygon.instances[0].map).toBeNull();
   });
 
-  it("fails offline without changing the supplied McKenzie projection", async () => {
-    const before = JSON.stringify(projection);
-    const adapter = new GoogleMapRendererAdapter("restricted-test-key", async () => { throw new Error("provider offline"); });
-    adapter.showDomainProjection(projection);
+  it("fails offline without changing the supplied generic scene", async () => {
+    const before = JSON.stringify(scene);
+    const adapter = new GoogleReadOnlyMapPresentationAdapter("restricted-test-key", async () => { throw new Error("provider offline"); });
+    adapter.showScene(scene);
     await expect(adapter.mount({} as HTMLElement)).rejects.toThrow("provider offline");
     expect(adapter.availability()).toEqual({ status: "offline", reason: "provider offline" });
-    expect(JSON.stringify(projection)).toBe(before);
+    expect(JSON.stringify(scene)).toBe(before);
     adapter.destroy(); expect(adapter.availability().status).toBe("destroyed");
+  });
+});
+
+describe("Fence-owned Google wrapper", () => {
+  it("converts only generic presentation interactions into Fence draft events", async () => {
+    FakeMap.instances = []; FakePolyline.instances = []; FakePolygon.instances = []; FakeCircle.instances = [];
+    const adapter = new FenceGoogleMapRendererAdapter("restricted-test-key", async () => runtime);
+    const edits: FenceDraftEditEvent[] = []; adapter.onDraftEdit((event: FenceDraftEditEvent) => edits.push(event));
+    adapter.showDomainProjection(projection); await adapter.mount({} as HTMLElement);
+    FakeMap.instances[0].emit("click", { latLng: new LatLng(35.961, -83.919) });
+    FakeCircle.instances[0].emit("dragend", { latLng: new LatLng(35.962, -83.918) });
+    expect(edits.map(({ type }) => type)).toEqual(["place_node", "move_node"]);
+    adapter.destroy();
   });
 });

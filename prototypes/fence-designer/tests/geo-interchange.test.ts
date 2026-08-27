@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { fenceGeoJson, fenceKml, localGroundToMap, mapToLocalGround, normalizeParcelGeoJson, parseLocalParcelFile, projectFenceDesignToMap, registrationAtDesignOrigin } from "../src/geo-interchange";
+import { fenceGeoJson, fenceKml, projectFenceDesignToMap, registrationAtDesignOrigin } from "../src/fence-geo-interchange";
+import { localGroundToMap, mapToLocalGround } from "../src/ground-registration";
+import { normalizeParcelGeoJson, parseLocalParcelFile } from "../src/local-reference-interchange";
 import { addPoint, EMPTY_DESIGN, stableDesignJson } from "../src/model";
 import { normalizedMapCoordinate } from "../src/map-contract";
 

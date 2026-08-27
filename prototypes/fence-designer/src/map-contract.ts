@@ -1,14 +1,7 @@
-export type NormalizedMapCoordinate = Readonly<{
-  longitude: string;
-  latitude: string;
-}>;
+import { assertProviderNeutral, normalizeMapViewport, normalizedMapCoordinate, type MapViewport, type NormalizedMapCoordinate, type RendererAvailability, type RendererAvailabilityEvent } from "./map-presentation";
 
-export type MapViewport = Readonly<{
-  center: NormalizedMapCoordinate;
-  zoom: string;
-  bearing: string;
-  pitch: string;
-}>;
+export { assertProviderNeutral, normalizeMapViewport, normalizedMapCoordinate } from "./map-presentation";
+export type { MapViewport, NormalizedMapCoordinate, RendererAvailability, RendererAvailabilityEvent } from "./map-presentation";
 
 export type FenceMapDisplayProjection = Readonly<{
   revision: string;
@@ -20,9 +13,6 @@ export type FenceDraftEditEvent =
   | Readonly<{ type: "place_node"; coordinate: NormalizedMapCoordinate }>
   | Readonly<{ type: "move_node"; nodeId: string; coordinate: NormalizedMapCoordinate }>
   | Readonly<{ type: "delete_node"; nodeId: string }>;
-
-export type RendererAvailability = "unmounted" | "ready" | "offline" | "destroyed";
-export type RendererAvailabilityEvent = Readonly<{ status: RendererAvailability; reason: string | null }>;
 
 export interface FenceMapRendererAdapter {
   mount(container: HTMLElement): Promise<void>;
@@ -111,53 +101,17 @@ export class FenceMapRendererContractHarness implements FenceMapRendererAdapter 
   }
 }
 
-const coordinatePattern = /^-?(?:0|[1-9][0-9]*)\.[0-9]{7}$/;
 const decimalPattern = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/;
-
-function boundedCoordinate(value: string, minimum: number, maximum: number, label: string) {
-  if (!coordinatePattern.test(value) || Number(value) < minimum || Number(value) > maximum || Object.is(Number(value), -0)) {
-    throw new TypeError(`${label} must be a normalized seven-decimal WGS84 string.`);
-  }
-  return value;
-}
-
-export function normalizedMapCoordinate(longitude: string, latitude: string): NormalizedMapCoordinate {
-  return Object.freeze({
-    longitude: boundedCoordinate(longitude, -180, 180, "Longitude"),
-    latitude: boundedCoordinate(latitude, -90, 90, "Latitude"),
-  });
-}
 
 function decimal(value: string, label: string, minimum: number, maximum: number) {
   if (!decimalPattern.test(value) || Number(value) < minimum || Number(value) > maximum) throw new TypeError(`${label} is invalid.`);
   return value;
 }
 
-export function normalizeMapViewport(input: MapViewport): MapViewport {
-  return Object.freeze({
-    center: normalizedMapCoordinate(input.center.longitude, input.center.latitude),
-    zoom: decimal(input.zoom, "Zoom", 0, 30),
-    bearing: decimal(input.bearing, "Bearing", -360, 360),
-    pitch: decimal(input.pitch, "Pitch", 0, 90),
-  });
-}
-
 function requiredText(value: string, label: string, maximum = 200) {
   const result = value.trim();
   if (!result || result.length > maximum) throw new TypeError(`${label} is required and must be ${maximum} characters or fewer.`);
   return result;
-}
-
-export function assertProviderNeutral(value: unknown, label = "Provider-neutral value"): void {
-  if (value === null || ["string", "number", "boolean"].includes(typeof value)) return;
-  if (Array.isArray(value)) {
-    value.forEach((item, index) => assertProviderNeutral(item, `${label}[${index}]`));
-    return;
-  }
-  if (typeof value !== "object") throw new TypeError(`${label} contains an unsupported value.`);
-  const prototype = Object.getPrototypeOf(value);
-  if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${label} contains a provider or class instance.`);
-  Object.entries(value as Record<string, unknown>).forEach(([key, item]) => assertProviderNeutral(item, `${label}.${key}`));
 }
 
 export function normalizeDisplayProjection(input: FenceMapDisplayProjection): FenceMapDisplayProjection {

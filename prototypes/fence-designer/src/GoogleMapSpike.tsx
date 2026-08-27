@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fenceGeoJson, fenceKml, mapToLocalGround, parseLocalParcelFile, projectFenceDesignToMap, registrationAtDesignOrigin, type LocalGroundToWgs84Registration, type ParcelGeoJson } from "./geo-interchange";
-import { GoogleMapRendererAdapter } from "./google-map-renderer";
+import { fenceGeoJson, fenceKml, projectFenceDesignToMap, registrationAtDesignOrigin } from "./fence-geo-interchange";
+import { FenceGoogleMapRendererAdapter } from "./fence-map-renderer";
+import { mapToLocalGround, type LocalGroundToWgs84Registration } from "./ground-registration";
+import { parseLocalParcelFile, type ParcelGeoJson } from "./local-reference-interchange";
 import { IDLE_LOCATION_STATE, ObservationalLocationSession, type ObservationalLocationState } from "./live-location";
-import { normalizedMapCoordinate, type RendererAvailabilityEvent } from "./map-contract";
+import { normalizedMapCoordinate, type RendererAvailabilityEvent } from "./map-presentation";
 import type { FenceDesign } from "./model";
 
 type GoogleMapSpikeProps = Readonly<{
@@ -35,7 +37,7 @@ function locationLabel(state: ObservationalLocationState) {
 
 export default function GoogleMapSpike({ apiKey, design, onPlacePoint, onMovePoint }: GoogleMapSpikeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const adapterRef = useRef<GoogleMapRendererAdapter | null>(null);
+  const adapterRef = useRef<FenceGoogleMapRendererAdapter | null>(null);
   const locationSessionRef = useRef<ObservationalLocationSession | null>(null);
   const registrationRef = useRef<LocalGroundToWgs84Registration>(registrationAtDesignOrigin(design, DEIDENTIFIED_KNOXVILLE_CENTER));
   const [registration, setRegistration] = useState(registrationRef.current);
@@ -55,7 +57,7 @@ export default function GoogleMapSpike({ apiKey, design, onPlacePoint, onMovePoi
 
   useEffect(() => {
     if (!apiKey || !containerRef.current) return;
-    const adapter = new GoogleMapRendererAdapter(apiKey);
+    const adapter = new FenceGoogleMapRendererAdapter(apiKey);
     adapterRef.current = adapter;
     const offAvailability = adapter.onAvailabilityChange(setAvailability);
     const offDraft = adapter.onDraftEdit((event) => {

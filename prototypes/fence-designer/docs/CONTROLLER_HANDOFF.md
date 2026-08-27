@@ -15,9 +15,13 @@ The local-image calibration defect is now bounded explicitly. One known line set
 - `src/storage.ts`: explicit browser-local design persistence plus separately validated compressed-reference persistence.
 - `src/view.ts`: deterministic bounded focal-point zoom, viewport-to-plan pan conversion, and edge/run-aware dimension-label placement.
 - `src/takeoff.ts`: pure derived Black Aluminum and Treated Pine Privacy takeoffs plus the shared read-only visual bay/post projection.
-- `src/map-contract.ts`: plain normalized-coordinate renderer contract, lifecycle/offline harness, separately confirmed address selection, base/overlay layer registry, and read-only shared local-ground registration/observation contracts.
-- `src/google-map-renderer.ts`: dependency-free Maps JavaScript candidate adapter with satellite/hybrid display, disposable fence projection, local parcel Data overlay, accuracy circle, draft events, and explicit lifecycle/offline behavior.
-- `src/geo-interchange.ts`: provider-neutral local-ground/WGS84 registration plus sanitized local parcel GeoJSON/KML input and explicit local Fence GeoJSON/KML export.
+- `src/map-presentation.ts`: domain-neutral read-only lifecycle/viewport/base/reference/location contract, immutable generic point/polyline/polygon scenes, generic interaction source, and contract harness.
+- `src/ground-registration.ts`: provider-neutral integer-mm local-ground↔WGS84 registration and projection.
+- `src/google-map-renderer.ts`: dependency-free Maps JavaScript candidate presenter that stores only generic presentation scenes.
+- `src/local-reference-interchange.ts`: sanitized local parcel GeoJSON/KML input with no upload or provider request.
+- `src/fence-map-renderer.ts`: Fence-owned projection styling and generic-interaction→Fence-draft translation.
+- `src/fence-geo-interchange.ts`: FenceDesign projection, Fence GeoJSON/KML export, and Fence anchor selection.
+- `src/map-contract.ts`: Fence projection/draft compatibility wrapper, separately confirmed address selection, base/overlay registry, and read-only prototype registration/observation contracts.
 - `src/live-location.ts`: bounded observational browser-location session with stale/no-fix/session stops and non-verifying accuracy tiers.
 - `src/GoogleMapSpike.tsx`: inactive-until-key candidate panel and the only integration surface between the adapter and existing Fence editor commands.
 - `src/measurement-provenance.ts`: explicit source, capture-context, verification, observation, correction, and reported-accuracy matrix including Moasure.
@@ -36,6 +40,7 @@ The local-image calibration defect is now bounded explicitly. One known line set
 - `docs/ARCHITECTURE.md`: scope, measurement contract, boundary, and deferred calibration slice.
 - `docs/BROWSER_QA.md`: validated interaction record.
 - `docs/PROVIDER_EVIDENCE_MATRIX.md`: blank pass/fail, imagery, interaction, accessibility, terms, cost, and replacement/offline spike template.
+- `docs/MAP_CORE_COMPATIBILITY_HANDOFF.md`: exact neutral/Fence file boundary and later shared-package guidance for Deck.
 
 ## Migrations and shared concepts
 
@@ -55,7 +60,7 @@ The local-image calibration defect is now bounded explicitly. One known line set
 
 ## Validation
 
-- 146 deterministic tests passed, including authored first/middle/last-span edits, multiple downstream points, two downstream gates, separate-line isolation, reverse bearings, invalid and connected topology, no-op revisions, deterministic replay/save-load, independent-line scale residuals, saved-scale re-verification, ground-plane registration, layer/geometry isolation, provider mount/destroy/offline behavior, local GeoJSON/KML parsing/export, observational-location stops, and provenance non-promotion.
+- 151 deterministic tests passed, including authored first/middle/last-span edits, multiple downstream points, two downstream gates, separate-line isolation, reverse bearings, invalid and connected topology, no-op revisions, deterministic replay/save-load, independent-line scale residuals, saved-scale re-verification, ground-plane registration, generic immutable point/polyline/polygon presentation, neutral/Fence interaction separation, provider mount/destroy/offline behavior, local GeoJSON/KML parsing/export, observational-location stops, and provenance non-promotion.
 - Strict TypeScript passed.
 - Prototype isolation guard passed.
 - Prototype production build passed.

@@ -28,4 +28,8 @@ for (const file of files) {
 }
 const renderer = readFileSync(join(source, "google-map-renderer.ts"), "utf8");
 if ((renderer.match(/https:\/\/maps\.googleapis\.com\/maps\/api\/js/g) ?? []).length !== 1) throw new Error("The Google renderer must contain exactly one approved Maps JavaScript loader endpoint.");
+for (const name of ["map-presentation.ts", "ground-registration.ts", "google-map-renderer.ts", "local-reference-interchange.ts", "live-location.ts"]) {
+  const text = readFileSync(join(source, name), "utf8");
+  if (/FenceMap|FenceDesign|FenceDraft|takeoff|from\s+["']\.\/model["']/i.test(text)) throw new Error(`${name} crosses the provider-neutral read-only map boundary.`);
+}
 console.log(`Fence Designer isolation check passed (${files.length} source files).`);

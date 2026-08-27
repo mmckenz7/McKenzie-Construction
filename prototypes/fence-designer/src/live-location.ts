@@ -1,4 +1,4 @@
-import { normalizedMapCoordinate, type NormalizedMapCoordinate } from "./map-contract";
+import { normalizedMapCoordinate, type NormalizedMapCoordinate } from "./map-presentation";
 
 export const LIVE_LOCATION_STALE_AFTER_MS = 10_000;
 export const LIVE_LOCATION_NO_FIX_STOP_MS = 30_000;
