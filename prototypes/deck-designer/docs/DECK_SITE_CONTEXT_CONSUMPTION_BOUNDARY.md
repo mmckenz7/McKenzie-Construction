@@ -19,6 +19,8 @@ Deck must not import the Fence prototype, copy its renderer, or create another G
 
 The provider-free `DeckLocalSiteContextFixtureAdapterV5` exists only to validate consumption. It has no mount lifecycle, network behavior, draft events, provider objects, storage, or map calculations. Satellite/hybrid choice, local parcel fixtures, and observational GPS fixtures can vary without changing authoritative Deck outputs.
 
+`deriveDeckSiteContextPresentationV5` and the dormant `SiteContextReadinessV5` component turn only that immutable Deck projection into a local SVG overlay and honest readiness copy. They are not imported by the active app, add no current runtime bundle weight, cannot mount a renderer, and deliberately expose no address, provider, edit-event, key, billing, or persistence behavior.
+
 ## Future adapter consumption
 
 After Fence proves and the Controller promotes a stable provider-neutral renderer core:
@@ -48,3 +50,5 @@ Any editable site-placement workflow requires a separate reviewed command contra
 3. Deck replaces the local fixture seam with a read-only consumer of that same core.
 4. Deck validates one canvas/map surface at a time, desktop and 390 px behavior, provider failure recovery, and unchanged authoritative outputs.
 5. Only a later owner/controller decision may authorize address persistence, editable site registration, production integration, or a shared API.
+
+The dormant readiness presentation may be activated only after the promoted Fence contract is available and the combined map/3D bundle budget is revalidated. Its current “map connection not active” state must not be replaced with fixture address, parcel, aerial, GPS, or field-verification claims.
