@@ -1,10 +1,10 @@
 # Fence renderer provider evidence matrix
 
-Status: candidate adapter implemented locally; provider not selected; runtime activation blocked on enforceable-cost decision
+Status: candidate adapter implemented; provider not selected; no-billing Demo Key authorized for the restricted Fence Preview only
 
 Use this only after the Controller authorizes a time-boxed provider spike, restricted non-Production credentials, billing limits, and a deidentified evaluation set. Do not record customer names, full addresses, credentials, or unlicensed screenshots here.
 
-Google-candidate ceiling: maximum 2,000 Dynamic Map loads in one month; no geocoding is included; $10 gross monthly maximum-stop intent; alerts at 50%, 80%, and 100%. Current official documentation exposes Dynamic Maps quotas per minute, not a monthly hard quota, and states that billing budgets do not cap spend. Activation is therefore blocked until the owner chooses an alert-only exception or separately reviewed automated enforcement.
+Google-candidate boundary: a Google Maps Demo Key is used without billing for the time-boxed non-Production spike. Google pauses the Demo Key after its documented daily limits, so this candidate cannot create Maps Platform charges. The key is stored only as a hidden Vercel Preview secret scoped to `codex/fence-visual-measure`, restricted at Google to the exact stable Fence Preview origin, and restricted to Maps JavaScript API. Geocoding and the other Demo APIs are not authorized for this spike.
 
 ## Spike identity
 
@@ -77,7 +77,7 @@ Use opaque case IDs only.
 | Free monthly allowance | | Provider pricing page |
 | Observed usage per completed layout | | Provider dashboard export |
 | Projected low/expected/high monthly cost | | Approved usage assumptions |
-| Quota and alert behavior tested | Blocked: Dynamic Maps exposes per-minute limits; budgets do not enforce a spend cap | Official Maps JavaScript usage/billing and Cloud Billing budget documentation |
+| Quota and alert behavior tested | No-billing Demo Key selected; Google documents daily service pause rather than billable overage | Official Maps JavaScript Demo Key documentation |
 | Rate limit/outage error behavior | | Test record |
 | Support/SLA required | | Business decision |
 
