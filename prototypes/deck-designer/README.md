@@ -38,6 +38,7 @@ Open the local URL Vite prints. Use `npm run validate` for the complete determin
 - Command-based undo and redo
 - Direct plan handles for width, projection, and L-cutout dimensions with selectable 1, 6, or 12 inch snapping
 - Flexible polygon corner handles, exact corner coordinates, and repeatable rectangular offsets
+- A provider-free, read-only site-context compatibility projection for future reuse of Fence's map adapter; no active Google runtime or map authority
 - Click-to-add rectangular bumpouts with parallel outer segments, magnetic corner-axis alignment, and draggable segment handles that move both attached endpoints
 - Direct movement of the active stair system along exact geometric edges with bounds and grid snapping
 - Keyboard/touch/click selection for edges, stair treads, landings, and cutouts with contextual actions
