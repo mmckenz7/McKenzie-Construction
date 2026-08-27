@@ -14,6 +14,7 @@ function renderPlan(
   design: DeckDesignV3,
   options: Readonly<{
     editingEnabled?: boolean;
+    outlineEditingEnabled?: boolean;
     selectedEdgeId?: string | null;
     selectedHoleIndex?: number | null;
     selectedLandingId?: string | null;
@@ -31,6 +32,7 @@ function renderPlan(
     houseGeometry={deriveHouseContextGeometry(design.siteContext)}
     snapIncrement={6}
     editingEnabled={options.editingEnabled}
+    outlineEditingEnabled={options.outlineEditingEnabled}
     selectedEdgeId={options.selectedEdgeId ?? null}
     selectedHoleIndex={options.selectedHoleIndex ?? null}
     selectedLandingId={options.selectedLandingId ?? null}
@@ -70,6 +72,16 @@ describe("interactive measured-plan accessibility", () => {
     expect(html).toContain('aria-label="Side selection plan with 4 deck sides"');
     expect(html).toContain("Tab through the deck sides. Press Enter or Space to select a side.");
     expect(html).not.toContain("movement handles");
+  });
+
+  it("keeps side selection available but hides deceptive outline handles while side options lock the outline", () => {
+    const design = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const html = renderPlan(design, { outlineEditingEnabled: false });
+    expect(html).toContain('aria-label="Deck plan with locked 4-corner outline"');
+    expect(html).toContain("unlock outline editing before moving sides and corners");
+    expect(html).toContain('aria-label="Select 16′ 0″ side"');
+    expect(html).not.toContain('class="segment-move-hit"');
+    expect(html).not.toContain('class="corner-move-hit"');
   });
 
   it("reports the exact selected cutout without placing pressed state on movement handles", () => {
