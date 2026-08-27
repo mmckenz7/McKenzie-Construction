@@ -2,8 +2,9 @@ import { after } from "next/server";
 
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import { e164UsPhone, normalizedPhone } from "@/lib/communications/phone";
+import { pushIdentity } from "@/lib/communications/push-alert";
 import { validateTwilioWebhook } from "@/lib/communications/twilio-webhook";
-import { sendInboundTextPush } from "@/lib/communications/web-push";
+import { sendCommunicationPush } from "@/lib/communications/web-push";
 
 export const runtime = "nodejs";
 
@@ -15,15 +16,28 @@ function xml(status = 200) {
 
 async function findContact(from: string) {
   const supabase = createAdminServerClient();
-  const result = await supabase.from("leads").select("id, phone").not("phone", "is", null).limit(1000);
-  if (result.error) return { leadId: null, customerId: null };
+  const company = await supabase.from("company_settings").select("id").limit(2);
+  if (company.error || company.data?.length !== 1) {
+    return { leadId: null, customerId: null, displayName: null };
+  }
   const wanted = normalizedPhone(from);
-  const leadId = (result.data ?? []).find((lead) => normalizedPhone(String(lead.phone ?? "")) === wanted)?.id ?? null;
-  if (leadId) return { leadId, customerId: null };
   const customerResult = await supabase.from("customers")
-    .select("id,source_lead_id,phone").not("phone", "is", null).limit(1000);
+    .select("id,source_lead_id,customer_name,phone").not("phone", "is", null).limit(1000);
+  if (customerResult.error) {
+    return { leadId: null, customerId: null, displayName: null };
+  }
   const customer = (customerResult.data ?? []).find((candidate) => normalizedPhone(String(candidate.phone ?? "")) === wanted);
-  return { leadId: customer?.source_lead_id ?? null, customerId: customer?.id ?? null };
+  if (customer) {
+    return {
+      leadId: customer.source_lead_id ?? null,
+      customerId: customer.id,
+      displayName: customer.customer_name,
+    };
+  }
+  const leadResult = await supabase.from("leads").select("id,name,phone").not("phone", "is", null).limit(1000);
+  if (leadResult.error) return { leadId: null, customerId: null, displayName: null };
+  const lead = (leadResult.data ?? []).find((candidate) => normalizedPhone(String(candidate.phone ?? "")) === wanted);
+  return { leadId: lead?.id ?? null, customerId: null, displayName: lead?.name ?? null };
 }
 
 async function textThread(from: string, to: string, leadId: string | null, customerId: string | null, receivedAt: string) {
@@ -77,7 +91,7 @@ export async function POST(request: Request) {
     if (!from || !to) return xml(400);
     const optOutValue = String(form.get("OptOutType") ?? "").toUpperCase();
     const optOutType = optOutValue === "STOP" || optOutValue === "START" || optOutValue === "HELP" ? optOutValue : null;
-    const { leadId, customerId } = await findContact(from);
+    const { leadId, customerId, displayName } = await findContact(from);
     const receivedAt = new Date().toISOString();
     const threadId = await textThread(from, to, leadId, customerId, receivedAt);
     if (!threadId) return xml(500);
@@ -92,9 +106,13 @@ export async function POST(request: Request) {
     if (message.error) return xml(500);
     if (!message.data) return xml();
 
-    // The provider receives only an encrypted generic alert. Customer identity,
-    // phone number, message body, and thread identifiers never enter the push payload.
-    after(() => sendInboundTextPush());
+    // Web Push encrypts the same-company identity and exact normal thread route.
+    // Message content and provider identifiers never enter the push payload.
+    after(() => sendCommunicationPush({
+      kind: "inbound_text",
+      identity: pushIdentity(displayName, from),
+      threadId,
+    }));
 
     if (optOutType === "STOP" || optOutType === "START") {
       await supabase.from("communication_preferences").upsert({

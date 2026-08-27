@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import {
+  communicationPushPayload,
+  maskedPushPhone,
+  pushIdentity,
+  safeSmsPushPreview,
+} from "../src/lib/communications/push-alert.ts";
+
 const manifest = readFileSync("src/app/manifest.ts", "utf8");
 const layout = readFileSync("src/app/layout.tsx", "utf8");
 const serviceWorker = readFileSync("public/sw.js", "utf8");
@@ -10,16 +17,19 @@ const pushRoute = readFileSync("src/app/api/communications/push-subscription/rou
 const pushTestRoute = readFileSync("src/app/api/communications/push-subscription/test/route.ts", "utf8");
 const pushControls = readFileSync("src/components/communication-push-controls.tsx", "utf8");
 const twilioWebhook = readFileSync("src/app/api/communications/webhooks/twilio/route.ts", "utf8");
+const threadDetail = readFileSync("src/app/sales/communications/[threadId]/page.tsx", "utf8");
+const communicationsLayout = readFileSync("src/app/communications/layout.tsx", "utf8");
 const refreshControls = readFileSync("src/components/communication-automation-controls.tsx", "utf8");
 const inbox = readFileSync("src/app/sales/communications/page.tsx", "utf8");
 const baseline = readFileSync("supabase/migrations/20260801095000_current_public_schema_through_090000.sql", "utf8");
 
-test("the installed Company Inbox opens the unified inbox while push clicks open text alerts", () => {
+test("the installed Company Inbox accepts only exact same-origin communication routes", () => {
   assert.match(manifest, /display: "standalone"/);
   assert.match(manifest, /start_url: "\/communications"/);
   assert.match(serviceWorker, /showNotification/);
-  assert.match(serviceWorker, /const destination = "\/communications\?channel=sms"/);
-  assert.doesNotMatch(serviceWorker, /payload\.url|threadId|providerMessageId/);
+  assert.match(serviceWorker, /safeNotificationDestination/);
+  assert.match(serviceWorker, /\^\\\/communications\\\//);
+  assert.doesNotMatch(serviceWorker, /new URL|https?:/);
 });
 
 test("the installed app and push notification use the square McKenzie PNG logo", () => {
@@ -30,13 +40,12 @@ test("the installed app and push notification use the square McKenzie PNG logo",
   assert.match(layout, /url: "\/branding\/mckenzie-apple-touch-icon\.png"/);
 });
 
-test("push delivery is restricted to the info account and contains no customer facts", () => {
+test("push delivery is restricted to the info account and carries no message content", () => {
   assert.match(pushServer, /INTERNAL_PUSH_RECIPIENT_EMAIL = "info@mckenzie-builds.com"/);
   assert.match(pushServer, /\.ilike\("email", INTERNAL_PUSH_RECIPIENT_EMAIL\)/);
   assert.match(pushServer, /rows\.length !== 1/);
-  assert.match(pushServer, /title: "New customer text"/);
-  assert.match(pushServer, /body: "A new text arrived in Company Inbox\."/);
-  assert.doesNotMatch(pushServer, /threadId|providerMessageId|customerPhone|messageBody/);
+  assert.match(pushServer, /communicationPushPayload\(input\)/);
+  assert.doesNotMatch(pushServer, /messageBody|bodyPreview|providerMessageId/);
   assert.match(pushRoute, /isInternalPushRecipient\(email\)/);
   assert.match(pushTestRoute, /isInternalPushRecipient\(email\)/);
 });
@@ -61,10 +70,74 @@ test("push rejection is distinguishable from a missing subscription without logg
 
 test("Twilio stores a unique inbound message before scheduling a nonblocking alert", () => {
   const duplicateGuard = twilioWebhook.indexOf("if (!message.data) return xml();");
-  const pushSchedule = twilioWebhook.indexOf("after(() => sendInboundTextPush())");
+  const pushSchedule = twilioWebhook.indexOf("after(() => sendCommunicationPush({");
   assert.ok(duplicateGuard > 0);
   assert.ok(pushSchedule > duplicateGuard);
-  assert.match(twilioWebhook, /Customer identity,[\s\S]*never enter the push payload/);
+  assert.match(twilioWebhook, /Message content and provider identifiers never enter the push payload/);
+  assert.match(twilioWebhook, /company\.data\?\.length !== 1/);
+  assert.match(twilioWebhook, /security_disposition: "normal"/);
+});
+
+test("typed alerts show sanitized CRM identity or a masked number without a preview", () => {
+  const threadId = "123e4567-e89b-42d3-a456-426614174000";
+  assert.equal(pushIdentity("  Example\nCustomer  ", "+18655551212"), "Example Customer");
+  assert.equal(maskedPushPhone("+1 (865) 555-1212"), "Number ending in 1212");
+  assert.deepEqual(communicationPushPayload({
+    kind: "inbound_text",
+    identity: pushIdentity(null, "+1 (865) 555-1212"),
+    threadId,
+  }), {
+    kind: "inbound_text",
+    identity: "Number ending in 1212",
+    url: `/communications/${threadId}`,
+  });
+  assert.equal(communicationPushPayload({
+    kind: "missed_call",
+    identity: "Example Customer",
+    threadId: "not-a-thread",
+  }), null);
+  assert.match(serviceWorker, /inbound_text: "New McKenzie text"/);
+  assert.match(serviceWorker, /incoming_call: "Incoming McKenzie call"/);
+  assert.match(serviceWorker, /missed_call: "Missed McKenzie call"/);
+  assert.doesNotMatch(serviceWorker, /messageBody|bodyPreview|payload\.body/);
+});
+
+test("SMS preview is short and rejects URLs or credential-bearing content", () => {
+  assert.equal(safeSmsPushPreview("  Can you call me about the back deck?  "), "Can you call me about the back deck?");
+  assert.equal(safeSmsPushPreview("A".repeat(90)), `${"A".repeat(71)}…`);
+  assert.equal(safeSmsPushPreview("Open https://example.test/private?id=123"), null);
+  assert.equal(safeSmsPushPreview("Your one-time code is 483920"), null);
+  assert.equal(safeSmsPushPreview("Password reset token: syntheticCredentialValue12345"), null);
+  assert.equal(safeSmsPushPreview("Project reference code 483920"), "Project reference code 483920");
+
+  const threadId = "123e4567-e89b-42d3-a456-426614174000";
+  assert.deepEqual(communicationPushPayload({
+    kind: "inbound_text",
+    identity: "Example Customer",
+    threadId,
+    preview: "Can you call me about the back deck?",
+  }), {
+    kind: "inbound_text",
+    identity: "Example Customer",
+    preview: "Can you call me about the back deck?",
+    url: `/communications/${threadId}`,
+  });
+  assert.deepEqual(communicationPushPayload({
+    kind: "incoming_call",
+    identity: "Example Customer",
+    threadId,
+    preview: "Calls never include content",
+  }), {
+    kind: "incoming_call",
+    identity: "Example Customer",
+    url: `/communications/${threadId}`,
+  });
+});
+
+test("notification deep links remain protected by normal thread detail access", () => {
+  assert.match(communicationsLayout, /canAccessWorkspace\(workspace\.access, "sales"\)/);
+  assert.match(communicationsLayout, /if \(!canOpenInbox\) redirect\("\/portal"\)/);
+  assert.match(threadDetail, /\.eq\("security_disposition", "normal"\)/);
 });
 
 test("the existing subscription table remains user-owned and no new schema is required", () => {
@@ -81,5 +154,6 @@ test("the open inbox refreshes read-only and shows Eastern time", () => {
   assert.doesNotMatch(refreshControls, /setInterval\(\(\) => void runAutomation/);
   assert.match(inbox, /timeZone: "America\/New_York"/);
   assert.match(inbox, /CommunicationPushControls/);
-  assert.match(pushControls, /Customer details and message content are not sent/);
+  assert.match(pushControls, /matched CRM name, or a masked phone number/);
+  assert.match(pushControls, /Message content is never included/);
 });

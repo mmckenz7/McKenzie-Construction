@@ -102,7 +102,7 @@ export function CommunicationPushControls() {
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 id="phone-notifications-title" className="font-bold text-slate-950">Phone notifications</h2>
-        <p className="mt-1 max-w-2xl text-sm text-slate-600">Get a private alert when a new customer text reaches Company Inbox. Customer details and message content are not sent in the notification.</p>
+        <p className="mt-1 max-w-2xl text-sm text-slate-600">Get a private alert showing the matched CRM name, or a masked phone number, when a new customer text reaches Company Inbox. Message content is never included.</p>
       </div>
       {subscription
         ? <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">Enabled on this device</span>

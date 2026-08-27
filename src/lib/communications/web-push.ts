@@ -2,6 +2,12 @@ import "server-only";
 
 import webpush, { type PushSubscription } from "web-push";
 
+import {
+  communicationPushPayload,
+  pushTestPayload,
+  type CommunicationPushKind,
+  type CommunicationPushPayload,
+} from "@/lib/communications/push-alert";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 
 export const INTERNAL_PUSH_RECIPIENT_EMAIL = "info@mckenzie-builds.com";
@@ -58,7 +64,10 @@ function stalePushSubscription(error: unknown) {
   return statusCode === 404 || statusCode === 410;
 }
 
-async function deliver(rows: StoredSubscription[]): Promise<WebPushDeliverySummary> {
+async function deliver(
+  rows: StoredSubscription[],
+  payload: CommunicationPushPayload,
+): Promise<WebPushDeliverySummary> {
   const config = configuration();
   if (!config.publicKey || !config.privateKey) {
     return { configured: false, attempted: 0, delivered: 0, removed: 0, rejectedStatusCodes: [] };
@@ -69,10 +78,7 @@ async function deliver(rows: StoredSubscription[]): Promise<WebPushDeliverySumma
   let delivered = 0;
   let removed = 0;
   const rejectedStatusCodes = new Set<number>();
-  const payload = JSON.stringify({
-    title: "New customer text",
-    body: "A new text arrived in Company Inbox.",
-  });
+  const encryptedPayload = JSON.stringify(payload);
 
   for (const row of rows) {
     const subscription: PushSubscription = {
@@ -80,7 +86,7 @@ async function deliver(rows: StoredSubscription[]): Promise<WebPushDeliverySumma
       keys: { p256dh: row.p256dh, auth: row.auth },
     };
     try {
-      await webpush.sendNotification(subscription, payload, {
+      await webpush.sendNotification(subscription, encryptedPayload, {
         TTL: 60,
       });
       delivered += 1;
@@ -111,13 +117,21 @@ async function internalRecipientAuthUserId() {
   return rows[0].auth_user_id;
 }
 
-export async function sendInboundTextPush() {
+export async function sendCommunicationPush(input: {
+  kind: CommunicationPushKind;
+  identity: string;
+  threadId: string;
+}) {
+  const payload = communicationPushPayload(input);
+  if (!payload) {
+    return { configured: Boolean(webPushPublicKey()), attempted: 0, delivered: 0, removed: 0, rejectedStatusCodes: [] };
+  }
   const userId = await internalRecipientAuthUserId();
   if (!userId) return { configured: Boolean(webPushPublicKey()), attempted: 0, delivered: 0, removed: 0, rejectedStatusCodes: [] };
-  return sendPushToUser(userId);
+  return sendPushToUser(userId, payload);
 }
 
-async function sendPushToUser(userId: string) {
+async function sendPushToUser(userId: string, payload: CommunicationPushPayload) {
   const supabase = createAdminServerClient();
   const subscriptions = await supabase
     .from("push_subscriptions")
@@ -126,12 +140,12 @@ async function sendPushToUser(userId: string) {
   if (subscriptions.error) {
     return { configured: Boolean(webPushPublicKey()), attempted: 0, delivered: 0, removed: 0, rejectedStatusCodes: [] };
   }
-  return deliver((subscriptions.data ?? []) as StoredSubscription[]);
+  return deliver((subscriptions.data ?? []) as StoredSubscription[], payload);
 }
 
 export async function sendPushTestToUser(userId: string, email: string | null | undefined) {
   if (!isInternalPushRecipient(email)) {
     return { configured: Boolean(webPushPublicKey()), attempted: 0, delivered: 0, removed: 0, rejectedStatusCodes: [] };
   }
-  return sendPushToUser(userId);
+  return sendPushToUser(userId, pushTestPayload());
 }
