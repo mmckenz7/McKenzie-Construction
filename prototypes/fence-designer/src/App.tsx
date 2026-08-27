@@ -16,6 +16,7 @@ import { loadLocalDesign, loadLocalReference, saveLocalDesign, saveLocalReferenc
 import { calculateBlackAluminumTakeoff, calculateTreatedPinePrivacyTakeoff, formatBlackAluminumTakeoffText, formatTreatedPinePrivacyTakeoffText, takeoffPostReasonLabel, type TakeoffPostReason } from "./takeoff";
 import { panView, placeDimensionLabels, zoomViewAt, type ViewBox } from "./view";
 import GoogleMapSpike from "./GoogleMapSpike";
+import { placeFenceMapPoint } from "./fence-map-draft";
 
 type Selection = Readonly<{ type: "point" | "segment"; id: string } | { type: "house" }> | null;
 type Drag = Readonly<{ pointId: string; original: FenceDesign }> | null;
@@ -765,12 +766,14 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
         {googleMapSpikeOpen && <GoogleMapSpike
           apiKey={googleMapsBrowserKey}
           design={design}
+          startsSeparateLine={mode === "new-line"}
           onPlacePoint={(position) => {
             const id = nextId.current++;
             const pointId = `point-${id}`;
-            const next = addPoint(design, { id: pointId, ...position }, `segment-${id}`, extensionAnchor?.id ?? null);
-            commit(next, next.points.length === 1 ? "Map point placed. Exact McKenzie geometry remains authoritative." : "Map fence point placed as one ordinary undoable geometry revision.");
-            setSelection({ type: "point", id: pointId }); setMode("select");
+            const startsSeparateLine = mode === "new-line";
+            const next = placeFenceMapPoint(design, { id: pointId, ...position }, `segment-${id}`, extensionAnchor?.id ?? null, startsSeparateLine ? "start-line" : "continue-line");
+            commit(next, startsSeparateLine ? "Separate map fence line started. Keep sketching to continue from this point." : next.points.length === 1 ? "Map point placed. Exact McKenzie geometry remains authoritative." : "Map fence point placed as one ordinary undoable geometry revision.");
+            setSelection({ type: "point", id: pointId }); setMode(startsSeparateLine ? "draw" : "select");
           }}
           onMovePoint={(pointId, position) => {
             const next = movePoint(design, pointId, position.xMm, position.yMm);

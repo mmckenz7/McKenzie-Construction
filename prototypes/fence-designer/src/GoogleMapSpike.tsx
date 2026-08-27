@@ -14,6 +14,7 @@ import type { FenceDesign } from "./model";
 type GoogleMapSpikeProps = Readonly<{
   apiKey: string | null;
   design: FenceDesign;
+  startsSeparateLine: boolean;
   onPlacePoint(position: Readonly<{ xMm: number; yMm: number }>): void;
   onMovePoint(pointId: string, position: Readonly<{ xMm: number; yMm: number }>): void;
 }>;
@@ -37,7 +38,7 @@ function locationLabel(state: ObservationalLocationState) {
   return state.reason ?? "Location stopped.";
 }
 
-export default function GoogleMapSpike({ apiKey, design, onPlacePoint, onMovePoint }: GoogleMapSpikeProps) {
+export default function GoogleMapSpike({ apiKey, design, startsSeparateLine, onPlacePoint, onMovePoint }: GoogleMapSpikeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<FenceGoogleMapRendererAdapter | null>(null);
   const locationSessionRef = useRef<ObservationalLocationSession | null>(null);
@@ -171,6 +172,7 @@ export default function GoogleMapSpike({ apiKey, design, onPlacePoint, onMovePoi
         <button aria-pressed={sketchEnabled} className={sketchEnabled ? "active-tool" : ""} onClick={() => { setSketchEnabled((current) => !current); setMessage(sketchEnabled ? "Map sketching off." : "Map sketching on. Tap to add a point; drag a point circle to move it."); }}>{sketchEnabled ? "✎ Sketching on" : "✎ Sketch on map"}</button>
         <button onClick={reanchor}>⌖ Place plan at map center</button>
       </div>
+      {startsSeparateLine && <div className="calibration-status complete" role="status"><strong>Separate line armed</strong><span>Your next map tap starts a new fence line. The following taps continue from that new point.</span></div>}
       <div ref={containerRef} className="google-map-canvas" aria-label="Google satellite fence map" />
       <div className="google-map-status" role="status"><strong>{availability.status === "ready" ? "Map ready" : availability.status === "offline" ? "Map unavailable—local Fence remains ready" : "Loading map…"}</strong>{availability.reason && <span>{availability.reason}</span>}</div>
     </>}
