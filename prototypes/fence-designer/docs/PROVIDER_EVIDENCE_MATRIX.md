@@ -32,8 +32,11 @@ Google-candidate planning ceiling, not authorization: maximum 2,000 map loads an
 | Attribution remains visible in all supported layouts | | |
 | Aerial/parcel input stays preliminary | | |
 | Phone GPS stays field-captured and does not auto-verify | | |
+| Live GPS marker and accuracy circle never snap/mutate Fence geometry | | |
 | Moasure source and explicit verification remain distinct | | |
 | No DrawingManager/deprecated drawing dependency | | |
+| Parcel visibility changes leave stable Fence JSON unchanged | | |
+| GeoJSON/KML export is explicit, local, provider-neutral, and fails without WGS84 registration | | |
 
 ## Deidentified property evidence
 
@@ -63,6 +66,7 @@ Use opaque case IDs only.
 | Provider replacement/remount | | | | |
 | Focus order and visible focus | | | | |
 | Accessible labels/instructions | | | | |
+| Live-location Start/Stop, stale state, accuracy tiers, and five-minute stop | | | | |
 
 ## Cost and operations
 

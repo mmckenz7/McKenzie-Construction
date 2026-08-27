@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EMPTY_DESIGN, addPoint, feetAndInchesToMm, gateOffsetFromReferenceMm, insertGateOnSegment, setSegmentLengthMm, stableDesignJson } from "../src/model";
+import { initialScaleCalibrationState } from "../src/background";
 import { LEGACY_STORAGE_KEY, loadLocalDesign, loadLocalReference, PREVIOUS_STORAGE_KEY, REFERENCE_STORAGE_KEY, saveLocalDesign, saveLocalReference, STORAGE_KEY } from "../src/storage";
 
 class MemoryStorage {
@@ -69,7 +70,9 @@ describe("local persistence", () => {
       transform: { xMm: 10, yMm: 20, widthMm: 30_000, heightMm: 20_000, rotationDegrees: 4.5 },
     } as const;
     saveLocalReference(storage, reference);
-    expect(loadLocalReference(storage)).toEqual(reference);
+    const loaded = loadLocalReference(storage);
+    expect(loaded).toEqual(reference);
+    expect(initialScaleCalibrationState(loaded)).toEqual({ status: "scale-set", provenance: "loaded-local-transform", primaryKnownDistanceMm: null });
   });
 
   it("loads legacy references as uncalibrated so drawing cannot trust an unknown scale", () => {

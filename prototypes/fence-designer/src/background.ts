@@ -17,6 +17,31 @@ export type ReferenceBackground = Readonly<{
   calibrated: boolean;
 }>;
 
+export const SCALE_VERIFICATION_PERCENT_TOLERANCE = 1;
+export const SCALE_VERIFICATION_MIN_TOLERANCE_MM = 152;
+
+export type ScaleVerification = Readonly<{
+  knownDistanceMm: number;
+  measuredDistanceMm: number;
+  residualMm: number;
+  residualPercent: number;
+  toleranceMm: number;
+  passed: boolean;
+}>;
+
+export type ScaleCalibrationState =
+  | Readonly<{ status: "uncalibrated"; provenance: "none" }>
+  | Readonly<{ status: "scale-set"; provenance: "user-known-line" | "loaded-local-transform"; primaryKnownDistanceMm: number | null }>
+  | Readonly<{ status: "verified" | "failed"; provenance: "two-user-known-lines"; primaryKnownDistanceMm: number | null; verification: ScaleVerification }>;
+
+export const UNCALIBRATED_SCALE_STATE: ScaleCalibrationState = Object.freeze({ status: "uncalibrated", provenance: "none" });
+
+export function initialScaleCalibrationState(reference: ReferenceBackground | null): ScaleCalibrationState {
+  return reference?.calibrated
+    ? Object.freeze({ status: "scale-set", provenance: "loaded-local-transform", primaryKnownDistanceMm: null })
+    : UNCALIBRATED_SCALE_STATE;
+}
+
 export function fittedBackgroundTransform(
   imageWidthPx: number,
   imageHeightPx: number,
@@ -59,6 +84,23 @@ export function calibrateBackgroundTransform(
     widthMm: nextWidth,
     heightMm: nextHeight,
   });
+}
+
+export function verifyBackgroundScale(
+  first: PlanPosition,
+  second: PlanPosition,
+  knownDistanceMm: number,
+  percentTolerance = SCALE_VERIFICATION_PERCENT_TOLERANCE,
+  minimumToleranceMm = SCALE_VERIFICATION_MIN_TOLERANCE_MM,
+): ScaleVerification {
+  if (!Number.isSafeInteger(knownDistanceMm) || knownDistanceMm <= 0) throw new RangeError("Verification distance must be greater than zero.");
+  if (!Number.isFinite(percentTolerance) || percentTolerance <= 0 || percentTolerance > 100 || !Number.isSafeInteger(minimumToleranceMm) || minimumToleranceMm < 0) throw new RangeError("Scale verification tolerance is invalid.");
+  const measuredDistanceMm = Math.round(Math.hypot(second.xMm - first.xMm, second.yMm - first.yMm));
+  if (measuredDistanceMm < 1) throw new RangeError("Choose two different verification points.");
+  const residualMm = measuredDistanceMm - knownDistanceMm;
+  const residualPercent = Math.abs(residualMm) / knownDistanceMm * 100;
+  const toleranceMm = Math.max(minimumToleranceMm, Math.round(knownDistanceMm * percentTolerance / 100));
+  return Object.freeze({ knownDistanceMm, measuredDistanceMm, residualMm, residualPercent, toleranceMm, passed: Math.abs(residualMm) <= toleranceMm });
 }
 
 export function moveBackgroundTransform(background: BackgroundTransform, dxMm: number, dyMm: number): BackgroundTransform {

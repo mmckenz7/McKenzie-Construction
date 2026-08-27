@@ -6,6 +6,8 @@ import {
   beginAddressSelection,
   confirmAddressSelection,
   createLayerRegistry,
+  normalizeGroundPlaneScene,
+  normalizeLayerRegistration,
   normalizedMapCoordinate,
   selectBaseLayer,
   setOverlayVisibility,
@@ -143,5 +145,81 @@ describe("layer registry", () => {
     const registry = createLayerRegistry([], []);
     expect(() => selectBaseLayer(registry, "missing")).toThrow("does not exist");
     expect(() => setOverlayVisibility(registry, "missing", true)).toThrow("does not exist");
+  });
+});
+
+describe("shared local ground-plane registration", () => {
+  const satelliteRegistration = {
+    layerId: "local-satellite",
+    role: "base_imagery",
+    sourceCrs: "IMAGE_PIXEL",
+    groundCrs: "MCKENZIE_LOCAL_MM",
+    method: "similarity_controls",
+    controls: [
+      { source: { x: "100", y: "200" }, ground: { xMm: 0, yMm: 0 } },
+      { source: { x: "900", y: "200" }, ground: { xMm: 30_480, yMm: 0 } },
+    ],
+    residualMm: 76,
+    uncertaintyMm: 305,
+    status: "registered",
+  } as const;
+  const parcelRegistration = {
+    layerId: "local-parcel",
+    role: "parcel_overlay",
+    sourceCrs: "EPSG:2915",
+    groundCrs: "MCKENZIE_LOCAL_MM",
+    method: "declared_crs",
+    controls: [],
+    residualMm: null,
+    uncertaintyMm: 610,
+    status: "registered",
+  } as const;
+
+  it("registers imagery and parcel context into one integer-millimeter plane without changing fence geometry", () => {
+    const fenceProjection = {
+      revision: "revision-7",
+      points: [{ id: "point-1", position: { xMm: 0, yMm: 0 } }, { id: "point-2", position: { xMm: 6_096, yMm: 0 } }],
+      runs: [{ id: "segment-1", fromPointId: "point-1", toPointId: "point-2" }],
+    } as const;
+    const scene = normalizeGroundPlaneScene({
+      plane: "MCKENZIE_LOCAL_MM",
+      registrations: [satelliteRegistration, parcelRegistration],
+      observations: [
+        { observationId: "parcel-observation", segmentId: "segment-1", layerId: "local-parcel", source: "parcel_context", confidence: "medium", verification: "preliminary" },
+        { observationId: "aerial-observation", segmentId: "segment-1", layerId: "local-satellite", source: "aerial_imagery", confidence: "low", verification: "estimated" },
+      ],
+      fenceProjection,
+    });
+    const registry = createLayerRegistry(
+      [{ id: "local-satellite", label: "Local satellite capture", kind: "satellite", provider: useMetadata }],
+      [{ id: "local-parcel", label: "Local parcel context", source: "parcel", visible: true, provider: useMetadata }],
+    );
+    const before = JSON.stringify(scene.fenceProjection);
+    const hidden = setOverlayVisibility(registry, "local-parcel", false);
+    expect(hidden.overlays[0].visible).toBe(false);
+    expect(JSON.stringify(scene.fenceProjection)).toBe(before);
+    expect(scene.registrations.map(({ role }) => role)).toEqual(["base_imagery", "parcel_overlay"]);
+    expect(scene.observations[0]).toMatchObject({ confidence: "medium", verification: "preliminary" });
+  });
+
+  it("requires enough non-collinear controls for similarity and affine registration", () => {
+    expect(() => normalizeLayerRegistration({ ...satelliteRegistration, controls: satelliteRegistration.controls.slice(0, 1) })).toThrow(/at least two/i);
+    expect(() => normalizeLayerRegistration({
+      ...satelliteRegistration,
+      method: "affine_controls",
+      controls: [
+        ...satelliteRegistration.controls,
+        { source: { x: "1700", y: "200" }, ground: { xMm: 60_960, yMm: 0 } },
+      ],
+    })).toThrow(/non-collinear/i);
+  });
+
+  it("keeps confidence separate and refuses to promote parcel or imagery context to field verified", () => {
+    expect(() => normalizeGroundPlaneScene({
+      plane: "MCKENZIE_LOCAL_MM",
+      registrations: [parcelRegistration],
+      observations: [{ observationId: "parcel-observation", segmentId: null, layerId: "local-parcel", source: "parcel_context", confidence: "high", verification: "field_verified" }],
+      fenceProjection: { revision: "empty", points: [], runs: [] },
+    })).toThrow(/cannot be promoted/i);
   });
 });

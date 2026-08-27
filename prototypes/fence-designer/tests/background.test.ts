@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform, straightenBackgroundFromHouseCorners } from "../src/background";
+import { calibrateBackgroundTransform, fittedBackgroundTransform, initialScaleCalibrationState, moveBackgroundTransform, rotateBackgroundTransform, straightenBackgroundFromHouseCorners, verifyBackgroundScale } from "../src/background";
 
 describe("local reference image transform", () => {
   it("fits an image into the current plan while preserving its aspect ratio", () => {
@@ -27,6 +27,25 @@ describe("local reference image transform", () => {
     expect(moveBackgroundTransform(background, 305, -610)).toEqual({ ...background, xMm: 305, yMm: -610 });
     expect(rotateBackgroundTransform(background, 370).rotationDegrees).toBe(10);
     expect(rotateBackgroundTransform(background, -190).rotationDegrees).toBe(170);
+  });
+
+  it("verifies a second independent line against the greater of one percent or six inches", () => {
+    expect(verifyBackgroundScale({ xMm: 0, yMm: 0 }, { xMm: 10_050, yMm: 0 }, 10_000)).toEqual({
+      knownDistanceMm: 10_000,
+      measuredDistanceMm: 10_050,
+      residualMm: 50,
+      residualPercent: 0.5,
+      toleranceMm: 152,
+      passed: true,
+    });
+    expect(verifyBackgroundScale({ xMm: 0, yMm: 0 }, { xMm: 20_250, yMm: 0 }, 20_000)).toMatchObject({ toleranceMm: 200, passed: false });
+    expect(() => verifyBackgroundScale({ xMm: 0, yMm: 0 }, { xMm: 0, yMm: 0 }, 10_000)).toThrow(/different verification points/i);
+  });
+
+  it("does not silently promote a loaded calibrated transform to two-line verified", () => {
+    const reference = { src: "data:image/jpeg;base64,ZmFrZQ==", name: "Local reference", opacity: 0.7, locked: false, calibrated: true, transform: { xMm: 0, yMm: 0, widthMm: 10_000, heightMm: 5_000, rotationDegrees: 0 } } as const;
+    expect(initialScaleCalibrationState(reference)).toEqual({ status: "scale-set", provenance: "loaded-local-transform", primaryKnownDistanceMm: null });
+    expect(initialScaleCalibrationState(null)).toEqual({ status: "uncalibrated", provenance: "none" });
   });
 
   it("straightens a traced house's first wall to the grid and returns its measured footprint", () => {

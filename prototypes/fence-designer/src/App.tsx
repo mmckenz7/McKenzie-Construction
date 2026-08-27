@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createHistory, pushHistory, redo, undo, type History } from "./history";
-import { calibrateBackgroundTransform, fittedBackgroundTransform, moveBackgroundTransform, rotateBackgroundTransform, straightenBackgroundFromHouseCorners, type PlanPosition, type ReferenceBackground } from "./background";
+import { calibrateBackgroundTransform, fittedBackgroundTransform, initialScaleCalibrationState, moveBackgroundTransform, rotateBackgroundTransform, straightenBackgroundFromHouseCorners, UNCALIBRATED_SCALE_STATE, verifyBackgroundScale, type PlanPosition, type ReferenceBackground, type ScaleCalibrationState } from "./background";
 import {
   EMPTY_DESIGN, addPoint, closestPointOnHouseEdge, deletePoint, feetAndInchesToMm, fenceLineCount, fencePathForPoint, formatFeetInches, gateOffsetFromReferenceMm, gateRunForSegment, insertGateOnSegment, isPointOnHouseEdge, movePoint, movePointWithLockedFollowing,
   pointById, pointRole, removeHouseReference, segmentLengthMm, setHouseReference, setHouseReferenceAt, setSegmentKind, setSegmentLengthMm, snapPlanPosition, snapRunEndpoint, snapToFenceRun, snapToHouseEdge, solvePathBetweenFixedEndsMm, startFenceLine, totalLengthMm, updateGateOnRun,
@@ -18,7 +18,7 @@ import { panView, placeDimensionLabels, zoomViewAt, type ViewBox } from "./view"
 
 type Selection = Readonly<{ type: "point" | "segment"; id: string } | { type: "house" }> | null;
 type Drag = Readonly<{ pointId: string; original: FenceDesign }> | null;
-type Mode = "draw" | "select" | "pan" | "close" | "new-line" | "calibrate" | "trace-house";
+type Mode = "draw" | "select" | "pan" | "close" | "new-line" | "calibrate" | "verify-calibration" | "trace-house";
 type ReferenceProvider = keyof PropertyReferenceLinks;
 type TakeoffMaterial = "black-aluminum" | "treated-pine-privacy";
 type PlanPointer = Readonly<{ clientX: number; clientY: number }>;
@@ -101,6 +101,7 @@ export default function App() {
   const [referenceBackground, setReferenceBackground] = useState<ReferenceBackground | null>(null);
   const [referenceBusy, setReferenceBusy] = useState<"capture" | "paste" | "upload" | null>(null);
   const [calibrationPoints, setCalibrationPoints] = useState<readonly PlanPosition[]>([]);
+  const [scaleCalibration, setScaleCalibration] = useState<ScaleCalibrationState>(UNCALIBRATED_SCALE_STATE);
   const [houseTracePoints, setHouseTracePoints] = useState<readonly PlanPosition[]>([]);
   const [calibrationFeet, setCalibrationFeet] = useState("");
   const [calibrationInches, setCalibrationInches] = useState("0");
@@ -163,7 +164,7 @@ export default function App() {
   const liveRunLengthMm = mode === "draw" && previewPoint && extensionAnchor
     ? Math.round(Math.hypot(previewPoint.xMm - extensionAnchor.xMm, previewPoint.yMm - extensionAnchor.yMm))
     : null;
-  const referenceNeedsCalibration = Boolean(referenceBackground && !referenceBackground.calibrated);
+  const referenceNeedsCalibration = Boolean(referenceBackground && scaleCalibration.status !== "verified");
   const dimensionScale = view.width / DEFAULT_VIEW.width;
   const dimensionPositions = useMemo(() => new Map(placeDimensionLabels(design.segments.map((segment) => {
     const start = pointById(design, segment.fromPointId); const end = pointById(design, segment.toPointId);
@@ -247,8 +248,31 @@ export default function App() {
       const knownDistanceMm = feetAndInchesToMm(Number(calibrationFeet), Number(calibrationInches));
       const transform = calibrateBackgroundTransform(referenceBackground.transform, calibrationPoints[0], point, knownDistanceMm);
       setReferenceBackground({ ...referenceBackground, transform, calibrated: true });
-      setCalibrationPoints([]); setMode("select"); setNotice(`Reference image calibrated to ${formatFeetInches(knownDistanceMm)}. Fence measurements were not changed.`);
+      setScaleCalibration(Object.freeze({ status: "scale-set", provenance: "user-known-line", primaryKnownDistanceMm: knownDistanceMm }));
+      setCalibrationPoints([]); setMode("select"); setNotice(`Image scale set from ${formatFeetInches(knownDistanceMm)}. Verify it with a different known line before drawing. Fence measurements were not changed.`);
     } catch (error) { setCalibrationPoints([]); setMode("select"); setNotice(error instanceof Error ? error.message : "The reference image could not be calibrated."); }
+  };
+  const verifyCalibrationAt = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (!referenceBackground?.calibrated) { setMode("select"); setNotice("Set image scale with the first known line before verifying it."); return; }
+    if (referenceBackground.locked) { setMode("select"); setNotice("Unlock the reference image before verifying its scale."); return; }
+    const point = toPlanRaw(event.clientX, event.clientY);
+    if (calibrationPoints.length === 0) {
+      setCalibrationPoints([point]); setNotice("First verification point marked. Tap the second endpoint on this independent known line."); return;
+    }
+    try {
+      const knownDistanceMm = feetAndInchesToMm(Number(calibrationFeet), Number(calibrationInches));
+      const verification = verifyBackgroundScale(calibrationPoints[0], point, knownDistanceMm);
+      setScaleCalibration(Object.freeze({
+        status: verification.passed ? "verified" : "failed",
+        provenance: "two-user-known-lines",
+        primaryKnownDistanceMm: scaleCalibration.status === "scale-set" ? scaleCalibration.primaryKnownDistanceMm : scaleCalibration.status === "verified" || scaleCalibration.status === "failed" ? scaleCalibration.primaryKnownDistanceMm : null,
+        verification,
+      }));
+      setCalibrationPoints([]); setMode("select");
+      setNotice(verification.passed
+        ? `Scale verified: ${formatFeetInches(verification.measuredDistanceMm)} measured against ${formatFeetInches(knownDistanceMm)} (${verification.residualPercent.toFixed(2)}% residual). Alignment remains manual reference only.`
+        : `Scale verification failed: ${formatFeetInches(verification.measuredDistanceMm)} measured against ${formatFeetInches(knownDistanceMm)} (${verification.residualPercent.toFixed(2)}% residual). Drawing stays locked; recalibrate or verify different controls.`);
+    } catch (error) { setCalibrationPoints([]); setMode("select"); setNotice(error instanceof Error ? error.message : "The reference scale could not be verified."); }
   };
   const traceHouseAt = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (!referenceBackground || referenceBackground.locked) { setHouseTracePoints([]); setMode("select"); setNotice("Unlock a captured reference image before tracing the house."); return; }
@@ -271,6 +295,7 @@ export default function App() {
   const addAt = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (mode === "trace-house") { traceHouseAt(event); return; }
     if (mode === "calibrate") { calibrateAt(event); return; }
+    if (mode === "verify-calibration") { verifyCalibrationAt(event); return; }
     if (mode === "close") { closeAt(event); return; }
     if (referenceNeedsCalibration && (mode === "draw" || mode === "new-line")) { setPropertyPanelOpen(true); setMode("select"); setNotice("Calibrate the aerial/reference image with a known distance before drawing fence points."); return; }
     if (mode === "new-line") {
@@ -404,7 +429,7 @@ export default function App() {
     setGateEditorOpen(false); setSelection({ type: "segment", id }); setMode("select"); setNotice("Span selected. Enter an exact length or edit its gate intent.");
   };
   const startDrag = (event: ReactPointerEvent, pointId: string) => {
-    if (mode === "pan" || mode === "close" || mode === "draw" || mode === "new-line" || mode === "calibrate" || mode === "trace-house" || event.metaKey) return;
+    if (mode === "pan" || mode === "close" || mode === "draw" || mode === "new-line" || mode === "calibrate" || mode === "verify-calibration" || mode === "trace-house" || event.metaKey) return;
     event.stopPropagation();
     setGateEditorOpen(false); setSelection({ type: "point", id: pointId }); setMode("select"); setDrag({ pointId, original: design });
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
@@ -576,6 +601,7 @@ export default function App() {
   };
   const applyReferenceImage = (image: RasterizedReferenceImage, name: string, message: string) => {
     setReferenceBackground({ src: image.src, name, transform: fittedBackgroundTransform(image.widthPx, image.heightPx, view), opacity: 0.58, locked: false, calibrated: false });
+    setScaleCalibration(UNCALIBRATED_SCALE_STATE);
     setLayers((current) => ({ ...current, reference: true })); setMode("select"); setCalibrationPoints([]); setNotice(message);
   };
   const loadReferenceImage = async (file: File | undefined) => {
@@ -608,10 +634,19 @@ export default function App() {
       setNotice(`Calibration ready for ${formatFeetInches(distance)}. Tap the first point on the known distance.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid calibration distance."); }
   };
+  const startScaleVerification = () => {
+    if (!referenceBackground?.calibrated) { setNotice("Set image scale with the first known line before verifying it."); return; }
+    if (referenceBackground.locked) { setNotice("Unlock the reference image before verifying its scale."); return; }
+    try {
+      const distance = feetAndInchesToMm(Number(calibrationFeet), Number(calibrationInches));
+      setCalibrationPoints([]); setMode("verify-calibration"); setSelection(null); setPreviewPoint(null);
+      setNotice(`Scale verification ready for ${formatFeetInches(distance)}. Mark a different known line from the one used to set scale.`);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid verification distance."); }
+  };
   const startHouseTrace = () => {
     if (!referenceBackground) { setNotice("Capture or upload a property image first."); return; }
     if (referenceBackground.locked) { setNotice("Unlock the reference image before tracing the house."); return; }
-    if (!referenceBackground.calibrated) { setNotice("Calibrate the reference image against a known distance before tracing the house."); return; }
+    if (scaleCalibration.status !== "verified") { setNotice("Verify the image scale with a second independent known distance before tracing the house."); return; }
     if (design.points.length) { setNotice("Straighten the property image before drawing fence points so existing measurements are never moved out of alignment."); return; }
     setHouseTracePoints([]); setCalibrationPoints([]); setMode("trace-house"); setSelection(null); setPreviewPoint(null);
     setNotice("Tap one house corner, then the adjacent corner along the wall that should become horizontal. Continue around all four corners.");
@@ -623,7 +658,11 @@ export default function App() {
   const fitReference = () => {
     if (!referenceBackground || referenceBackground.locked) return;
     const image = new Image();
-    image.onload = () => setReferenceBackground((current) => current ? { ...current, transform: fittedBackgroundTransform(image.naturalWidth, image.naturalHeight, view) } : current);
+    image.onload = () => {
+      setReferenceBackground((current) => current ? { ...current, transform: fittedBackgroundTransform(image.naturalWidth, image.naturalHeight, view), calibrated: false, locked: false } : current);
+      setScaleCalibration(UNCALIBRATED_SCALE_STATE);
+      setNotice("Image fitted to the view. Its prior scale was cleared; set and verify scale again before drawing.");
+    };
     image.src = referenceBackground.src;
   };
   const selectHouse = () => {
@@ -662,7 +701,7 @@ export default function App() {
       if (!loaded) { setNotice("No saved layout exists in this browser yet."); return; }
       const loadedReference = loadLocalReference(localStorage);
       cancelGpsLock(); lastGpsFix.current = null; setGpsOrigin(null); setGpsAccuracyMeters(null); setLastWalkSegmentId(null); setWalkLengthConfirmed(true); setSiteWalkActive(false);
-      setHistory(createHistory(loaded)); setReferenceBackground(loadedReference); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setNotice(loadedReference ? "Saved fence layout and reference image loaded. Start Site Walk at the last point to align a new GPS session." : "Saved local layout loaded. Start Site Walk at the last point to align a new GPS session.");
+      setHistory(createHistory(loaded)); setReferenceBackground(loadedReference); setScaleCalibration(initialScaleCalibrationState(loadedReference)); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setNotice(loadedReference ? "Saved fence layout and reference image loaded. Verify its saved scale with an independent known line before drawing; image alignment remains reference only." : "Saved local layout loaded.");
     } catch (error) { setNotice(error instanceof Error ? `Saved layout was not opened: ${error.message}` : "Saved layout was not opened."); }
   };
   const copyTakeoff = async () => {
@@ -731,7 +770,16 @@ export default function App() {
           <div className="capture-help"><strong>Desktop test flow</strong><span><b>Capture map tab:</b> choose the open Acres or KGIS tab in the browser picker.</span><span><b>Paste image:</b> copy a screenshot, return here, and paste it directly. On Mac use Control–Shift–Command–4; on Windows use Windows–Shift–S.</span></div>
           {referenceBackground && <div className="reference-upload"><span title={referenceBackground.name}>Using: {referenceBackground.name}</span></div>}
           {referenceBackground && <>
-            <div className={`calibration-status${referenceBackground.calibrated ? " complete" : " required"}`} role="status"><strong>{referenceBackground.calibrated ? "✓ Scale calibrated" : "Calibration required before drawing"}</strong><span>{referenceBackground.calibrated ? "Fence drawing is unlocked." : "Enter one known real-world distance and mark its two endpoints on the image."}</span></div>
+            <div className={`calibration-status${scaleCalibration.status === "verified" ? " complete" : " required"}`} role="status">
+              <strong>{scaleCalibration.status === "verified" ? "✓ Scale verified with two known lines" : scaleCalibration.status === "failed" ? "Scale verification failed — drawing remains locked" : scaleCalibration.status === "scale-set" ? "Second known line required" : "Calibration required before drawing"}</strong>
+              <span>{scaleCalibration.status === "verified"
+                ? `Independent check residual: ${formatFeetInches(Math.abs(scaleCalibration.verification.residualMm))} (${scaleCalibration.verification.residualPercent.toFixed(2)}%). Fence drawing is unlocked.`
+                : scaleCalibration.status === "failed"
+                  ? `Independent check residual: ${formatFeetInches(Math.abs(scaleCalibration.verification.residualMm))}; allowed ${formatFeetInches(scaleCalibration.verification.toleranceMm)}. Recalibrate or verify different control points.`
+                  : scaleCalibration.status === "scale-set"
+                    ? scaleCalibration.provenance === "loaded-local-transform" ? "A saved scale was loaded, but it must be checked again with an independent known line on this image." : "Use a different known line to verify the scale before drawing."
+                    : "Enter one known real-world distance and mark its two endpoints on the image."}</span>
+            </div>
             <div className="layer-controls" aria-label="Visible plan layers">
               <strong>Visible layers</strong>
               {(["reference", "grid", "house", "dimensions"] as const).map((layer) => <label key={layer}><input type="checkbox" checked={layers[layer]} onChange={() => setLayers((current) => ({ ...current, [layer]: !current[layer] }))} /><span>{layer === "reference" ? "Reference image" : layer === "dimensions" ? "Measurements" : `${layer[0].toUpperCase()}${layer.slice(1)}`}</span></label>)}
@@ -742,16 +790,17 @@ export default function App() {
               <div className="reference-position"><span>Move image</span><div><button aria-label="Move reference left" disabled={referenceBackground.locked} onClick={() => nudgeReference(-305, 0)}>←</button><button aria-label="Move reference up" disabled={referenceBackground.locked} onClick={() => nudgeReference(0, -305)}>↑</button><button aria-label="Move reference down" disabled={referenceBackground.locked} onClick={() => nudgeReference(0, 305)}>↓</button><button aria-label="Move reference right" disabled={referenceBackground.locked} onClick={() => nudgeReference(305, 0)}>→</button></div></div>
             </div>
             <div className="calibration-editor">
-              <div><strong>Set image scale</strong><span>Enter one known real-world distance, then tap its two endpoints on the image.</span></div>
+              <div><strong>Set and verify image scale</strong><span>First set scale from one known line. Then enter a different known distance and check its two endpoints. The check must agree within 1% or 6 inches, whichever is greater.</span></div>
               <div className="exact-grid"><label><span>Feet</span><input aria-label="Calibration feet" inputMode="numeric" type="number" min="0" max="1000" placeholder="Required" value={calibrationFeet} onChange={(event) => setCalibrationFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Calibration inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={calibrationInches} onChange={(event) => setCalibrationInches(event.target.value)} /></label></div>
-              <button className={mode === "calibrate" ? "active-tool" : "primary"} disabled={referenceBackground.locked} onClick={startCalibration}>{mode === "calibrate" ? "Pick calibration points…" : "Pick two points"}</button>
+              <div className="reference-capture-actions"><button className={mode === "calibrate" ? "active-tool" : "primary"} disabled={referenceBackground.locked} onClick={startCalibration}>{mode === "calibrate" ? "Pick scale points…" : "1. Set scale: pick two points"}</button><button className={mode === "verify-calibration" ? "active-tool" : "primary"} disabled={referenceBackground.locked || !referenceBackground.calibrated} onClick={startScaleVerification}>{mode === "verify-calibration" ? "Pick verification points…" : "2. Verify independent line"}</button></div>
             </div>
+            <div className="capture-help"><strong>Scale is not alignment</strong><span>This check can detect a stretched or mismatched image scale. It does not align satellite imagery to parcel vectors. Alignment remains manual and unverified in this slice.</span><span>Imagery and parcel lines are reference context only—not a boundary survey or legal property line. Exact entered fence lengths remain authoritative.</span></div>
             <div className="house-trace-editor">
               <div><strong>Straighten from the house</strong><span>After calibration, mark four house corners. The first wall becomes horizontal and creates the house footprint.</span></div>
-              <button className={mode === "trace-house" ? "active-tool" : "primary"} disabled={referenceBackground.locked || !referenceBackground.calibrated || design.points.length > 0} onClick={() => { if (mode === "trace-house") { setHouseTracePoints([]); setMode("select"); setNotice("House tracing canceled."); } else startHouseTrace(); }}>{mode === "trace-house" ? `Cancel tracing · ${houseTracePoints.length}/4` : "Trace 4 house corners"}</button>
+              <button className={mode === "trace-house" ? "active-tool" : "primary"} disabled={referenceBackground.locked || scaleCalibration.status !== "verified" || design.points.length > 0} onClick={() => { if (mode === "trace-house") { setHouseTracePoints([]); setMode("select"); setNotice("House tracing canceled."); } else startHouseTrace(); }}>{mode === "trace-house" ? `Cancel tracing · ${houseTracePoints.length}/4` : "Trace 4 house corners"}</button>
               {design.points.length > 0 && <small>Available before fence points are drawn so straightening cannot misalign existing measurements.</small>}
             </div>
-            <div className="reference-actions"><button disabled={referenceBackground.locked} onClick={fitReference}>Fit image to view</button><button disabled={!referenceBackground.calibrated} aria-pressed={referenceBackground.locked} className={referenceBackground.locked ? "active-tool" : ""} onClick={() => setReferenceBackground({ ...referenceBackground, locked: !referenceBackground.locked })}>{referenceBackground.locked ? "🔒 Image locked" : "🔓 Lock image"}</button><button className="danger" onClick={() => { setReferenceBackground(null); saveLocalReference(localStorage, null); setCalibrationPoints([]); setHouseTracePoints([]); if (mode === "calibrate" || mode === "trace-house") setMode("select"); setNotice("Local reference image removed. Fence measurements were not changed."); }}>Remove image</button></div>
+            <div className="reference-actions"><button disabled={referenceBackground.locked} onClick={fitReference}>Fit image to view</button><button disabled={scaleCalibration.status !== "verified"} aria-pressed={referenceBackground.locked} className={referenceBackground.locked ? "active-tool" : ""} onClick={() => setReferenceBackground({ ...referenceBackground, locked: !referenceBackground.locked })}>{referenceBackground.locked ? "🔒 Image locked" : "🔓 Lock image"}</button><button className="danger" onClick={() => { setReferenceBackground(null); setScaleCalibration(UNCALIBRATED_SCALE_STATE); saveLocalReference(localStorage, null); setCalibrationPoints([]); setHouseTracePoints([]); if (mode === "calibrate" || mode === "verify-calibration" || mode === "trace-house") setMode("select"); setNotice("Local reference image removed. Fence measurements were not changed."); }}>Remove image</button></div>
           </>}
         </div>
         <small>Reference imagery and GIS lines are not a boundary survey. Google stays a separate viewer. Captured images never leave this browser, are compressed for local use, and are saved with Save local so the design can be reopened on this same device. They are never included in fence totals.</small>
@@ -815,7 +864,7 @@ export default function App() {
             return <image className="reference-image" href={referenceBackground.src} x={transform.xMm} y={transform.yMm} width={transform.widthMm} height={transform.heightMm} opacity={referenceBackground.opacity} preserveAspectRatio="none" transform={`rotate(${transform.rotationDegrees} ${centerX} ${centerY})`} pointerEvents="none" aria-label={`Local reference image ${referenceBackground.name}`} />;
           })()}
           {layers.grid && <rect x={view.x} y={view.y} width={view.width} height={view.height} fill="url(#grid)" pointerEvents="none" />}
-          {design.house && layers.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode === "close") { event.stopPropagation(); closeAt(event); } else if (mode !== "pan" && mode !== "new-line" && mode !== "calibrate" && mode !== "trace-house" && !event.metaKey) { event.stopPropagation(); selectHouse(); } }}>
+          {design.house && layers.house && <g className={`house-reference${houseSelected ? " selected" : ""}`} role="button" tabIndex={0} aria-label={`House footprint ${formatFeetInches(design.house.lengthMm)} by ${formatFeetInches(design.house.widthMm)}`} onPointerDown={(event) => { if (mode === "close") { event.stopPropagation(); closeAt(event); } else if (mode !== "pan" && mode !== "new-line" && mode !== "calibrate" && mode !== "verify-calibration" && mode !== "trace-house" && !event.metaKey) { event.stopPropagation(); selectHouse(); } }}>
             <rect className="house-hit" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <rect className="house-footprint" x={design.house.xMm} y={design.house.yMm} width={design.house.lengthMm} height={design.house.widthMm} />
             <g transform={`translate(${design.house.xMm + design.house.lengthMm / 2} ${design.house.yMm + design.house.widthMm / 2})`} className="house-label"><rect x="-1050" y="-300" width="2100" height="600" rx="180" /><text textAnchor="middle" dominantBaseline="central">HOUSE · {formatFeetInches(design.house.lengthMm)} × {formatFeetInches(design.house.widthMm)}</text></g>
@@ -881,7 +930,7 @@ export default function App() {
               <g className={gateReferencePost === "post-b" ? "active" : ""} transform={`translate(${reference.postB.xMm} ${reference.postB.yMm})`}><circle className="halo" r={470 * dimensionScale} /><circle className="badge" r={345 * dimensionScale} /><text textAnchor="middle" dominantBaseline="central" style={{ fontSize: 310 * dimensionScale }}>B</text></g>
             </g>;
           })()}
-          {mode === "calibrate" && calibrationPoints.map((point, index) => <g key={`${point.xMm}-${point.yMm}-${index}`} className="calibration-point" transform={`translate(${point.xMm} ${point.yMm})`} pointerEvents="none"><circle r="230" /><line x1="-380" y1="0" x2="380" y2="0" /><line x1="0" y1="-380" x2="0" y2="380" /><text y="-470" textAnchor="middle">{index + 1}</text></g>)}
+          {(mode === "calibrate" || mode === "verify-calibration") && calibrationPoints.map((point, index) => <g key={`${point.xMm}-${point.yMm}-${index}`} className="calibration-point" transform={`translate(${point.xMm} ${point.yMm})`} pointerEvents="none"><circle r="230" /><line x1="-380" y1="0" x2="380" y2="0" /><line x1="0" y1="-380" x2="0" y2="380" /><text y="-470" textAnchor="middle">{index + 1}</text></g>)}
           {mode === "trace-house" && <g className="house-trace" pointerEvents="none">
             {houseTracePoints.length > 1 && <polyline points={houseTracePoints.map(({ xMm, yMm }) => `${xMm},${yMm}`).join(" ")} />}
             {houseTracePoints.map((point, index) => <g key={`${point.xMm}-${point.yMm}-${index}`} transform={`translate(${point.xMm} ${point.yMm})`}><circle r="250" /><text y="-470" textAnchor="middle">{index + 1}</text></g>)}

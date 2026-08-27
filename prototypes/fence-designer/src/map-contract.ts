@@ -293,3 +293,121 @@ export function setOverlayVisibility(registry: FenceLayerRegistry, layerId: stri
   if (!registry.overlays.some(({ id }) => id === layerId)) throw new TypeError("Selected overlay layer does not exist.");
   return Object.freeze({ ...registry, overlays: Object.freeze(registry.overlays.map((layer) => layer.id === layerId ? Object.freeze({ ...layer, visible }) : layer)) });
 }
+
+// Provider adapters may project geographic coordinates into this plane, but FenceDesign
+// remains the only editable geometry authority and continues to use integer millimeters.
+export type LocalGroundPoint = Readonly<{ xMm: number; yMm: number }>;
+export type RegistrationMethod = "declared_crs" | "similarity_controls" | "affine_controls";
+export type RegisteredLayerRole = "base_imagery" | "parcel_overlay" | "obstruction_overlay" | "reference_overlay";
+export type RegistrationControl = Readonly<{
+  source: Readonly<{ x: string; y: string }>;
+  ground: LocalGroundPoint;
+}>;
+export type LayerRegistration = Readonly<{
+  layerId: string;
+  role: RegisteredLayerRole;
+  sourceCrs: string;
+  groundCrs: "MCKENZIE_LOCAL_MM";
+  method: RegistrationMethod;
+  controls: readonly RegistrationControl[];
+  residualMm: number | null;
+  uncertaintyMm: number | null;
+  status: "registered" | "rejected";
+}>;
+
+export type ReferenceObservation = Readonly<{
+  observationId: string;
+  segmentId: string | null;
+  layerId: string | null;
+  source: "parcel_context" | "aerial_imagery" | "manual_field" | "gps_field" | "instrument_field";
+  confidence: "low" | "medium" | "high";
+  verification: "preliminary" | "estimated" | "field_verified" | "manually_corrected";
+}>;
+
+export type GroundPlaneScene = Readonly<{
+  plane: "MCKENZIE_LOCAL_MM";
+  registrations: readonly LayerRegistration[];
+  observations: readonly ReferenceObservation[];
+  fenceProjection: Readonly<{
+    revision: string;
+    points: readonly Readonly<{ id: string; position: LocalGroundPoint }>[];
+    runs: readonly Readonly<{ id: string; fromPointId: string; toPointId: string }>[];
+  }>;
+}>;
+
+function localGroundPoint(point: LocalGroundPoint): LocalGroundPoint {
+  if (!Number.isSafeInteger(point.xMm) || !Number.isSafeInteger(point.yMm)) throw new TypeError("Local ground points must use integer millimeters.");
+  return Object.freeze({ xMm: point.xMm, yMm: point.yMm });
+}
+
+function sourceCoordinate(value: string, label: string) {
+  const normalized = decimal(value, label, -1e15, 1e15);
+  if (!Number.isFinite(Number(normalized))) throw new TypeError(`${label} is invalid.`);
+  return normalized;
+}
+
+function nonCollinear(points: readonly Readonly<{ x: number; y: number }>[]) {
+  if (points.length < 3) return false;
+  const [first, second] = points;
+  return points.slice(2).some((third) => Math.abs((second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x)) > 1e-9);
+}
+
+export function normalizeLayerRegistration(input: LayerRegistration): LayerRegistration {
+  assertProviderNeutral(input, "Layer registration");
+  if (input.groundCrs !== "MCKENZIE_LOCAL_MM") throw new TypeError("Registered layers must target the McKenzie local ground plane.");
+  const controls = Object.freeze(input.controls.map((control) => Object.freeze({
+    source: Object.freeze({ x: sourceCoordinate(control.source.x, "Source X"), y: sourceCoordinate(control.source.y, "Source Y") }),
+    ground: localGroundPoint(control.ground),
+  })));
+  if (input.method === "similarity_controls" && controls.length < 2) throw new TypeError("Similarity registration requires at least two matching controls.");
+  if (input.method === "affine_controls") {
+    if (controls.length < 3) throw new TypeError("Affine registration requires at least three matching controls.");
+    if (!nonCollinear(controls.map(({ source }) => ({ x: Number(source.x), y: Number(source.y) }))) || !nonCollinear(controls.map(({ ground }) => ({ x: ground.xMm, y: ground.yMm })))) throw new TypeError("Affine registration controls must be non-collinear in both coordinate planes.");
+  }
+  if (input.method === "declared_crs" && controls.length !== 0) throw new TypeError("Declared-CRS registration does not accept manual controls.");
+  const metric = (value: number | null, label: string) => {
+    if (value === null) return null;
+    if (!Number.isSafeInteger(value) || value < 0) throw new TypeError(`${label} must be nonnegative integer millimeters.`);
+    return value;
+  };
+  return Object.freeze({
+    layerId: requiredText(input.layerId, "Registered layer ID", 80),
+    role: input.role,
+    sourceCrs: requiredText(input.sourceCrs, "Source CRS", 120),
+    groundCrs: "MCKENZIE_LOCAL_MM",
+    method: input.method,
+    controls,
+    residualMm: metric(input.residualMm, "Registration residual"),
+    uncertaintyMm: metric(input.uncertaintyMm, "Registration uncertainty"),
+    status: input.status,
+  });
+}
+
+export function normalizeGroundPlaneScene(input: GroundPlaneScene): GroundPlaneScene {
+  assertProviderNeutral(input, "Ground-plane scene");
+  if (input.plane !== "MCKENZIE_LOCAL_MM") throw new TypeError("Fence scenes must use the McKenzie local ground plane.");
+  const registrations = Object.freeze(input.registrations.map(normalizeLayerRegistration));
+  const layerIds = registrations.map(({ layerId }) => layerId);
+  if (new Set(layerIds).size !== layerIds.length) throw new TypeError("Registered layer IDs must be unique.");
+  const pointIds = new Set<string>();
+  const points = Object.freeze(input.fenceProjection.points.map(({ id, position }) => {
+    const normalizedId = requiredText(id, "Fence point ID", 80);
+    if (pointIds.has(normalizedId)) throw new TypeError("Fence point IDs must be unique.");
+    pointIds.add(normalizedId);
+    return Object.freeze({ id: normalizedId, position: localGroundPoint(position) });
+  }));
+  const runs = Object.freeze(input.fenceProjection.runs.map((run) => {
+    const normalized = Object.freeze({ id: requiredText(run.id, "Fence run ID", 80), fromPointId: requiredText(run.fromPointId, "From point ID", 80), toPointId: requiredText(run.toPointId, "To point ID", 80) });
+    if (!pointIds.has(normalized.fromPointId) || !pointIds.has(normalized.toPointId) || normalized.fromPointId === normalized.toPointId) throw new TypeError("Fence runs must reference two distinct scene points.");
+    return normalized;
+  }));
+  const observations = Object.freeze(input.observations.map((observation) => {
+    const layerId = observation.layerId === null ? null : requiredText(observation.layerId, "Observation layer ID", 80);
+    if (layerId !== null && !layerIds.includes(layerId)) throw new TypeError("Observation layer must be registered in the scene.");
+    const segmentId = observation.segmentId === null ? null : requiredText(observation.segmentId, "Observation segment ID", 80);
+    if (segmentId !== null && !runs.some(({ id }) => id === segmentId)) throw new TypeError("Observation segment must exist in the fence projection.");
+    if ((observation.source === "parcel_context" || observation.source === "aerial_imagery") && observation.verification === "field_verified") throw new TypeError("Parcel and aerial observations cannot be promoted to field verified.");
+    return Object.freeze({ ...observation, observationId: requiredText(observation.observationId, "Observation ID", 120), layerId, segmentId });
+  }));
+  return Object.freeze({ plane: "MCKENZIE_LOCAL_MM", registrations, observations, fenceProjection: Object.freeze({ revision: requiredText(input.fenceProjection.revision, "Fence projection revision", 80), points, runs }) });
+}
