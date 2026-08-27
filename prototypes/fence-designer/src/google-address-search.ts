@@ -2,27 +2,33 @@ import { loadGoogleMapsRuntime } from "./google-map-renderer";
 import type { AddressSearchAdapter, AddressSearchCandidate } from "./map-contract";
 import { normalizedMapCoordinate } from "./map-presentation";
 
-type GoogleGeocoderResult = Readonly<{
-  place_id: string;
-  formatted_address: string;
-  geometry: Readonly<{ location: Readonly<{ lat(): number; lng(): number }> }>;
+type GooglePlaceResult = Readonly<{
+  id: string;
+  formattedAddress?: string | null;
+  location?: Readonly<{ lat(): number; lng(): number }> | null;
 }>;
 
-type GoogleGeocoder = Readonly<{
-  geocode(request: Readonly<{ address: string; componentRestrictions: Readonly<{ country: "US" }>; region: "us" }>): Promise<Readonly<{ results: readonly GoogleGeocoderResult[] }>>;
+type GooglePlaceClass = Readonly<{
+  searchByText(request: Readonly<{
+    textQuery: string;
+    fields: readonly ["id", "formattedAddress", "location"];
+    maxResultCount: 5;
+    region: "us";
+    language: "en-US";
+  }>): Promise<Readonly<{ places: readonly GooglePlaceResult[] }>>;
 }>;
 
-type GoogleGeocodingLibrary = Readonly<{ Geocoder: new () => GoogleGeocoder }>;
-type GoogleGeocodingRuntime = Readonly<{ importLibrary(name: "geocoding"): Promise<GoogleGeocodingLibrary> }>;
-export type GoogleGeocodingLoader = (apiKey: string) => Promise<GoogleGeocodingRuntime>;
+type GooglePlacesLibrary = Readonly<{ Place: GooglePlaceClass }>;
+type GooglePlacesRuntime = Readonly<{ importLibrary(name: "places"): Promise<GooglePlacesLibrary> }>;
+export type GooglePlacesLoader = (apiKey: string) => Promise<GooglePlacesRuntime>;
 
 const GOOGLE_TERMS_VERSION = "https://cloud.google.com/maps-platform/terms";
 
-async function browserGoogleGeocodingRuntime(apiKey: string): Promise<GoogleGeocodingRuntime> {
+async function browserGooglePlacesRuntime(apiKey: string): Promise<GooglePlacesRuntime> {
   await loadGoogleMapsRuntime(apiKey);
-  const maps = (window as unknown as { google?: { maps?: Partial<GoogleGeocodingRuntime> } }).google?.maps;
-  if (!maps?.importLibrary) throw new TypeError("Google address search is unavailable. The map remains usable without it.");
-  return maps as GoogleGeocodingRuntime;
+  const maps = (window as unknown as { google?: { maps?: Partial<GooglePlacesRuntime> } }).google?.maps;
+  if (!maps?.importLibrary) throw new TypeError("Google Places address search is unavailable. The map remains usable without it.");
+  return maps as GooglePlacesRuntime;
 }
 
 function addressQuery(value: string) {
@@ -34,25 +40,25 @@ function addressQuery(value: string) {
 export class GoogleAddressSearchAdapter implements AddressSearchAdapter {
   constructor(
     private readonly apiKey: string,
-    private readonly loader: GoogleGeocodingLoader = browserGoogleGeocodingRuntime,
+    private readonly loader: GooglePlacesLoader = browserGooglePlacesRuntime,
     private readonly now: () => string = () => new Date().toISOString(),
   ) {}
 
   async search(value: string): Promise<readonly AddressSearchCandidate[]> {
     const query = addressQuery(value);
     const runtime = await this.loader(this.apiKey);
-    const { Geocoder } = await runtime.importLibrary("geocoding");
-    const response = await new Geocoder().geocode({ address: query, componentRestrictions: { country: "US" }, region: "us" });
+    const { Place } = await runtime.importLibrary("places");
+    const response = await Place.searchByText({ textQuery: query, fields: ["id", "formattedAddress", "location"], maxResultCount: 5, region: "us", language: "en-US" });
     const seen = new Set<string>();
-    return Object.freeze(response.results.flatMap((result) => {
-      if (!result.place_id || seen.has(result.place_id)) return [];
-      seen.add(result.place_id);
+    return Object.freeze(response.places.flatMap((result) => {
+      if (!result.id || !result.formattedAddress || !result.location || seen.has(result.id)) return [];
+      seen.add(result.id);
       return [Object.freeze({
-        resultId: result.place_id,
-        displayLabel: result.formatted_address,
-        coordinate: normalizedMapCoordinate(result.geometry.location.lng().toFixed(7), result.geometry.location.lat().toFixed(7)),
+        resultId: result.id,
+        displayLabel: result.formattedAddress,
+        coordinate: normalizedMapCoordinate(result.location.lng().toFixed(7), result.location.lat().toFixed(7)),
         provider: Object.freeze({
-          providerId: "google-maps-geocoder",
+          providerId: "google-maps-places-new",
           termsVersion: GOOGLE_TERMS_VERSION,
           attribution: "Google Maps",
           storagePolicy: "provider_specific" as const,
