@@ -148,3 +148,14 @@ Repository validation note: the supported webpack production build completed suc
 124. Confirmed the following run remained exactly 19′ 11″ and the combined total became 72′ 11″ instead of corrupting the following angle or length.
 125. Undo restored 69′ 11″ and the 30′ 0″ middle run in one step; Redo restored 72′ 11″ and the 33′ 0″ correction in one step.
 126. At 390 × 844 the document width remained exactly 390 px, primary controls remained 48 px high, the two exact-length fields were 46 px high, and the three span-editor actions were 327 × 44 px. Browser warnings/errors remained empty.
+
+## No-billing Google candidate Preview QA — 2026-08-27
+
+127. Opened the exact branch Preview for commit `1455554` at `https://mc-kenzie-construction-git-codex-fenc-126aaa-mmckenz7s-projects.vercel.app/sales/fence-designer` after its automatic Git deployment became Ready. The browser key remained a hidden, branch-scoped Preview secret; no value was displayed, logged, or persisted by the prototype.
+128. Opened **Property → Open live map beta** and confirmed the restricted no-billing Google Maps Demo Key reached **Map ready** with satellite imagery, Google attribution, imagery attribution, Terms, and Report a map error visible.
+129. Switched to **Hybrid + streets** and confirmed road and place labels appeared over the satellite imagery. Switched back to satellite and retained the same local Fence design and measured totals.
+130. Reproduced the owner's deidentified real patio footprint with exact 20′ 0″ × 33′ 0″ Quick Layout commands. The closed four-span rectangle totaled exactly 106′ 0″ and remained the unchanged local integer-millimeter Fence geometry authority.
+131. Used **Place plan at map center** and confirmed the 20′ × 33′ rectangle appeared as the read-only green map projection. Opening, closing, and reopening the live map destroyed and remounted the provider surface without removing or revising the local design.
+132. Uploaded a synthetic deidentified GeoJSON polygon from a disposable local fixture. The parcel overlay rendered as an independent layer, its visibility control became enabled, and **Remove parcel** became available without changing Fence geometry, gates, takeoff, or persistence.
+133. Confirmed GeoJSON/KML export stayed disabled until deliberate plan placement and that no geocoder, Places, Street View, KGIS fetch, paid billing, Production key, or provider object entered the Fence document.
+134. Checked the branch Preview console after satellite/hybrid switching, plan placement, lifecycle remount, and parcel import: zero warnings and zero errors. Observational browser location was deliberately not started because this deidentified renderer test did not require a field GPS observation.
