@@ -15,6 +15,7 @@ import { parseRunCommand, quickGateTarget, runEndpoint, type ParsedRunCommand } 
 import { loadLocalDesign, loadLocalReference, saveLocalDesign, saveLocalReference } from "./storage";
 import { calculateBlackAluminumTakeoff, calculateTreatedPinePrivacyTakeoff, formatBlackAluminumTakeoffText, formatTreatedPinePrivacyTakeoffText, takeoffPostReasonLabel, type TakeoffPostReason } from "./takeoff";
 import { panView, placeDimensionLabels, zoomViewAt, type ViewBox } from "./view";
+import GoogleMapSpike from "./GoogleMapSpike";
 
 type Selection = Readonly<{ type: "point" | "segment"; id: string } | { type: "house" }> | null;
 type Drag = Readonly<{ pointId: string; original: FenceDesign }> | null;
@@ -54,7 +55,7 @@ function measurementFields(mm: number): Readonly<{ feet: string; inches: string 
   return Object.freeze({ feet: String(feet), inches: inches.toFixed(3).replace(/\.?0+$/, "") || "0" });
 }
 
-export default function App() {
+export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMapsBrowserKey?: string | null }>) {
   const [history, setHistory] = useState<History<FenceDesign>>(() => createHistory(EMPTY_DESIGN));
   const [selection, setSelection] = useState<Selection>(null);
   const [mode, setMode] = useState<Mode>("draw");
@@ -93,6 +94,7 @@ export default function App() {
   const [commandInput, setCommandInput] = useState("");
   const [commandLog, setCommandLog] = useState<readonly string[]>([]);
   const [propertyPanelOpen, setPropertyPanelOpen] = useState(false);
+  const [googleMapSpikeOpen, setGoogleMapSpikeOpen] = useState(false);
   const [takeoffPanelOpen, setTakeoffPanelOpen] = useState(false);
   const [takeoffViewEnabled, setTakeoffViewEnabled] = useState(false);
   const [takeoffMaterial, setTakeoffMaterial] = useState<TakeoffMaterial>("black-aluminum");
@@ -759,6 +761,23 @@ export default function App() {
       {propertyPanelOpen && <div className="field-panel property-panel">
         <div className="field-panel-heading"><div><p className="eyebrow">Free property reference</p><h2>Open the map, then capture it here</h2></div><span className="reference-chip">Reference only</span></div>
         <p>Open Acres Plus or KGIS, position the property and turn on the layers you need. Return here and capture that browser tab, or paste a copied screenshot. No image file has to be saved on your device.</p>
+        <button aria-pressed={googleMapSpikeOpen} className={googleMapSpikeOpen ? "active-tool" : ""} onClick={() => setGoogleMapSpikeOpen((current) => !current)}>{googleMapSpikeOpen ? "Hide live map beta" : "Open live map beta"}</button>
+        {googleMapSpikeOpen && <GoogleMapSpike
+          apiKey={googleMapsBrowserKey}
+          design={design}
+          onPlacePoint={(position) => {
+            const id = nextId.current++;
+            const pointId = `point-${id}`;
+            const next = addPoint(design, { id: pointId, ...position }, `segment-${id}`, extensionAnchor?.id ?? null);
+            commit(next, next.points.length === 1 ? "Map point placed. Exact McKenzie geometry remains authoritative." : "Map fence point placed as one ordinary undoable geometry revision.");
+            setSelection({ type: "point", id: pointId }); setMode("select");
+          }}
+          onMovePoint={(pointId, position) => {
+            const next = movePoint(design, pointId, position.xMm, position.yMm);
+            commit(next, "Map point moved as one ordinary McKenzie geometry revision. Exact length can be corrected in the inspector.");
+            setSelection({ type: "point", id: pointId }); setMode("select");
+          }}
+        />}
         <div className="property-lookup"><label><span>Property address</span><input value={kgisAddress} onChange={(event) => setKgisAddress(event.target.value)} placeholder="Street address" autoComplete="street-address" /></label><div className="reference-links"><button onClick={() => openPropertyReference("acres")}>Open Acres ↗</button><button onClick={() => openPropertyReference("kgis")}>Open KGIS ↗</button><button onClick={() => openPropertyReference("googleMaps")}>Open Google ↗</button></div></div>
         <div className="reference-workflow">
           <input ref={referenceFileRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { void loadReferenceImage(event.target.files?.[0]); event.currentTarget.value = ""; }} />

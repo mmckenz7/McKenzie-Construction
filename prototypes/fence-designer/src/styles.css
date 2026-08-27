@@ -64,6 +64,20 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .capture-help { display: grid; gap: 4px; padding: 11px 13px; border-radius: 9px; background: #f4f6f3; color: #617068; font-size: .78rem; line-height: 1.4; }
 .capture-help strong { color: #294237; }
 .capture-help b { color: #43584d; }
+.google-map-spike { display: grid; gap: 12px; margin-top: 14px; padding: 14px; border: 1px solid #cbd6ce; border-radius: 12px; background: #f8faf7; }
+.google-map-spike h3 { margin: 3px 0 0; font: 500 1.25rem Georgia, serif; color: #173f31; }
+.google-map-spike > p { margin: 0; color: #5d6d64; line-height: 1.4; }
+.google-map-controls, .google-layer-controls, .google-location-controls, .google-export-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.google-map-canvas { width: 100%; height: 520px; overflow: hidden; border: 1px solid #9eada3; border-radius: 11px; background: #e8ece8; touch-action: pan-x pan-y; }
+.google-map-status { display: flex; gap: 8px; align-items: baseline; padding: 9px 11px; border-left: 4px solid #5b826f; border-radius: 7px; background: #eef4ef; color: #42584c; font-size: .78rem; }
+.google-layer-controls { padding: 10px 12px; border: 1px solid #d7ddd6; border-radius: 9px; background: #fff; }
+.google-layer-controls label, .parcel-file { display: flex; align-items: center; gap: 7px; color: #43564c; font-size: .78rem; font-weight: 760; }
+.parcel-file { display: grid; gap: 4px; min-width: min(100%, 260px); }
+.parcel-file input { max-width: 100%; min-height: 44px; }
+.location-quality { min-height: 44px; display: inline-flex; align-items: center; padding: 7px 10px; border-radius: 8px; background: #edf0f2; color: #53616a; font-size: .78rem; font-weight: 780; }
+.location-quality.best-observational { background: #dceee5; color: #285d47; }
+.location-quality.caution { background: #fff0dc; color: #8a4b12; }
+.location-quality.rejected { background: #fae5e2; color: #8e3128; }
 .reference-upload { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .reference-upload span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #5b6961; font-size: .78rem; }
 .layer-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 12px; border: 1px solid #d7ddd6; border-radius: 9px; background: #f7f9f6; }
@@ -258,6 +272,14 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
   .field-panel-heading { align-items: flex-start; }
   .takeoff-heading-actions { align-items: stretch; flex-direction: column; width: 100%; }
   .field-actions, .property-lookup, .walk-length-editor, .reference-adjustments, .reference-capture-actions, .calibration-editor, .house-trace-editor, .takeoff-confirm, .takeoff-summary, .takeoff-columns, .takeoff-audit-grid { display: grid; grid-template-columns: 1fr; }
+  .google-map-spike { padding: 10px; }
+  .google-map-controls, .google-layer-controls, .google-location-controls, .google-export-controls { display: grid; grid-template-columns: 1fr; }
+  .google-map-controls .segmented { width: 100%; }
+  .google-map-controls .segmented button { flex: 1; }
+  .google-map-controls button, .google-layer-controls button, .google-location-controls button, .google-export-controls button { width: 100%; min-height: 48px; }
+  .google-map-canvas { height: 430px; }
+  .google-map-status { align-items: flex-start; flex-direction: column; }
+  .location-quality { width: 100%; min-height: 48px; }
   .field-actions button, .property-lookup button, .walk-length-editor button, .reference-actions button { width: 100%; }
   .reference-links { display: grid; grid-template-columns: 1fr; }
   .reference-upload { align-items: stretch; flex-direction: column; }

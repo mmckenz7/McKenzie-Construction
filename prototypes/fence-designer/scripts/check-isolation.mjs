@@ -24,5 +24,8 @@ for (const file of files) {
   for (const rule of forbidden) {
     if (rule.test(text)) throw new Error(`${relative(root, file)} violates prototype isolation: ${rule}`);
   }
+  if (/maps\.googleapis\.com/.test(text) && !file.endsWith("google-map-renderer.ts")) throw new Error(`${relative(root, file)} contains provider network access outside the isolated renderer adapter.`);
 }
+const renderer = readFileSync(join(source, "google-map-renderer.ts"), "utf8");
+if ((renderer.match(/https:\/\/maps\.googleapis\.com\/maps\/api\/js/g) ?? []).length !== 1) throw new Error("The Google renderer must contain exactly one approved Maps JavaScript loader endpoint.");
 console.log(`Fence Designer isolation check passed (${files.length} source files).`);
