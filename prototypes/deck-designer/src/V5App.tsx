@@ -11,9 +11,9 @@ import { formatFeetInches } from "./PlanView";
 import { saveDeckDesignV5 } from "./storageV5";
 import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
-import { addBumpoutOnEdge, moveOrthogonalPolygonCorner, movePolygonCorner, movePolygonSegment, resizePolygonEdge, setPolygonEdgeAngle } from "./polygonEditorV3";
+import { addBumpoutOnEdge, moveOrthogonalPolygonCorner, movePolygonCorner, movePolygonSegment, setPolygonEdgeAngle } from "./polygonEditorV3";
 import type { ConfirmedPhotoFacts, PhotoIntakeReview } from "./photoIntake";
-import { deriveGeometricPolygonEdges, type PolygonPoint } from "./polygon";
+import { deriveGeometricPolygonEdges, polygonBounds, type PolygonPoint } from "./polygon";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
 import { V3NumberField } from "./V3NumberField";
 import { deriveLayoutReviewV5 } from "./layoutReviewV5";
@@ -22,6 +22,7 @@ import { setEdgeFinishIntentV5 } from "./finishEditorV5";
 import { deriveWarningSelectionV5 } from "./warningLocatorV5";
 import { usesPrototypeReviewThresholdV5, type GeometryWarningV5 } from "./geometryWarningsV5";
 import type { RenderPalette } from "./ThreeViewV3";
+import { resizePolygonEdgeWithHouseAnchorV5 } from "./houseBoundaryV5";
 
 const ThreeViewV3 = lazy(async () => ({ default: (await import("./ThreeViewV3")).ThreeViewV3 }));
 const PhotoIntake = lazy(async () => ({ default: (await import("./PhotoIntakeDialog")).PhotoIntake }));
@@ -92,7 +93,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   const activeLanding = activeStairSystem?.landings.find((landing) => landing.id === selectedLandingId) ?? activeStairSystem?.landings.find((landing) => !landing.locked) ?? null;
   const activeTotalRisers = activeStairSystem ? Math.ceil((platform.elevation - design.siteContext.gradeElevation) / activeStairSystem.maxRiserHeight) : 0;
   const activeActualRise = activeTotalRisers ? (platform.elevation - design.siteContext.gradeElevation) / activeTotalRisers : 0;
-  const hasEdgeReferences = platform.edgeConditions.some((condition) => condition.condition === "house_attachment") || platform.construction.railing.enabledEdgeIds.length > 0 || platform.construction.stairSystems.length > 0 || platform.construction.edgeFinishes.length > 0;
+  const hasOutlineOptionLocks = platform.construction.railing.enabledEdgeIds.length > 0 || platform.construction.stairSystems.length > 0 || platform.construction.edgeFinishes.length > 0;
   const visibleGeometry = useMemo(() => workflowStage === "layout"
     ? { ...geometry, railSegments: [], railPosts: [], fasciaSpans: [], skirtingPanels: [] }
     : workflowStage === "railings" ? { ...geometry, fasciaSpans: [], skirtingPanels: [] } : geometry, [geometry, workflowStage]);
@@ -154,7 +155,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     if (edgeIndex < 0) { setMessage("Select a side first."); return; }
     try {
       const current = history.present.platforms.find((item) => item.id === platform.id)!;
-      const nextOuter = resizePolygonEdge(current.region.outer, edgeIndex, length, snapIncrement);
+      const nextOuter = resizePolygonEdgeWithHouseAnchorV5(current, edgeId, length, snapIncrement);
       if (replaceRegion(nextOuter, true)) {
         setSelectedEdgeId(deriveGeometricPolygonEdges(nextOuter)[edgeIndex]?.id ?? null);
         setMessage(`Side is ${formatFeetInches(length)}.`);
@@ -194,13 +195,12 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       else apply(next, inset === requestedInset ? `Conceptual beam set ${formatFeetInches(inset)} from the outside edge.` : `Conceptual beam limited to ${formatFeetInches(inset)} from the outside edge for this deck.`);
     } catch (error) { setPreview(null); setMessage(error instanceof Error ? error.message : CHANGE_REJECTED); }
   };
-  const platformBounds = platform.region.outer.reduce((bounds, point) => ({ minX: Math.min(bounds.minX, point.x), maxX: Math.max(bounds.maxX, point.x), minZ: Math.min(bounds.minZ, point.z), maxZ: Math.max(bounds.maxZ, point.z) }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+  const platformBounds = polygonBounds(platform.region.outer);
   const keepSelectedLevelOnly = () => {
     const current = history.present.platforms.find((item) => item.id === platform.id)!;
     const stairSystems = current.construction.stairSystems.filter((system) => system.landings.every((landing) => !landing.terminalPlatformId && landing.connections.every((connection) => connection.destination !== "deck")));
     const kept = { ...current, construction: { ...current.construction, stairSystems } };
-    const next = normalizeDeckDesignV5({ ...history.present, platforms: [kept], metadata: { ...history.present.metadata, revision: history.present.metadata.revision + 1 } });
-    apply(next, "Single-level workflow restored. Multi-level stair references were removed.");
+    apply(normalizeDeckDesignV5({ ...history.present, platforms: [kept], metadata: { ...history.present.metadata, revision: history.present.metadata.revision + 1 } }), "Single-level workflow restored; level links removed.");
     setSelectedPlatformId(kept.id); clearPlanSelection();
   };
   const setPlatformElevation = (valueFeet: number) => {
@@ -219,7 +219,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
   };
   const updateCutout = (index: number, update: Partial<{ centerX: number; centerZ: number; width: number; depth: number }>) => {
     const current = platform.region.holes[index]; if (!current) return;
-    const bounds = current.reduce((result, point) => ({ minX: Math.min(result.minX, point.x), maxX: Math.max(result.maxX, point.x), minZ: Math.min(result.minZ, point.z), maxZ: Math.max(result.maxZ, point.z) }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+    const bounds = polygonBounds(current);
     const next = rectangleHole(update.centerX ?? (bounds.minX + bounds.maxX) / 2, update.centerZ ?? (bounds.minZ + bounds.maxZ) / 2, update.width ?? bounds.maxX - bounds.minX, update.depth ?? bounds.maxZ - bounds.minZ);
     const holes = platform.region.holes.map((hole, holeIndex) => holeIndex === index ? next : hole);
     if (replaceRegion(platform.region.outer, true, holes)) setMessage("Cutout updated.");
@@ -236,7 +236,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     const current = history.present.platforms.find((item) => item.id === platform.id)!;
     const unlocked: DeckPlatformV5 = {
       ...current,
-      edgeConditions: current.edgeConditions.map((condition) => ({ ...condition, condition: "free", attachment: "none" })),
+      edgeConditions: current.edgeConditions,
       construction: {
         ...current.construction,
         railing: { ...current.construction.railing, enabledEdgeIds: [] },
@@ -244,7 +244,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
         edgeFinishes: [],
       },
     };
-    apply(revisePlatform(history.present, unlocked), "Outline unlocked; side options and stairs cleared.");
+    apply(revisePlatform(history.present, unlocked), "Outline unlocked. Side options cleared; house fixed.");
     setSelectedStairSystemId(null);
     setSelectedLandingId(null);
   };
@@ -366,17 +366,16 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     if (landingPositionMode === "distance") return activeLanding.afterRiser * activeStairSystem.treadDepth;
     return landingPositionMode === "above" ? activeTotalRisers - activeLanding.afterRiser : activeLanding.afterRiser;
   };
-  const addLandingConnection = (destination: "deck" | "grade", targetPlatformId?: string, targetEdgeId?: string) => {
+  const addLandingConnection = () => {
     if (!activeStairSystem || !activeLanding?.locked) { setMessage("Lock the landing before adding a flight."); return; }
-    if (destination === "deck" && !targetPlatformId && activeLanding.afterRiser === 0) { setMessage("Choose another level or move this landing below the deck first."); return; }
     const last = activeLanding.connections.at(-1);
     if (last && !last.locked) { setMessage("Lock this flight before another."); return; }
     const usedDirections = new Set([activeLanding.turn, ...activeLanding.connections.map((connection) => connection.direction)]);
     const direction = (["left", "right", "straight"] as const).find((candidate) => !usedDirections.has(candidate));
     if (!direction) { setMessage("All landing sides are used."); return; }
     const id = `${activeLanding.id}-connection-${activeLanding.connections.length + 1}`;
-    const connection: StairLandingConnectionV3 = Object.freeze({ id, locked: false, destination, direction, width: activeStairSystem.width, treadDepth: activeStairSystem.treadDepth, ...(targetPlatformId ? { targetPlatformId } : {}), ...(targetEdgeId ? { targetEdgeId } : {}) });
-    updateLanding({ connections: [...activeLanding.connections, connection] }, targetPlatformId ? `Choose the arrival side and direction for ${targetPlatformId.replaceAll("-", " ")}.` : "Connected another stair down to grade through this shared landing.");
+    const connection: StairLandingConnectionV3 = Object.freeze({ id, locked: false, destination: "grade", direction, width: activeStairSystem.width, treadDepth: activeStairSystem.treadDepth });
+    updateLanding({ connections: [...activeLanding.connections, connection] }, "Connected another stair down to grade through this landing.");
   };
   const lockLanding = () => updateLanding({ locked: true }, "Landing locked. Another may now be added.");
   const lockStairSystem = () => {
@@ -431,10 +430,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     const next = migrateDeckDesignToV5({ ...legacy, id: design.id, name: design.name, metadata: { ...legacy.metadata, revision: design.metadata.revision + 1 } });
     apply(next, `${kind === "rectangle" ? "Rectangle" : "L-shape"} template applied in v5.`); setSelectedPlatformId(next.platforms[0].id); clearPlanSelection(); setWorkflowStage("layout");
   };
-  const photoBounds = platform.region.outer.reduce((bounds, point) => ({
-    minX: Math.min(bounds.minX, point.x), maxX: Math.max(bounds.maxX, point.x),
-    minZ: Math.min(bounds.minZ, point.z), maxZ: Math.max(bounds.maxZ, point.z),
-  }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+  const photoBounds = polygonBounds(platform.region.outer);
   const initialPhotoFacts: ConfirmedPhotoFacts = {
     designName: design.name,
     layoutIntent: "rectangle",
@@ -497,9 +493,9 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
       <div className="history-actions"><button disabled={!history.past.length} onClick={() => changeHistory("undo")}>Undo</button><button disabled={!history.future.length} onClick={() => changeHistory("redo")}>Redo</button></div>
       <div className="design-facts"><div><span>Schema</span><strong>DeckDesign v5</strong></div><div><span>Revision</span><strong>{design.metadata.revision}</strong></div><div><span>Fingerprint</span><code>{designFingerprint}</code></div></div><p className="status-message" aria-live="polite">{message}</p>
     </aside><section className="visual-area" id="design-views">
-      <article className="view-card plan-card"><div className="card-title"><div><span>{workflowStage === "layout" ? "Measured plan" : workflowStage === "railings" ? "Railing plan" : "Finish plan"}</span><small>{workflowStage === "layout" ? `2D · ${platform.id} · ${geometry.platformEdges.length} sides · single level` : workflowStage === "railings" ? "2D · tap a railing side" : "2D · tap one side for fascia or skirting"}</small></div><div className="plan-card-tools"><strong>{formatFeetInches(platform.elevation)} above grade</strong><div className="plan-history-actions"><button disabled={!history.past.length} onClick={() => changeHistory("undo")}>Undo</button><button disabled={!history.future.length} onClick={() => changeHistory("redo")}>Redo</button></div></div></div><PlanViewV3 platform={compatibilityPlatform} activeStairSystem={activeStairSystem} geometry={visibleGeometry} houseGeometry={houseGeometry} snapIncrement={snapIncrement} editingEnabled={workflowStage === "layout"} outlineEditingEnabled={!hasEdgeReferences} selectedEdgeId={selectedEdgeId} selectedHoleIndex={selectedHoleIndex} selectedLandingId={selectedLandingId} beamLines={platform.construction.framing.beamLines} selectedBeamLineId={selectedBeamLineId} onSelectBeamLine={setSelectedBeamLineId} onSelectEdge={workflowStage === "layout" ? selectLayoutEdge : setSelectedEdgeId} onSelectStairSystem={(systemId) => selectStairObject(systemId)} onSelectLanding={(systemId, landingId) => selectStairObject(systemId, landingId)} onSelectHouseOpening={selectHouseOpening} onSelectHole={(index) => { setSelectedHoleIndex(index); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setMessage(`Cutout ${index + 1} selected. Drag the center to move it or a corner to resize it.`); }} onHolePreview={(index, hole) => moveCutout(index, hole, false)} onHoleCommit={(index, hole) => moveCutout(index, hole, true)} onCornerPreview={(index, point) => moveCorner(index, point, false)} onCornerCommit={(index, point, magnetic) => moveCorner(index, point, true, magnetic)} onCancel={() => setPreview(null)} onStairPreview={(offset) => moveActiveStairs(offset, "", true)} onStairCommit={(offset) => moveActiveStairs(offset, `Stairs moved to ${formatFeetInches(offset)}.`)} onSegmentPreview={(index, distance) => moveSegment(index, distance, false)} onSegmentCommit={(index, distance) => moveSegment(index, distance, true)} onBeamPreview={(inset) => moveBeam(inset, true)} onBeamCommit={(inset) => moveBeam(inset)} />
+      <article className="view-card plan-card"><div className="card-title"><div><span>{workflowStage === "layout" ? "Measured plan" : workflowStage === "railings" ? "Railing plan" : "Finish plan"}</span><small>{workflowStage === "layout" ? `2D · ${platform.id} · ${geometry.platformEdges.length} sides · single level` : workflowStage === "railings" ? "2D · tap a railing side" : "2D · tap one side for fascia or skirting"}</small></div><div className="plan-card-tools"><strong>{formatFeetInches(platform.elevation)} above grade</strong><div className="plan-history-actions"><button disabled={!history.past.length} onClick={() => changeHistory("undo")}>Undo</button><button disabled={!history.future.length} onClick={() => changeHistory("redo")}>Redo</button></div></div></div><PlanViewV3 platform={compatibilityPlatform} activeStairSystem={activeStairSystem} geometry={visibleGeometry} houseGeometry={houseGeometry} snapIncrement={snapIncrement} editingEnabled={workflowStage === "layout"} outlineEditingEnabled={!hasOutlineOptionLocks} selectedEdgeId={selectedEdgeId} selectedHoleIndex={selectedHoleIndex} selectedLandingId={selectedLandingId} beamLines={platform.construction.framing.beamLines} selectedBeamLineId={selectedBeamLineId} onSelectBeamLine={setSelectedBeamLineId} onSelectEdge={workflowStage === "layout" ? selectLayoutEdge : setSelectedEdgeId} onSelectStairSystem={(systemId) => selectStairObject(systemId)} onSelectLanding={(systemId, landingId) => selectStairObject(systemId, landingId)} onSelectHouseOpening={selectHouseOpening} onSelectHole={(index) => { setSelectedHoleIndex(index); setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); setMessage(`Cutout ${index + 1} selected. Drag the center to move it or a corner to resize it.`); }} onHolePreview={(index, hole) => moveCutout(index, hole, false)} onHoleCommit={(index, hole) => moveCutout(index, hole, true)} onCornerPreview={(index, point) => moveCorner(index, point, false)} onCornerCommit={(index, point, magnetic) => moveCorner(index, point, true, magnetic)} onCancel={() => setPreview(null)} onStairPreview={(offset) => moveActiveStairs(offset, "", true)} onStairCommit={(offset) => moveActiveStairs(offset, `Stairs moved to ${formatFeetInches(offset)}.`)} onSegmentPreview={(index, distance) => moveSegment(index, distance, false)} onSegmentCommit={(index, distance) => moveSegment(index, distance, true)} onBeamPreview={(inset) => moveBeam(inset, true)} onBeamCommit={(inset) => moveBeam(inset)} />
         {workflowStage === "layout" ? <section ref={planActionTray} className={`plan-action-tray${activeStairSystem ? " editing-stairs" : ""}`} aria-live="polite">
-          {hasEdgeReferences && !activeStairSystem ? <div className="plan-action-copy outline-locked-action"><strong>Unlock outline editing</strong><small>Recorded house, railing, stair, or finish side options are protecting this shape. Unlock to drag the white side handles or add a bumpout; those side options will be cleared so nothing is silently moved.</small><button className="primary" onClick={unlockOutline}>Unlock outline editing</button></div> : selectedEdgeId ? (() => {
+          {hasOutlineOptionLocks && !activeStairSystem ? <div className="plan-action-copy outline-locked-action"><strong>Unlock outline editing</strong><small>Side options lock the shape. Unlocking clears them; house stays fixed.</small><button className="primary" onClick={unlockOutline}>Unlock outline editing</button></div> : selectedEdgeId ? (() => {
             const edge = geometry.platformEdges.find((item) => item.id === selectedEdgeId);
             if (!edge) return <div className="plan-action-copy"><strong>Select a blueprint side</strong><small>Only that side’s controls will appear here.</small></div>;
             const isFree = platform.edgeConditions.some((condition) => condition.edgeId === edge.id && condition.condition === "free");
@@ -507,9 +503,9 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
             const stairReference = horizontal ? edge.start.x <= edge.end.x ? "left" : "right" : edge.start.z <= edge.end.z ? "top" : "bottom";
             const edgeDirection = Math.round(((((Math.atan2(edge.end.z - edge.start.z, edge.end.x - edge.start.x) * 180 / Math.PI) % 360) + 360) % 360) * 100) / 100;
             return <>
-              <div className="plan-action-copy"><strong>{formatFeetInches(edge.length)} side selected</strong><small>{activeStairSystem ? `This side has stairs with ${activeStairSystem.landings.length} landing${activeStairSystem.landings.length === 1 ? "" : "s"}.` : isFree ? "Length, bumpout, and stair controls apply only to this side." : "House side selected. Stairs are unavailable here."}</small></div>
+              <div className="plan-action-copy"><strong>{formatFeetInches(edge.length)} side selected</strong><small>{activeStairSystem ? `Stairs have ${activeStairSystem.landings.length} landing${activeStairSystem.landings.length === 1 ? "" : "s"}.` : isFree ? "Length, bumpout, and stairs apply here." : "Fixed house side selected."}</small></div>
               <div className="plan-action-fields segment-fields"><V3NumberField label="Deck edge length (feet)" value={Math.round(edge.length / 12 * 100) / 100} step={.5} onCommit={(value) => updateSegmentLength(edge.id, value * 12)} /><V3NumberField label="Direction · 0° right, 90° away" value={edgeDirection} step={1} onCommit={(value) => updateSegmentAngle(edge.id, value)} />{activeStairSystem && !activeStairSystem.locked && <><V3NumberField label={`Stairs from ${stairReference} end (feet)`} value={Math.round(activeStairSystem.offset / 12 * 100) / 100} step={.5} onCommit={(value) => moveActiveStairs(value * 12, `Stairs moved to ${value} feet from the ${stairReference} end.`)} /><V3NumberField label="Stair width (feet)" value={Math.round(activeStairSystem.width / 12 * 100) / 100} step={.5} onCommit={(value) => { const width = value * 12; updateStairSystem({ width, landings: activeStairSystem.landings.map((landing) => ({ ...landing, width: Math.max(landing.width, width) })) }, "Stair width updated exactly."); }} /></>}</div>
-              {!activeStairSystem ? <div className="plan-action-buttons"><button onClick={() => addBumpoutToEdge(edge.id)}>Add bumpout</button><button className="primary" disabled={!isFree || edge.length < 48} onClick={() => addStairsToEdge(edge.id, edge.length)}>Add stairs</button></div> : activeStairSystem.locked ? <div className="plan-action-buttons"><button onClick={() => updateStairSystem({ locked: false }, "Stairs reopened for editing.")}>Edit stairs</button><button className="primary" onClick={() => { setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); }}>Close side</button></div> : <>
+              {!activeStairSystem ? <div className="plan-action-buttons"><button disabled={!isFree} onClick={() => addBumpoutToEdge(edge.id)}>{isFree ? "Add bumpout" : "House side stays fixed"}</button><button className="primary" disabled={!isFree || edge.length < 48} onClick={() => addStairsToEdge(edge.id, edge.length)}>Add stairs</button></div> : activeStairSystem.locked ? <div className="plan-action-buttons"><button onClick={() => updateStairSystem({ locked: false }, "Stairs reopened for editing.")}>Edit stairs</button><button className="primary" onClick={() => { setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); }}>Close side</button></div> : <>
                 <div className="automatic-standard-note"><strong>Step depth is automatic</strong><small>{activeStairSystem.treadDepth}&quot; conceptual standard; local code and field conditions still require review.</small></div>
                 <div className="plan-action-buttons"><button onClick={() => addLanding("top")}>Add top landing</button><button onClick={() => addLanding("midway")}>Add midway landing</button><button className="primary" onClick={lockStairSystem}>Done with side</button></div>
                 <div className="stair-railing-note"><strong>Stair railings included</strong><small>Tracked separately from deck railings.</small></div>
@@ -519,7 +515,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
                   <div className="field-grid"><V3NumberField label="Landing width (feet)" value={Math.round(activeLanding.width / 12 * 100) / 100} step={.5} onCommit={(value) => updateLanding({ width: value * 12 }, "Landing width updated exactly.")} /><V3NumberField label="Landing depth (feet)" value={Math.round(activeLanding.depth / 12 * 100) / 100} step={.5} onCommit={(value) => updateLanding({ depth: value * 12 }, "Landing depth updated exactly.")} /></div>
                   {!activeLanding.terminalPlatformId && <fieldset><legend>Direction after landing</legend><div className={`toggle-grid${activeLanding.afterRiser > 0 ? " four" : ""}`}>{(activeLanding.afterRiser > 0 ? ["straight", "left", "right", "switchback"] as const : ["straight", "left", "right"] as const).map((turn) => <button type="button" key={turn} className={`toggle${activeLanding.turn === turn ? " active" : ""}`} aria-pressed={activeLanding.turn === turn} onClick={() => updateLanding({ turn, afterRiser: turn === "switchback" ? Math.max(activeLanding.afterRiser, Math.ceil(activeTotalRisers / 2)) : activeLanding.afterRiser, width: turn === "switchback" ? Math.max(activeLanding.width, activeStairSystem.width * 2) : activeLanding.width, depth: turn === "straight" ? activeLanding.depth : Math.max(activeLanding.depth, activeStairSystem.width) }, `Stairs continue ${turn}.`)}>{turn}</button>)}</div><small>Viewed walking down. Switchback reverses beside the upper flight.</small></fieldset>}
                   {!activeLanding.locked && <button className="primary" onClick={lockLanding}>Finish landing details</button>}
-                  {activeLanding.locked && !activeLanding.terminalPlatformId && <Suspense fallback={<div className="house-editor-loading" role="status">Preparing landing connections…</div>}><LandingConnectionsEditor landing={activeLanding} destinationPlatforms={[]} onAdd={addLandingConnection} onUpdateLanding={(connections, nextMessage) => updateLanding({ connections }, nextMessage)} onUpdateConnection={updateLandingConnection} /></Suspense>}
+                  {activeLanding.locked && !activeLanding.terminalPlatformId && <Suspense fallback={<div className="house-editor-loading" role="status">Preparing landing connections…</div>}><LandingConnectionsEditor landing={activeLanding} onAdd={addLandingConnection} onUpdateLanding={(connections, nextMessage) => updateLanding({ connections }, nextMessage)} onUpdateConnection={updateLandingConnection} /></Suspense>}
                 </div>}
                 <button className="remove-stairs" onClick={() => { const remaining = platform.construction.stairSystems.filter((system) => system.id !== activeStairSystem.id); replaceStairSystems(remaining, "Stairs removed from this side."); setSelectedStairSystemId(null); setSelectedLandingId(null); }}>Remove stairs from this side</button>
               </>}

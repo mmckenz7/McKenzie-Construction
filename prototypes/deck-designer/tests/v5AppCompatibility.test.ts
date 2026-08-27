@@ -7,6 +7,12 @@ import { restoreV5Authority } from "../src/V5App";
 import { readFileSync } from "node:fs";
 
 describe("v5 browser compatibility adapter", () => {
+  it("keeps saved multi-level recovery reachable in every compatibility shell", () => {
+    expect(readFileSync(new URL("../src/LevelCutoutControls.tsx", import.meta.url), "utf8")).toContain("Keep selected level only");
+    for (const file of ["V3App.tsx", "V4App.tsx", "V5App.tsx"]) {
+      expect(readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8")).toContain("onKeepSelectedLevel={keepSelectedLevelOnly}");
+    }
+  });
   it("preserves beam and finish facts after a legacy non-framing edit", () => {
     const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
     const free = base.platforms[0].edgeConditions.find((condition) => condition.condition === "free")!.edgeId;
@@ -22,9 +28,11 @@ describe("v5 browser compatibility adapter", () => {
 
   it("puts the protected-outline unlock action beside the plan and restores the contextual bumpout action", () => {
     const source = readFileSync(new URL("../src/V5App.tsx", import.meta.url), "utf8");
-    expect(source).toContain('outlineEditingEnabled={!hasEdgeReferences}');
-    expect(source).toContain("Unlock to drag the white side handles or add a bumpout");
-    expect(source).toContain('onClick={() => addBumpoutToEdge(edge.id)}>Add bumpout</button>');
-    expect(source).not.toContain('disabled={hasEdgeReferences}');
+    expect(source).toContain('outlineEditingEnabled={!hasOutlineOptionLocks}');
+    expect(source).toContain("Unlocking clears them; house stays fixed.");
+    expect(source).toContain('onClick={() => addBumpoutToEdge(edge.id)}>{isFree ? "Add bumpout" : "House side stays fixed"}</button>');
+    expect(source).toContain("house fixed.");
+    expect(source).toContain("edgeConditions: current.edgeConditions");
+    expect(source).not.toContain('disabled={hasOutlineOptionLocks}');
   });
 });

@@ -2,6 +2,7 @@ import { applyPolygonRegionReplacement, planPolygonRegionReplacement } from "./c
 import type { PolygonEdgeReferenceResolution } from "./polygon";
 import type { PolygonRegion } from "./polygonRegion";
 import { deckDesignV5ToV3Compatibility, migrateDeckDesignToV5, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
+import { assertHouseBoundariesPreservedV5 } from "./houseBoundaryV5";
 
 export type EdgeReferenceUsageV5 = "house_attachment" | "railing" | "stairs" | "fascia" | "skirting";
 export type EdgeReferenceImpactV5 = Readonly<{
@@ -39,6 +40,7 @@ export function planPolygonRegionReplacementV5(
   const normalized = normalizeDeckDesignV5(design);
   const platform = normalized.platforms.find((candidate) => candidate.id === platformId);
   if (!platform) throw new RangeError(`Platform ${platformId} does not exist.`);
+  assertHouseBoundariesPreservedV5(platform, proposedRegion.outer);
   const base = planPolygonRegionReplacement(deckDesignV5ToV3Compatibility(normalized), platformId, proposedRegion);
   const finishByEdge = new Map(platform.construction.edgeFinishes.map((finish) => [finish.edgeId, finish]));
   const impacts = base.impacts.map((impact): EdgeReferenceImpactV5 => Object.freeze({ ...impact, usages: Object.freeze([...impact.usages]) }));

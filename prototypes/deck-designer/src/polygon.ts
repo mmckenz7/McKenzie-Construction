@@ -7,6 +7,7 @@ export type PolygonEdge = Readonly<{
   outward: PolygonPoint;
 }>;
 export type PolygonInterval = Readonly<{ start: number; end: number }>;
+export type PolygonBounds = Readonly<{ minX: number; maxX: number; minZ: number; maxZ: number }>;
 export type PolygonEdgeReferenceResolution = Readonly<{
   status: "preserved" | "remapped" | "review_required" | "missing";
   previousEdgeId: string;
@@ -26,10 +27,17 @@ export function signedPolygonArea(points: readonly PolygonPoint[]): number {
   }, 0) / 2;
 }
 
-function pointOnSegment(point: PolygonPoint, start: PolygonPoint, end: PolygonPoint): boolean {
+export function pointOnSegment(point: PolygonPoint, start: PolygonPoint, end: PolygonPoint): boolean {
   return Math.abs(cross(start, end, point)) < EPSILON &&
     point.x >= Math.min(start.x, end.x) - EPSILON && point.x <= Math.max(start.x, end.x) + EPSILON &&
     point.z >= Math.min(start.z, end.z) - EPSILON && point.z <= Math.max(start.z, end.z) + EPSILON;
+}
+
+export function polygonBounds(points: readonly PolygonPoint[]): PolygonBounds {
+  return Object.freeze(points.reduce((bounds, point) => ({
+    minX: Math.min(bounds.minX, point.x), maxX: Math.max(bounds.maxX, point.x),
+    minZ: Math.min(bounds.minZ, point.z), maxZ: Math.max(bounds.maxZ, point.z),
+  }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity }));
 }
 
 function segmentsIntersect(a: PolygonPoint, b: PolygonPoint, c: PolygonPoint, d: PolygonPoint): boolean {

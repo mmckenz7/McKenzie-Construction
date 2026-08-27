@@ -4,6 +4,7 @@ import { deriveHouseConnectionDraft, applyHouseConnectionV3 } from "../src/house
 import { deriveHouseContextGeometry } from "../src/houseContextGeometry";
 import { DEFAULT_DESIGN } from "../src/model";
 import { migrateDeckDesignToV3, stableDeckDesignV3Json } from "../src/modelV3";
+import { deriveGeometricPolygonEdges } from "../src/polygon";
 
 const base = migrateDeckDesignToV3(DEFAULT_DESIGN);
 const platform = base.platforms[0];
@@ -53,5 +54,18 @@ describe("v3 house connection", () => {
     const editable = { ...withWindow, platforms: [{ ...withWindow.platforms[0], construction: { ...withWindow.platforms[0].construction, railing: { ...withWindow.platforms[0].construction.railing, enabledEdgeIds: [] } } }] };
     const nextSide = editable.platforms[0].edgeConditions.find((condition) => condition.condition === "free")!.edgeId;
     expect(() => applyHouseConnectionV3(editable, platform.id, { edgeId: nextSide, attachment: "ledger", doorEnabled: false, doorOffset: 0, doorWidth: 72 })).toThrow(/move recorded windows/i);
+  });
+
+  it("adds and independently edits a second perpendicular wall without replacing the first", () => {
+    const editable = { ...base, platforms: [{ ...platform, construction: { ...platform.construction, railing: { ...platform.construction.railing, enabledEdgeIds: [] }, stairSystems: [] } }] };
+    const side = deriveGeometricPolygonEdges(editable.platforms[0].region.outer).find((edge) => edge.start.x === 0 && edge.end.x === 0)!.id;
+    const added = applyHouseConnectionV3(editable, platform.id, { wallId: null, edgeId: side, attachment: "ledger", doorEnabled: false, doorOffset: 0, doorWidth: 72 });
+    expect(added.siteContext.houseWalls.map((wall) => wall.id)).toEqual(["house-wall-1", "house-wall-2"]);
+    expect(added.platforms[0].edgeConditions.filter((condition) => condition.condition === "house_attachment")).toHaveLength(2);
+    expect(deriveHouseConnectionDraft(added, platform.id, "house-wall-1").edgeId).toBe(houseEdge.edgeId);
+    expect(deriveHouseConnectionDraft(added, platform.id, "house-wall-2").edgeId).toBe(side);
+    const revised = applyHouseConnectionV3(added, platform.id, { wallId: "house-wall-2", edgeId: side, attachment: "non-ledger", doorEnabled: false, doorOffset: 0, doorWidth: 72 });
+    expect(revised.siteContext.houseWalls.find((wall) => wall.id === "house-wall-1")).toEqual(added.siteContext.houseWalls[0]);
+    expect(revised.siteContext.houseWalls.find((wall) => wall.id === "house-wall-2")?.attachment).toBe("non-ledger");
   });
 });

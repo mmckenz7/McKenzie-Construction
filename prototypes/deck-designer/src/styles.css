@@ -328,6 +328,9 @@ button:hover { transform: translateY(-1px); }
 .back-to-layout { margin: 8px 0; border-color: #aebbb2; background: white; color: #34473f; }
 .railing-help { margin-top: 0; padding: 12px; border-radius: 8px; background: #f2f4f1; }
 .house-connection-editor { scroll-margin-top: 62px; }
+.house-wall-selector { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 12px; }
+.house-wall-selector button { min-height: 40px; flex: 1 1 86px; }
+.house-wall-selector button[aria-pressed="true"] { color: #fff; background: var(--forest); border-color: var(--forest); }
 .house-door-toggle { margin: 4px 0 12px; padding: 10px; border: 1px solid #c7d1ca; border-radius: 8px; background: #f1f4f0; }
 .house-door-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 13px; }
 .house-connection-help { margin-top: 8px; }

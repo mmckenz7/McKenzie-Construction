@@ -1,5 +1,6 @@
 import {
   normalizePolygon,
+  polygonBounds,
   signedPolygonArea,
   type PolygonPoint,
 } from "./polygon";
@@ -100,15 +101,6 @@ export function triangulatePolygon(points: readonly PolygonPoint[]): readonly Po
   return Object.freeze(triangles);
 }
 
-function bounds(points: readonly PolygonPoint[]): Readonly<{ minX: number; maxX: number; minZ: number; maxZ: number }> {
-  return Object.freeze({
-    minX: Math.min(...points.map((point) => point.x)),
-    maxX: Math.max(...points.map((point) => point.x)),
-    minZ: Math.min(...points.map((point) => point.z)),
-    maxZ: Math.max(...points.map((point) => point.z)),
-  });
-}
-
 export function deriveJoistPathAxes(
   outer: readonly PolygonPoint[],
   boardDirection: DeckBoardDirection,
@@ -117,7 +109,7 @@ export function deriveJoistPathAxes(
   if (outer.length < 3) throw new RangeError("Joist path axes require a polygon outline.");
   if (boardDirection !== "left_right" && boardDirection !== "house_yard") throw new TypeError("Board direction must be left/right or house/yard.");
   if (!Number.isFinite(joistSpacing) || joistSpacing < 8 || joistSpacing > 24) throw new RangeError("Joist spacing must be between 8 and 24 inches.");
-  const regionBounds = bounds(outer);
+  const regionBounds = polygonBounds(outer);
   const minimum = boardDirection === "left_right" ? regionBounds.minX : regionBounds.minZ;
   const maximum = boardDirection === "left_right" ? regionBounds.maxX : regionBounds.maxZ;
   const bays = Math.ceil((maximum - minimum) / joistSpacing);
@@ -148,7 +140,7 @@ export function derivePolygonMembers(
   if (boardDirection !== "left_right" && boardDirection !== "house_yard") {
     throw new TypeError("Board direction must be left/right or house/yard.");
   }
-  const regionBounds = bounds(normalized.outer);
+  const regionBounds = polygonBounds(normalized.outer);
   const height = regionBounds.maxZ - regionBounds.minZ;
   const width = regionBounds.maxX - regionBounds.minX;
   const pitch = options.boardWidth + options.gap;

@@ -5,6 +5,8 @@ import { derivePlatformGeometryV3 } from "../src/geometryV3";
 import { deriveHouseContextGeometry } from "../src/houseContextGeometry";
 import { migrateDeckDesignToV3, normalizeDeckDesignV3, type DeckDesignV3 } from "../src/modelV3";
 import { PlanViewV3 } from "../src/PlanViewV3";
+import { applyHouseConnectionV3 } from "../src/houseConnectionV3";
+import { deriveGeometricPolygonEdges } from "../src/polygon";
 import rectangleFoundationFixture from "./fixtures/rectangle-foundation.json";
 import lShapeLandingFixture from "./fixtures/l-shape-landing.json";
 
@@ -82,6 +84,20 @@ describe("interactive measured-plan accessibility", () => {
     expect(html).toContain('aria-label="Select 16′ 0″ side"');
     expect(html).not.toContain('class="segment-move-hit"');
     expect(html).not.toContain('class="corner-move-hit"');
+  });
+
+  it("hides fixed house-side movement controls while leaving outside controls reachable", () => {
+    const base = migrateDeckDesignToV3(rectangleFoundationFixture.design);
+    const oneWall = renderPlan(base);
+    expect(oneWall.match(/class="segment-move-hit"/g)).toHaveLength(3);
+    expect(oneWall.match(/class="corner-move-hit"/g)).toHaveLength(2);
+    const left = deriveGeometricPolygonEdges(base.platforms[0].region.outer).find((edge) => edge.outward.x < -.9)!;
+    const clearLeft = normalizeDeckDesignV3({ ...base, platforms: [{ ...base.platforms[0], construction: { ...base.platforms[0].construction, railing: { ...base.platforms[0].construction.railing, enabledEdgeIds: base.platforms[0].construction.railing.enabledEdgeIds.filter((id) => id !== left.id) } } }] });
+    const twoWallDesign = applyHouseConnectionV3(clearLeft, clearLeft.platforms[0].id, { wallId: null, edgeId: left.id, attachment: "unknown", doorEnabled: false, doorOffset: 0, doorWidth: 36 });
+    const twoWalls = renderPlan(twoWallDesign);
+    expect(twoWalls.match(/class="segment-move-hit"/g)).toHaveLength(2);
+    expect(twoWalls.match(/class="corner-move-hit"/g)).toHaveLength(1);
+    expect(twoWalls.match(/class="v3-edge" role="button" tabindex="0"/g)).toHaveLength(4);
   });
 
   it("reports the exact selected cutout without placing pressed state on movement handles", () => {

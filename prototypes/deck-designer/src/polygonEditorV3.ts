@@ -164,6 +164,8 @@ export function resizePolygonEdge(
   edgeIndex: number,
   requestedLength: number,
   snapIncrement: number,
+  connectedEdgeIndex = (edgeIndex + 1) % outer.length,
+  reverseDirection = false,
 ): readonly PolygonPoint[] {
   const edges = deriveGeometricPolygonEdges(outer);
   const edge = edges[edgeIndex];
@@ -171,8 +173,8 @@ export function resizePolygonEdge(
   const length = snap(requestedLength, snapIncrement);
   if (!Number.isFinite(length) || length < snapIncrement) throw new RangeError(`Side length must be at least ${snapIncrement} inches.`);
   if (Math.abs(length - edge.length) < .01) return outer;
-  const direction = { x: (edge.end.x - edge.start.x) / edge.length, z: (edge.end.z - edge.start.z) / edge.length };
-  const connectedEdgeIndex = (edgeIndex + 1) % edges.length;
+  const sign = reverseDirection ? -1 : 1;
+  const direction = { x: sign * (edge.end.x - edge.start.x) / edge.length, z: sign * (edge.end.z - edge.start.z) / edge.length };
   const connectedEdge = edges[connectedEdgeIndex];
   const alignment = connectedEdge.outward.x * direction.x + connectedEdge.outward.z * direction.z;
   if (Math.abs(alignment) < .99) throw new RangeError("Exact side length requires a square connected side; drag the corner for an angled layout.");
