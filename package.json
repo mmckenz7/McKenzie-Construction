@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "npm run migration:check",
+    "prebuild": "npm run migration:check && npm run site-map-core:check",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "migration:check": "node scripts/check-migration-ledger.mjs",
+    "site-map-core:check": "npm --prefix packages/site-map-core test",
     "sandbox:prepare": "node scripts/prepare-local-sandbox.mjs",
     "sandbox:start": "supabase --workdir .local-sandbox start",
     "sandbox:reset": "supabase --workdir .local-sandbox db reset",
