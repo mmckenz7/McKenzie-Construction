@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const prototypeRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const sourceRoot = resolve(prototypeRoot, "src");
 const allowedBareImports = new Set([
+  "@mckenzie/site-map-core",
   "react",
   "react-dom/client",
   "three",

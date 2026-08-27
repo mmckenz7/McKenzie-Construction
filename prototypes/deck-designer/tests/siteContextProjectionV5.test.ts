@@ -1,3 +1,4 @@
+import { SITE_MAP_GROUND_PLANE } from "@mckenzie/site-map-core";
 import { describe, expect, it } from "vitest";
 import { deriveDeckDesignProjectionV5 } from "../src/designProjectionV5";
 import { derivePlatformGeometryV5 } from "../src/geometryV5";
@@ -6,7 +7,7 @@ import { createHistoryV5 } from "../src/historyV5";
 import { DEFAULT_DESIGN } from "../src/model";
 import { deckDesignV5Fingerprint, migrateDeckDesignToV5, normalizeDeckDesignV5, stableDeckDesignV5Json } from "../src/modelV5";
 import { DeckLocalSiteContextFixtureAdapterV5, type DeckSiteContextFixtureV5 } from "../src/siteContextFixtureV5";
-import { DECK_SITE_CONTEXT_COMPATIBILITY_PLANE, deriveDeckSiteContextProjectionV5, MILLIMETERS_PER_INCH } from "../src/siteContextProjectionV5";
+import { deriveDeckSiteContextProjectionV5, MILLIMETERS_PER_INCH } from "../src/siteContextProjectionV5";
 
 function designWithHole() {
   const base = migrateDeckDesignToV5(DEFAULT_DESIGN);
@@ -33,14 +34,14 @@ function fixture(update: Partial<DeckSiteContextFixtureV5> = {}): DeckSiteContex
 }
 
 describe("Deck v5 provider-neutral site-context preparation", () => {
-  it("projects normalized Deck facts deterministically into the mirrored integer-millimeter plane", () => {
+  it("projects normalized Deck facts deterministically into the shared integer-millimeter plane", () => {
     const design = designWithHole();
     const first = deriveDeckSiteContextProjectionV5(design);
     const replay = deriveDeckSiteContextProjectionV5(JSON.parse(stableDeckDesignV5Json(design)));
     expect(first).toEqual(replay);
     expect(first).toMatchObject({
       projectionVersion: 1,
-      plane: DECK_SITE_CONTEXT_COMPATIBILITY_PLANE,
+      plane: SITE_MAP_GROUND_PLANE,
       sourceDesignFingerprint: deckDesignV5Fingerprint(design),
       sourceUnits: "in",
       millimetersPerInch: MILLIMETERS_PER_INCH,

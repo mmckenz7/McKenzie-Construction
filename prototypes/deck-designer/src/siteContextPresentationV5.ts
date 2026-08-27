@@ -1,14 +1,22 @@
+import {
+  SITE_MAP_GROUND_PLANE,
+  localGroundToMap,
+  normalizeMapPresentationScene,
+  type LocalGroundToWgs84Registration,
+  type MapPresentationScene,
+  type SiteMapGroundPlane,
+} from "@mckenzie/site-map-core";
 import type { DeckGroundPointV5, DeckSiteContextProjectionV5 } from "./siteContextProjectionV5";
 
 export type DeckSiteContextPresentationV5 = Readonly<{
-  plane: "MCKENZIE_LOCAL_MM";
+  plane: SiteMapGroundPlane;
   revisionLabel: string;
   viewBox: string;
   platforms: readonly Readonly<{ id: string; outer: string; holes: readonly string[] }>[];
   houseWalls: readonly Readonly<{ id: string; x1: number; y1: number; x2: number; y2: number }>[];
   counts: Readonly<{ platforms: number; cutouts: number; houseWalls: number }>;
   readiness: "local_overlay_ready";
-  connection: "awaiting_promoted_fence_contract";
+  connection: "shared_read_only_contract_ready";
   authority: "context_only_not_survey_or_construction";
 }>;
 
@@ -29,10 +37,10 @@ function assertFrozenPoint(point: DeckGroundPointV5): void {
 /**
  * Builds a provider-free presentation model from Deck's immutable local-plane
  * projection. It deliberately exposes no mount, search, map-edit, network,
- * persistence, key, or billing behavior owned by the Fence adapter.
+ * persistence, key, or billing behavior owned by a provider adapter.
  */
 export function deriveDeckSiteContextPresentationV5(projection: DeckSiteContextProjectionV5): DeckSiteContextPresentationV5 {
-  if (projection.plane !== "MCKENZIE_LOCAL_MM") throw new TypeError("Deck site context must use the McKenzie local ground plane.");
+  if (projection.plane !== SITE_MAP_GROUND_PLANE) throw new TypeError("Deck site context must use the McKenzie local ground plane.");
   if (!Object.isFrozen(projection) || !Object.isFrozen(projection.platforms) || !Object.isFrozen(projection.houseWalls)) throw new TypeError("Deck site context presentation requires a frozen read-only projection.");
   projection.platforms.forEach((platform) => {
     if (!Object.isFrozen(platform) || !Object.isFrozen(platform.outer) || !Object.isFrozen(platform.outer.points) || !Object.isFrozen(platform.holes)) throw new TypeError("Deck platform context must be recursively frozen.");
@@ -71,14 +79,61 @@ export function deriveDeckSiteContextPresentationV5(projection: DeckSiteContextP
     y2: -wall.end.yMm,
   })));
   return Object.freeze({
-    plane: "MCKENZIE_LOCAL_MM",
+    plane: SITE_MAP_GROUND_PLANE,
     revisionLabel: `Design revision ${projection.sourceRevision}`,
     viewBox: `${minX - padding} ${-(maxY + padding)} ${maxX - minX + padding * 2} ${maxY - minY + padding * 2}`,
     platforms,
     houseWalls,
     counts: Object.freeze({ platforms: platforms.length, cutouts: platforms.reduce((total, platform) => total + platform.holes.length, 0), houseWalls: houseWalls.length }),
     readiness: "local_overlay_ready",
-    connection: "awaiting_promoted_fence_contract",
+    connection: "shared_read_only_contract_ready",
     authority: "context_only_not_survey_or_construction",
+  });
+}
+
+const platformStyle = Object.freeze({
+  strokeColor: "#65452e",
+  strokeOpacity: 1,
+  strokeWidth: 2,
+  fillColor: "#c99963",
+  fillOpacity: 0.55,
+});
+
+const houseWallStyle = Object.freeze({
+  strokeColor: "#344e41",
+  strokeOpacity: 1,
+  strokeWidth: 4,
+  fillColor: "#344e41",
+  fillOpacity: 0,
+});
+
+/**
+ * Deck-owned domain-to-scene wrapper for the shared read-only map contract.
+ * Registration is caller-supplied and disposable; neither it nor the returned
+ * WGS84 scene is allowed to mutate or persist DeckDesign geometry.
+ */
+export function deriveDeckSiteContextMapSceneV5(
+  projection: DeckSiteContextProjectionV5,
+  registration: LocalGroundToWgs84Registration,
+): MapPresentationScene {
+  deriveDeckSiteContextPresentationV5(projection);
+  return normalizeMapPresentationScene({
+    revision: `${projection.sourceDesignFingerprint}:${projection.sourceRevision}`,
+    points: Object.freeze([]),
+    polylines: Object.freeze(projection.houseWalls.map((wall) => Object.freeze({
+      id: `deck-house-wall:${wall.id}`,
+      coordinates: Object.freeze([
+        localGroundToMap(wall.start, registration),
+        localGroundToMap(wall.end, registration),
+      ]),
+      style: houseWallStyle,
+    }))),
+    polygons: Object.freeze(projection.platforms.map((platform) => Object.freeze({
+      id: `deck-platform:${platform.id}`,
+      rings: Object.freeze([platform.outer, ...platform.holes].map((ring) => Object.freeze(
+        ring.points.map((point) => localGroundToMap(point, registration)),
+      ))),
+      style: platformStyle,
+    }))),
   });
 }

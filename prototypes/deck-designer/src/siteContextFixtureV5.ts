@@ -1,3 +1,4 @@
+import { SITE_MAP_GROUND_PLANE } from "@mckenzie/site-map-core";
 import type { DeckGroundPointV5, DeckSiteContextProjectionV5 } from "./siteContextProjectionV5";
 
 export type DeckSiteContextFixtureV5 = Readonly<{
@@ -83,7 +84,7 @@ export class DeckLocalSiteContextFixtureAdapterV5 {
   private readonly deck: DeckSiteContextProjectionV5;
 
   constructor(deck: DeckSiteContextProjectionV5) {
-    if (deck.plane !== "MCKENZIE_LOCAL_MM" || !Object.isFrozen(deck)) throw new TypeError("A frozen Deck ground-plane projection is required.");
+    if (deck.plane !== SITE_MAP_GROUND_PLANE || !Object.isFrozen(deck)) throw new TypeError("A frozen Deck ground-plane projection is required.");
     this.deck = deck;
   }
 

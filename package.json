@@ -4,11 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "site-map-core:build": "npm --prefix packages/site-map-core run build",
+    "prebuild": "npm run site-map-core:build",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
+    "@mckenzie/site-map-core": "file:packages/site-map-core",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.8",
     "next": "^16.2.11",

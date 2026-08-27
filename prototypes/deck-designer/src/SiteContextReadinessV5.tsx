@@ -1,7 +1,7 @@
 import { deriveDeckSiteContextPresentationV5 } from "./siteContextPresentationV5";
 import type { DeckSiteContextProjectionV5 } from "./siteContextProjectionV5";
 
-/** Dormant until the Controller promotes Fence's tested adapter contract. */
+/** Dormant presentation only; mounting a provider remains a separate approval. */
 export function SiteContextReadinessV5({ projection }: { projection: DeckSiteContextProjectionV5 }) {
   const presentation = deriveDeckSiteContextPresentationV5(projection);
   return <section className="site-context-readiness" aria-labelledby="site-context-title">
@@ -16,7 +16,7 @@ export function SiteContextReadinessV5({ projection }: { projection: DeckSiteCon
       </svg>
     </div>
     <dl><div><dt>Coordinate plane</dt><dd>{presentation.plane}</dd></div><div><dt>Source</dt><dd>{presentation.revisionLabel}</dd></div><div><dt>Local context</dt><dd>{presentation.counts.houseWalls} house wall{presentation.counts.houseWalls === 1 ? "" : "s"}</dd></div></dl>
-    <p>Deck geometry is ready for a future Fence-owned map surface. No address, parcel, aerial, GPS, provider, or field-verification claim is attached.</p>
+    <p>Deck geometry is connected to the shared read-only site-map contract. No map provider is active, and no address, parcel, aerial, GPS, or field-verification claim is attached.</p>
     <small>Context only · not a survey or construction authority</small>
   </section>;
 }

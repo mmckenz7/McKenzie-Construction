@@ -1,10 +1,6 @@
+import { SITE_MAP_GROUND_PLANE, type SiteMapGroundPlane } from "@mckenzie/site-map-core";
 import { deckDesignV5Fingerprint, normalizeDeckDesignV5, type DeckDesignV5 } from "./modelV5";
 
-/**
- * Compatibility identifier mirrored from the Fence-owned provider-neutral
- * ground-plane contract. This prototype-local constant is not shared authority.
- */
-export const DECK_SITE_CONTEXT_COMPATIBILITY_PLANE = "MCKENZIE_LOCAL_MM" as const;
 export const MILLIMETERS_PER_INCH = 25.4 as const;
 
 export type DeckGroundPointV5 = Readonly<{ id: string; xMm: number; yMm: number }>;
@@ -12,7 +8,7 @@ export type DeckGroundRingV5 = Readonly<{ id: string; points: readonly DeckGroun
 
 export type DeckSiteContextProjectionV5 = Readonly<{
   projectionVersion: 1;
-  plane: typeof DECK_SITE_CONTEXT_COMPATIBILITY_PLANE;
+  plane: SiteMapGroundPlane;
   sourceDesignId: string;
   sourceDesignFingerprint: string;
   sourceRevision: number;
@@ -94,7 +90,7 @@ export function deriveDeckSiteContextProjectionV5(design: DeckDesignV5): DeckSit
     }));
   return Object.freeze({
     projectionVersion: 1,
-    plane: DECK_SITE_CONTEXT_COMPATIBILITY_PLANE,
+    plane: SITE_MAP_GROUND_PLANE,
     sourceDesignId: normalized.id,
     sourceDesignFingerprint: deckDesignV5Fingerprint(normalized),
     sourceRevision: normalized.metadata.revision,

@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "site-map-core:build": "npm --prefix ../../packages/site-map-core run build",
+    "pretest": "npm run site-map-core:build",
+    "prebuild": "npm run site-map-core:build",
     "build": "node scripts/check-isolation.mjs && tsc -b && vite build && node scripts/check-bundle.mjs",
     "golden:inspect": "vite-node scripts/print-golden.ts",
     "isolation:check": "node scripts/check-isolation.mjs",
@@ -14,6 +17,7 @@
     "validate": "npm test && npm run build && npm run preview:typecheck && npm run golden:inspect"
   },
   "dependencies": {
+    "@mckenzie/site-map-core": "file:../../packages/site-map-core",
     "@vitejs/plugin-react": "^5.0.0",
     "three": "^0.179.1",
     "vite": "^7.1.2",
