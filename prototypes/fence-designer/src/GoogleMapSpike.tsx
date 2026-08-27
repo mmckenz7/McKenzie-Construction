@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { GoogleAddressSearchAdapter } from "./google-address-search";
 import { fenceGeoJson, fenceKml, projectFenceDesignToMap, registrationAtDesignOrigin } from "./fence-geo-interchange";
 import { FenceGoogleMapRendererAdapter } from "./fence-map-renderer";
 import { mapToLocalGround, type LocalGroundToWgs84Registration } from "./ground-registration";
 import { parseLocalParcelFile, type ParcelGeoJson } from "./local-reference-interchange";
 import { IDLE_LOCATION_STATE, ObservationalLocationSession, type ObservationalLocationState } from "./live-location";
+import { beginAddressSelection, confirmAddressSelection, type AddressSearchCandidate } from "./map-contract";
 import { normalizedMapCoordinate, type RendererAvailabilityEvent } from "./map-presentation";
 import type { FenceDesign } from "./model";
 
@@ -49,6 +51,10 @@ export default function GoogleMapSpike({ apiKey, design, onPlacePoint, onMovePoi
   const [parcelName, setParcelName] = useState<string | null>(null);
   const [parcelVisible, setParcelVisible] = useState(true);
   const [location, setLocation] = useState<ObservationalLocationState>(IDLE_LOCATION_STATE);
+  const [addressQuery, setAddressQuery] = useState("");
+  const [addressCandidates, setAddressCandidates] = useState<readonly AddressSearchCandidate[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [addressSearching, setAddressSearching] = useState(false);
   const [message, setMessage] = useState("The Google renderer is disposable. Fence measurements remain in McKenzie integer millimeters.");
   const placeRef = useRef(onPlacePoint); const moveRef = useRef(onMovePoint); const sketchRef = useRef(sketchEnabled);
   placeRef.current = onPlacePoint; moveRef.current = onMovePoint; sketchRef.current = sketchEnabled; registrationRef.current = registration;
@@ -91,6 +97,28 @@ export default function GoogleMapSpike({ apiKey, design, onPlacePoint, onMovePoi
     setMessage("Fence plan origin placed at the current map center. Exact McKenzie lengths did not change.");
   };
 
+  const searchAddress = async () => {
+    if (!apiKey) return;
+    setAddressSearching(true); setSelectedAddressId(null); setAddressCandidates([]);
+    try {
+      const candidates = await new GoogleAddressSearchAdapter(apiKey).search(addressQuery);
+      setAddressCandidates(candidates);
+      if (!candidates.length) setMessage("Google did not find that address. Try including the city, state, and ZIP code.");
+      else setMessage("Choose the matching address, then confirm before the map moves. The address is not saved in the Fence design.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Address search is unavailable."); }
+    finally { setAddressSearching(false); }
+  };
+
+  const confirmAddress = () => {
+    const candidate = addressCandidates.find(({ resultId }) => resultId === selectedAddressId);
+    const adapter = adapterRef.current;
+    if (!candidate || !adapter) { setMessage("Choose a matching address after the map is ready."); return; }
+    const confirmed = confirmAddressSelection(beginAddressSelection(candidate), candidate.resultId, new Date().toISOString());
+    const current = adapter.currentViewport();
+    adapter.setViewport({ ...current, center: confirmed.candidate.coordinate, zoom: "19" });
+    setMessage(`Map centered on the confirmed Google result: ${confirmed.candidate.displayLabel}. The address was not saved; place the Fence plan separately when ready.`);
+  };
+
   const importParcel = async (file: File | undefined) => {
     if (!file) return;
     try {
@@ -129,6 +157,15 @@ export default function GoogleMapSpike({ apiKey, design, onPlacePoint, onMovePoi
     <div className="field-panel-heading"><div><p className="eyebrow">Non-Production renderer spike</p><h3>Live satellite + fence overlay</h3></div><span className="reference-chip">Reference only</span></div>
     <p>Google is the live display surface only. Exact McKenzie lengths, gates, history, and takeoff remain authoritative and survive if this map is unavailable.</p>
     {!apiKey ? <div className="calibration-status required" role="status"><strong>Restricted Preview key not configured</strong><span>The adapter is installed but will not contact Google until the approved browser-restricted Maps JavaScript key is available in this non-Production environment.</span></div> : <>
+      <form className="google-address-search" onSubmit={(event) => { event.preventDefault(); void searchAddress(); }}>
+        <label><span>Find property address</span><input value={addressQuery} maxLength={200} autoComplete="street-address" inputMode="search" placeholder="Street, city, state, ZIP" onChange={(event) => setAddressQuery(event.target.value)} /></label>
+        <button type="submit" disabled={addressSearching || !addressQuery.trim()}>{addressSearching ? "Searching…" : "Search address"}</button>
+      </form>
+      {addressCandidates.length > 0 && <div className="google-address-results" aria-label="Google address matches">
+        <fieldset><legend>Confirm the matching property</legend>{addressCandidates.map((candidate) => <label key={candidate.resultId}><input type="radio" name="google-address-result" value={candidate.resultId} checked={selectedAddressId === candidate.resultId} onChange={() => setSelectedAddressId(candidate.resultId)} /><span>{candidate.displayLabel}</span></label>)}</fieldset>
+        <button disabled={!selectedAddressId} onClick={confirmAddress}>Center map on confirmed address</button>
+        <small>Search sends the entered address to Google only when you press Search. The query and result are not saved in this design.</small>
+      </div>}
       <div className="google-map-controls">
         <div className="segmented" aria-label="Google base imagery"><button className={mapType === "satellite" ? "active" : ""} onClick={() => setMapType("satellite")}>Satellite</button><button className={mapType === "hybrid" ? "active" : ""} onClick={() => setMapType("hybrid")}>Hybrid + streets</button></div>
         <button aria-pressed={sketchEnabled} className={sketchEnabled ? "active-tool" : ""} onClick={() => { setSketchEnabled((current) => !current); setMessage(sketchEnabled ? "Map sketching off." : "Map sketching on. Tap to add a point; drag a point circle to move it."); }}>{sketchEnabled ? "✎ Sketching on" : "✎ Sketch on map"}</button>

@@ -67,6 +67,15 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .google-map-spike { display: grid; gap: 12px; margin-top: 14px; padding: 14px; border: 1px solid #cbd6ce; border-radius: 12px; background: #f8faf7; }
 .google-map-spike h3 { margin: 3px 0 0; font: 500 1.25rem Georgia, serif; color: #173f31; }
 .google-map-spike > p { margin: 0; color: #5d6d64; line-height: 1.4; }
+.google-address-search { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 8px; align-items: end; padding: 12px; border: 1px solid #cbd6ce; border-radius: 10px; background: #fff; }
+.google-address-search label { display: grid; gap: 5px; color: #43564c; font-size: .78rem; font-weight: 800; }
+.google-address-search input { min-height: 48px; width: 100%; border: 1px solid #aebcb2; border-radius: 8px; padding: 9px 11px; color: #1e3228; background: #fff; }
+.google-address-results { display: grid; gap: 9px; padding: 12px; border-left: 4px solid #5b826f; border-radius: 8px; background: #eef4ef; }
+.google-address-results fieldset { display: grid; gap: 7px; margin: 0; padding: 0; border: 0; }
+.google-address-results legend { margin-bottom: 6px; color: #294237; font-weight: 850; }
+.google-address-results label { display: flex; align-items: flex-start; gap: 8px; color: #344a3e; font-size: .82rem; line-height: 1.35; }
+.google-address-results input { width: 18px; height: 18px; margin-top: 1px; accent-color: #174f3c; }
+.google-address-results small { color: #596a61; line-height: 1.4; }
 .google-map-controls, .google-layer-controls, .google-location-controls, .google-export-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .google-map-canvas { width: 100%; height: 520px; overflow: hidden; border: 1px solid #9eada3; border-radius: 11px; background: #e8ece8; touch-action: pan-x pan-y; }
 .google-map-status { display: flex; gap: 8px; align-items: baseline; padding: 9px 11px; border-left: 4px solid #5b826f; border-radius: 7px; background: #eef4ef; color: #42584c; font-size: .78rem; }
@@ -273,7 +282,8 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
   .takeoff-heading-actions { align-items: stretch; flex-direction: column; width: 100%; }
   .field-actions, .property-lookup, .walk-length-editor, .reference-adjustments, .reference-capture-actions, .calibration-editor, .house-trace-editor, .takeoff-confirm, .takeoff-summary, .takeoff-columns, .takeoff-audit-grid { display: grid; grid-template-columns: 1fr; }
   .google-map-spike { padding: 10px; }
-  .google-map-controls, .google-layer-controls, .google-location-controls, .google-export-controls { display: grid; grid-template-columns: 1fr; }
+  .google-address-search, .google-map-controls, .google-layer-controls, .google-location-controls, .google-export-controls { display: grid; grid-template-columns: 1fr; }
+  .google-address-search button, .google-address-results button { width: 100%; min-height: 48px; }
   .google-map-controls .segmented { width: 100%; }
   .google-map-controls .segmented button { flex: 1; }
   .google-map-controls button, .google-layer-controls button, .google-location-controls button, .google-export-controls button { width: 100%; min-height: 48px; }
