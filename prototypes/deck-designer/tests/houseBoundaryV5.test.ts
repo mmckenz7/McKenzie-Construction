@@ -104,8 +104,14 @@ describe("v5 immutable house boundaries", () => {
     const edges = deriveGeometricPolygonEdges(platform.region.outer);
     const right = edges.find((edge) => edge.start.x === 192 && edge.end.x === 192)!;
     const bottom = edges.find((edge) => edge.start.z === 144 && edge.end.z === 144)!;
-    expect(() => applyPolygonRegionReplacementV5(base, platform.id, { ...platform.region, outer: resizePolygonEdgeWithHouseAnchorV5(platform, right.id, 180, 6) })).toThrow(/recorded house/i);
-    expect(() => applyPolygonRegionReplacementV5(base, platform.id, { ...platform.region, outer: resizePolygonEdgeWithHouseAnchorV5(platform, bottom.id, 240, 6) })).toThrow(/recorded house/i);
+    const deeper = applyPolygonRegionReplacementV5(base, platform.id, { ...platform.region, outer: resizePolygonEdgeWithHouseAnchorV5(platform, right.id, 180, 6) }).design;
+    const wider = applyPolygonRegionReplacementV5(base, platform.id, { ...platform.region, outer: resizePolygonEdgeWithHouseAnchorV5(platform, bottom.id, 240, 6) }).design;
+    expect(Math.max(...deeper.platforms[0].region.outer.map((point) => point.z))).toBe(180);
+    expect(Math.max(...wider.platforms[0].region.outer.map((point) => point.x))).toBe(240);
+    expect(houseIds(deeper)).toHaveLength(2);
+    expect(houseIds(wider)).toHaveLength(2);
+    expect(deeper.platforms[0].region.outer).toContainEqual({ x: 0, z: 0 });
+    expect(wider.platforms[0].region.outer).toContainEqual({ x: 0, z: 0 });
     const bottomIndex = edges.indexOf(bottom);
     const outward = addBumpoutOnEdge(platform.region.outer, bottomIndex, { x: 96, z: 144 }, 6);
     const expanded = applyPolygonRegionReplacementV5(base, platform.id, { ...platform.region, outer: outward }).design;

@@ -15,13 +15,26 @@ function outwardDistance(edge: PolygonEdge, point: PolygonPoint): number {
   return (point.x - edge.start.x) * edge.outward.x + (point.z - edge.start.z) * edge.outward.z;
 }
 
+function remainsOnHouseBoundary(previous: PolygonEdge, proposed: PolygonEdge): boolean {
+  const dx = (previous.end.x - previous.start.x) / previous.length;
+  const dz = (previous.end.z - previous.start.z) / previous.length;
+  const lineDistance = (point: PolygonPoint) =>
+    Math.abs((point.x - previous.start.x) * dz - (point.z - previous.start.z) * dx);
+  if (lineDistance(proposed.start) > EPSILON || lineDistance(proposed.end) > EPSILON) return false;
+  const project = (point: PolygonPoint) =>
+    (point.x - previous.start.x) * dx + (point.z - previous.start.z) * dz;
+  const start = Math.min(project(proposed.start), project(proposed.end));
+  const end = Math.max(project(proposed.start), project(proposed.end));
+  return Math.min(previous.length, end) - Math.max(0, start) > EPSILON;
+}
+
 export function assertHouseBoundariesPreservedV5(
   platform: DeckPlatformV5,
   proposedOuter: readonly PolygonPoint[],
 ): void {
   const proposedEdges = deriveGeometricPolygonEdges(proposedOuter);
   for (const houseEdge of houseEdges(platform)) {
-    if (!proposedEdges.some((edge) => edge.id === houseEdge.id) || proposedOuter.some((point) => outwardDistance(houseEdge, point) > EPSILON)) reject("The recorded house is fixed. Move an outside side away.");
+    if (!proposedEdges.some((edge) => remainsOnHouseBoundary(houseEdge, edge)) || proposedOuter.some((point) => outwardDistance(houseEdge, point) > EPSILON)) reject("The recorded house is fixed. Move an outside side away.");
   }
 }
 
