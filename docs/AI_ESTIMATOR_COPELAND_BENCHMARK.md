@@ -1,8 +1,65 @@
 # Copeland AI Estimator V0 Benchmark Readiness
 
-Status: benchmark protocol only; Copeland source packet not yet present
+Status: offline readiness/scoring runner implemented; Copeland Gate 0 packet frozen and ready
 
 Repository checkpoint: `codex/ai-estimator-next` at `316a1ca`
+
+## Copeland identity and contamination exclusion
+
+The Copeland benchmark is the privately identified deck project represented by
+the frozen source manifest. The unrelated Lowe's quote recorded in that private
+manifest belongs to a different project. Neither project's address nor the
+unrelated quote identifier may appear in model inputs, truth mappings,
+corrections, reports, or repository documentation. The private source manifest
+records the unrelated reference as an explicit exclusion.
+
+Lowe's API access and an exact Lowe's receipt are not readiness gates. The
+construction invoice states that the primary Lowe's materials were purchased
+separately by the owner; retain that only as hidden financial context unless a
+reviewed, correctly mapped Copeland receipt becomes available later.
+
+## Executable offline runner
+
+The repository now provides a provider-neutral offline path:
+
+```text
+npm run benchmark:ai-estimator -- <source.json> <truth.json> [report.json]
+npm run benchmark:ai-estimator -- <source.json> <truth.json> <candidate.json> <review.json> [report.json]
+```
+
+Readiness mode freezes and hashes the two manifests and reports missing consent,
+dates, files, or content hashes. Scoring mode additionally validates the model
+draft through the existing closed extraction schema, verifies every permitted
+source file against its SHA-256, and computes exact fact, measurement, unknown,
+question, review-time, correction-time, and safety metrics.
+
+The report exposes only manifest/output hashes, a non-address benchmark ID, and
+metrics. It does not echo addresses, source contents, financial values, private
+paths, or reviewer identity. The runner has no provider, Supabase, estimate,
+proposal, contract, ordering, project, or lead-mutation dependency.
+
+Completed-work photos and videos belong only in the hidden truth packet. Truth
+facts use an explicit `as_built` phase so visible installed conditions are not
+mistaken for estimating-time evidence or later customer changes. Visual review
+may confirm visible conditions, but it cannot establish brands, concealed
+connections, exact quantities without scale, structural adequacy, engineering,
+or code compliance.
+
+## Frozen Copeland Gate 0 result - 2026-08-27
+
+The model-visible packet contains seven privacy-minimized sources:
+
+- sheet A103, issued 2025-09-12; and
+- six before-condition photos captured 2026-04-28.
+
+Provider-ready photo copies have GPS and EXIF removed. Three redundant before
+photos containing people are retained privately but excluded from model input.
+All August 2026 completed-work photos and video remain hidden as-built truth.
+
+The frozen readiness report records `readyForBlindRun: true`, seven permitted
+sources, zero missing Gate 0 requirements, and no accuracy score. Accuracy
+remains intentionally null until a truth-isolated model run and blind human
+review produce a candidate extraction and correction log.
 
 ## Purpose
 
