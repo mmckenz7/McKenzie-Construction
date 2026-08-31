@@ -12,7 +12,7 @@ import { acquireBestGps, formatGpsAccuracy, gpsOriginAt, projectGpsFix, projectG
 import { propertyReferenceLinks, type PropertyReferenceLinks } from "./property-reference";
 import { captureReferenceDisplay, rasterizeReferenceBlob, readReferenceImageFromClipboard, referenceImageErrorMessage, type RasterizedReferenceImage } from "./reference-image";
 import { parseRunCommand, quickGateTarget, runEndpoint, type ParsedRunCommand } from "./run-command";
-import { loadLocalDesign, loadLocalReference, saveLocalDesign, saveLocalReference } from "./storage";
+import { loadLocalDesign, loadLocalReference, loadRecoveryDesign, MAX_FENCE_JOB_FILE_BYTES, parseFenceJobFile, saveLocalDesign, saveLocalReference, saveRecoveryDesign, serializeFenceJobFile } from "./storage";
 import { calculateBlackAluminumTakeoff, calculateTreatedPinePrivacyTakeoff, formatBlackAluminumTakeoffText, formatTreatedPinePrivacyTakeoffText, takeoffPostReasonLabel, type TakeoffPostReason } from "./takeoff";
 import { panView, placeDimensionLabels, zoomViewAt, type ViewBox } from "./view";
 import GoogleMapSpike from "./GoogleMapSpike";
@@ -112,6 +112,7 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
   const [dimensionSideOverrides, setDimensionSideOverrides] = useState<Readonly<Record<string, 1 | -1>>>({});
   const svgRef = useRef<SVGSVGElement>(null);
   const referenceFileRef = useRef<HTMLInputElement>(null);
+  const designFileRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(1);
   const gpsRequestId = useRef(0);
   const lastGpsFix = useRef<GpsFix | null>(null);
@@ -119,11 +120,31 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
   const activePointers = useRef(new Map<number, PlanPointer>());
   const navigationGesture = useRef<NavigationGesture>(null);
   const navigationWasActive = useRef(false);
+  const recoveryInitialized = useRef(false);
   const design = history.present;
   const takeoffReady = design.segments.length > 0 && takeoffConfirmedRevision === design.revision;
   const walkNeedsExactLength = siteWalkActive && snapEnabled && lastWalkSegmentId !== null && !walkLengthConfirmed;
 
   useEffect(() => () => gpsAbortController.current?.abort(), []);
+
+  useEffect(() => {
+    if (!recoveryInitialized.current) {
+      recoveryInitialized.current = true;
+      try {
+        const recovered = loadRecoveryDesign(localStorage);
+        if (recovered && (recovered.points.length > 0 || recovered.house)) {
+          setHistory(createHistory(recovered)); nextId.current = nextNumericId(recovered); setMode("select"); setView(fittedView(recovered));
+          setNotice("Recovered the latest browser draft after refresh. Review it, then use Save local or Export job for a deliberate copy.");
+        }
+      } catch { /* A damaged recovery copy must never block a clean new layout. */ }
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      try { saveRecoveryDesign(localStorage, design); }
+      catch { /* Explicit Save local continues to surface storage failures. */ }
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [design]);
 
   const selectedSegment = selection?.type === "segment" ? design.segments.find(({ id }) => id === selection.id) ?? null : null;
   const selectedSegmentIndex = selectedSegment ? design.segments.findIndex(({ id }) => id === selectedSegment.id) : -1;
@@ -413,14 +434,14 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
     }
     endDrag();
   };
-  const selectSegment = (id: string, selectedAt?: Readonly<{ xMm: number; yMm: number }>) => {
-    const segment = design.segments.find((item) => item.id === id);
+  const selectSegment = (id: string, selectedAt?: Readonly<{ xMm: number; yMm: number }>, sourceDesign = design, message = "Span selected. Enter an exact length or edit its gate intent.") => {
+    const segment = sourceDesign.segments.find((item) => item.id === id);
     if (!segment) return;
-    const start = pointById(design, segment.fromPointId); const end = pointById(design, segment.toPointId);
+    const start = pointById(sourceDesign, segment.fromPointId); const end = pointById(sourceDesign, segment.toPointId);
     const dx = end.xMm - start.xMm; const dy = end.yMm - start.yMm;
     const squaredLength = dx ** 2 + dy ** 2;
     const ratio = selectedAt && squaredLength > 0 ? ((selectedAt.xMm - start.xMm) * dx + (selectedAt.yMm - start.yMm) * dy) / squaredLength : 0.5;
-    const runLength = segmentLengthMm(design, segment);
+    const runLength = segmentLengthMm(sourceDesign, segment);
     const distanceFromPostA = runLength * Math.max(0, Math.min(1, ratio));
     const referencePost: GateReferencePost = distanceFromPostA <= runLength / 2 ? "post-a" : "post-b";
     const gateOffsetInchesFromReference = Math.round((referencePost === "post-a" ? distanceFromPostA : runLength - distanceFromPostA) / 25.4);
@@ -430,7 +451,7 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
     const totalInches = Math.round(runLength / 25.4);
     setFeet(String(Math.floor(totalInches / 12)));
     setInches(String(totalInches % 12));
-    setGateEditorOpen(false); setSelection({ type: "segment", id }); setMode("select"); setNotice("Span selected. Enter an exact length or edit its gate intent.");
+    setGateEditorOpen(false); setSelection({ type: "segment", id }); setMode("select"); setNotice(message);
   };
   const startDrag = (event: ReactPointerEvent, pointId: string) => {
     if (mode === "pan" || mode === "close" || mode === "draw" || mode === "new-line" || mode === "calibrate" || mode === "verify-calibration" || mode === "trace-house" || event.metaKey) return;
@@ -472,7 +493,10 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
     if (!selectedSegment) return;
     try {
       const result = editSegmentToExactLength(selectedSegment.id, feet, inches);
+      const nextSegment = design.segments[selectedSegmentIndex + 1];
       commit(result.next, `Span set to ${formatFeetInches(result.length)}. Its authored start and bearing stayed fixed; every later point on this fence line moved together so following runs and gates kept their geometry.`);
+      if (nextSegment) selectSegment(nextSegment.id, undefined, result.next, `Span ${selectedSegmentIndex + 2} of ${result.next.segments.length} is ready for exact review. The previous span is set to ${formatFeetInches(result.length)}.`);
+      else setNotice(`Exact review reached the final span. Its length is set to ${formatFeetInches(result.length)}. Add or review gates, then confirm the layout in Materials.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Enter a valid length."); }
   };
   const addGate = () => {
@@ -708,6 +732,25 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
       setHistory(createHistory(loaded)); setReferenceBackground(loadedReference); setScaleCalibration(initialScaleCalibrationState(loadedReference)); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setNotice(loadedReference ? "Saved fence layout and reference image loaded. Verify its saved scale with an independent known line before drawing; image alignment remains reference only." : "Saved local layout loaded.");
     } catch (error) { setNotice(error instanceof Error ? `Saved layout was not opened: ${error.message}` : "Saved layout was not opened."); }
   };
+  const exportJobFile = () => {
+    if (design.segments.length === 0) { setNotice("Draw at least one measured span before exporting a Fence job file."); return; }
+    const blob = new Blob([serializeFenceJobFile(design)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = `mckenzie-fence-layout-r${design.revision}.mckenzie-fence.json`; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setNotice("Portable Fence job file downloaded. It contains exact geometry and gates, but no reference imagery, pricing, customer data, or map-provider data.");
+  };
+  const importJobFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      if (file.size > MAX_FENCE_JOB_FILE_BYTES) throw new RangeError("That Fence job file is larger than the supported 2 MB limit.");
+      const loaded = parseFenceJobFile(await file.text());
+      cancelGpsLock(); lastGpsFix.current = null; setGpsOrigin(null); setGpsAccuracyMeters(null); setLastWalkSegmentId(null); setWalkLengthConfirmed(true); setSiteWalkActive(false);
+      setHistory(createHistory(loaded)); setReferenceBackground(null); setScaleCalibration(UNCALIBRATED_SCALE_STATE); nextId.current = nextNumericId(loaded); setSelection(null); setGateEditorOpen(false); setClosurePathPointId(null); setMode("select"); setView(fittedView(loaded)); setTakeoffConfirmedRevision(null); setTakeoffViewEnabled(false);
+      setNotice("Portable Fence job opened. Review its exact measurements and gates before confirming a new takeoff. Reference imagery is intentionally not included.");
+    } catch (error) { setNotice(error instanceof Error ? `Fence job was not opened: ${error.message}` : "Fence job was not opened."); }
+  };
   const copyTakeoff = async () => {
     try {
       if (!navigator.clipboard?.writeText) throw new RangeError("This browser cannot copy the takeoff. Select and copy the audit details manually.");
@@ -739,6 +782,8 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
       <button aria-pressed={propertyPanelOpen} className={propertyPanelOpen ? "active-tool" : ""} onClick={() => setPropertyPanelOpen((current) => !current)}>⌖ Property</button>
       <button aria-pressed={takeoffPanelOpen} className={takeoffPanelOpen ? "active-tool" : ""} onClick={() => setTakeoffPanelOpen((current) => !current)}>▦ Materials</button>
       <span className="toolbar-spacer" />
+      <input ref={designFileRef} hidden type="file" accept=".mckenzie-fence.json,application/json" onChange={(event) => { void importJobFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+      <button disabled={design.segments.length === 0} onClick={exportJobFile}>⇩ Export job</button><button onClick={() => designFileRef.current?.click()}>⇧ Open job</button>
       <button onClick={save}>Save local</button><button onClick={load}>Load local</button>
     </nav>
 
@@ -839,7 +884,7 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
         <small>Reference imagery and GIS lines are not a boundary survey. Google stays a separate viewer. Captured images never leave this browser, are compressed for local use, and are saved with Save local so the design can be reopened on this same device. They are never included in fence totals.</small>
       </div>}
       {takeoffPanelOpen && <div className="field-panel takeoff-panel">
-        <div className="field-panel-heading"><div><p className="eyebrow">Material takeoff V0</p><h2>{takeoffReady ? (takeoffMaterial === "black-aluminum" ? "Black Aluminum" : "Treated Pine Privacy") : "Confirm the measured layout"}</h2></div><div className="takeoff-heading-actions">{takeoffReady && <label className="takeoff-material"><span>Fence type</span><select aria-label="Fence material takeoff" value={takeoffMaterial} onChange={(event) => { setTakeoffMaterial(event.target.value as TakeoffMaterial); setTakeoffViewEnabled(false); setNotice("Material takeoff changed. The confirmed drawing and all line rules stayed exactly the same."); }}><option value="black-aluminum">Black aluminum</option><option value="treated-pine-privacy">Treated pine privacy</option></select></label>}<span className="reference-chip">No pricing</span>{takeoffReady && <><button onClick={() => void copyTakeoff()}>Copy takeoff</button><button aria-pressed={takeoffViewEnabled} className={takeoffViewEnabled ? "active-tool" : ""} onClick={() => { setTakeoffViewEnabled((current) => !current); setNotice(takeoffViewEnabled ? "Takeoff markers hidden." : "Takeoff markers show each eight-foot bay and post decision on the plan."); }}>{takeoffViewEnabled ? "Hide plan takeoff" : "Show takeoff on plan"}</button></>}</div></div>
+        <div className="field-panel-heading"><div><p className="eyebrow">Material takeoff V0</p><h2>{takeoffReady ? (takeoffMaterial === "black-aluminum" ? "Black Aluminum" : "Treated Pine Privacy") : "Confirm the measured layout"}</h2></div><div className="takeoff-heading-actions">{takeoffReady && <label className="takeoff-material"><span>Fence type</span><select aria-label="Fence material takeoff" value={takeoffMaterial} onChange={(event) => { setTakeoffMaterial(event.target.value as TakeoffMaterial); setTakeoffViewEnabled(false); setNotice("Material takeoff changed. The confirmed drawing and all line rules stayed exactly the same."); }}><option value="black-aluminum">Black aluminum</option><option value="treated-pine-privacy">Treated pine privacy</option></select></label>}<span className="reference-chip">No pricing</span>{takeoffReady && <><button onClick={() => void copyTakeoff()}>Copy takeoff</button><button onClick={() => window.print()}>Print / save PDF</button><button aria-pressed={takeoffViewEnabled} className={takeoffViewEnabled ? "active-tool" : ""} onClick={() => { setTakeoffViewEnabled((current) => !current); setNotice(takeoffViewEnabled ? "Takeoff markers hidden." : "Takeoff markers show each eight-foot bay and post decision on the plan."); }}>{takeoffViewEnabled ? "Hide plan takeoff" : "Show takeoff on plan"}</button></>}</div></div>
         {!takeoffReady ? <div className="takeoff-confirm"><strong>{design.segments.length ? (takeoffConfirmedRevision === null ? "Drawing comes first" : "The drawing changed") : "Draw the fence first"}</strong><span>{design.segments.length ? "Confirm the measured lines when the layout is ready. Fence type only changes the material calculation afterward." : "Use the same Draw, Edit, gate, closure, snap, and exact-length tools for every fence type."}</span><button className="primary" disabled={design.segments.length === 0} onClick={() => { setTakeoffConfirmedRevision(design.revision); setTakeoffViewEnabled(false); setNotice("Measured layout confirmed for takeoff. Choose a fence type; the drawing and line rules will not change."); }}>Confirm layout for takeoff</button></div> : <>
         {takeoffMaterial === "black-aluminum" ? <>
           <p>Calculated directly from the measured fence and gate runs using 8-foot panels.</p>
@@ -987,7 +1032,7 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
           </nav>
           <h2>{selectedSegment.kind === "gate" ? `${selectedSegment.gateType === "double" ? "Double" : "Single"} gate` : "Fence run"}</h2>
           <div className="length-readout">{formatFeetInches(segmentLengthMm(design, selectedSegment))}</div>
-          {selectedSegment.kind === "fence" && <><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyExactLength}>Apply exact length</button></>}
+          {selectedSegment.kind === "fence" && <><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyExactLength}>{selectedSegmentIndex < design.segments.length - 1 ? "Apply & next span" : "Apply & finish exact review"}</button></>}
           <>
             <button className="primary wide" onClick={() => { const opening = !gateEditorOpen; if (opening && selectedSegment.kind === "gate") { if (!selectedGateRun) { setNotice("This saved gate is no longer on one straight editable run. Restore it to fence intent, then place the gate again."); return; } const width = measurementFields(segmentLengthMm(design, selectedSegment)); const distanceFromPostB = selectedGateRun.runLengthMm - selectedGateRun.offsetFromPostAMm - segmentLengthMm(design, selectedSegment); const offset = measurementFields(gateReferencePost === "post-a" ? selectedGateRun.offsetFromPostAMm : distanceFromPostB); setGateTypeChoice(selectedSegment.gateType ?? "single"); setGateFeet(width.feet); setGateInches(width.inches); setGateOffsetFeet(offset.feet); setGateOffsetInches(offset.inches); } setGateEditorOpen(opening); setNotice(opening ? `Post ${gateReferencePost === "post-a" ? "A" : "B"} is highlighted as the gate measurement origin. You can switch it below.` : "Gate editing canceled."); }}>{gateEditorOpen ? "Cancel gate editing" : selectedSegment.kind === "gate" ? "✎ Edit gate width and location" : "＋ Add gate to this run"}</button>
             {gateEditorOpen && <div className="gate-editor">

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EMPTY_DESIGN, addPoint, feetAndInchesToMm, gateOffsetFromReferenceMm, insertGateOnSegment, setSegmentLengthMm, stableDesignJson } from "../src/model";
 import { initialScaleCalibrationState } from "../src/background";
-import { LEGACY_STORAGE_KEY, loadLocalDesign, loadLocalReference, PREVIOUS_STORAGE_KEY, REFERENCE_STORAGE_KEY, saveLocalDesign, saveLocalReference, STORAGE_KEY } from "../src/storage";
+import { FENCE_JOB_FILE_FORMAT, LEGACY_STORAGE_KEY, loadLocalDesign, loadLocalReference, loadRecoveryDesign, parseFenceJobFile, PREVIOUS_STORAGE_KEY, RECOVERY_STORAGE_KEY, REFERENCE_STORAGE_KEY, saveLocalDesign, saveLocalReference, saveRecoveryDesign, serializeFenceJobFile, STORAGE_KEY } from "../src/storage";
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -45,6 +45,34 @@ describe("local persistence", () => {
 
   it("returns null when no local design exists", () => {
     expect(loadLocalDesign(new MemoryStorage())).toBeNull();
+  });
+
+  it("keeps automatic crash recovery separate from the deliberate local save", () => {
+    const storage = new MemoryStorage();
+    const recovered = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 305, yMm: 610 });
+    saveLocalDesign(storage, EMPTY_DESIGN);
+    saveRecoveryDesign(storage, recovered);
+    expect(storage.values.get(RECOVERY_STORAGE_KEY)).toBe(stableDesignJson(recovered));
+    expect(loadRecoveryDesign(storage)).toEqual(recovered);
+    expect(loadLocalDesign(storage)).toEqual(EMPTY_DESIGN);
+  });
+
+  it("exports and imports a deterministic portable Fence job without reference imagery", () => {
+    let design = addPoint(EMPTY_DESIGN, { id: "point-1", xMm: 0, yMm: 0 });
+    design = addPoint(design, { id: "point-2", xMm: feetAndInchesToMm(24, 0), yMm: 0 }, "segment-1");
+    design = insertGateOnSegment(design, "segment-1", feetAndInchesToMm(4, 0), feetAndInchesToMm(8, 0), "single", "point-3", "point-4", "segment-2", "segment-3");
+    const serialized = serializeFenceJobFile(design);
+    expect(JSON.parse(serialized)).toMatchObject({ format: FENCE_JOB_FILE_FORMAT, fileVersion: 1 });
+    expect(serialized).not.toMatch(/data:image|reference|createdAt|exportedAt/);
+    expect(parseFenceJobFile(serialized)).toEqual(design);
+    expect(serializeFenceJobFile(parseFenceJobFile(serialized))).toBe(serialized);
+  });
+
+  it("fails closed for malformed, unsupported, or oversized Fence job files", () => {
+    expect(() => parseFenceJobFile("not json")).toThrow("not valid Fence job JSON");
+    expect(() => parseFenceJobFile(JSON.stringify({ format: "other", fileVersion: 1, design: EMPTY_DESIGN }))).toThrow("not a supported McKenzie Fence job file");
+    expect(() => parseFenceJobFile(JSON.stringify({ format: FENCE_JOB_FILE_FORMAT, fileVersion: 2, design: EMPTY_DESIGN }))).toThrow("not a supported McKenzie Fence job file");
+    expect(() => parseFenceJobFile("x".repeat(2_000_001))).toThrow("larger than the supported 2 MB limit");
   });
 
   it("loads and migrates a schema-v1 layout from the legacy storage key", () => {

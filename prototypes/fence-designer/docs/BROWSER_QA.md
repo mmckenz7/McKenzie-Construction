@@ -175,3 +175,16 @@ Repository validation note: the supported webpack production build completed suc
 - Next advances through Span 2 and Span 3 in authored order and refreshes the exact feet/inches fields for each span.
 - Previous returns in the same order; neither navigation button changes geometry, totals, gates, or the design revision.
 - At 390 px wide, Previous and Next remain side by side with 48 px touch targets and do not overflow the inspector.
+
+## Integrated production-candidate acceptance pass
+
+Run this as one end-to-end test after the bundled candidate reaches Preview:
+
+1. Find a property address, select the clearest base map, and rough-sketch at least three connected spans plus one separate divider line.
+2. Continue to exact dimensions. Confirm review begins at Span 1, **Apply & next span** advances in authored order, and the final span offers **Apply & finish exact review**.
+3. Add one single and one double gate from measured Post A/Post B offsets. Confirm the fence stays straight and the gate labels remain readable.
+4. Export the job file, then open it in a fresh browser/device. Confirm geometry, gates, line count, total length, and revision match while imagery and takeoff confirmation are intentionally absent.
+5. Edit one middle span, refresh the browser, and confirm the latest geometry returns from crash recovery. Confirm Undo/Redo still treat the edit as one revision before refresh; recovery begins a fresh history after refresh.
+6. Confirm the imported/recovered drawing must be explicitly confirmed in Materials. Compare Black Aluminum and Treated Pine Privacy without changing geometry.
+7. Show the plan takeoff, inspect panel/bay and post decisions, then use **Print / save PDF**. Confirm the printed packet contains the title, total, selected takeoff, plan, legend, and footer without editing controls or the inspector.
+8. Repeat the drawing, exact review, gate edit, export, and Materials controls at 390 px wide. Confirm 48 px primary touch targets, no horizontal document overflow, keyboard focus visibility, and zero console warnings/errors.

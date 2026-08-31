@@ -341,4 +341,21 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
   :scope.site-walk-active .site-walk-panel .mark-location { grid-column: auto; }
   :scope.site-walk-active .canvas-shell, :scope.site-walk-active .plan-canvas { min-height: 72dvh; }
 }
+
+@media print {
+  :scope { min-height: auto; background: #fff; }
+  .toolbar, .inspector, .command-dock, .live-measurement, .notice, .property-panel, .site-walk-panel { display: none !important; }
+  .app-header { padding: 12px 0; background: #fff; color: #172d25; border-bottom: 2px solid #172d25; }
+  .app-header .eyebrow { color: #72502b; }
+  .app-header p, .total-card span, .total-card small { color: #43564c; }
+  .total-card { border-color: #789083; background: #fff; }
+  .total-card strong { color: #172d25; }
+  .field-panels { display: block; padding: 10px 0; border: 0; background: #fff; }
+  .takeoff-panel { box-shadow: none; break-inside: avoid; }
+  .takeoff-heading-actions button, .takeoff-material { display: none; }
+  .workspace { display: block; }
+  .canvas-shell, .plan-canvas { min-height: 0; height: 6.5in; }
+  .canvas-key { font-size: 8pt; }
+  .app-footer { padding: 8px 0; background: #fff; border-top: 1px solid #9eaaa3; }
+}
 }
