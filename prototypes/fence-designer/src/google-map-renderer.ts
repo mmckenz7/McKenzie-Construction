@@ -11,7 +11,7 @@ type GoogleMap = {
   getHeading(): number | undefined;
   getTilt(): number | undefined;
   setCenter(center: { lat: number; lng: number }): void;
-  setMapTypeId(type: "satellite" | "hybrid"): void;
+  setMapTypeId(type: MapBasePresentation): void;
   setOptions(options: Record<string, unknown>): void;
   setZoom(zoom: number): void;
 };
@@ -121,7 +121,7 @@ export class GoogleReadOnlyMapPresentationAdapter implements ReadOnlyMapPresenta
   destroy() {
     if (this.state.status === "destroyed") return;
     this.clearGeometry();
-    this.listeners.splice(0).forEach((listener) => listener.remove());
+    this.listeners.splice(0).forEach((listener) => listener?.remove?.());
     this.locationDot?.setMap(null); this.accuracyCircle?.setMap(null);
     this.locationDot = null; this.accuracyCircle = null; this.map = null; this.runtime = null;
     this.updateAvailability("destroyed", null);
@@ -179,7 +179,7 @@ export class GoogleReadOnlyMapPresentationAdapter implements ReadOnlyMapPresenta
   private renderAll() { this.renderScene(); this.renderParcel(); }
 
   private clearGeometry() {
-    this.geometryListeners.splice(0).forEach((listener) => listener.remove());
+    this.geometryListeners.splice(0).forEach((listener) => listener?.remove?.());
     this.runOverlays.splice(0).forEach((overlay) => overlay.setMap(null));
     this.polygonOverlays.splice(0).forEach((overlay) => overlay.setMap(null));
     this.nodeOverlays.splice(0).forEach((overlay) => overlay.setMap(null));

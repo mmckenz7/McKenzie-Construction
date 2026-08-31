@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FenceGoogleMapRendererAdapter } from "../src/fence-map-renderer";
 import { GoogleReadOnlyMapPresentationAdapter, type GoogleMapsRuntime } from "../src/google-map-renderer";
 import type { FenceDraftEditEvent, FenceMapDisplayProjection } from "../src/map-contract";
-import { normalizedMapCoordinate, type MapPresentationInteraction, type MapPresentationScene } from "../src/map-presentation";
+import { normalizedMapCoordinate, type MapBasePresentation, type MapPresentationInteraction, type MapPresentationScene } from "../src/map-presentation";
 
 class Listener { removed = false; constructor(readonly callback: (event?: unknown) => void) {} remove() { this.removed = true; } }
 class LatLng { constructor(private readonly latitude: number, private readonly longitude: number) {} lat() { return this.latitude; } lng() { return this.longitude; } }
@@ -23,7 +23,7 @@ class FakeMap {
   emit(name: string, event?: unknown) { this.listeners.get(name)?.forEach((listener) => { if (!listener.removed) listener.callback(event); }); }
   getCenter() { return this.center; } getZoom() { return this.zoom; } getHeading() { return this.heading; } getTilt() { return this.tilt; }
   setCenter(value: { lat: number; lng: number }) { this.center = new LatLng(value.lat, value.lng); }
-  setMapTypeId(value: "satellite" | "hybrid") { this.mapType = value; }
+  setMapTypeId(value: MapBasePresentation) { this.mapType = value; }
   setOptions(options: Record<string, unknown>) { this.heading = Number(options.heading ?? this.heading); this.tilt = Number(options.tilt ?? this.tilt); }
   setZoom(value: number) { this.zoom = value; }
 }
@@ -74,7 +74,10 @@ describe("provider-neutral Google presentation adapter", () => {
     expect(FakePolyline.instances).toHaveLength(1);
     expect(FakePolygon.instances).toHaveLength(1);
     expect(FakeCircle.instances).toHaveLength(1);
-    adapter.setBasePresentation("hybrid"); expect(map.mapType).toBe("hybrid");
+    for (const presentation of ["hybrid", "roadmap", "terrain", "satellite"] as const) {
+      adapter.setBasePresentation(presentation);
+      expect(map.mapType).toBe(presentation);
+    }
     adapter.showReferenceLayer({ type: "FeatureCollection", features: [{ type: "Feature", properties: { layer: "parcel-reference" }, geometry: { type: "LineString", coordinates: [[-83.92, 35.96], [-83.919, 35.961]] } }] });
     expect(map.dataFeatures).toHaveLength(1);
     adapter.setReferenceLayerVisible(false); expect(map.dataFeatures).toHaveLength(0);
@@ -96,6 +99,18 @@ describe("provider-neutral Google presentation adapter", () => {
     expect(adapter.availability()).toEqual({ status: "offline", reason: "provider offline" });
     expect(JSON.stringify(scene)).toBe(before);
     adapter.destroy(); expect(adapter.availability().status).toBe("destroyed");
+  });
+
+  it("destroys safely when a provider returns an incomplete listener during partial initialization", async () => {
+    class PartialCircle extends FakeCircle {
+      addListener() { return undefined as unknown as Listener; }
+    }
+    const partialRuntime = { ...runtime, Circle: PartialCircle } as unknown as GoogleMapsRuntime;
+    const adapter = new GoogleReadOnlyMapPresentationAdapter("restricted-test-key", async () => partialRuntime);
+    adapter.showScene(scene);
+    await adapter.mount({} as HTMLElement);
+    expect(() => adapter.destroy()).not.toThrow();
+    expect(adapter.availability().status).toBe("destroyed");
   });
 });
 

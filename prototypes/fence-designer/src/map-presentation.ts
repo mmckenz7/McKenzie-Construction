@@ -1,6 +1,6 @@
 export type NormalizedMapCoordinate = Readonly<{ longitude: string; latitude: string }>;
 export type MapViewport = Readonly<{ center: NormalizedMapCoordinate; zoom: string; bearing: string; pitch: string }>;
-export type MapBasePresentation = "satellite" | "hybrid";
+export type MapBasePresentation = "satellite" | "hybrid" | "roadmap" | "terrain";
 export type RendererAvailability = "unmounted" | "ready" | "offline" | "destroyed";
 export type RendererAvailabilityEvent = Readonly<{ status: RendererAvailability; reason: string | null }>;
 

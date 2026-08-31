@@ -8,7 +8,7 @@ import { mapToLocalGround, type LocalGroundToWgs84Registration } from "./ground-
 import { parseLocalParcelFile, type ParcelGeoJson } from "./local-reference-interchange";
 import { IDLE_LOCATION_STATE, ObservationalLocationSession, type ObservationalLocationState } from "./live-location";
 import { beginAddressSelection, confirmAddressSelection, type AddressSearchCandidate } from "./map-contract";
-import { normalizedMapCoordinate, type RendererAvailabilityEvent } from "./map-presentation";
+import { normalizedMapCoordinate, type MapBasePresentation, type RendererAvailabilityEvent } from "./map-presentation";
 import type { FenceDesign } from "./model";
 
 type GoogleMapSpikeProps = Readonly<{
@@ -17,6 +17,7 @@ type GoogleMapSpikeProps = Readonly<{
   startsSeparateLine: boolean;
   onPlacePoint(position: Readonly<{ xMm: number; yMm: number }>): void;
   onMovePoint(pointId: string, position: Readonly<{ xMm: number; yMm: number }>): void;
+  onContinueToExactDimensions(): void;
 }>;
 
 const DEIDENTIFIED_KNOXVILLE_CENTER = normalizedMapCoordinate("-83.9200000", "35.9600000");
@@ -38,7 +39,7 @@ function locationLabel(state: ObservationalLocationState) {
   return state.reason ?? "Location stopped.";
 }
 
-export default function GoogleMapSpike({ apiKey, design, startsSeparateLine, onPlacePoint, onMovePoint }: GoogleMapSpikeProps) {
+export default function GoogleMapSpike({ apiKey, design, startsSeparateLine, onPlacePoint, onMovePoint, onContinueToExactDimensions }: GoogleMapSpikeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<FenceGoogleMapRendererAdapter | null>(null);
   const locationSessionRef = useRef<ObservationalLocationSession | null>(null);
@@ -46,7 +47,7 @@ export default function GoogleMapSpike({ apiKey, design, startsSeparateLine, onP
   const [registration, setRegistration] = useState(registrationRef.current);
   const [registrationPlaced, setRegistrationPlaced] = useState(false);
   const [availability, setAvailability] = useState<RendererAvailabilityEvent>({ status: "unmounted", reason: null });
-  const [mapType, setMapType] = useState<"satellite" | "hybrid">("satellite");
+  const [mapType, setMapType] = useState<MapBasePresentation>("satellite");
   const [sketchEnabled, setSketchEnabled] = useState(false);
   const [parcel, setParcel] = useState<ParcelGeoJson | null>(null);
   const [parcelName, setParcelName] = useState<string | null>(null);
@@ -173,13 +174,22 @@ export default function GoogleMapSpike({ apiKey, design, startsSeparateLine, onP
         <small>Search sends the entered address to Google only when you press Search. The query and result are not saved in this design.</small>
       </div>}
       <div className="google-map-controls">
-        <div className="segmented" aria-label="Google base imagery"><button className={mapType === "satellite" ? "active" : ""} onClick={() => setMapType("satellite")}>Satellite</button><button className={mapType === "hybrid" ? "active" : ""} onClick={() => setMapType("hybrid")}>Hybrid + streets</button></div>
+        <div className="segmented google-base-map-selector" aria-label="Google base map">
+          <button aria-pressed={mapType === "satellite"} className={mapType === "satellite" ? "active" : ""} onClick={() => setMapType("satellite")}>Satellite</button>
+          <button aria-pressed={mapType === "hybrid"} className={mapType === "hybrid" ? "active" : ""} onClick={() => setMapType("hybrid")}>Hybrid</button>
+          <button aria-pressed={mapType === "roadmap"} className={mapType === "roadmap" ? "active" : ""} onClick={() => setMapType("roadmap")}>Street</button>
+          <button aria-pressed={mapType === "terrain"} className={mapType === "terrain" ? "active" : ""} onClick={() => setMapType("terrain")}>Terrain</button>
+        </div>
         <button aria-pressed={sketchEnabled} className={sketchEnabled ? "active-tool" : ""} onClick={() => { setSketchEnabled((current) => !current); setMessage(sketchEnabled ? "Map sketching off." : "Map sketching on. Tap to add a point; drag a point circle to move it."); }}>{sketchEnabled ? "✎ Sketching on" : "✎ Sketch on map"}</button>
         <button onClick={reanchor}>⌖ Place plan at map center</button>
       </div>
       {startsSeparateLine && <div className="calibration-status complete" role="status"><strong>Separate line armed</strong><span>Your next map tap starts a new fence line. The following taps continue from that new point.</span></div>}
       <div ref={containerRef} className="google-map-canvas" aria-label="Google satellite fence map" />
       <div className="google-map-status" role="status"><strong>{availability.status === "ready" ? "Map ready" : availability.status === "offline" ? "Map unavailable—local Fence remains ready" : "Loading map…"}</strong>{availability.reason && <span>{availability.reason}</span>}</div>
+      <div className="google-exact-handoff">
+        <div><strong>Rough map → exact dimensions</strong><span>Sketch the shape here, then continue to the plan. Select each span and enter the tape, wheel, or laser length. Exact McKenzie dimensions replace the rough visual length and remain authoritative.</span></div>
+        <button className="primary" disabled={!design.segments.length} onClick={onContinueToExactDimensions}>Continue with exact dimensions</button>
+      </div>
     </>}
     <div className="google-layer-controls">
       <label className="parcel-file"><span>Local parcel overlay</span><input type="file" accept=".geojson,.json,.kml,application/geo+json,application/json,application/vnd.google-earth.kml+xml" onChange={(event) => { void importParcel(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>

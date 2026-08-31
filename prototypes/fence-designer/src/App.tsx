@@ -780,6 +780,16 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
             commit(next, "Map point moved as one ordinary McKenzie geometry revision. Exact length can be corrected in the inspector.");
             setSelection({ type: "point", id: pointId }); setMode("select");
           }}
+          onContinueToExactDimensions={() => {
+            const finalSegment = design.segments[design.segments.length - 1];
+            if (!finalSegment) return;
+            setSelection({ type: "segment", id: finalSegment.id });
+            setMode("select");
+            setView(fittedView(design));
+            setGoogleMapSpikeOpen(false);
+            setPropertyPanelOpen(false);
+            setNotice("Rough map sketch moved to the plan. The latest span is selected—enter its exact measured length, then select each remaining span in turn.");
+          }}
         />}
         <div className="property-lookup"><label><span>Property address</span><input value={kgisAddress} onChange={(event) => setKgisAddress(event.target.value)} placeholder="Street address" autoComplete="street-address" /></label><div className="reference-links"><button onClick={() => openPropertyReference("acres")}>Open Acres ↗</button><button onClick={() => openPropertyReference("kgis")}>Open KGIS ↗</button><button onClick={() => openPropertyReference("googleMaps")}>Open Google ↗</button></div></div>
         <div className="reference-workflow">

@@ -78,8 +78,13 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .google-address-results input { width: 18px; height: 18px; margin-top: 1px; accent-color: #174f3c; }
 .google-address-results small { color: #596a61; line-height: 1.4; }
 .google-map-controls, .google-layer-controls, .google-location-controls, .google-export-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.google-base-map-selector { display: grid; grid-template-columns: repeat(4, minmax(78px, 1fr)); }
 .google-map-canvas { width: 100%; height: 520px; overflow: hidden; border: 1px solid #9eada3; border-radius: 11px; background: #e8ece8; touch-action: pan-x pan-y; }
 .google-map-status { display: flex; gap: 8px; align-items: baseline; padding: 9px 11px; border-left: 4px solid #5b826f; border-radius: 7px; background: #eef4ef; color: #42584c; font-size: .78rem; }
+.google-exact-handoff { display: grid; grid-template-columns: minmax(240px, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid #c8d6cc; border-radius: 10px; background: #edf4ef; }
+.google-exact-handoff > div { display: grid; gap: 4px; }
+.google-exact-handoff strong { color: #173f31; }
+.google-exact-handoff span { color: #53675d; font-size: .78rem; line-height: 1.4; }
 .google-layer-controls { padding: 10px 12px; border: 1px solid #d7ddd6; border-radius: 9px; background: #fff; }
 .google-layer-controls label, .parcel-file { display: flex; align-items: center; gap: 7px; color: #43564c; font-size: .78rem; font-weight: 760; }
 .parcel-file { display: grid; gap: 4px; min-width: min(100%, 260px); }
@@ -283,9 +288,10 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
   .takeoff-heading-actions { align-items: stretch; flex-direction: column; width: 100%; }
   .field-actions, .property-lookup, .walk-length-editor, .reference-adjustments, .reference-capture-actions, .calibration-editor, .house-trace-editor, .takeoff-confirm, .takeoff-summary, .takeoff-columns, .takeoff-audit-grid { display: grid; grid-template-columns: 1fr; }
   .google-map-spike { padding: 10px; }
-  .google-address-search, .google-map-controls, .google-layer-controls, .google-location-controls, .google-export-controls { display: grid; grid-template-columns: 1fr; }
+  .google-address-search, .google-map-controls, .google-layer-controls, .google-location-controls, .google-export-controls, .google-exact-handoff { display: grid; grid-template-columns: 1fr; }
   .google-address-search button, .google-address-results button { width: 100%; min-height: 48px; }
   .google-map-controls .segmented { width: 100%; }
+  .google-map-controls .google-base-map-selector { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .google-map-controls .segmented button { flex: 1; }
   .google-map-controls button, .google-layer-controls button, .google-location-controls button, .google-export-controls button { width: 100%; min-height: 48px; }
   .google-map-canvas { height: 430px; }

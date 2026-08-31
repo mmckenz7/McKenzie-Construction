@@ -159,3 +159,11 @@ Repository validation note: the supported webpack production build completed suc
 132. Uploaded a synthetic deidentified GeoJSON polygon from a disposable local fixture. The parcel overlay rendered as an independent layer, its visibility control became enabled, and **Remove parcel** became available without changing Fence geometry, gates, takeoff, or persistence.
 133. Confirmed GeoJSON/KML export stayed disabled until deliberate plan placement and that no geocoder, Places, Street View, KGIS fetch, paid billing, Production key, or provider object entered the Fence document.
 134. Checked the branch Preview console after satellite/hybrid switching, plan placement, lifecycle remount, and parcel import: zero warnings and zero errors. Observational browser location was deliberately not started because this deidentified renderer test did not require a field GPS observation.
+
+## Base-map choices and rough-to-exact handoff QA — 2026-08-31
+
+135. Opened the isolated local Fence renderer with a disposable invalid placeholder key used only to expose the controls. Confirmed **Satellite**, **Hybrid**, **Street**, and **Terrain** are one mutually exclusive, keyboard-accessible base-map selector and that changing the selection does not revise Fence geometry.
+136. At 390 × 844, the four base-map buttons rendered as a contained two-by-two grid. Every button measured 142.5 × 48 px inside the 313 px map panel; the document remained horizontally contained.
+137. Confirmed the new **Rough map → exact dimensions** handoff stays disabled for an empty design and becomes available after a measured span exists. Activating it closes the reference panel, fits the local plan, selects the latest authored span, and exposes the existing exact-length inspector without revising geometry.
+138. Forced a partial provider initialization failure with the disposable invalid key and confirmed closing the map leaves the local Fence application visible and usable. Deterministic coverage verifies incomplete provider listeners cannot break renderer cleanup.
+139. Live Street/Terrain imagery validation remains reserved for the automatic branch Preview because the local placeholder intentionally cannot authenticate to Google. Existing exact-length, downstream-translation, undo/redo, and takeoff regressions remain the authority for the post-handoff editing behavior.
