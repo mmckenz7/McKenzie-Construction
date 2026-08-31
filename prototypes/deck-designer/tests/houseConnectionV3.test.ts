@@ -1,7 +1,8 @@
 // @ts-ignore The production root intentionally does not install this isolated prototype package's test runner.
 import { describe, expect, it } from "vitest";
-import { deriveHouseConnectionDraft, applyHouseConnectionV3 } from "../src/houseConnectionV3";
+import { deriveHouseConnectionDraft, applyHouseConnectionV3, removeHouseConnectionV3 } from "../src/houseConnectionV3";
 import { deriveHouseContextGeometry } from "../src/houseContextGeometry";
+import { createHistoryV3, designHistoryReducerV3 } from "../src/historyV3";
 import { DEFAULT_DESIGN } from "../src/model";
 import { migrateDeckDesignToV3, stableDeckDesignV3Json } from "../src/modelV3";
 import { deriveGeometricPolygonEdges } from "../src/polygon";
@@ -67,5 +68,36 @@ describe("v3 house connection", () => {
     const revised = applyHouseConnectionV3(added, platform.id, { wallId: "house-wall-2", edgeId: side, attachment: "non-ledger", doorEnabled: false, doorOffset: 0, doorWidth: 72 });
     expect(revised.siteContext.houseWalls.find((wall) => wall.id === "house-wall-1")).toEqual(added.siteContext.houseWalls[0]);
     expect(revised.siteContext.houseWalls.find((wall) => wall.id === "house-wall-2")?.attachment).toBe("non-ledger");
+  });
+
+  it("removes only the selected extra wall and restores its exact side to free", () => {
+    const editable = { ...base, platforms: [{ ...platform, construction: { ...platform.construction, railing: { ...platform.construction.railing, enabledEdgeIds: [] }, stairSystems: [] } }] };
+    const side = deriveGeometricPolygonEdges(editable.platforms[0].region.outer).find((edge) => edge.start.x === 0 && edge.end.x === 0)!.id;
+    const added = applyHouseConnectionV3(editable, platform.id, { wallId: null, edgeId: side, attachment: "ledger", doorEnabled: false, doorOffset: 0, doorWidth: 72 });
+    const removed = removeHouseConnectionV3(added, platform.id, "house-wall-2");
+    expect(removed.metadata.revision).toBe(added.metadata.revision + 1);
+    expect(removed.siteContext.houseWalls).toEqual([added.siteContext.houseWalls[0]]);
+    expect(removed.platforms[0].edgeConditions.find((condition) => condition.edgeId === side)).toMatchObject({ condition: "free", attachment: "none" });
+    expect(removed.platforms[0].edgeConditions.find((condition) => condition.edgeId === houseEdge.edgeId)).toEqual(added.platforms[0].edgeConditions.find((condition) => condition.edgeId === houseEdge.edgeId));
+    expect(stableDeckDesignV3Json(removeHouseConnectionV3(added, platform.id, "house-wall-2"))).toBe(stableDeckDesignV3Json(removed));
+  });
+
+  it("restores the removed wall and exact edge condition through Undo and Redo", () => {
+    const editable = { ...base, platforms: [{ ...platform, construction: { ...platform.construction, railing: { ...platform.construction.railing, enabledEdgeIds: [] }, stairSystems: [] } }] };
+    const side = deriveGeometricPolygonEdges(editable.platforms[0].region.outer).find((edge) => edge.start.x === 0 && edge.end.x === 0)!.id;
+    const added = applyHouseConnectionV3(editable, platform.id, { wallId: null, edgeId: side, attachment: "ledger", doorEnabled: false, doorOffset: 0, doorWidth: 72 });
+    const removed = removeHouseConnectionV3(added, platform.id, "house-wall-2");
+    const applied = designHistoryReducerV3(createHistoryV3(added), { type: "apply", design: removed });
+    const undone = designHistoryReducerV3(applied, { type: "undo" });
+    const redone = designHistoryReducerV3(undone, { type: "redo" });
+    expect({ ...undone.present, metadata: added.metadata }).toEqual(added);
+    expect({ ...redone.present, metadata: removed.metadata }).toEqual(removed);
+  });
+
+  it("rejects removal of the last wall or a missing wall without changing recorded facts", () => {
+    const before = stableDeckDesignV3Json(base);
+    expect(() => removeHouseConnectionV3(base, platform.id, "house-wall-1")).toThrow(/keep one/i);
+    expect(() => removeHouseConnectionV3({ ...base, siteContext: { ...base.siteContext, houseWalls: [...base.siteContext.houseWalls, { ...base.siteContext.houseWalls[0], id: "house-wall-2" }] } }, platform.id, "missing-wall")).toThrow(/needs review/i);
+    expect(stableDeckDesignV3Json(base)).toBe(before);
   });
 });

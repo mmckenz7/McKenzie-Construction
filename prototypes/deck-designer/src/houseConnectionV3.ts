@@ -113,3 +113,23 @@ export function applyHouseConnectionV3(design: DeckDesignV3, platformId: string,
     metadata: { ...design.metadata, revision: design.metadata.revision + 1 },
   });
 }
+
+export function removeHouseConnectionV3(design: DeckDesignV3, platformId: string, wallId: string): DeckDesignV3 {
+  const platform = platformFor(design, platformId);
+  if (design.siteContext.houseWalls.length === 1) throw new RangeError("Keep one recorded house wall.");
+  if (!design.siteContext.houseWalls.some((candidate) => candidate.id === wallId)) throw new RangeError("Wall removal needs review.");
+  const edgeId = wallEdgeId(design, platformId, wallId);
+  if (!edgeId || design.platforms.some((candidate) => candidate.id !== platformId && wallEdgeId(design, candidate.id, wallId)) ||
+    design.siteContext.houseWalls.some((candidate) => candidate.id !== wallId && wallEdgeId(design, platformId, candidate.id) === edgeId)) throw new RangeError("Wall removal needs review.");
+  return normalizeDeckDesignV3({
+    ...design,
+    platforms: design.platforms.map((candidate) => candidate.id === platform.id ? {
+      ...candidate,
+      edgeConditions: candidate.edgeConditions.map((condition) => condition.edgeId === edgeId
+        ? { ...condition, condition: "free" as const, attachment: "none" as const }
+        : condition),
+    } : candidate),
+    siteContext: { ...design.siteContext, houseWalls: design.siteContext.houseWalls.filter((candidate) => candidate.id !== wallId) },
+    metadata: { ...design.metadata, revision: design.metadata.revision + 1 },
+  });
+}

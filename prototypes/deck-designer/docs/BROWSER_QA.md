@@ -679,3 +679,11 @@ Remaining Phase A visual-quality gap: durable golden screenshot automation and c
 - Opened layout review on the clean saved design and confirmed its normal edge-aligned house context produced no invented wall/platform warning.
 - At 390 × 844, the full-screen review retained visible Close and Lock layout & continue actions and the page retained exactly one canvas.
 - Browser logs contained no warnings or errors. Pure v3/v5 tests verify the exact measured non-blocking review result for rectangle and L-shape crossings, strict vertical-span applicability, exact boundary exclusion, door/opening and cutout-void subtraction, split-panel deduplication, deterministic replay/order, and no prototype-threshold classification.
+
+## 2026-08-30 — additional house-wall add/remove recovery
+
+- After unlocking side options, **Add second wall** entered a visible **Add Wall 2** step, announced the instruction, and focused the side selector instead of appearing inactive.
+- With two eligible perpendicular sides, no side was guessed. With one side occupied by stairs, the only eligible perpendicular side was preselected; the wall was created only after the explicit **Add Wall 2** action.
+- **Remove selected wall** retained Wall 1 and restored the removed wall’s exact deck side to free/editable. Undo restored Wall 2 and its locked side; Redo removed it again.
+- At 390 × 844, the wall selector, instruction, full-width add/remove actions, and side fields remained reachable and touch-sized with no horizontal overflow. The designer retained exactly one 3D canvas.
+- Browser logs contained no warnings or errors. No saved draft was changed because the QA actions were not saved locally.
