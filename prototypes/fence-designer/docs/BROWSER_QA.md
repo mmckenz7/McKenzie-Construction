@@ -164,6 +164,14 @@ Repository validation note: the supported webpack production build completed suc
 
 135. Opened the isolated local Fence renderer with a disposable invalid placeholder key used only to expose the controls. Confirmed **Satellite**, **Hybrid**, **Street**, and **Terrain** are one mutually exclusive, keyboard-accessible base-map selector and that changing the selection does not revise Fence geometry.
 136. At 390 × 844, the four base-map buttons rendered as a contained two-by-two grid. Every button measured 142.5 × 48 px inside the 313 px map panel; the document remained horizontally contained.
-137. Confirmed the new **Rough map → exact dimensions** handoff stays disabled for an empty design and becomes available after a measured span exists. Activating it closes the reference panel, fits the local plan, selects the latest authored span, and exposes the existing exact-length inspector without revising geometry.
+137. Confirmed the new **Rough map → exact dimensions** handoff stays disabled for an empty design and becomes available after a measured span exists. Activating it closes the reference panel, fits the local plan, selects the first authored span, and exposes the existing exact-length inspector without revising geometry.
 138. Forced a partial provider initialization failure with the disposable invalid key and confirmed closing the map leaves the local Fence application visible and usable. Deterministic coverage verifies incomplete provider listeners cannot break renderer cleanup.
 139. Live Street/Terrain imagery validation remains reserved for the automatic branch Preview because the local placeholder intentionally cannot authenticate to Google. Existing exact-length, downstream-translation, undo/redo, and takeoff regressions remain the authority for the post-handoff editing behavior.
+
+# Authored span exact-review navigation
+
+- A rough map sketch with three spans enters exact review on Span 1, not the last span.
+- The inspector announces `Span 1 of 3`; Previous is disabled and Next is enabled.
+- Next advances through Span 2 and Span 3 in authored order and refreshes the exact feet/inches fields for each span.
+- Previous returns in the same order; neither navigation button changes geometry, totals, gates, or the design revision.
+- At 390 px wide, Previous and Next remain side by side with 48 px touch targets and do not overflow the inspector.

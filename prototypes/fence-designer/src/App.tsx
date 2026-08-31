@@ -126,6 +126,7 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
   useEffect(() => () => gpsAbortController.current?.abort(), []);
 
   const selectedSegment = selection?.type === "segment" ? design.segments.find(({ id }) => id === selection.id) ?? null : null;
+  const selectedSegmentIndex = selectedSegment ? design.segments.findIndex(({ id }) => id === selectedSegment.id) : -1;
   const selectedGateRun = selectedSegment?.kind === "gate" ? (() => {
     try { return gateRunForSegment(design, selectedSegment.id); }
     catch { return null; }
@@ -781,14 +782,14 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
             setSelection({ type: "point", id: pointId }); setMode("select");
           }}
           onContinueToExactDimensions={() => {
-            const finalSegment = design.segments[design.segments.length - 1];
-            if (!finalSegment) return;
-            setSelection({ type: "segment", id: finalSegment.id });
+            const firstSegment = design.segments[0];
+            if (!firstSegment) return;
+            selectSegment(firstSegment.id);
             setMode("select");
             setView(fittedView(design));
             setGoogleMapSpikeOpen(false);
             setPropertyPanelOpen(false);
-            setNotice("Rough map sketch moved to the plan. The latest span is selected—enter its exact measured length, then select each remaining span in turn.");
+            setNotice(`Rough map sketch moved to the plan. Span 1 of ${design.segments.length} is selected—enter its exact measured length, then use Next span.`);
           }}
         />}
         <div className="property-lookup"><label><span>Property address</span><input value={kgisAddress} onChange={(event) => setKgisAddress(event.target.value)} placeholder="Street address" autoComplete="street-address" /></label><div className="reference-links"><button onClick={() => openPropertyReference("acres")}>Open Acres ↗</button><button onClick={() => openPropertyReference("kgis")}>Open KGIS ↗</button><button onClick={() => openPropertyReference("googleMaps")}>Open Google ↗</button></div></div>
@@ -977,6 +978,13 @@ export default function App({ googleMapsBrowserKey = null }: Readonly<{ googleMa
         {houseSelected && <div><h2>House footprint</h2><p>{design.house ? "This measured footprint is visual context only and is excluded from fence totals." : "Add an optional measured house footprint before drawing the fence."}</p><h3 className="field-heading">House length</h3><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseFeet} onChange={(event) => setHouseFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseInches} onChange={(event) => setHouseInches(event.target.value)} /></label></div><h3 className="field-heading">House width</h3><div className="exact-grid"><label><span>Feet</span><input aria-label="Width feet" inputMode="numeric" type="number" min="1" max="1000" placeholder="Required" value={houseWidthFeet} onChange={(event) => setHouseWidthFeet(event.target.value)} /></label><label><span>Inches</span><input aria-label="Width inches" inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={houseWidthInches} onChange={(event) => setHouseWidthInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyHouseLength}>{design.house ? "Update house footprint" : "Add house footprint"}</button>{design.house && <button className="danger wide" onClick={() => { commit(removeHouseReference(design), "House footprint removed."); setSelection(null); }}>Remove house footprint</button>}<small>House-edge connections stay active in free-angle mode. The optional angle assist affects only non-house points. This footprint is not a survey or building record.</small></div>}
         {selectedPoint && <div><h2>{pointRole(design, selectedPoint.id)}</h2><p className="coordinate">X {formatFeetInches(Math.abs(selectedPoint.xMm))} · Y {formatFeetInches(Math.abs(selectedPoint.yMm))}</p><p>{lengthLockEnabled ? "Drag to adjust this line's angle. Its incoming length stays fixed and only the following points on this line move." : "Drag this point freely; connected span lengths will change."}</p>{design.house && selectedPointPath && selectedPointPath.segments.length >= 2 && selectedPoint.id === selectedPointPath.points.at(-1)?.id && <button className="primary wide" onClick={() => { setMode("close"); setClosurePathPointId(selectedPoint.id); setSelection(null); setPreviewPoint(null); setNotice("Tap the second connection on the house. Closure will keep this line's measured runs fixed and redistribute only its angles."); }}>⇥ Close this line to house</button>}<button className="danger wide" onClick={removeSelection}>Delete point</button></div>}
         {selectedSegment && <div>
+          <nav className="span-review-nav" aria-label="Exact dimension span review">
+            <span>Span {selectedSegmentIndex + 1} of {design.segments.length}</span>
+            <div>
+              <button type="button" disabled={selectedSegmentIndex <= 0} onClick={() => { const previous = design.segments[selectedSegmentIndex - 1]; if (previous) { selectSegment(previous.id); setNotice(`Span ${selectedSegmentIndex} of ${design.segments.length} selected for exact review.`); } }}>← Previous</button>
+              <button type="button" disabled={selectedSegmentIndex >= design.segments.length - 1} onClick={() => { const next = design.segments[selectedSegmentIndex + 1]; if (next) { selectSegment(next.id); setNotice(`Span ${selectedSegmentIndex + 2} of ${design.segments.length} selected for exact review.`); } }}>Next →</button>
+            </div>
+          </nav>
           <h2>{selectedSegment.kind === "gate" ? `${selectedSegment.gateType === "double" ? "Double" : "Single"} gate` : "Fence run"}</h2>
           <div className="length-readout">{formatFeetInches(segmentLengthMm(design, selectedSegment))}</div>
           {selectedSegment.kind === "fence" && <><div className="exact-grid"><label><span>Feet</span><input inputMode="numeric" type="number" min="0" max="1000" value={feet} onChange={(event) => setFeet(event.target.value)} /></label><label><span>Inches</span><input inputMode="decimal" type="number" min="0" max="11.99" step="0.25" value={inches} onChange={(event) => setInches(event.target.value)} /></label></div><button className="primary wide" onClick={applyExactLength}>Apply exact length</button></>}

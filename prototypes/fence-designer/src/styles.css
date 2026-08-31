@@ -235,6 +235,10 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
 .inspector button { margin-top: 10px; }
 .inspector small { display: block; margin-top: 12px; color: #78827d; line-height: 1.4; }
 .inspector-empty { min-height: 185px; }
+.span-review-nav { display: grid; gap: 7px; margin: 0 0 14px; padding: 10px; border: 1px solid #d6ddd6; border-radius: 9px; background: #f6f8f5; }
+.span-review-nav > span { color: #59675f; font-size: .76rem; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
+.span-review-nav > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.span-review-nav button { min-height: 44px; margin: 0; padding: 8px 10px; }
 .coordinate { font-size: .82rem; font-weight: 750; }
 .length-readout { margin: 12px 0; font: 500 2.2rem Georgia, serif; color: #173f31; }
 .exact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -278,6 +282,7 @@ button.danger { color: #9c3028; border-color: #e2b7b0; }
   .workspace { display: flex; flex-direction: column; }
   .canvas-shell, .plan-canvas { min-height: 58dvh; }
   .inspector { border-left: 0; border-top: 1px solid #cbd1ca; min-height: auto; padding: 16px; }
+  .span-review-nav button { min-height: 48px; }
   .inspector:not(.has-selection) { padding: 0; border-top: 0; }
   .inspector:not(.has-selection) .inspector-empty { display: none; }
   .inspector:not(.has-selection) .notice { margin: 0; border-radius: 0; }
