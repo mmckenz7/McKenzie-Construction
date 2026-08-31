@@ -9,6 +9,7 @@ export type HouseConnectionInput = Readonly<{
   doorEnabled: boolean;
   doorOffset: number;
   doorWidth: number;
+  removeRailing?: boolean;
 }>;
 
 export type HouseConnectionDraft = HouseConnectionInput & Readonly<{ edgeLength: number }>;
@@ -57,30 +58,32 @@ export function applyHouseConnectionV3(design: DeckDesignV3, platformId: string,
   const platform = platformFor(design, platformId);
   const edges = deriveGeometricPolygonEdges(platform.region.outer);
   const edge = edges.find((candidate) => candidate.id === input.edgeId);
-  if (!edge) throw new RangeError("Choose the exact side of the deck that meets the house.");
-  if (!(["unknown", "ledger", "non-ledger"] as const).includes(input.attachment)) throw new TypeError("Choose a supported house connection.");
-  if (platform.construction.railing.enabledEdgeIds.includes(edge.id) || platform.construction.stairSystems.some((system) => system.edgeId === edge.id)) {
-    throw new RangeError("Remove railings or stairs from the house side before attaching it to the house.");
+  if (!edge) throw new RangeError("Choose the exact deck side that meets the house.");
+  if (!(["unknown", "ledger", "non-ledger"] as const).includes(input.attachment)) throw new TypeError("Choose a supported connection.");
+  const hasRailing = platform.construction.railing.enabledEdgeIds.includes(edge.id);
+  const hasStairs = platform.construction.stairSystems.some((system) => system.edgeId === edge.id);
+  if (hasStairs || hasRailing && input.removeRailing !== true) {
+    throw new RangeError("Remove railings or stairs before making this a house side.");
   }
   if (input.doorEnabled && (!Number.isFinite(input.doorOffset) || !Number.isFinite(input.doorWidth) || input.doorWidth < 24 || input.doorWidth > 144 || input.doorOffset < 0 || input.doorOffset + input.doorWidth > edge.length)) {
-    throw new RangeError("The door must be 2–12 feet wide and fit completely on the selected house side.");
+    throw new RangeError("The door must be 2–12 feet wide and fit this side.");
   }
   const dx = (edge.end.x - edge.start.x) / edge.length;
   const dz = (edge.end.z - edge.start.z) / edge.length;
   const extension = 60;
   const previousWall = input.wallId === null ? undefined : input.wallId ? design.siteContext.houseWalls.find((wall) => wall.id === input.wallId) : design.siteContext.houseWalls[0];
-  if (input.wallId !== null && input.wallId && !previousWall) throw new RangeError("Choose an existing recorded house wall before updating it.");
+  if (input.wallId !== null && input.wallId && !previousWall) throw new RangeError("Choose a recorded wall to update.");
   const previousHouseEdgeId = previousWall ? wallEdgeId(design, platformId, previousWall.id) : undefined;
   const targetBelongsToAnotherWall = platform.edgeConditions.some((condition) => condition.edgeId === edge.id && condition.condition === "house_attachment") && previousHouseEdgeId !== edge.id;
-  if (targetBelongsToAnotherWall) throw new RangeError("That deck side is already locked to another recorded house wall.");
+  if (targetBelongsToAnotherWall) throw new RangeError("That side already belongs to another wall.");
   if (previousHouseEdgeId && previousHouseEdgeId !== edge.id && previousWall?.openings.some((opening) => opening.kind !== "door")) {
-    throw new RangeError("Changing the house side would move recorded windows. Review or remove those openings first.");
+    throw new RangeError("Changing sides would move recorded windows. Review them first.");
   }
   const baseElevation = design.siteContext.gradeElevation;
   const sillHeight = platform.elevation - baseElevation;
-  if (sillHeight < 0 || sillHeight > 240) throw new RangeError("The door threshold must remain between grade and the 20-foot prototype limit.");
+  if (sillHeight < 0 || sillHeight > 240) throw new RangeError("Door threshold must stay within the 20-foot prototype limit.");
   const wallHeight = Math.max(previousWall?.height ?? 120, sillHeight + 104);
-  if (wallHeight > 360) throw new RangeError("The conceptual house wall would exceed the 30-foot prototype limit.");
+  if (wallHeight > 360) throw new RangeError("House wall exceeds the 30-foot prototype limit.");
   const preservedOpenings = previousWall?.openings.filter((opening) => opening.kind !== "door") ?? [];
   const door = input.doorEnabled ? Object.freeze({
     id: previousWall?.openings.find((opening) => opening.kind === "door")?.id ?? "door-1",
@@ -106,6 +109,10 @@ export function applyHouseConnectionV3(design: DeckDesignV3, platformId: string,
       edgeConditions: candidate.edgeConditions.map((condition) => condition.edgeId === edge.id
         ? { ...condition, condition: "house_attachment" as const, attachment: input.attachment }
         : condition.edgeId === previousHouseEdgeId ? { ...condition, condition: "free" as const, attachment: "none" as const } : condition),
+      construction: hasRailing && input.removeRailing === true ? {
+        ...candidate.construction,
+        railing: { ...candidate.construction.railing, enabledEdgeIds: candidate.construction.railing.enabledEdgeIds.filter((edgeId) => edgeId !== edge.id) },
+      } : candidate.construction,
     } : candidate),
     siteContext: { ...design.siteContext, houseWalls: Object.freeze(previousWall
       ? design.siteContext.houseWalls.map((candidate) => candidate.id === previousWall.id ? wall : candidate)

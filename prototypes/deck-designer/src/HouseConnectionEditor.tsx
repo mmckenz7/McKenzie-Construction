@@ -26,15 +26,15 @@ export function eligibleNewHouseWallEdgeIds(platform: DeckPlatformV3): readonly 
   const houseEdges = edges.filter((edge) => platform.edgeConditions.some((condition) => condition.edgeId === edge.id && condition.condition === "house_attachment"));
   return edges.filter((edge) => {
     const free = platform.edgeConditions.some((condition) => condition.edgeId === edge.id && condition.condition === "free");
-    const referenced = platform.construction.railing.enabledEdgeIds.includes(edge.id) || platform.construction.stairSystems.some((system) => system.edgeId === edge.id);
-    return free && !referenced && houseEdges.some((houseEdge) => Math.abs((edge.end.x - edge.start.x) * (houseEdge.end.x - houseEdge.start.x) + (edge.end.z - edge.start.z) * (houseEdge.end.z - houseEdge.start.z)) < 0.001);
+    const hasStairs = platform.construction.stairSystems.some((system) => system.edgeId === edge.id);
+    return free && !hasStairs && houseEdges.some((houseEdge) => Math.abs(edge.outward.x * houseEdge.outward.x + edge.outward.z * houseEdge.outward.z) < .001);
   }).map((edge) => edge.id);
 }
 
-export function newHouseWallPrompt(count: number, wallNumber: number): string {
-  if (!count) return "No open perpendicular side. Use Unlock outline editing, or remove its railing or stairs.";
-  if (count > 1) return "Choose Left or Right side, then confirm below.";
-  return `Wall ${wallNumber} side selected. Confirm below.`;
+export function newHouseWallPrompt(count: number): string {
+  if (!count) return "No side. Remove stairs or free one.";
+  if (count > 1) return "Choose Left or Right.";
+  return "Side selected.";
 }
 
 export function HouseConnectionEditor({ design, platform, onApply, onError }: Props) {
@@ -52,6 +52,8 @@ export function HouseConnectionEditor({ design, platform, onApply, onError }: Pr
   const [wallPrompt, setWallPrompt] = useState("");
   const wallNumber = design.siteContext.houseWalls.length + 1;
   const selectableEdges = addingWall ? edges.filter((edge) => eligibleNewWallEdgeIds.includes(edge.id)) : edges;
+  const selectedHasRailing = platform.construction.railing.enabledEdgeIds.includes(edgeId);
+  const selectedHasStairs = platform.construction.stairSystems.some((system) => system.edgeId === edgeId);
   useEffect(() => {
     if (!addingWall) setEdgeId(draft.edgeId);
     setAttachment(draft.attachment);
@@ -62,16 +64,16 @@ export function HouseConnectionEditor({ design, platform, onApply, onError }: Pr
   useEffect(() => {
     if (wallId !== "new" && !design.siteContext.houseWalls.some((wall) => wall.id === wallId)) setWallId(design.siteContext.houseWalls[0]?.id ?? "");
   }, [design.siteContext.houseWalls, wallId]);
-  useEffect(() => { if (addingWall) { setWallPrompt(newHouseWallPrompt(eligibleNewWallEdgeIds.length, wallNumber)); sideSelector.current?.focus(); } }, [addingWall, eligibleNewWallEdgeIds.length, wallNumber]);
+  useEffect(() => { if (addingWall) { setWallPrompt(newHouseWallPrompt(eligibleNewWallEdgeIds.length)); sideSelector.current?.focus(); } }, [addingWall, eligibleNewWallEdgeIds.length]);
   return <section className="house-connection-editor" id="house-connection">
     <div className="section-heading compact"><span>03</span><div><p>House connection</p></div></div>
     <div className="house-wall-selector" aria-label="Recorded house walls">{design.siteContext.houseWalls.map((wall, index) => <button key={wall.id} type="button" aria-pressed={wallId === wall.id} onClick={() => setWallId(wall.id)}>Wall {index + 1}</button>)}<button type="button" disabled={design.siteContext.houseWalls.length >= 8} onClick={() => { setWallId("new"); setEdgeId(eligibleNewWallEdgeIds.length === 1 ? eligibleNewWallEdgeIds[0] : ""); setAttachment("unknown"); setDoorEnabled(false); }}>{design.siteContext.houseWalls.length < 2 ? "Add second wall" : "Add another wall"}</button></div>
-    {addingWall && <div className="stair-railing-note" role="status" aria-live="polite"><strong>Add Wall {wallNumber}</strong><small>{wallPrompt}</small></div>}
-    <label className="field full"><span>{addingWall ? `Wall ${wallNumber} side touching the house` : "Side touching the house"}</span><select ref={sideSelector} value={edgeId} onChange={(event) => { setEdgeId(event.target.value); if (event.target.value) setWallPrompt(`Wall ${wallNumber} side selected. Confirm below.`); }}><option value="">{addingWall && !eligibleNewWallEdgeIds.length ? "No eligible side" : "Choose a side…"}</option>{selectableEdges.map((edge) => <option key={edge.id} value={edge.id}>{sideName(edge)} · {formatFeetInches(edge.length)}</option>)}</select></label>
+    {(addingWall || selectedHasRailing || selectedHasStairs) && <div className="stair-railing-note" role="status" aria-live="polite"><strong>{selectedHasStairs ? "Stairs block this wall" : selectedHasRailing ? "Railing will be removed" : `Add Wall ${wallNumber}`}</strong><small>{selectedHasStairs ? "Remove stairs first." : selectedHasRailing ? "The wall replaces it." : wallPrompt}</small></div>}
+    <label className="field full"><span>{addingWall ? `Wall ${wallNumber} side touching the house` : "Side touching the house"}</span><select ref={sideSelector} value={edgeId} onChange={(event) => { setEdgeId(event.target.value); if (event.target.value) setWallPrompt("Side selected."); }}><option value="">{addingWall && !eligibleNewWallEdgeIds.length ? "No eligible side" : "Choose a side…"}</option>{selectableEdges.map((edge) => <option key={edge.id} value={edge.id}>{sideName(edge)} · {formatFeetInches(edge.length)}</option>)}</select></label>
     <label className="field full"><span>Connection type</span><select value={attachment} onChange={(event) => setAttachment(event.target.value as typeof attachment)}><option value="unknown">Unknown · verify</option><option value="ledger">Ledger attached</option><option value="non-ledger">Freestanding</option></select></label>
     <label className="check-row house-door-toggle"><input type="checkbox" checked={doorEnabled} onChange={(event) => setDoorEnabled(event.target.checked)} />Show door</label>
     {doorEnabled && <div className="house-door-fields"><label className="field"><span>Door width (feet)</span><input inputMode="decimal" type="number" min="2" max="12" step="0.25" value={doorWidthFeet} onChange={(event) => setDoorWidthFeet(event.target.value)} /></label><label className="field"><span>From side start (feet)</span><input inputMode="decimal" type="number" min="0" step="0.25" value={doorOffsetFeet} onChange={(event) => setDoorOffsetFeet(event.target.value)} /></label></div>}
-    <button className="primary full-action" disabled={!addingWall && !edgeId} onClick={() => { if (addingWall && !edgeId) { const message = newHouseWallPrompt(eligibleNewWallEdgeIds.length, wallNumber); setWallPrompt(message); onError(message); sideSelector.current?.focus(); return; } try { const next = applyHouseConnectionV3(design, platform.id, { wallId: addingWall ? null : wallId, edgeId, attachment, doorEnabled, doorOffset: Number(doorOffsetFeet) * 12, doorWidth: Number(doorWidthFeet) * 12 }); onApply(next, attachment); if (addingWall) setWallId(next.siteContext.houseWalls.at(-1)?.id ?? ""); } catch (error) { onError(error instanceof Error ? error.message : "House connection update rejected."); } }}>{addingWall ? `Add Wall ${wallNumber}` : "Update house connection"}</button>
-    {!addingWall && design.siteContext.houseWalls.length > 1 && <button className="full-action" onClick={() => { try { const next = removeHouseConnectionV3(design, platform.id, wallId); const remaining = next.siteContext.houseWalls[0]; setWallId(remaining.id); onApply(next, remaining.attachment); } catch (error) { onError(error instanceof Error ? error.message : "House wall removal rejected."); } }}>Remove selected wall</button>}
+    <button className="primary full-action" disabled={selectedHasStairs || !addingWall && !edgeId} onClick={() => { if (addingWall && !edgeId) { const message = newHouseWallPrompt(eligibleNewWallEdgeIds.length); setWallPrompt(message); onError(message); sideSelector.current?.focus(); return; } try { const next = applyHouseConnectionV3(design, platform.id, { wallId: addingWall ? null : wallId, edgeId, attachment, doorEnabled, doorOffset: Number(doorOffsetFeet) * 12, doorWidth: Number(doorWidthFeet) * 12, removeRailing: selectedHasRailing }); onApply(next, attachment); if (addingWall) setWallId(next.siteContext.houseWalls.at(-1)?.id ?? ""); } catch (error) { onError(error instanceof Error ? error.message : "House update rejected."); } }}>{selectedHasRailing ? `Remove railing & ${addingWall ? `add Wall ${wallNumber}` : "update house"}` : addingWall ? `Add Wall ${wallNumber}` : "Update house connection"}</button>
+    {!addingWall && design.siteContext.houseWalls.length > 1 && <button className="full-action" onClick={() => { try { const next = removeHouseConnectionV3(design, platform.id, wallId); const remaining = next.siteContext.houseWalls[0]; setWallId(remaining.id); onApply(next, remaining.attachment); } catch (error) { onError(error instanceof Error ? error.message : "Wall removal rejected."); } }}>Remove selected wall</button>}
   </section>;
 }

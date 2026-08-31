@@ -36,7 +36,7 @@ describe("house connection editor", () => {
     expect(source).not.toContain('aria-pressed={addingWall}');
   });
 
-  it("preselects only one unambiguous free perpendicular side", () => {
+  it("preselects only one unambiguous perpendicular side without stairs", () => {
     const base = migrateDeckDesignToV3(DEFAULT_DESIGN);
     const edges = deriveGeometricPolygonEdges(base.platforms[0].region.outer);
     const perpendicular = edges.filter((edge) => edge.start.x === edge.end.x);
@@ -44,17 +44,29 @@ describe("house connection editor", () => {
       ...base.platforms[0],
       construction: { ...base.platforms[0].construction, railing: { ...base.platforms[0].construction.railing, enabledEdgeIds: [perpendicular[1].id] }, stairSystems: [] },
     };
-    expect(eligibleNewHouseWallEdgeIds(onlyOne)).toEqual([perpendicular[0].id]);
-    expect(eligibleNewHouseWallEdgeIds({ ...onlyOne, construction: { ...onlyOne.construction, railing: { ...onlyOne.construction.railing, enabledEdgeIds: [] } } })).toHaveLength(2);
+    const stairs = { id: "stair-system-test", locked: false, edgeId: perpendicular[1].id, offset: 24, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [] } as const;
+    expect(eligibleNewHouseWallEdgeIds({ ...onlyOne, construction: { ...onlyOne.construction, stairSystems: [stairs] } })).toEqual([perpendicular[0].id]);
+    expect(eligibleNewHouseWallEdgeIds(onlyOne)).toHaveLength(2);
   });
 
   it("explains zero and ambiguous candidates instead of disabling the final action", () => {
-    expect(newHouseWallPrompt(0, 2)).toContain("Unlock outline editing");
-    expect(newHouseWallPrompt(2, 2)).toContain("Choose Left or Right side");
+    expect(newHouseWallPrompt(0)).toContain("Remove stairs");
+    expect(newHouseWallPrompt(2)).toContain("Choose Left or Right");
     const source = readFileSync(new URL("../src/HouseConnectionEditor.tsx", import.meta.url), "utf8");
-    expect(source).toContain('disabled={!addingWall && !edgeId}');
+    expect(source).toContain('disabled={selectedHasStairs || !addingWall && !edgeId}');
     expect(source).toContain("sideSelector.current?.focus(); return;");
-    expect(source).toContain("eligibleNewWallEdgeIds.length, wallNumber");
+    expect(source).toContain("eligibleNewWallEdgeIds.length");
     expect(source).toContain("selectableEdges.map");
+    expect(source).toContain("Railing will be removed");
+    expect(source).toContain("Remove railing &");
+  });
+
+  it("offers railed perpendicular sides but never stair sides", () => {
+    const base = migrateDeckDesignToV3(DEFAULT_DESIGN);
+    const edges = deriveGeometricPolygonEdges(base.platforms[0].region.outer);
+    const perpendicular = edges.filter((edge) => edge.start.x === edge.end.x);
+    expect(eligibleNewHouseWallEdgeIds(base.platforms[0])).toEqual(perpendicular.map((edge) => edge.id));
+    const stairs = { id: "stair-system-test", locked: false, edgeId: perpendicular[1].id, offset: 24, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [] } as const;
+    expect(eligibleNewHouseWallEdgeIds({ ...base.platforms[0], construction: { ...base.platforms[0].construction, stairSystems: [stairs] } })).toEqual([perpendicular[0].id]);
   });
 });

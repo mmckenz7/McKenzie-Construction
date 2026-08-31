@@ -37,12 +37,36 @@ describe("v3 house connection", () => {
   });
 
   it("rejects a door that does not fit the selected house side", () => {
-    expect(() => applyHouseConnectionV3(base, platform.id, { edgeId: houseEdge.edgeId, attachment: "ledger", doorEnabled: true, doorOffset: 150, doorWidth: 72 })).toThrow(/fit completely/i);
+    expect(() => applyHouseConnectionV3(base, platform.id, { edgeId: houseEdge.edgeId, attachment: "ledger", doorEnabled: true, doorOffset: 150, doorWidth: 72 })).toThrow(/fit this side/i);
   });
 
   it("does not silently replace a railing or stair reference with a house attachment", () => {
     const railedEdge = platform.construction.railing.enabledEdgeIds[0];
     expect(() => applyHouseConnectionV3(base, platform.id, { edgeId: railedEdge, attachment: "ledger", doorEnabled: false, doorOffset: 0, doorWidth: 72 })).toThrow(/remove railings or stairs/i);
+  });
+
+  it("atomically replaces only the selected railing after explicit intent", () => {
+    const side = deriveGeometricPolygonEdges(platform.region.outer).find((edge) => edge.start.x === edge.end.x)!.id;
+    const before = stableDeckDesignV3Json(base);
+    const added = applyHouseConnectionV3(base, platform.id, { wallId: null, edgeId: side, attachment: "ledger", doorEnabled: false, doorOffset: 0, doorWidth: 72, removeRailing: true });
+    expect(stableDeckDesignV3Json(base)).toBe(before);
+    expect(added.metadata.revision).toBe(base.metadata.revision + 1);
+    expect(added.siteContext.houseWalls.map((wall) => wall.id)).toEqual(["house-wall-1", "house-wall-2"]);
+    expect(added.platforms[0].construction.railing.enabledEdgeIds).toEqual(platform.construction.railing.enabledEdgeIds.filter((edgeId) => edgeId !== side));
+    expect(added.platforms[0].edgeConditions.find((condition) => condition.edgeId === side)).toMatchObject({ condition: "house_attachment", attachment: "ledger" });
+    const applied = designHistoryReducerV3(createHistoryV3(base), { type: "apply", design: added });
+    expect(designHistoryReducerV3(applied, { type: "undo" }).present.platforms[0].construction.railing.enabledEdgeIds).toEqual(platform.construction.railing.enabledEdgeIds);
+    const redone = designHistoryReducerV3(designHistoryReducerV3(applied, { type: "undo" }), { type: "redo" });
+    expect({ ...redone.present, metadata: added.metadata }).toEqual(added);
+  });
+
+  it("keeps stairs and the complete rejected design unchanged", () => {
+    const edgeId = platform.edgeConditions.find((condition) => condition.condition === "free")!.edgeId;
+    const stairSystem = { id: "stair-system-test", locked: false, edgeId, offset: 24, width: 48, treadDepth: 10, maxRiserHeight: 7.75, landings: [] } as const;
+    const withStairs = { ...base, platforms: [{ ...platform, construction: { ...platform.construction, stairSystems: [stairSystem] } }] };
+    const before = stableDeckDesignV3Json(withStairs);
+    expect(() => applyHouseConnectionV3(withStairs, platform.id, { wallId: null, edgeId, attachment: "ledger", doorEnabled: false, doorOffset: 0, doorWidth: 72, removeRailing: true })).toThrow(/remove railings or stairs/i);
+    expect(stableDeckDesignV3Json(withStairs)).toBe(before);
   });
 
   it("does not silently move recorded windows when the house side changes", () => {
