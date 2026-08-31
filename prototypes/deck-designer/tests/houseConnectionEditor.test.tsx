@@ -1,7 +1,7 @@
 // @ts-ignore The production root intentionally does not install this isolated prototype package's test runner.
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { HouseConnectionEditor, eligibleNewHouseWallEdgeIds } from "../src/HouseConnectionEditor";
+import { HouseConnectionEditor, eligibleNewHouseWallEdgeIds, newHouseWallPrompt } from "../src/HouseConnectionEditor";
 import { applyHouseConnectionV3 } from "../src/houseConnectionV3";
 import { DEFAULT_DESIGN } from "../src/model";
 import { migrateDeckDesignToV3 } from "../src/modelV3";
@@ -46,5 +46,15 @@ describe("house connection editor", () => {
     };
     expect(eligibleNewHouseWallEdgeIds(onlyOne)).toEqual([perpendicular[0].id]);
     expect(eligibleNewHouseWallEdgeIds({ ...onlyOne, construction: { ...onlyOne.construction, railing: { ...onlyOne.construction.railing, enabledEdgeIds: [] } } })).toHaveLength(2);
+  });
+
+  it("explains zero and ambiguous candidates instead of disabling the final action", () => {
+    expect(newHouseWallPrompt(0, 2)).toContain("Unlock outline editing");
+    expect(newHouseWallPrompt(2, 2)).toContain("Choose Left or Right side");
+    const source = readFileSync(new URL("../src/HouseConnectionEditor.tsx", import.meta.url), "utf8");
+    expect(source).toContain('disabled={!addingWall && !edgeId}');
+    expect(source).toContain("sideSelector.current?.focus(); return;");
+    expect(source).toContain("eligibleNewWallEdgeIds.length, wallNumber");
+    expect(source).toContain("selectableEdges.map");
   });
 });
