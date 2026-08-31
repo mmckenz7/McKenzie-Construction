@@ -2,6 +2,8 @@
 
 An isolated, local-only 2D fence measurement prototype.
 
+The two current material calculators now run through closed, versioned Installation Profile draft bundles. Those bundles only name assumptions that were already embedded in the prototype; they remain unvalidated and are not commercial standards. See [Fence Installation Profile foundation](docs/INSTALLATION_PROFILE_FOUNDATION.md).
+
 ```sh
 npm install
 npm run validate

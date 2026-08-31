@@ -15,6 +15,7 @@ The local-image calibration defect is now bounded explicitly. One known line set
 - `src/storage.ts`: explicit browser-local design persistence plus separately validated compressed-reference persistence.
 - `src/view.ts`: deterministic bounded focal-point zoom, viewport-to-plan pan conversion, and edge/run-aware dimension-label placement.
 - `src/takeoff.ts`: pure derived Black Aluminum and Treated Pine Privacy takeoffs plus the shared read-only visual bay/post projection.
+- `src/installation-profile.ts`: closed, frozen, versioned draft bundles for the assumptions already embedded in those two calculators, deterministic canonical content identity, and two narrowly typed hash-bound job overrides. Both drafts remain unvalidated and are not commercial installation standards.
 - `src/map-presentation.ts`: domain-neutral read-only lifecycle/viewport/base/reference/location contract, immutable generic point/polyline/polygon scenes, generic interaction source, and contract harness.
 - `src/ground-registration.ts`: provider-neutral integer-mm local-ground↔WGS84 registration and projection.
 - `src/google-map-renderer.ts`: dependency-free Maps JavaScript candidate presenter that stores only generic presentation scenes.

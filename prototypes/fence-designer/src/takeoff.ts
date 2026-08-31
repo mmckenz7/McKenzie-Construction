@@ -1,8 +1,16 @@
 import { MM_PER_FOOT, fencePathForPoint, formatFeetInches, pointById, pointRole, segmentLengthMm, type FenceDesign, type GateType } from "./model";
+import {
+  applyInstallationProfileOverrides,
+  BLACK_ALUMINUM_DRAFT_PROFILE,
+  isManufacturedPanelProfile,
+  TREATED_PINE_PRIVACY_DRAFT_PROFILE,
+  type FenceInstallationProfile,
+  type InstallationProfileOverrideSet,
+  type ManufacturedPanelInstallationProfile,
+  type StickBuiltPrivacyInstallationProfile,
+} from "./installation-profile";
 
-export const BLACK_ALUMINUM_PANEL_LENGTH_MM = Math.round(8 * MM_PER_FOOT);
-const BLACK_ALUMINUM_PANEL_LENGTH_INCHES = 96;
-const BLACK_ALUMINUM_GATE_USABLE_INCHES = 84;
+export const BLACK_ALUMINUM_PANEL_LENGTH_MM = BLACK_ALUMINUM_DRAFT_PROFILE.construction.maximumBayWidthMm;
 
 export type GateOpeningTakeoff = Readonly<{ gateType: GateType; widthMm: number; count: number }>;
 export type GateFabricationPiece = Readonly<{ segmentId: string; gateType: GateType; widthMm: number; pieceIndex: number; pieceCount: number }>;
@@ -134,13 +142,18 @@ export function formatBlackAluminumTakeoffText(takeoff: BlackAluminumTakeoff) {
   ].join("\n");
 }
 
-function withTenPercentWaste(quantity: number) {
-  return Math.ceil(quantity * 1.1);
+function withBasisPointWaste(quantity: number, basisPoints: number) {
+  return Math.ceil(quantity * (10_000 + basisPoints) / 10_000);
 }
 
-function picketsForWidthMm(widthMm: number) {
+function roundedInches(mm: number) {
+  return Math.max(0, Math.round(mm / (MM_PER_FOOT / 12)));
+}
+
+function picketsForWidthMm(widthMm: number, picketWidthMm: number) {
   const widthInches = Math.max(0, Math.round(widthMm / (MM_PER_FOOT / 12)));
-  return widthInches > 0 ? Math.ceil(widthInches / 6) : 0;
+  const picketWidthInches = roundedInches(picketWidthMm);
+  return widthInches > 0 ? Math.ceil(widthInches / picketWidthInches) : 0;
 }
 
 export function formatTreatedPinePrivacyTakeoffText(takeoff: TreatedPinePrivacyTakeoff) {
@@ -216,27 +229,28 @@ function findMidRunConnections(design: FenceDesign): readonly MidRunConnection[]
   }));
 }
 
-function panelCountForLength(lengthMm: number) {
+function panelCountForLength(lengthMm: number, maximumBayWidthMm: number) {
   const measuredInches = Math.round(lengthMm / (MM_PER_FOOT / 12));
-  return lengthMm > 0 ? Math.max(1, Math.ceil(measuredInches / BLACK_ALUMINUM_PANEL_LENGTH_INCHES)) : 0;
+  return lengthMm > 0 ? Math.max(1, Math.ceil(measuredInches / roundedInches(maximumBayWidthMm))) : 0;
 }
 
-function doubleGateFabricationPanelCount(widthMm: number) {
-  return widthMm <= Math.round(6 * MM_PER_FOOT) ? 1 : 2;
+function doubleGateFabricationPanelCount(widthMm: number, singlePanelMaximumWidthMm: number) {
+  return widthMm <= singlePanelMaximumWidthMm ? 1 : 2;
 }
 
-function singleGateFabricationPanels(gates: readonly Readonly<{ segmentId: string; widthMm: number }>[]): readonly GateFabricationPanel[] {
+function singleGateFabricationPanels(gates: readonly Readonly<{ segmentId: string; widthMm: number }>[], usableWidthMm: number): readonly GateFabricationPanel[] {
+  const usableWidthInches = roundedInches(usableWidthMm);
   const pieces = gates.flatMap(({ segmentId, widthMm }) => {
     let remainingInches = Math.max(1, Math.round(widthMm / (MM_PER_FOOT / 12)));
     const widths: number[] = [];
     while (remainingInches > 0) {
-      widths.push(Math.min(BLACK_ALUMINUM_GATE_USABLE_INCHES, remainingInches));
-      remainingInches -= BLACK_ALUMINUM_GATE_USABLE_INCHES;
+      widths.push(Math.min(usableWidthInches, remainingInches));
+      remainingInches -= usableWidthInches;
     }
     return widths.map((widthInches, pieceIndex) => ({ segmentId, widthInches, pieceIndex, pieceCount: widths.length }));
   }).sort((first, second) => second.widthInches - first.widthInches || first.segmentId.localeCompare(second.segmentId) || first.pieceIndex - second.pieceIndex);
   if (!pieces.length) return Object.freeze([]);
-  const minimum = Math.ceil(pieces.reduce((sum, piece) => sum + piece.widthInches, 0) / BLACK_ALUMINUM_GATE_USABLE_INCHES);
+  const minimum = Math.ceil(pieces.reduce((sum, piece) => sum + piece.widthInches, 0) / usableWidthInches);
   const packInto = (panelCount: number): readonly (readonly number[])[] | null => {
     const used = Array.from({ length: panelCount }, () => 0);
     const bins = Array.from({ length: panelCount }, () => [] as number[]);
@@ -245,7 +259,7 @@ function singleGateFabricationPanels(gates: readonly Readonly<{ segmentId: strin
       const piece = pieces[pieceIndex].widthInches;
       const tried = new Set<number>();
       for (let panelIndex = 0; panelIndex < used.length; panelIndex += 1) {
-        if (tried.has(used[panelIndex]) || used[panelIndex] + piece > BLACK_ALUMINUM_GATE_USABLE_INCHES) continue;
+        if (tried.has(used[panelIndex]) || used[panelIndex] + piece > usableWidthInches) continue;
         tried.add(used[panelIndex]); used[panelIndex] += piece; bins[panelIndex].push(pieceIndex);
         if (place(pieceIndex + 1)) return true;
         used[panelIndex] -= piece; bins[panelIndex].pop();
@@ -260,7 +274,7 @@ function singleGateFabricationPanels(gates: readonly Readonly<{ segmentId: strin
     const candidate = packInto(panelCount);
     if (candidate) { packed = candidate; break; }
   }
-  const usableMm = Math.round(BLACK_ALUMINUM_GATE_USABLE_INCHES * MM_PER_FOOT / 12);
+  const usableMm = Math.round(usableWidthInches * MM_PER_FOOT / 12);
   return Object.freeze(packed.map((bin, panelIndex) => {
     const panelPieces = bin.map((pieceIndex) => pieces[pieceIndex]).map((piece) => Object.freeze({
       segmentId: piece.segmentId,
@@ -303,10 +317,11 @@ function straightFenceRuns(design: FenceDesign, midRunConnections: readonly MidR
   return Object.freeze(runs);
 }
 
-function naturalConnectionPositions(run: StraightFenceRun): readonly number[] {
+function naturalConnectionPositions(run: StraightFenceRun, maximumBayWidthMm: number): readonly number[] {
   if (!run.connections.length) return [];
   const totalInches = Math.round(run.lengthMm / (MM_PER_FOOT / 12));
-  const availablePanels = Math.ceil(totalInches / BLACK_ALUMINUM_PANEL_LENGTH_INCHES);
+  const maximumBayWidthInches = roundedInches(maximumBayWidthMm);
+  const availablePanels = Math.ceil(totalInches / maximumBayWidthInches);
   const positionGroups = new Map<number, string[]>();
   run.connections.forEach(({ pointId, offsetMm }) => {
     const positionInches = Math.round(offsetMm / (MM_PER_FOOT / 12));
@@ -318,7 +333,7 @@ function naturalConnectionPositions(run: StraightFenceRun): readonly number[] {
   positions.forEach((position) => {
     const next = [...states];
     states.forEach((state) => {
-      const panelsUsed = state.panelsUsed + Math.ceil((position - state.lastPosition) / BLACK_ALUMINUM_PANEL_LENGTH_INCHES);
+      const panelsUsed = state.panelsUsed + Math.ceil((position - state.lastPosition) / maximumBayWidthInches);
       if (panelsUsed < availablePanels) next.push({ lastPosition: position, panelsUsed, selected: [...state.selected, position] });
     });
     const bestByPositionAndPanels = new Map<string, LayoutState>();
@@ -330,7 +345,7 @@ function naturalConnectionPositions(run: StraightFenceRun): readonly number[] {
     states = [...bestByPositionAndPanels.values()];
   });
   const best = states
-    .filter((state) => state.panelsUsed + Math.ceil((totalInches - state.lastPosition) / BLACK_ALUMINUM_PANEL_LENGTH_INCHES) <= availablePanels)
+    .filter((state) => state.panelsUsed + Math.ceil((totalInches - state.lastPosition) / maximumBayWidthInches) <= availablePanels)
     .sort((first, second) => second.selected.length - first.selected.length || first.selected.join(",").localeCompare(second.selected.join(",")))[0];
   return best?.selected ?? [];
 }
@@ -354,7 +369,8 @@ function pointAtRunPosition(run: StraightFenceRun, positionInches: number, total
   return Object.freeze({ xMm: Math.round(piece.start.xMm + (piece.end.xMm - piece.start.xMm) * fraction), yMm: Math.round(piece.start.yMm + (piece.end.yMm - piece.start.yMm) * fraction) });
 }
 
-function visualLayoutForRuns(runs: readonly StraightFenceRun[], selectedConnectionsByRun: readonly (readonly number[])[]) {
+function visualLayoutForRuns(runs: readonly StraightFenceRun[], selectedConnectionsByRun: readonly (readonly number[])[], maximumBayWidthMm: number) {
+  const maximumBayWidthInches = roundedInches(maximumBayWidthMm);
   const panels: TakeoffPanel[] = []; const linePosts: TakeoffPost[] = [];
   runs.forEach((run, runIndex) => {
     const totalInches = Math.max(1, Math.round(run.lengthMm / (MM_PER_FOOT / 12)));
@@ -363,7 +379,7 @@ function visualLayoutForRuns(runs: readonly StraightFenceRun[], selectedConnecti
     const boundaries: number[] = [0];
     requiredBoundaries.slice(0, -1).forEach((start, index) => {
       const end = requiredBoundaries[index + 1];
-      for (let position = start + BLACK_ALUMINUM_PANEL_LENGTH_INCHES; position < end; position += BLACK_ALUMINUM_PANEL_LENGTH_INCHES) boundaries.push(position);
+      for (let position = start + maximumBayWidthInches; position < end; position += maximumBayWidthInches) boundaries.push(position);
       boundaries.push(end);
     });
     const uniqueBoundaries = [...new Set(boundaries)].sort((first, second) => first - second);
@@ -376,7 +392,7 @@ function visualLayoutForRuns(runs: readonly StraightFenceRun[], selectedConnecti
         start: pointAtRunPosition(run, startInches, totalInches),
         end: pointAtRunPosition(run, endInches, totalInches),
         lengthMm: runOffsetAtPosition(run, endInches, totalInches) - runOffsetAtPosition(run, startInches, totalInches),
-        cut: endInches - startInches < BLACK_ALUMINUM_PANEL_LENGTH_INCHES,
+        cut: endInches - startInches < maximumBayWidthInches,
       }));
     });
     const selectedSet = new Set(selectedConnections);
@@ -415,17 +431,27 @@ function physicalPosts(design: FenceDesign, naturalMidRunPointIds: ReadonlySet<s
   return Object.freeze(posts);
 }
 
-export function calculateBlackAluminumTakeoff(design: FenceDesign): BlackAluminumTakeoff {
+function calculateSharedLayout(design: FenceDesign, maximumBayWidthMm: number) {
   const midRunConnections = findMidRunConnections(design);
   const runs = straightFenceRuns(design, midRunConnections);
-  const selectedConnectionsByRun = runs.map(naturalConnectionPositions);
+  const selectedConnectionsByRun = runs.map((run) => naturalConnectionPositions(run, maximumBayWidthMm));
   const naturalMidRunPointIds = new Set(runs.flatMap((run, index) => naturalConnectionPointIds(run, selectedConnectionsByRun[index])));
   const allMidRunPointIds = new Set(midRunConnections.map(({ pointId }) => pointId));
-  const visualRuns = visualLayoutForRuns(runs, selectedConnectionsByRun);
+  const visualRuns = visualLayoutForRuns(runs, selectedConnectionsByRun, maximumBayWidthMm);
   const terminalPosts = physicalPosts(design, naturalMidRunPointIds, allMidRunPointIds);
   const posts = Object.freeze([...terminalPosts, ...visualRuns.linePosts]);
   const fenceLengthMm = design.segments.filter(({ kind }) => kind === "fence").reduce((sum, segment) => sum + segmentLengthMm(design, segment), 0);
-  const fencePanelCount = runs.reduce((sum, run) => sum + panelCountForLength(run.lengthMm), 0);
+  const fencePanelCount = runs.reduce((sum, run) => sum + panelCountForLength(run.lengthMm, maximumBayWidthMm), 0);
+  return Object.freeze({ runs, fenceLengthMm, fencePanelCount, layout: Object.freeze({ panels: visualRuns.panels, posts }) });
+}
+
+function compactFeet(mm: number) {
+  const feet = mm / MM_PER_FOOT;
+  return Number.isInteger(feet) ? `${feet}′` : formatFeetInches(mm);
+}
+
+function calculateManufacturedPanelTakeoff(design: FenceDesign, profile: ManufacturedPanelInstallationProfile): BlackAluminumTakeoff {
+  const shared = calculateSharedLayout(design, profile.construction.maximumBayWidthMm);
 
   const gateCounts = new Map<string, GateOpeningTakeoff>();
   let singleGates = 0; let doubleGates = 0;
@@ -440,13 +466,14 @@ export function calculateBlackAluminumTakeoff(design: FenceDesign): BlackAluminu
     if (gateType === "double") { doubleGates += 1; doubleGateInputs.push({ segmentId: segment.id, widthMm }); }
     else { singleGates += 1; singleGateInputs.push({ segmentId: segment.id, widthMm }); }
   });
-  const singlePanels = singleGateFabricationPanels(singleGateInputs);
-  const usableGateMm = Math.round(BLACK_ALUMINUM_GATE_USABLE_INCHES * MM_PER_FOOT / 12);
+  const usableGateMm = profile.construction.gateFabrication.usableWidthMm;
+  const singlePanelMaximumWidthMm = profile.construction.gateFabrication.doubleGateSinglePanelMaximumWidthMm;
+  const singlePanels = singleGateFabricationPanels(singleGateInputs, usableGateMm);
   const doublePanels = doubleGateInputs.flatMap(({ segmentId, widthMm }) => {
-    const panelCount = doubleGateFabricationPanelCount(widthMm);
+    const panelCount = doubleGateFabricationPanelCount(widthMm, singlePanelMaximumWidthMm);
     const widths = panelCount === 1 ? [widthMm] : [Math.floor(widthMm / 2), widthMm - Math.floor(widthMm / 2)];
     return widths.map((pieceWidthMm, pieceIndex) => Object.freeze({
-      id: `gate-panel-${singlePanels.length + doubleGateInputs.slice(0, doubleGateInputs.findIndex((gate) => gate.segmentId === segmentId)).reduce((sum, gate) => sum + doubleGateFabricationPanelCount(gate.widthMm), 0) + pieceIndex + 1}`,
+      id: `gate-panel-${singlePanels.length + doubleGateInputs.slice(0, doubleGateInputs.findIndex((gate) => gate.segmentId === segmentId)).reduce((sum, gate) => sum + doubleGateFabricationPanelCount(gate.widthMm, singlePanelMaximumWidthMm), 0) + pieceIndex + 1}`,
       gateType: "double" as const,
       usableMm: usableGateMm,
       usedMm: pieceWidthMm,
@@ -456,36 +483,36 @@ export function calculateBlackAluminumTakeoff(design: FenceDesign): BlackAluminu
   });
   const gateFabricationPanels = Object.freeze([...singlePanels, ...doublePanels]);
   const warnings = Object.freeze([
-    ...singleGateInputs.filter(({ widthMm }) => widthMm > usableGateMm).map(({ segmentId }) => `${segmentId}: single gate exceeds 7′ usable material and is split across fabrication panels.`),
-    ...doubleGateInputs.filter(({ widthMm }) => widthMm > usableGateMm * 2).map(({ segmentId }) => `${segmentId}: double gate exceeds the 14′ combined usable capacity of two fabrication panels.`),
+    ...singleGateInputs.filter(({ widthMm }) => widthMm > usableGateMm).map(({ segmentId }) => `${segmentId}: single gate exceeds ${compactFeet(usableGateMm)} usable material and is split across fabrication panels.`),
+    ...doubleGateInputs.filter(({ widthMm }) => widthMm > usableGateMm * 2).map(({ segmentId }) => `${segmentId}: double gate exceeds the ${compactFeet(usableGateMm * 2)} combined usable capacity of two fabrication panels.`),
   ]);
   const gatePanelCount = gateFabricationPanels.length;
 
   return Object.freeze({
-    fenceLengthMm,
-    panelCount: fencePanelCount + gatePanelCount,
-    fencePanelCount,
+    fenceLengthMm: shared.fenceLengthMm,
+    panelCount: shared.fencePanelCount + gatePanelCount,
+    fencePanelCount: shared.fencePanelCount,
     gatePanelCount,
-    endPosts: posts.filter(({ kind }) => kind === "end").length,
-    cornerPosts: posts.filter(({ kind }) => kind === "corner").length,
-    linePosts: posts.filter(({ kind }) => kind === "line").length,
+    endPosts: shared.layout.posts.filter(({ kind }) => kind === "end").length,
+    cornerPosts: shared.layout.posts.filter(({ kind }) => kind === "corner").length,
+    linePosts: shared.layout.posts.filter(({ kind }) => kind === "line").length,
     singleGates,
     doubleGates,
-    hinges: singleGates * 2 + doubleGates * 4,
-    latches: singleGates + doubleGates,
-    centerDropPoles: doubleGates,
+    hinges: (singleGates + doubleGates * 2) * profile.gateHardware.hingesPerLeaf,
+    latches: (singleGates + doubleGates) * profile.gateHardware.latchesPerOpening,
+    centerDropPoles: doubleGates * profile.gateHardware.doubleGateDropPolesPerOpening,
     gateOpenings: Object.freeze([...gateCounts.values()].sort((first, second) => first.gateType.localeCompare(second.gateType) || first.widthMm - second.widthMm)),
     gateFabricationPanels,
     warnings,
-    layout: Object.freeze({ panels: visualRuns.panels, posts }),
+    layout: shared.layout,
   });
 }
 
-export function calculateTreatedPinePrivacyTakeoff(design: FenceDesign): TreatedPinePrivacyTakeoff {
-  const aluminumLayout = calculateBlackAluminumTakeoff(design);
+function calculateStickBuiltPrivacyTakeoff(design: FenceDesign, profile: StickBuiltPrivacyInstallationProfile): TreatedPinePrivacyTakeoff {
+  const shared = calculateSharedLayout(design, profile.construction.maximumBayWidthMm);
   const midRunConnections = findMidRunConnections(design);
   const runs = straightFenceRuns(design, midRunConnections);
-  const fencePickets = runs.reduce((sum, run) => sum + picketsForWidthMm(run.lengthMm), 0);
+  const fencePickets = runs.reduce((sum, run) => sum + picketsForWidthMm(run.lengthMm, profile.construction.picketWidthMm), 0);
   let gatePickets = 0; let singleGates = 0; let doubleGates = 0; let gateLengthMm = 0;
   const gateCounts = new Map<string, GateOpeningTakeoff>();
   design.segments.filter(({ kind }) => kind === "gate").forEach((segment) => {
@@ -497,24 +524,24 @@ export function calculateTreatedPinePrivacyTakeoff(design: FenceDesign): Treated
     gateCounts.set(key, { gateType, widthMm, count: (current?.count ?? 0) + 1 });
     if (gateType === "double") {
       doubleGates += 1;
-      gatePickets += picketsForWidthMm(Math.floor(widthMm / 2)) + picketsForWidthMm(widthMm - Math.floor(widthMm / 2));
+      gatePickets += picketsForWidthMm(Math.floor(widthMm / 2), profile.construction.picketWidthMm) + picketsForWidthMm(widthMm - Math.floor(widthMm / 2), profile.construction.picketWidthMm);
     } else {
       singleGates += 1;
-      gatePickets += picketsForWidthMm(widthMm);
+      gatePickets += picketsForWidthMm(widthMm, profile.construction.picketWidthMm);
     }
   });
   const installedPickets = fencePickets + gatePickets;
-  const picketsWithWaste = withTenPercentWaste(installedPickets);
-  const fenceRailPieces = aluminumLayout.layout.panels.length * 3;
-  const gateFramePieces = singleGates * 5 + doubleGates * 10;
+  const picketsWithWaste = withBasisPointWaste(installedPickets, profile.purchaseWaste.basisPoints);
+  const fenceRailPieces = shared.layout.panels.length * profile.construction.railsPerBay;
+  const gateFramePieces = (singleGates + doubleGates * 2) * profile.construction.gateFramePiecesPerLeaf;
   const baseTwoByFours = fenceRailPieces + gateFramePieces;
-  const twoByFoursWithWaste = withTenPercentWaste(baseTwoByFours);
-  const installedPosts = aluminumLayout.layout.posts.length;
-  const fourByFoursWithWaste = withTenPercentWaste(installedPosts);
-  const railToPostStructuralScrews = aluminumLayout.layout.panels.length * 12;
-  const gateFrameStructuralScrews = (singleGates + doubleGates * 2) * 12;
+  const twoByFoursWithWaste = withBasisPointWaste(baseTwoByFours, profile.purchaseWaste.basisPoints);
+  const installedPosts = shared.layout.posts.length;
+  const fourByFoursWithWaste = withBasisPointWaste(installedPosts, profile.purchaseWaste.basisPoints);
+  const railToPostStructuralScrews = shared.layout.panels.length * profile.fasteners.railToPostScrewsPerBay;
+  const gateFrameStructuralScrews = (singleGates + doubleGates * 2) * profile.fasteners.gateFrameScrewsPerLeaf;
   return Object.freeze({
-    fenceLengthMm: aluminumLayout.fenceLengthMm,
+    fenceLengthMm: shared.fenceLengthMm,
     gateLengthMm,
     installedPickets,
     fencePickets,
@@ -528,18 +555,52 @@ export function calculateTreatedPinePrivacyTakeoff(design: FenceDesign): Treated
     installedPosts,
     fourByFoursWithWaste,
     postWasteAllowance: fourByFoursWithWaste - installedPosts,
-    concreteBags: installedPosts,
-    picketScrews: installedPickets * 6,
+    concreteBags: installedPosts * profile.concrete.packagesPerPost,
+    picketScrews: installedPickets * profile.fasteners.picketScrewsPerPicket,
     railToPostStructuralScrews,
     gateFrameStructuralScrews,
     totalStructuralScrews: railToPostStructuralScrews + gateFrameStructuralScrews,
     singleGates,
     doubleGates,
-    hinges: singleGates * 2 + doubleGates * 4,
-    latches: singleGates + doubleGates,
-    dropRods: doubleGates,
+    hinges: (singleGates + doubleGates * 2) * profile.gateHardware.hingesPerLeaf,
+    latches: (singleGates + doubleGates) * profile.gateHardware.latchesPerOpening,
+    dropRods: doubleGates * profile.gateHardware.doubleGateDropPolesPerOpening,
     gateOpenings: Object.freeze([...gateCounts.values()].sort((first, second) => first.gateType.localeCompare(second.gateType) || first.widthMm - second.widthMm)),
-    warnings: Object.freeze(installedPickets ? ["Structural screw quantities are preliminary defaults: 12 per installed fence bay and 12 per gate leaf. Hardware mounting fasteners are assumed included with each hardware item."] : []),
-    layout: aluminumLayout.layout,
+    warnings: Object.freeze(installedPickets ? [`Structural screw quantities are preliminary defaults: ${profile.fasteners.railToPostScrewsPerBay} per installed fence bay and ${profile.fasteners.gateFrameScrewsPerLeaf} per gate leaf. Hardware mounting fasteners are assumed included with each hardware item.`] : []),
+    layout: shared.layout,
   });
+}
+
+export type InstallationProfileTakeoffEvaluation =
+  | Readonly<{ kind: "manufactured_panel"; profileId: string; profileVersion: string; baseProfileContentHash: string; overrideContentHash: string | null; takeoff: BlackAluminumTakeoff }>
+  | Readonly<{ kind: "stick_built_privacy"; profileId: string; profileVersion: string; baseProfileContentHash: string; overrideContentHash: string | null; takeoff: TreatedPinePrivacyTakeoff }>;
+
+export function calculateTakeoffForInstallationProfile(
+  design: FenceDesign,
+  profile: FenceInstallationProfile,
+  overrides: InstallationProfileOverrideSet | null = null,
+): InstallationProfileTakeoffEvaluation {
+  const resolved = applyInstallationProfileOverrides(profile, overrides);
+  const identity = {
+    profileId: resolved.baseProfile.profileId,
+    profileVersion: resolved.baseProfile.profileVersion,
+    baseProfileContentHash: resolved.baseProfileContentHash,
+    overrideContentHash: resolved.overrideContentHash,
+  };
+  if (isManufacturedPanelProfile(resolved.effectiveProfile)) {
+    return Object.freeze({ kind: "manufactured_panel", ...identity, takeoff: calculateManufacturedPanelTakeoff(design, resolved.effectiveProfile) });
+  }
+  return Object.freeze({ kind: "stick_built_privacy", ...identity, takeoff: calculateStickBuiltPrivacyTakeoff(design, resolved.effectiveProfile) });
+}
+
+export function calculateBlackAluminumTakeoff(design: FenceDesign): BlackAluminumTakeoff {
+  const evaluation = calculateTakeoffForInstallationProfile(design, BLACK_ALUMINUM_DRAFT_PROFILE);
+  if (evaluation.kind !== "manufactured_panel") throw new TypeError("Black Aluminum draft profile has the wrong construction kind.");
+  return evaluation.takeoff;
+}
+
+export function calculateTreatedPinePrivacyTakeoff(design: FenceDesign): TreatedPinePrivacyTakeoff {
+  const evaluation = calculateTakeoffForInstallationProfile(design, TREATED_PINE_PRIVACY_DRAFT_PROFILE);
+  if (evaluation.kind !== "stick_built_privacy") throw new TypeError("Treated Pine Privacy draft profile has the wrong construction kind.");
+  return evaluation.takeoff;
 }
