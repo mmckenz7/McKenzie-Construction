@@ -37,7 +37,7 @@ test("lead and phone conversions are recorded without personal information", () 
   assert.match(lead, /project_request_submitted/);
   assert.match(analytics, /analyticsWindow\.dataLayer\.push/);
   assert.match(analytics, /event_label: eventLabel/);
-  assert.match(thankYou, /<LeadConversionTracker \/>/);
+  assert.match(thankYou, /conversionId \? <LeadConversionTracker conversionId=\{conversionId\}/);
   assert.doesNotMatch(phone + lead + analytics, /email|phone_number|customer_name/i);
 });
 

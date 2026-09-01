@@ -1,12 +1,15 @@
+import { cookies } from "next/headers";
+
 import { LeadConversionTracker } from "@/components/lead-conversion-tracker";
 import { TrackedPhoneLink } from "@/components/tracked-phone-link";
 
 const brandGreen = "#8CC63F";
 
-export default function ThankYouPage() {
+export default async function ThankYouPage() {
+  const conversionId = (await cookies()).get("mckenzie_lead_conversion")?.value ?? null;
   return (
     <main className="min-h-screen bg-zinc-950 px-5 py-24 text-white sm:px-8">
-      <LeadConversionTracker />
+      {conversionId ? <LeadConversionTracker conversionId={conversionId} /> : null}
       <div className="mx-auto flex min-h-[70vh] max-w-3xl items-center">
         <div>
           <div

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
 
+import { PublicLeadAttributionCapture } from "@/components/public-lead-attribution";
+
 import "./globals.css";
 
 const inter = Inter({
@@ -132,6 +134,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
+        <PublicLeadAttributionCapture />
         {children}
 
         <script

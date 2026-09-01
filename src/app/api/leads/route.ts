@@ -13,6 +13,29 @@ import {
   type CompanyAssignmentSettings,
 } from "@/lib/crm/assignment";
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
+import {
+  normalizePublicLeadAttribution,
+  publicLeadAttributionFields,
+  publicLeadSource,
+} from "@/lib/public-lead-attribution";
+
+const allowedProjectTypes = new Set([
+  "New Deck",
+  "Deck Replacement",
+  "Covered Outdoor Living",
+  "Screened Porch",
+  "Railing or Stairs",
+  "Pergola",
+  "Exterior Residential Project",
+  "Other",
+]);
+
+const allowedContactMethods = new Set([
+  "no_preference",
+  "phone",
+  "text",
+  "email",
+]);
 
 const allowedLeadStatuses = [
   "new",
@@ -33,12 +56,17 @@ const allowedConsultationStatuses = [
 
 function optionalText(
   value: FormDataEntryValue | null,
+  maxLength = 500,
 ): string | null {
   if (typeof value !== "string") {
     return null;
   }
 
   const cleanedValue = value.trim();
+
+  if (cleanedValue.length > maxLength) {
+    throw new RangeError("Submitted text is too long.");
+  }
 
   return cleanedValue.length > 0
     ? cleanedValue
@@ -48,9 +76,10 @@ function optionalText(
 function requiredText(
   value: FormDataEntryValue | null,
   fieldName: string,
+  maxLength = 500,
 ): string {
   const cleanedValue =
-    optionalText(value);
+    optionalText(value, maxLength);
 
   if (!cleanedValue) {
     throw new Error(
@@ -63,12 +92,19 @@ function requiredText(
 
 function redirectTo(
   path: string,
+  conversionId?: string,
 ): Response {
+  const headers: Record<string, string> = {
+    Location: path,
+  };
+
+  if (conversionId) {
+    headers["Set-Cookie"] = `mckenzie_lead_conversion=${conversionId}; Path=/thank-you; Max-Age=300; HttpOnly; Secure; SameSite=Lax`;
+  }
+
   return new Response(null, {
     status: 303,
-    headers: {
-      Location: path,
-    },
+    headers,
   });
 }
 
@@ -102,15 +138,18 @@ export async function POST(
     const name = requiredText(
       formData.get("name"),
       "Name",
+      160,
     );
 
     const phone = requiredText(
       formData.get("phone"),
       "Phone",
+      40,
     );
 
     const email = optionalText(
       formData.get("email"),
+      254,
     );
 
     const propertyAddress =
@@ -118,6 +157,7 @@ export async function POST(
         formData.get(
           "propertyAddress",
         ),
+        300,
       );
 
     const projectType =
@@ -126,6 +166,7 @@ export async function POST(
           "projectType",
         ),
         "Project type",
+        80,
       );
 
     const description =
@@ -134,6 +175,7 @@ export async function POST(
           "description",
         ),
         "Project description",
+        5000,
       );
 
     const estimatedBudget =
@@ -141,6 +183,7 @@ export async function POST(
         formData.get(
           "estimatedBudget",
         ),
+        100,
       );
 
     const desiredTimeline =
@@ -148,6 +191,7 @@ export async function POST(
         formData.get(
           "desiredTimeline",
         ),
+        100,
       );
 
     const preferredContactMethod =
@@ -155,6 +199,7 @@ export async function POST(
         formData.get(
           "preferredContactMethod",
         ),
+        40,
       ) ?? "phone";
 
     const requestedDate =
@@ -162,6 +207,7 @@ export async function POST(
         formData.get(
           "requestedDate",
         ),
+        10,
       );
 
     const requestedTime =
@@ -169,6 +215,7 @@ export async function POST(
         formData.get(
           "requestedTime",
         ),
+        5,
       );
 
     const alternateDate =
@@ -176,6 +223,7 @@ export async function POST(
         formData.get(
           "alternateDate",
         ),
+        10,
       );
 
     const alternateTime =
@@ -183,7 +231,37 @@ export async function POST(
         formData.get(
           "alternateTime",
         ),
+        5,
       );
+
+    const phoneDigits = phone.replace(/\D/g, "");
+    const validEmail = !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email);
+    const validDate = (value: string | null) =>
+      !value || /^\d{4}-\d{2}-\d{2}$/u.test(value);
+    const validTime = (value: string | null) =>
+      !value || /^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(value);
+
+    if (
+      phoneDigits.length < 10 ||
+      phoneDigits.length > 15 ||
+      !validEmail ||
+      !allowedProjectTypes.has(projectType) ||
+      !allowedContactMethods.has(preferredContactMethod) ||
+      !validDate(requestedDate) ||
+      !validDate(alternateDate) ||
+      !validTime(requestedTime) ||
+      !validTime(alternateTime)
+    ) {
+      return redirectTo("/contact?error=validation");
+    }
+
+    const attributionInput: Record<string, unknown> = {
+      landing_path: formData.get("landing_path"),
+    };
+    for (const field of publicLeadAttributionFields) {
+      attributionInput[field] = formData.get(field);
+    }
+    const attribution = normalizePublicLeadAttribution(attributionInput);
 
     const consultationWasRequested =
       Boolean(
@@ -306,7 +384,7 @@ export async function POST(
         consultation_status:
           consultationStatus,
         lead_status: "new",
-        lead_source: "website",
+        lead_source: publicLeadSource(attribution),
         responsible_person_id:
           responsiblePersonId,
       })
@@ -348,6 +426,7 @@ export async function POST(
           details: `${name} submitted a request for ${projectType}.`,
           metadata: {
             source: "website",
+            attribution,
             phone,
             email,
             property_address:
@@ -437,9 +516,7 @@ export async function POST(
       );
     }
 
-    return redirectTo(
-      "/thank-you",
-    );
+    return redirectTo("/thank-you", crypto.randomUUID());
   } catch (error) {
     console.error(
       "Project request error:",
@@ -447,7 +524,9 @@ export async function POST(
     );
 
     return redirectTo(
-      "/contact?error=submission",
+      error instanceof RangeError
+        ? "/contact?error=validation"
+        : "/contact?error=submission",
     );
   }
 }

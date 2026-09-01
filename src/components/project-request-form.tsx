@@ -1,3 +1,5 @@
+import { PublicLeadAttributionFields } from "@/components/public-lead-attribution";
+
 const inputClass =
   "min-h-14 w-full border border-zinc-300 bg-white px-4 text-base text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950";
 
@@ -28,6 +30,7 @@ export function ProjectRequestForm({
       method="post"
       className="grid gap-5 bg-zinc-100 p-6 sm:grid-cols-2 sm:p-9"
     >
+      <PublicLeadAttributionFields />
       <div className="hidden" aria-hidden="true">
         <label htmlFor="website">Website</label>
         <input

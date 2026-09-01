@@ -42,9 +42,19 @@ function readProjectType(value: string | string[] | undefined) {
 export default async function ContactPage({
   searchParams,
 }: {
-  searchParams: Promise<{ projectType?: string | string[] }>;
+  searchParams: Promise<{
+    error?: string | string[];
+    projectType?: string | string[];
+  }>;
 }) {
-  const defaultProjectType = readProjectType((await searchParams).projectType);
+  const params = await searchParams;
+  const defaultProjectType = readProjectType(params.projectType);
+  const errorMessage =
+    params.error === "validation"
+      ? "Please review the project details and submit the request again."
+      : params.error === "submission"
+        ? "We could not submit your request right now. Please try again or call or text 865-433-3325."
+        : null;
 
   return (
     <main className="bg-white text-zinc-950">
@@ -73,6 +83,14 @@ export default async function ContactPage({
 
       <section className="bg-white">
         <div className="mx-auto max-w-5xl px-6 py-12 lg:px-8 lg:py-16">
+          {errorMessage ? (
+            <div
+              role="alert"
+              className="mb-6 border border-red-300 bg-red-50 px-5 py-4 text-sm font-semibold leading-6 text-red-800"
+            >
+              {errorMessage}
+            </div>
+          ) : null}
           {defaultProjectType ? (
             <div className="mb-6 border border-lime-300 bg-lime-50 px-5 py-4 text-sm leading-6 text-slate-800">
               We started the form with <strong>{defaultProjectType}</strong>{" "}
