@@ -31,3 +31,5 @@ Free angle is the default. After the first run, optional 45°/90° assistance us
 ## Supervised field trial
 
 Use [`docs/FIRST_FIELD_TRIAL_WORKSHEET.md`](docs/FIRST_FIELD_TRIAL_WORKSHEET.md) for the immediate real user's first supervised trial. It records the actual fence-system rules, independent field measurements, gate facts, device/evidence, pass/stop criteria, and the materially different second-system follow-up without treating this prototype as survey, pricing, product-order, or construction authority.
+
+The dated [first outside operator path](docs/COMMERCIAL_FIELD_BETA_PATH.md) keeps commercialization evidence-led: exact system rules → versioned draft profile → independent sample-job comparison → bounded activation → human-reviewed estimate. Google address search and broad tenant administration are not prerequisites for the first supervised field session.

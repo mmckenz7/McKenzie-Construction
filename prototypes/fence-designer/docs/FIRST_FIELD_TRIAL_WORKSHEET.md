@@ -11,7 +11,7 @@ Use this worksheet for the immediate real user's actual fence system. Keep an in
 - Device:
 - Browser/version:
 - Preview deployment and commit shown for the trial:
-- Minimum validated application source: `40b231299624fa1e2cf2f09dd516ba3a3cc680ae` (or a reviewed descendant)
+- Minimum validated application source: `1005a688748480b78a1c14e43c763a0c27ee546a` (or a reviewed descendant)
 - Measurement tool: tape / wheel / laser / other reviewed hardware
 - Reference photos or screenshots approved for deidentified QA: yes / no
 
@@ -27,6 +27,12 @@ Do not use consumer-phone GPS as the measurement source. Parcel, aerial, referen
 - Color/finish:
 - Source of system rules (manufacturer document, installer standard, supplier packet):
 - Rule source date/version:
+- Profile ID:
+- Profile version:
+- Profile content hash:
+- Profile state: draft/unvalidated / reviewed sample / activated for bounded beta
+- Profile author:
+- Independent profile reviewer:
 
 Record the applicable rules before comparing takeoff:
 
@@ -41,6 +47,8 @@ Record the applicable rules before comparing takeoff:
 - Slope handling: level / stepped / racked / unresolved
 
 If these rules are incomplete, run a geometry-only trial and label the takeoff comparison **not evaluated**. Do not substitute Black Aluminum or Treated Pine assumptions for a different system.
+
+Activation requires the exact profile hash above to match the reviewed draft, a separately completed human takeoff for this sample, and an independent reviewer. A rule change creates a new version; it never silently replaces this record.
 
 ## Field geometry
 
@@ -120,6 +128,9 @@ Stop the trial and preserve evidence without guessing if any of these occur:
 - Browser console errors/warnings:
 - Required engine correction:
 - Required system rule clarification:
+- Independent reviewer decision: pass / revise / stop
+- Exact activated profile hash, if approved:
+- Estimate handoff allowed: yes / no
 - Recommended internal-beta decision:
 
 ## Second-system follow-up
