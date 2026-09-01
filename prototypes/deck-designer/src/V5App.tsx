@@ -11,7 +11,7 @@ import { formatFeetInches } from "./PlanView";
 import { saveDeckDesignV5 } from "./storageV5";
 import type { CameraPreset } from "./ThreeView";
 import type { RenderQuality } from "./renderQuality";
-import { addBumpoutOnEdge, moveOrthogonalPolygonCorner, movePolygonCorner, movePolygonSegment, setPolygonEdgeAngle } from "./polygonEditorV3";
+import { addBumpoutOnEdge, moveOrthogonalPolygonCorner, movePolygonCorner, movePolygonSegment } from "./polygonEditorV3";
 import type { ConfirmedPhotoFacts, PhotoIntakeReview } from "./photoIntake";
 import { deriveGeometricPolygonEdges, polygonBounds, type PolygonPoint } from "./polygon";
 import { deriveHouseContextGeometry } from "./houseContextGeometry";
@@ -22,7 +22,7 @@ import { setEdgeFinishIntentV5 } from "./finishEditorV5";
 import { deriveWarningSelectionV5 } from "./warningLocatorV5";
 import { usesPrototypeReviewThresholdV5, type GeometryWarningV5 } from "./geometryWarningsV5";
 import type { RenderPalette } from "./ThreeViewV3";
-import { resizePolygonEdgeWithHouseAnchorV5 } from "./houseBoundaryV5";
+import { resizePolygonEdgeWithHouseAnchorV5, setPolygonEdgeAngleWithHouseAnchorV5 } from "./houseBoundaryV5";
 
 const ThreeViewV3 = lazy(async () => ({ default: (await import("./ThreeViewV3")).ThreeViewV3 }));
 const PhotoIntake = lazy(async () => ({ default: (await import("./PhotoIntakeDialog")).PhotoIntake }));
@@ -169,7 +169,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
     if (edgeIndex < 0) { setMessage("Select a side first."); return; }
     try {
       const current = history.present.platforms.find((item) => item.id === platform.id)!;
-      const nextOuter = setPolygonEdgeAngle(current.region.outer, edgeIndex, degrees);
+      const nextOuter = setPolygonEdgeAngleWithHouseAnchorV5(current, edgeId, degrees);
       if (replaceRegion(nextOuter, true)) {
         setSelectedEdgeId(deriveGeometricPolygonEdges(nextOuter)[edgeIndex]?.id ?? null);
         const normalizedDegrees = ((degrees % 360) + 360) % 360;
@@ -503,7 +503,7 @@ export function V5App({ initialDesign, initialMessage = "Corner editor ready.", 
             const edgeDirection = Math.round(((((Math.atan2(edge.end.z - edge.start.z, edge.end.x - edge.start.x) * 180 / Math.PI) % 360) + 360) % 360) * 100) / 100;
             return <>
               <div className="plan-action-copy"><strong>{formatFeetInches(edge.length)} side selected</strong><small>{activeStairSystem ? `${activeStairSystem.landings.length} landing${activeStairSystem.landings.length === 1 ? "" : "s"}.` : isFree ? "Length, bumpout, and stairs." : "Fixed house side."}</small></div>
-              <div className="plan-action-fields segment-fields"><V3NumberField label="Deck edge length (feet)" value={Math.round(edge.length / 12 * 100) / 100} step={.5} onCommit={(value) => updateSegmentLength(edge.id, value * 12)} /><V3NumberField label="Direction · 0° right, 90° away" value={edgeDirection} step={1} onCommit={(value) => updateSegmentAngle(edge.id, value)} />{activeStairSystem && !activeStairSystem.locked && <><V3NumberField label={`Stairs from ${stairReference} end (feet)`} value={Math.round(activeStairSystem.offset / 12 * 100) / 100} step={.5} onCommit={(value) => moveActiveStairs(value * 12, `Stairs moved to ${value} feet from the ${stairReference} end.`)} /><V3NumberField label="Stair width (feet)" value={Math.round(activeStairSystem.width / 12 * 100) / 100} step={.5} onCommit={(value) => { const width = value * 12; updateStairSystem({ width, landings: activeStairSystem.landings.map((landing) => ({ ...landing, width: Math.max(landing.width, width) })) }, "Stair width updated exactly."); }} /></>}</div>
+              {isFree && <div className="plan-action-fields segment-fields"><V3NumberField label="Deck edge length (feet)" value={Math.round(edge.length / 12 * 100) / 100} step={.5} onCommit={(value) => updateSegmentLength(edge.id, value * 12)} /><V3NumberField label="Direction · 0° right, 90° away" value={edgeDirection} step={1} onCommit={(value) => updateSegmentAngle(edge.id, value)} />{activeStairSystem && !activeStairSystem.locked && <><V3NumberField label={`Stairs from ${stairReference} end (feet)`} value={Math.round(activeStairSystem.offset / 12 * 100) / 100} step={.5} onCommit={(value) => moveActiveStairs(value * 12, `Stairs moved to ${value} feet from the ${stairReference} end.`)} /><V3NumberField label="Stair width (feet)" value={Math.round(activeStairSystem.width / 12 * 100) / 100} step={.5} onCommit={(value) => { const width = value * 12; updateStairSystem({ width, landings: activeStairSystem.landings.map((landing) => ({ ...landing, width: Math.max(landing.width, width) })) }, "Stair width updated exactly."); }} /></>}</div>}
               {!activeStairSystem ? <div className="plan-action-buttons"><button disabled={!isFree} onClick={() => addBumpoutToEdge(edge.id)}>{isFree ? "Add bumpout" : "House side stays fixed"}</button><button className="primary" disabled={!isFree || edge.length < 48} onClick={() => addStairsToEdge(edge.id, edge.length)}>Add stairs</button></div> : activeStairSystem.locked ? <div className="plan-action-buttons"><button onClick={() => updateStairSystem({ locked: false }, "Stairs reopened for editing.")}>Edit stairs</button><button className="primary" onClick={() => { setSelectedEdgeId(null); setSelectedStairSystemId(null); setSelectedLandingId(null); }}>Close side</button></div> : <>
                  <div className="automatic-standard-note"><strong>Automatic step depth</strong><small>{activeStairSystem.treadDepth}&quot; concept; verify local requirements.</small></div>
                 <div className="plan-action-buttons"><button onClick={() => addLanding("top")}>Add top landing</button><button onClick={() => addLanding("midway")}>Add midway landing</button><button className="primary" onClick={lockStairSystem}>Done with side</button></div>

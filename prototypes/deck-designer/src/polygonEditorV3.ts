@@ -185,6 +185,7 @@ export function setPolygonEdgeAngle(
   outer: readonly PolygonPoint[],
   edgeIndex: number,
   requestedDegrees: number,
+  anchorEnd = false,
 ): readonly PolygonPoint[] {
   const edges = deriveGeometricPolygonEdges(outer);
   const edge = edges[edgeIndex];
@@ -196,12 +197,15 @@ export function setPolygonEdgeAngle(
     const rounded = Math.round(value * 100) / 100;
     return Object.is(rounded, -0) ? 0 : rounded;
   };
-  const nextEnd = Object.freeze({
-    x: round(edge.start.x + Math.cos(radians) * edge.length),
-    z: round(edge.start.z + Math.sin(radians) * edge.length),
+  const anchor = anchorEnd ? edge.end : edge.start;
+  const direction = anchorEnd ? -1 : 1;
+  const nextPoint = Object.freeze({
+    x: round(anchor.x + direction * Math.cos(radians) * edge.length),
+    z: round(anchor.z + direction * Math.sin(radians) * edge.length),
   });
-  if (nextEnd.x === edge.end.x && nextEnd.z === edge.end.z) return outer;
+  const currentPoint = anchorEnd ? edge.start : edge.end;
+  if (nextPoint.x === currentPoint.x && nextPoint.z === currentPoint.z) return outer;
   const next = [...outer];
-  next[(edgeIndex + 1) % next.length] = nextEnd;
+  next[anchorEnd ? edgeIndex : (edgeIndex + 1) % next.length] = nextPoint;
   return Object.freeze(next);
 }

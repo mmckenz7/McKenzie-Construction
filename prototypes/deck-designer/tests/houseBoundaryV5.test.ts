@@ -3,7 +3,7 @@ import { applyPolygonRegionReplacementV5 } from "../src/commandsV5";
 import { deriveDeckDesignProjectionV5 } from "../src/designProjectionV5";
 import { applyHouseConnectionV3 } from "../src/houseConnectionV3";
 import { createHistoryV5, designHistoryReducerV5 } from "../src/historyV5";
-import { resizePolygonEdgeWithHouseAnchorV5 } from "../src/houseBoundaryV5";
+import { resizePolygonEdgeWithHouseAnchorV5, setPolygonEdgeAngleWithHouseAnchorV5 } from "../src/houseBoundaryV5";
 import { DEFAULT_DESIGN, updateDesign } from "../src/model";
 import { deckDesignV5ToV3Compatibility, migrateDeckDesignToV5, stableDeckDesignV5Json, type DeckDesignV5 } from "../src/modelV5";
 import { addBumpoutOnEdge, movePolygonSegment } from "../src/polygonEditorV3";
@@ -79,6 +79,91 @@ describe("v5 immutable house boundaries", () => {
     const undone = designHistoryReducerV5(applied, { type: "undo" });
     expect(undone.present.platforms[0].region).toEqual(base.platforms[0].region);
     expect(houseIds(undone.present)).toEqual(houseIds(base));
+  });
+
+  it("anchors either house corner while setting the mirrored free-side angle", () => {
+    const base = unlocked();
+    const platform = base.platforms[0];
+    const houseId = houseIds(base)[0];
+    const house = deriveGeometricPolygonEdges(platform.region.outer).find((edge) => edge.id === houseId)!;
+    const adjacent = deriveGeometricPolygonEdges(platform.region.outer).filter((edge) => edge.id !== houseId && [edge.start, edge.end].some((point) => [house.start, house.end].some((anchor) => point.x === anchor.x && point.z === anchor.z)));
+    expect(adjacent).toHaveLength(2);
+    const results = adjacent.map((edge) => {
+      const startAnchored = [house.start, house.end].some((anchor) => anchor.x === edge.start.x && anchor.z === edge.start.z);
+      const degrees = startAnchored ? 80 : 280;
+      const outer = setPolygonEdgeAngleWithHouseAnchorV5(platform, edge.id, degrees);
+      const next = applyPolygonRegionReplacementV5(base, platform.id, { ...platform.region, outer }).design;
+      const nextEdges = deriveGeometricPolygonEdges(next.platforms[0].region.outer);
+      const anchor = startAnchored ? edge.start : edge.end;
+      const nextEdge = nextEdges.find((candidate) => startAnchored
+        ? candidate.start.x === anchor.x && candidate.start.z === anchor.z
+        : candidate.end.x === anchor.x && candidate.end.z === anchor.z)!;
+      expect(houseIds(next)).toEqual([houseId]);
+      expect(deriveGeometricPolygonEdges(next.platforms[0].region.outer)).toContainEqual(house);
+      expect(nextEdge.length).toBeCloseTo(edge.length, 1);
+      expect(next.metadata.revision).toBe(base.metadata.revision + 1);
+      return next;
+    });
+    expect(results.map((design) => design.metadata.revision)).toEqual([base.metadata.revision + 1, base.metadata.revision + 1]);
+  });
+
+  it("commits one angle revision, replays identically, and restores it through Undo", () => {
+    const base = unlocked();
+    const platform = base.platforms[0];
+    const side = deriveGeometricPolygonEdges(platform.region.outer).find((edge) => edge.start.x === 0 && edge.end.x === 0)!;
+    const outer = setPolygonEdgeAngleWithHouseAnchorV5(platform, side.id, 280);
+    const first = applyPolygonRegionReplacementV5(base, platform.id, { ...platform.region, outer }).design;
+    const replay = applyPolygonRegionReplacementV5(base, platform.id, { ...platform.region, outer }).design;
+    expect(stableDeckDesignV5Json(first)).toBe(stableDeckDesignV5Json(replay));
+    expect(first.metadata.revision).toBe(base.metadata.revision + 1);
+    const applied = designHistoryReducerV5(createHistoryV5(base), { type: "apply", design: first });
+    expect(applied.past).toHaveLength(1);
+    expect(designHistoryReducerV5(applied, { type: "undo" }).present.platforms[0].region).toEqual(platform.region);
+  });
+
+  it("supports anchored angle edits on L and custom outlines", () => {
+    const lShape = unlocked(migrateDeckDesignToV5(updateDesign(DEFAULT_DESIGN, { kind: "l-shape", width: 240, projection: 180, cutoutWidth: 72, cutoutDepth: 60 })));
+    const left = deriveGeometricPolygonEdges(lShape.platforms[0].region.outer).find((edge) => edge.start.x === 0 && edge.end.x === 0)!;
+    const lOuter = setPolygonEdgeAngleWithHouseAnchorV5(lShape.platforms[0], left.id, 280);
+    const angledL = applyPolygonRegionReplacementV5(lShape, "platform-1", { ...lShape.platforms[0].region, outer: lOuter }).design;
+    expect(houseIds(angledL)).toEqual(houseIds(lShape));
+    expect(deriveGeometricPolygonEdges(angledL.platforms[0].region.outer)).toContainEqual(deriveGeometricPolygonEdges(lShape.platforms[0].region.outer)[0]);
+
+    const customOuter = [{ x: 0, z: 0 }, { x: 192, z: 0 }, { x: 168, z: 120 }, { x: 0, z: 144 }];
+    const custom = migrateDeckDesignToV5({ ...lShape, platforms: [{ ...lShape.platforms[0], region: { outer: customOuter, holes: [] }, edgeConditions: deriveGeometricPolygonEdges(customOuter).map((edge, index) => ({ edgeId: edge.id, condition: index === 0 ? "house_attachment" : "free", attachment: index === 0 ? "ledger" : "none" })) }] });
+    const side = deriveGeometricPolygonEdges(custom.platforms[0].region.outer)[1];
+    const customOuterAngled = setPolygonEdgeAngleWithHouseAnchorV5(custom.platforms[0], side.id, 80);
+    const angledCustom = applyPolygonRegionReplacementV5(custom, "platform-1", { ...custom.platforms[0].region, outer: customOuterAngled }).design;
+    expect(houseIds(angledCustom)).toEqual(houseIds(custom));
+  });
+
+  it("rejects exact angle edits on house sides and ambiguous two-wall corners without changing facts", () => {
+    const base = addLockingSideWall(unlocked());
+    const platform = base.platforms[0];
+    const edges = deriveGeometricPolygonEdges(platform.region.outer);
+    const house = edges.find((edge) => houseIds(base).includes(edge.id))!;
+    const secondHouse = edges.find((edge) => houseIds(base).includes(edge.id) && edge.id !== house.id)!;
+    const ambiguousPlatform = {
+      ...platform,
+      edgeConditions: edges.map((edge, index) => ({
+        edgeId: edge.id,
+        condition: index === 0 || index === 2 ? "house_attachment" as const : "free" as const,
+        attachment: index === 0 || index === 2 ? "ledger" as const : "none" as const,
+      })),
+    };
+    const betweenTwoBoundaries = edges[1];
+    const before = stableDeckDesignV5Json(base);
+    const quantities = JSON.stringify(deriveDeckDesignProjectionV5(base).aggregateQuantities);
+    expect(() => setPolygonEdgeAngleWithHouseAnchorV5(platform, house.id, 15)).toThrow(/fixed house side/i);
+    expect(() => setPolygonEdgeAngleWithHouseAnchorV5(platform, secondHouse.id, 15)).toThrow(/fixed house side/i);
+    expect(() => setPolygonEdgeAngleWithHouseAnchorV5(ambiguousPlatform, betweenTwoBoundaries.id, 80)).toThrow(/touches two house boundaries/i);
+    expect(stableDeckDesignV5Json(base)).toBe(before);
+    expect(JSON.stringify(deriveDeckDesignProjectionV5(base).aggregateQuantities)).toBe(quantities);
+
+    const single = unlocked();
+    const right = deriveGeometricPolygonEdges(single.platforms[0].region.outer).find((edge) => edge.start.x === 192 && edge.end.x === 192)!;
+    const throughHouse = setPolygonEdgeAngleWithHouseAnchorV5(single.platforms[0], right.id, 280);
+    expect(() => applyPolygonRegionReplacementV5(single, "platform-1", { ...single.platforms[0].region, outer: throughHouse })).toThrow(/recorded house|intersect/i);
   });
 
   it("supports an L outline outward depth change and fails closed for an angled custom path", () => {

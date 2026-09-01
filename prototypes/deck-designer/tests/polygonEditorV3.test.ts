@@ -55,6 +55,14 @@ describe("direct v3 polygon authoring", () => {
     expect(normalizePolygon(next)).toEqual(next);
   });
 
+  it("can preserve the edge end while setting the authored direction", () => {
+    const next = setPolygonEdgeAngle(rectangle, 3, 280, true);
+    expect(next[0]).toEqual(rectangle[0]);
+    expect(next[3]).toEqual({ x: -25.01, z: 141.81 });
+    expect(Math.hypot(next[0].x - next[3].x, next[0].z - next[3].z)).toBeCloseTo(144, 1);
+    expect(setPolygonEdgeAngle(rectangle, 3, 270, true)).toBe(rectangle);
+  });
+
   it("normalizes wrapped angles and rejects non-finite input", () => {
     expect(setPolygonEdgeAngle(rectangle, 0, -90)[1]).toEqual({ x: 0, z: -192 });
     expect(setPolygonEdgeAngle(rectangle, 0, 270)).toEqual(setPolygonEdgeAngle(rectangle, 0, -90));

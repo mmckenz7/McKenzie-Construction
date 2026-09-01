@@ -50,6 +50,8 @@ describe("v5 browser compatibility adapter", () => {
     expect(source).toContain("Clears side options; house stays fixed.");
     expect(source).toContain('onClick={() => addBumpoutToEdge(edge.id)}>{isFree ? "Add bumpout" : "House side stays fixed"}</button>');
     expect(source).toContain("house fixed.");
+    expect(source).toContain('{isFree && <div className="plan-action-fields segment-fields">');
+    expect(source).toContain("setPolygonEdgeAngleWithHouseAnchorV5(current, edgeId, degrees)");
     expect(source).toContain("edgeConditions: current.edgeConditions");
     expect(source).not.toContain('disabled={hasOutlineOptionLocks}');
   });
