@@ -12,6 +12,7 @@ The checklist boxes below remain unchecked until they are exercised in the signe
 | --- | --- | --- |
 | Access and company isolation | Canonical and Sales layouts require an authenticated Sales workspace. Conversation mutation, email, text, and Microsoft attachment routes verify Sales access; admin-client mutations and attachment reads also verify the configured singleton company. | Confirm redirects and forbidden behavior with the two staging roles. |
 | Assignment and matching | Unmatched threads cannot be assigned, matching is one-time, and existing email/text threads now take their CRM identity only from the stored thread—not request-supplied Lead or Customer IDs. | Exercise match, assign, unassign, archive, read/unread, and close/reopen on existing records. |
+| Unassigned inbound texts | Nullable thread identity is retained, replies use the authenticated Sales workspace plus company messaging policy, and later matching or lead creation retains the same thread. Phone-normalized duplicate checks fail closed before lead creation. | Use an existing approved staging text thread to verify the queue/actions; do not send unless a separate provider-send gate is approved. |
 | Folders and search | Inbox/Sent/Needs Attention/Archived are projections of existing thread/message facts. Search, channel, and department filters are URL-addressable and explicitly bounded to 100 threads and 150 messages. | Compare each projection and filter intersection with visible staging data. |
 | To/Cc/Bcc and attachments | Address validation, cross-field deduplication, sandbox checking, private Bcc delivery, supported type/count/size rules, metadata-only retry behavior, safe filenames, matched-message checks, and explicit Microsoft downloads have focused regression coverage. | Send only to existing allowlisted recipients and use non-sensitive test files. |
 | Lead → Customer → Project continuity | Record histories reuse canonical thread IDs, customers are preferred over source leads, and project activity is a read-only projection with canonical conversation links. | Follow one existing converted record through all three staging views and reply once. |
@@ -67,6 +68,10 @@ Preflight validation on the isolated branch: 53 focused communications tests pas
 - [ ] An exact active supplier-location email is labeled Vendor and remains unassigned.
 - [ ] A no-reply notification and an unsubscribe-style newsletter receive the expected automated labels.
 - [ ] Unknown unmatched mail is labeled for review and can be read or archived without forced CRM assignment.
+- [ ] Unassigned conversations lists only threads with neither a lead nor a customer link.
+- [ ] An existing inbound text can remain unassigned and still shows Reply, Link existing contact, Create Lead, and Leave unassigned actions on a narrow viewport without horizontal clipping.
+- [ ] Link existing contact and Create Lead retain the exact conversation URL and all prior messages; a phone already used by a lead or customer blocks duplicate lead creation.
+- [ ] Do not submit the text reply during read-only QA; provider delivery requires its own explicit send approval.
 - [ ] Internal, vendor, automated, and review conversations do not create fake leads, customers, projects, or assignments.
 - [ ] Matching an unmatched conversation to an existing lead or customer works once; a second match is rejected safely.
 

@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     const thread = await supabase.from("communication_threads")
       .select("id,provider,lead_id,customer_id,participant_addresses")
       .eq("id", threadId).eq("provider", "twilio").eq("security_disposition", "normal")
-      .or("lead_id.not.is.null,customer_id.not.is.null").maybeSingle();
+      .maybeSingle();
     if (thread.error || !thread.data) {
       return Response.json({ success: false, error: "The text conversation could not be found." }, { status: 404 });
     }
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
   }
   recipient = recipient ?? participantRecipient;
   if (!recipient) {
-    return Response.json({ success: false, error: "This lead or customer does not have a valid 10-digit phone number." }, { status: 400 });
+    return Response.json({ success: false, error: "This conversation does not have a valid 10-digit phone number." }, { status: 400 });
   }
 
   const preference = await supabase.from("communication_preferences")

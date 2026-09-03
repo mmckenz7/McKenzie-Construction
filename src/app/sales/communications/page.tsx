@@ -65,6 +65,7 @@ const folders = [
 ] as const;
 
 const views = [
+  ["unassigned", "Unassigned conversations"],
   ["unread", "Unread"],
   ["closed", "Closed"],
   ["customers", "Customers"],
@@ -279,6 +280,9 @@ export default async function CommunicationsPage({
   let candidateThreads = viewKind
     ? rawThreads.filter((thread) => triageByThread.get(thread.id)?.kind === viewKind)
     : rawThreads;
+  if (view === "unassigned") {
+    candidateThreads = candidateThreads.filter((thread) => !thread.lead_id && !thread.customer_id);
+  }
   if (view === "sent") candidateThreads = candidateThreads.filter((thread) => sentThreadIds.has(thread.id));
   if (view === "attention") {
     candidateThreads = candidateThreads.filter((thread) =>

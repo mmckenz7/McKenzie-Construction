@@ -31,7 +31,7 @@ async function textThread(from: string, to: string, leadId: string | null, custo
   const customerPhone = e164UsPhone(from) ?? from;
   const companyPhone = e164UsPhone(to) ?? to;
   const providerThreadId = `sms:${customerPhone}`;
-  const values = {
+  const baseValues = {
     provider: "twilio",
     provider_thread_id: providerThreadId,
     subject: "Text conversation",
@@ -46,19 +46,27 @@ async function textThread(from: string, to: string, leadId: string | null, custo
     security_disposition: "normal",
   } as const;
   const existing = await supabase.from("communication_threads")
-    .select("id")
+    .select("id,lead_id,customer_id")
     .eq("provider", "twilio")
     .eq("provider_thread_id", providerThreadId)
     .eq("security_disposition", "normal")
     .maybeSingle();
   if (existing.error) return null;
+  const existingHasIdentity = Boolean(existing.data?.lead_id || existing.data?.customer_id);
+  const values = {
+    ...baseValues,
+    lead_id: existingHasIdentity ? existing.data?.lead_id ?? null : leadId,
+    customer_id: existingHasIdentity ? existing.data?.customer_id ?? null : customerId,
+  };
   const result = existing.data
     ? await supabase.from("communication_threads").update(values)
       .eq("id", existing.data.id)
       .eq("security_disposition", "normal")
-      .select("id").single()
-    : await supabase.from("communication_threads").insert(values).select("id").single();
-  return result.data?.id ?? null;
+      .select("id,lead_id,customer_id").single()
+    : await supabase.from("communication_threads").insert(values).select("id,lead_id,customer_id").single();
+  return result.data
+    ? { id: result.data.id, leadId: result.data.lead_id, customerId: result.data.customer_id }
+    : null;
 }
 
 export async function POST(request: Request) {
@@ -79,14 +87,15 @@ export async function POST(request: Request) {
     const optOutType = optOutValue === "STOP" || optOutValue === "START" || optOutValue === "HELP" ? optOutValue : null;
     const { leadId, customerId } = await findContact(from);
     const receivedAt = new Date().toISOString();
-    const threadId = await textThread(from, to, leadId, customerId, receivedAt);
-    if (!threadId) return xml(500);
+    const thread = await textThread(from, to, leadId, customerId, receivedAt);
+    if (!thread) return xml(500);
+    const threadId = thread.id;
     const message = await supabase.from("communication_messages").upsert({
       channel: "sms", direction: "inbound", sender: from, recipient: to,
       body, status: "received", provider: "twilio", provider_message_id: providerMessageId,
-      lead_id: leadId, thread_id: threadId, department: "sales", is_read: false,
+      lead_id: thread.leadId, thread_id: threadId, department: "sales", is_read: false,
       opt_out_type: optOutType, received_at: receivedAt,
-      metadata: { num_media: String(form.get("NumMedia") ?? "0"), customer_id: customerId },
+      metadata: { num_media: String(form.get("NumMedia") ?? "0"), customer_id: thread.customerId },
       security_disposition: "normal",
     }, { onConflict: "provider,provider_message_id,direction", ignoreDuplicates: true }).select("id").maybeSingle();
     if (message.error) return xml(500);
@@ -105,15 +114,15 @@ export async function POST(request: Request) {
       }, { onConflict: "channel,address" });
     }
 
-    if (leadId) {
+    if (thread.leadId) {
       await Promise.all([
         supabase.from("lead_activities").insert({
-          lead_id: leadId, activity_type: "sms_received", channel: "sms", direction: "inbound",
+          lead_id: thread.leadId, activity_type: "sms_received", channel: "sms", direction: "inbound",
           summary: optOutType ? `SMS ${optOutType} received` : "Customer text received",
           details: body, metadata: { provider_message_id: providerMessageId, opt_out_type: optOutType },
         }),
-        supabase.from("lead_tasks").update({ status: "canceled", canceled_at: receivedAt, completion_note: "Canceled because the customer replied by text." }).eq("lead_id", leadId).in("task_type", ["first_phone_follow_up", "phone_follow_up"]).in("status", ["open", "in_progress"]),
-        supabase.from("tasks").update({ status: "canceled", canceled_at: receivedAt, completion_note: "Canceled because the customer replied by text." }).eq("lead_id", leadId).in("task_type", ["first_phone_follow_up", "phone_follow_up"]).in("status", ["open", "in_progress"]),
+        supabase.from("lead_tasks").update({ status: "canceled", canceled_at: receivedAt, completion_note: "Canceled because the customer replied by text." }).eq("lead_id", thread.leadId).in("task_type", ["first_phone_follow_up", "phone_follow_up"]).in("status", ["open", "in_progress"]),
+        supabase.from("tasks").update({ status: "canceled", canceled_at: receivedAt, completion_note: "Canceled because the customer replied by text." }).eq("lead_id", thread.leadId).in("task_type", ["first_phone_follow_up", "phone_follow_up"]).in("status", ["open", "in_progress"]),
       ]);
     }
     await supabase.from("communication_threads").update({

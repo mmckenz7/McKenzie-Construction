@@ -1,9 +1,14 @@
 import { createAdminServerClient } from "@/lib/supabase/admin-server";
 import { communicationWorkspaceMatchesSingletonCompany } from "@/lib/communications/workspace-company";
+import {
+  phoneCandidatesContain,
+  unassignedSmsCounterpartyPhone,
+} from "@/lib/communications/phone";
 import { canAccessWorkspace, getWorkspaceAccess } from "@/lib/workspace-access";
 
 type ThreadUpdateRequest = {
   action?: unknown;
+  name?: unknown;
   targetType?: unknown;
   targetId?: unknown;
   status?: unknown;
@@ -77,7 +82,7 @@ export async function PATCH(
       { status: 400 },
     );
   }
-  if (action !== undefined && action !== "match") {
+  if (action !== undefined && action !== "match" && action !== "create_lead") {
     return Response.json(
       { success: false, error: "Choose a valid conversation action." },
       { status: 400 },
@@ -89,13 +94,26 @@ export async function PATCH(
       { status: 400 },
     );
   }
+  const leadName = typeof payload.name === "string" ? payload.name.trim() : "";
+  if (action === "create_lead" && (!leadName || leadName.length > 120)) {
+    return Response.json(
+      { success: false, error: "Enter a lead name no longer than 120 characters." },
+      { status: 400 },
+    );
+  }
   if (action === "match" && (payload.status !== undefined || payload.isRead !== undefined || payload.assignedToId !== undefined)) {
     return Response.json(
       { success: false, error: "Match the conversation before making other changes." },
       { status: 400 },
     );
   }
-  if (action !== "match" && status === undefined && isRead === undefined && assignedToId === undefined) {
+  if (action === "create_lead" && (payload.status !== undefined || payload.isRead !== undefined || payload.assignedToId !== undefined)) {
+    return Response.json(
+      { success: false, error: "Complete the conversation action before making other changes." },
+      { status: 400 },
+    );
+  }
+  if (action !== "match" && action !== "create_lead" && status === undefined && isRead === undefined && assignedToId === undefined) {
     return Response.json(
       { success: false, error: "Choose a conversation change." },
       { status: 400 },
@@ -200,6 +218,129 @@ export async function PATCH(
       thread: updateResult.data,
       targetLabel,
       warning,
+    });
+  }
+
+  if (action === "create_lead") {
+    const [threadResult, settingsResult] = await Promise.all([
+      supabase
+        .from("communication_threads")
+        .select("id,provider,lead_id,customer_id,participant_addresses")
+        .eq("id", threadId)
+        .eq("security_disposition", "normal")
+        .maybeSingle(),
+      supabase
+        .from("company_settings")
+        .select("communications_from_phone")
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    if (threadResult.error || !threadResult.data) {
+      return Response.json(
+        { success: false, error: "The conversation could not be found." },
+        { status: 404 },
+      );
+    }
+    if (threadResult.data.lead_id || threadResult.data.customer_id) {
+      return Response.json(
+        { success: false, error: "This conversation is already linked to CRM." },
+        { status: 409 },
+      );
+    }
+    if (threadResult.data.provider !== "twilio") {
+      return Response.json(
+        { success: false, error: "Create a lead here only from an inbound text conversation." },
+        { status: 409 },
+      );
+    }
+    if (settingsResult.error || !settingsResult.data) {
+      return Response.json(
+        { success: false, error: "Communication settings could not be loaded." },
+        { status: 500 },
+      );
+    }
+
+    const phone = unassignedSmsCounterpartyPhone(
+      threadResult.data.participant_addresses,
+      settingsResult.data.communications_from_phone,
+    );
+    if (!phone) {
+      return Response.json(
+        { success: false, error: "The inbound text does not identify one safe customer phone number." },
+        { status: 409 },
+      );
+    }
+
+    const [leadsResult, customersResult] = await Promise.all([
+      supabase.from("leads").select("id,phone").not("phone", "is", null).limit(1000),
+      supabase.from("customers").select("id,phone").not("phone", "is", null).limit(1000),
+    ]);
+    if (leadsResult.error || customersResult.error || (leadsResult.data?.length ?? 0) >= 1000 || (customersResult.data?.length ?? 0) >= 1000) {
+      return Response.json(
+        { success: false, error: "Existing contacts could not be checked safely. Link an existing contact instead." },
+        { status: 409 },
+      );
+    }
+    if (phoneCandidatesContain(phone, leadsResult.data ?? []) || phoneCandidatesContain(phone, customersResult.data ?? [])) {
+      return Response.json(
+        { success: false, error: "A lead or customer already uses this phone number. Link the existing contact instead." },
+        { status: 409 },
+      );
+    }
+
+    const leadResult = await supabase
+      .from("leads")
+      .insert({
+        name: leadName,
+        phone,
+        description: "Created from an unassigned inbound text conversation.",
+        source: "Company Inbox",
+        status: "new",
+        lead_status: "new",
+        lead_source: "inbound_sms",
+        preferred_contact_method: "text",
+        consultation_status: "not_requested",
+      })
+      .select("id,name")
+      .single();
+    if (leadResult.error || !leadResult.data) {
+      return Response.json(
+        { success: false, error: "The lead could not be created." },
+        { status: 500 },
+      );
+    }
+
+    const updateResult = await supabase
+      .from("communication_threads")
+      .update({ lead_id: leadResult.data.id, customer_id: null })
+      .eq("id", threadId)
+      .eq("security_disposition", "normal")
+      .is("lead_id", null)
+      .is("customer_id", null)
+      .select("id,lead_id,customer_id")
+      .maybeSingle();
+    if (updateResult.error || !updateResult.data) {
+      await supabase.from("leads").delete().eq("id", leadResult.data.id);
+      return Response.json(
+        { success: false, error: "The conversation changed before the lead could be linked. Refresh and try again." },
+        { status: 409 },
+      );
+    }
+
+    const messageUpdate = await supabase
+      .from("communication_messages")
+      .update({ lead_id: leadResult.data.id })
+      .eq("thread_id", threadId)
+      .eq("security_disposition", "normal");
+
+    return Response.json({
+      success: true,
+      thread: updateResult.data,
+      targetLabel: leadResult.data.name,
+      warning: messageUpdate.error
+        ? "The lead and conversation are linked, but older message audit rows still need repair."
+        : undefined,
     });
   }
 
